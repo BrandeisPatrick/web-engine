@@ -7,7 +7,9 @@
 //   - instanced decor pumpkins + leaves (1 draw each), grass tufts (1 draw; fewer on phones)
 //   - sky dressing: a big moon billboard + halo and a ring of tree-line silhouettes, both depth-less (the post fog reads
 //     them as sky) and following the camera
-// Colliders go to the PhysicsWorld as static boxes (gravestones, fences, trunks, buildings). Exposes the spots the
+// Colliders go to the PhysicsWorld as static boxes (gravestones, fences, trunks, buildings). The graveyard has four
+// ways out (the south gate and a gap in each other side) and its iron fence collides only up to FENCE_TOP above the
+// ground, so a JUMP clears it (walking does not): it used to be one gate in a 6 m wall, a trap. Exposes the spots the
 // game needs: lantern positions, ghost spawn points, a candy spawn sampler, and glowSpots (halos the game draws over
 // the static glowing props: gate and porch lanterns, lit windows, crypt candles, the cauldron).
 // Materials: world-space grain on the props and the terrain (looks.js patchDetail; the terrain with a faint dew sheen),
@@ -42,7 +44,10 @@ export function pathDist(x, z) {
 }
 
 // ------------------------------------------------------------------ regions
-export const GRAVEYARD = { x0: 8, x1: 46, z0: -46, z1: -10, gate: [13.5, 18.5] };
+export const GRAVEYARD = { x0: 8, x1: 46, z0: -46, z1: -10, gate: [13.5, 18.5],
+  // the gaps (m along their side): south (the gate, x), west (x = x0, z), east (x = x1, z), north (z = z0, x)
+  exits: { s: [13.5, 18.5], w: [-30, -25.5], e: [-24, -19.5], n: [26, 30.5] } };
+const FENCE_TOP = 1.1; // the graveyard fence collider's top above the ground (the jump apex is ~1.7 m, a step 0.32 m)
 export const PATCH = { x0: -47, x1: -12, z0: -3, z1: 42 };
 export const HOUSE = { x: -31, z: -37, w: 11, d: 9, yaw: 0.25 };
 export const CRYPT = { x: 35, z: -38 };
@@ -434,29 +439,46 @@ export function buildWorld({ scene, physics, low }) {
       graves.push(gravestone(B, x, z, kind, rnd, physics));
     }
   }
-  const G0 = GRAVEYARD, gateGap = (x, z) => Math.abs(z - G0.z1) < 0.3 && x > G0.gate[0] && x < G0.gate[1];
-  ironFence(B, G0.x0, G0.z1, G0.x1, G0.z1, physics, gateGap);
-  ironFence(B, G0.x1, G0.z1, G0.x1, G0.z0, physics);
-  ironFence(B, G0.x1, G0.z0, G0.x0, G0.z0, physics);
-  ironFence(B, G0.x0, G0.z0, G0.x0, G0.z1, physics);
-  // fence colliders (the gate is open)
-  physics.addStaticBox(G0.x0 - 0.1, -5, G0.gate[0], 6, G0.z1 - 0.1, G0.z1 + 0.1);
-  physics.addStaticBox(G0.gate[1], -5, G0.x1 + 0.1, 6, G0.z1 - 0.1, G0.z1 + 0.1);
-  physics.addStaticBox(G0.x0 - 0.1, -5, G0.x1 + 0.1, 6, G0.z0 - 0.1, G0.z0 + 0.1);
-  physics.addStaticBox(G0.x0 - 0.1, -5, G0.x0 + 0.1, 6, G0.z0, G0.z1);
-  physics.addStaticBox(G0.x1 - 0.1, -5, G0.x1 + 0.1, 6, G0.z0, G0.z1);
-  // gate posts with stone caps + an arch sign
-  for (const gx of G0.gate) {
-    const y = heightAt(gx, G0.z1), z = G0.z1;
-    B.add(new THREE.BoxGeometry(0.66, 0.36, 0.66), '#4f4a58', gx, y + 0.1, z);             // plinth
-    B.add(new THREE.BoxGeometry(0.58, 0.08, 0.58), '#5d5866', gx, y + 0.31, z);
-    B.add(new THREE.BoxGeometry(0.5, 2.0, 0.5), '#5a5563', gx, y + 1.3, z);               // shaft
-    B.add(new THREE.BoxGeometry(0.54, 0.07, 0.54), '#514c5a', gx, y + 1.62, z);           // a stone band
-    B.add(new THREE.BoxGeometry(0.62, 0.1, 0.62), '#66616f', gx, y + 2.33, z);            // cap slab
-    B.add(new THREE.BoxGeometry(0.5, 0.06, 0.5), '#5d5866', gx, y + 2.41, z);
-    B.add(new THREE.CylinderGeometry(0.09, 0.14, 0.08, 10), '#5d5866', gx, y + 2.47, z);  // finial neck
-    B.add(new THREE.SphereGeometry(0.28, 14, 10), '#6b6675', gx, y + 2.68, z);
-  }
+  const G0 = GRAVEYARD, X = G0.exits, inGap = (v, g) => v > g[0] && v < g[1];
+  ironFence(B, G0.x0, G0.z1, G0.x1, G0.z1, physics, (x, z) => Math.abs(z - G0.z1) < 0.3 && inGap(x, X.s));
+  ironFence(B, G0.x1, G0.z1, G0.x1, G0.z0, physics, (x, z) => Math.abs(x - G0.x1) < 0.3 && inGap(z, X.e));
+  ironFence(B, G0.x1, G0.z0, G0.x0, G0.z0, physics, (x, z) => Math.abs(z - G0.z0) < 0.3 && inGap(x, X.n));
+  ironFence(B, G0.x0, G0.z0, G0.x0, G0.z1, physics, (x, z) => Math.abs(x - G0.x0) < 0.3 && inGap(z, X.w));
+  // fence colliders: ~4 m pieces whose top is FENCE_TOP over the highest ground under them (a jump clears the fence,
+  // walking does not), with the four gaps open
+  const fenceSide = (along, at, a0, a1, gap) => { // along 'x' (a side at z = at) or 'z' (a side at x = at)
+    const pieces = (b0, b1) => {
+      const n = Math.max(1, Math.round((b1 - b0) / 4));
+      for (let i = 0; i < n; i++) {
+        const c0 = b0 + ((b1 - b0) * i) / n, c1 = b0 + ((b1 - b0) * (i + 1)) / n;
+        let top = -Infinity;
+        for (let c = c0; c <= c1 + 1e-6; c += 0.5) top = Math.max(top, along === 'x' ? heightAt(c, at) : heightAt(at, c));
+        if (along === 'x') physics.addStaticBox(c0, -5, c1, top + FENCE_TOP, at - 0.1, at + 0.1);
+        else physics.addStaticBox(at - 0.1, -5, at + 0.1, top + FENCE_TOP, c0, c1);
+      }
+    };
+    pieces(a0, gap[0]); pieces(gap[1], a1);
+  };
+  fenceSide('x', G0.z1, G0.x0 - 0.1, G0.x1 + 0.1, X.s);
+  fenceSide('x', G0.z0, G0.x0 - 0.1, G0.x1 + 0.1, X.n);
+  fenceSide('z', G0.x0, G0.z0, G0.z1, X.w);
+  fenceSide('z', G0.x1, G0.z0, G0.z1, X.e);
+  // gate posts with stone caps at every gap (+ an arch sign over the south gate)
+  const gatePost = (gx, gz) => {
+    const y = heightAt(gx, gz);
+    B.add(new THREE.BoxGeometry(0.66, 0.36, 0.66), '#4f4a58', gx, y + 0.1, gz);             // plinth
+    B.add(new THREE.BoxGeometry(0.58, 0.08, 0.58), '#5d5866', gx, y + 0.31, gz);
+    B.add(new THREE.BoxGeometry(0.5, 2.0, 0.5), '#5a5563', gx, y + 1.3, gz);               // shaft
+    B.add(new THREE.BoxGeometry(0.54, 0.07, 0.54), '#514c5a', gx, y + 1.62, gz);           // a stone band
+    B.add(new THREE.BoxGeometry(0.62, 0.1, 0.62), '#66616f', gx, y + 2.33, gz);            // cap slab
+    B.add(new THREE.BoxGeometry(0.5, 0.06, 0.5), '#5d5866', gx, y + 2.41, gz);
+    B.add(new THREE.CylinderGeometry(0.09, 0.14, 0.08, 10), '#5d5866', gx, y + 2.47, gz);  // finial neck
+    B.add(new THREE.SphereGeometry(0.28, 14, 10), '#6b6675', gx, y + 2.68, gz);
+  };
+  for (const gx of X.s) gatePost(gx, G0.z1);
+  for (const gx of X.n) gatePost(gx, G0.z0);
+  for (const gz of X.w) gatePost(G0.x0, gz);
+  for (const gz of X.e) gatePost(G0.x1, gz);
   { const y = heightAt(16, G0.z1); B.add(new THREE.TorusGeometry(2.5, 0.06, 4, 20, Math.PI), '#1a1720', 16, y + 2.3, G0.z1); }
   // candle lanterns at the foot of the gate posts, on their outer sides (the path between them stays clear): warm points
   // framing the way in (glow geometry + a halo each)

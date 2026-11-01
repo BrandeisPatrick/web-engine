@@ -308,7 +308,8 @@ export class HUD {
     const help = this.help = el('div', 'hw-screen hw-help off', root);
     help.innerHTML = `<div class="hw-h1">HOW TO PLAY</div><div class="hw-cards">${CARDS}</div><div class="hw-ctrl"></div>
       <div class="hw-tips">Swirl lollipops under a light beam are worth 5. Jump onto a lantern to stomp it for extra candy.
-      When the screen edges frost over, a ghost is close: let it come near, then BOO! Caught? Grab the candy you drop.</div>
+      When the screen edges frost over, a ghost is close: let it come near, then BOO! Caught? Grab the candy you drop.
+      Jump over the graveyard fence!</div>
       <div class="hw-small-btns"><button class="hw-start" data-a="close">GOT IT</button></div>`;
     wire(help.querySelector('[data-a=close]'), () => this.showHelp(false));
     for (const b of root.querySelectorAll('[data-a=help]')) wire(b, () => this.showHelp(true));

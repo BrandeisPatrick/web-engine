@@ -29,7 +29,7 @@
 // a catch costs 10 % (2..12) with "GRAB IT BACK!", the safety window, the pack backing off after a catch, at most 2
 // chasers at once on phones (3 on desktop), BOO glowing while a chaser is in reach, the edge markers for an off-screen
 // big pop and a ghost behind the kid; the BOO lesson of a first session (the first ghost rises in view ahead, tame) and
-// its end after the first BOO that lands (localStorage).
+// its end after the first BOO that lands (localStorage); desktop: the graveyard fence stops a walk and a jump clears it.
 // Mobile controls: every button (title, HUD, pause, how-to-play, results) is at least 44 x 44 px inside the safe area,
 // HOW TO PLAY opens and closes by touch, the sound and pause buttons work, the full-screen button exists exactly where
 // the Fullscreen API does and toggles, haptics fire on candy / smash / BOO / catch (navigator.vibrate stubbed; none on
@@ -309,6 +309,37 @@ async function runProfile(name) {
       await sleep(100);
       b0 = await state(page);
       check(name, 'ArrowUp (1.3 s) runs', Math.hypot(b0.x - a0.x, b0.z - a0.z) > 3, `${Math.hypot(b0.x - a0.x, b0.z - a0.z).toFixed(2)} m`);
+      // ---- the graveyard fence (x = 8, away from the west gap): running into it stops the kid, a jump clears it
+      const lane = await G(page, () => {
+        const g = window.__game, out = [];
+        for (let z = -44; z <= -12; z += 0.5) {
+          if (z > -31 && z < -24.5) continue; // the west gap
+          let clear = true;
+          for (let x = 3; x <= 14 && clear; x += 0.25) { if (Math.abs(x - 8) < 0.6) continue; out.length = 0; clear = g.physics.queryColliders(x, z, 0.45, out).length === 0; }
+          if (clear) return z;
+        }
+        return null;
+      });
+      const fenceRun = async (jump) => {
+        await calmAll();
+        await G(page, (z) => { const g = window.__game; g.cc.teleport(13.5, g.world.heightAt(13.5, z) + 0.05, z); g.rig.yaw = Math.PI / 2; g.camState.facing = Math.PI / 2; g.rig.snap(); }, lane);
+        await sleep(200);
+        await page.keyboard.down('KeyW');
+        let jumped = !jump; const t0 = Date.now();
+        while (Date.now() - t0 < 2600) {
+          const x = await G(page, () => window.__game.cc.position.x);
+          if (!jumped && x < 10.4) { await page.keyboard.press('Space'); jumped = true; }
+          if (x < 7.4) break;
+          await sleep(15);
+        }
+        await page.keyboard.up('KeyW');
+        return G(page, () => window.__game.cc.position.x);
+      };
+      if (lane == null) check(name, 'graveyard fence: a clear lane to test on', false);
+      else {
+        const walked = await fenceRun(false), hopped = await fenceRun(true);
+        check(name, 'graveyard fence: walking into it stops, a JUMP clears it', walked > 8.15 && hopped < 7.6, `z ${lane}: walked to x ${walked.toFixed(2)}, jumped to x ${hopped.toFixed(2)}`);
+      }
     } else {
       check(name, 'touch start: no pointer-lock request', (await G(page, () => window.__lockReq)) === 0);
     }
