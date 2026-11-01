@@ -41,7 +41,8 @@
 // prefers-reduced-motion), the Witching Hour (call-out, x2 badge, every lantern relit, candy x2, candy rain, a catch
 // capped at 6, orange auras), the last-ten countdown under the clock pill, the results' rank ladder and next-rank line,
 // sharing (phones: Web Share, stubbed; desktop: the clipboard, stubbed, and a toast); phones: pushing straight into a
-// gravestone slides round it. --perf also measures a finale storm (the Witching Hour on top of the storm).
+// gravestone slides round it, pushing at a porch beyond the graveyard fence's inside corner slides out along the fence.
+// --perf also measures a finale storm (the Witching Hour on top of the storm).
 // Porches (porches.js): a lit doormat is a treat (8 candies, the lamp dark for 40 s, "TRICK OR TREAT!"), a dark one pays
 // nothing, BOO on a lit one is a trick (14, 60 s) whose resident ghost drops from the chimney and chases within a
 // second, the haunted porch only knocks and its trick pays 22 with two residents (70 s), a visited porch lights its
