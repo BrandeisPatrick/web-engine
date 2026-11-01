@@ -238,9 +238,9 @@ export class Hands {
         for (let j = 0; j < RING_N; j++) {
           const a = this.yaw[k] + j * (Math.PI * 2 / RING_N), r = HAND.RING * (0.94 + 0.06 * Math.sin(t * 3 + j));
           const f = 0.8 + 0.2 * Math.sin(t * 11 + j * 2.3); // embers along the crack
-          glows.set(base + n++, x + Math.cos(a) * r, gy + 0.05, z + Math.sin(a) * r, 0.36, 0.55 * L * f, 0.11 * L * f, 0);
+          glows.set(base + n++, x + Math.cos(a) * r, gy + 0.05, z + Math.sin(a) * r, 0.36, 0.6 * L * f, 0.05 * L * f, 0.02 * L * f);
         }
-        glows.set(base + n++, x, gy + 0.08, z, 1.9, 0.2 * L, 0.035 * L, 0);
+        glows.set(base + n++, x, gy + 0.08, z, 1.9, 0.22 * L, 0.018 * L, 0.01 * L); // crimson: not a lantern's orange
       }
       // dirt puffs while it tells (dim, low), a burst as the hands break out
       if (this.fx && s === TELL && (this.puffT[k] -= dt) <= 0) {

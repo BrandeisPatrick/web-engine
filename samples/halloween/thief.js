@@ -440,7 +440,7 @@ export class Thief {
       const fx = this.x + sn * 0.24 * sk, fz = this.z + c * 0.24 * sk, fy = R.position.y + 0.78 * sk;
       for (let j = 0; j < 3; j++) {
         const w = t * 6 + j * 2.094, r = 0.2;
-        glows.set(base + n++, fx + Math.cos(w) * r * sk, fy + Math.sin(w * 2) * 0.04, fz + Math.sin(w) * r * sk, 0.42 * far, 1.0, 0.82, 0.2);
+        glows.set(base + n++, fx + Math.cos(w) * r * sk, fy + Math.sin(w * 2) * 0.04, fz + Math.sin(w) * r * sk, 0.5 * far, 1.1, 0.9, 0.22);
       }
     }
     return n;
