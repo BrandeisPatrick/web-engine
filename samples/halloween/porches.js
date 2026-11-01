@@ -26,6 +26,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { PATHS, PLAY } from './world.js';
 import { patchDetail } from './looks.js';
+import { Batch, Parts, chamferBox, vgrad, crack, lathe, place, pumpkinGeometry, pumpkinFront } from './props.js';
 import { PORCHES } from './porch-spots.js';
 
 export const PORCH = {
@@ -64,13 +65,14 @@ function part(list, pm, g, color, k, x, y, z, ry = 0, rx = 0, rz = 0, sx = 1, sy
 
 /** The door leaf with its hinge on the local origin (x 0..DOOR_W, y 0..DOOR_H), panels and a knob on the +z face. */
 function doorGeometry() {
-  const parts = [], I = new THREE.Matrix4();
-  part(parts, I, new THREE.BoxGeometry(DOOR_W, DOOR_H, 0.06), '#ffffff', 0.82, DOOR_W / 2, DOOR_H / 2, 0);
-  for (const [px, py, h] of [[0.29, 1.5, 0.75], [0.77, 1.5, 0.75], [0.29, 0.55, 0.8], [0.77, 0.55, 0.8]]) part(parts, I, new THREE.BoxGeometry(0.36, h, 0.025), '#ffffff', 1.0, px, py, 0.04);
-  part(parts, I, new THREE.BoxGeometry(DOOR_W - 0.1, 0.06, 0.03), '#ffffff', 0.6, DOOR_W / 2, 1.05, 0.04);
-  part(parts, I, new THREE.SphereGeometry(0.045, 8, 6), '#ffe9a8', 2.2, DOOR_W - 0.13, 1.0, 0.075);
-  const g = mergeGeometries(parts);
-  for (const p of parts) p.dispose();
+  const L = new Parts();
+  vgrad(L.add(chamferBox(DOOR_W, DOOR_H, 0.06, 0.015), '#d8d8d8', DOOR_W / 2, DOOR_H / 2, 0), 0.8, 1.1);
+  for (const [px, py, h] of [[0.29, 1.5, 0.75], [0.77, 1.5, 0.75], [0.29, 0.55, 0.8], [0.77, 0.55, 0.8]]) vgrad(L.add(chamferBox(0.36, h, 0.03, 0.012), '#ffffff', px, py, 0.035), 0.85, 1.1);
+  L.add(chamferBox(DOOR_W - 0.1, 0.06, 0.03, 0.01), '#9a9a9a', DOOR_W / 2, 1.05, 0.035);
+  L.add(new THREE.SphereGeometry(0.045, 8, 6), '#ffe9a8', DOOR_W - 0.13, 1.0, 0.075);
+  for (const g of L.list) g.clearGroups();
+  const g = mergeGeometries(L.list);
+  for (const p of L.list) p.dispose();
   return g;
 }
 
@@ -138,63 +140,89 @@ export class Porches {
     this.knocking = -1; // the porch whose door is opening with the kid on its mat (BOO now = trick), or -1
   }
 
-  /** The stand-in porch fronts (lit, one mesh), their glowing parts (unlit, one mesh) and the wall colliders. */
+  /**
+   * The stand-in porch fronts (the props.js kit: hand-painted, chamfered, merged into one lit mesh with the baked ground
+   * shading), their glowing parts (unlit, one mesh) and the wall colliders.
+   */
   _buildStandIns(scene) {
-    const lit = [], glo = [], pm = new THREE.Matrix4(), I = (v) => [['pgrp', v[0]], ['pfloor', v[1]]];
+    const B = new Batch(), glo = [], pm = new THREE.Matrix4(), I = (v) => [['pgrp', v[0]], ['pfloor', v[1]]];
+    const R = 0.2, face = pumpkinFront(R, 8, 0.1); // the railing pumpkin (radius) and its front surface
     for (let k = 0; k < this.n; k++) {
       const S = this.spots[k], M = S.mat, H = S.haunted, wz = -M.d / 2 - 0.06 - 0.04; // the wall's mid-plane
-      pm.compose(_p.set(M.x, M.y, M.z), _q.setFromEuler(_e.set(0, S.yaw, 0)), _s.set(1, 1, 1));
-      const WALL = H ? '#3b3242' : '#6e5c70', TRIM = H ? '#1d1720' : '#3c2d3e', ROOF = H ? '#151017' : '#2b2031', IRON = '#17141c';
-      const P = (g, col, k2, x, y, z, ry, rx, rz, sx, sy, sz) => part(lit, pm, g, col, k2, x, y, z, ry, rx, rz, sx, sy, sz);
-      // the wall around the doorway (down into the ground for uneven terrain), its trim, a gable and two roof boards
+      const WALL = H ? '#352b3e' : '#5d4c66', WALL2 = H ? '#3d3148' : '#66546f', TRIM = H ? '#5e4f6a' : '#7a6584', ROOF = H ? '#211a28' : '#2e2436';
+      const STONE = '#454050', IRON = '#141016', INK = '#1d1724', zf = wz + WALL_T / 2 + 0.003; // the wall's face
+      const L = new Parts();
+      // a stone footing, the wall round the doorway (into the ground for uneven terrain), siding, corner boards
+      vgrad(L.add(chamferBox(WALL_W + 0.24, 0.55, WALL_T + 0.22, 0.04), STONE, 0, 0.0, wz), 0.6, 0.95);
       const side = (WALL_W - HOLE_W) / 2, sx = HOLE_W / 2 + side / 2, top = WALL_H - HOLE_H;
-      P(new THREE.BoxGeometry(side, WALL_H + 0.5, WALL_T), WALL, 1, -sx, (WALL_H - 0.5) / 2, wz);
-      P(new THREE.BoxGeometry(side, WALL_H + 0.5, WALL_T), WALL, 1, sx, (WALL_H - 0.5) / 2, wz);
-      P(new THREE.BoxGeometry(HOLE_W, top, WALL_T), WALL, 1, 0, HOLE_H + top / 2, wz);
-      for (const s of [-1, 1]) P(new THREE.BoxGeometry(0.12, HOLE_H + 0.1, 0.07), TRIM, 1, s * (HOLE_W / 2 + 0.04), (HOLE_H + 0.1) / 2, wz + WALL_T / 2 + 0.02);
-      P(new THREE.BoxGeometry(HOLE_W + 0.32, 0.14, 0.08), TRIM, 1, 0, HOLE_H + 0.06, wz + WALL_T / 2 + 0.02);
-      P(new THREE.BoxGeometry(WALL_W + 0.1, 0.1, WALL_T + 0.08), TRIM, 1, 0, 0.05, wz);              // sill board
-      for (const by of [0.72, 1.44, 2.6]) { // siding lines (beside the doorway; the top one over it)
-        if (by > HOLE_H) P(new THREE.BoxGeometry(WALL_W, 0.035, 0.03), TRIM, 0.8, 0, by, wz + WALL_T / 2 + 0.01);
-        else for (const s of [-1, 1]) P(new THREE.BoxGeometry(side - 0.1, 0.035, 0.03), TRIM, 0.8, s * (sx + 0.05), by, wz + WALL_T / 2 + 0.01);
+      for (const s of [-1, 1]) vgrad(L.add(new THREE.BoxGeometry(side, WALL_H + 0.5, WALL_T), WALL, s * sx, (WALL_H - 0.5) / 2, wz), 0.72, 1.1, 0.04, k * 7 + s + 2);
+      vgrad(L.add(new THREE.BoxGeometry(HOLE_W, top, WALL_T), WALL, 0, HOLE_H + top / 2, wz), 0.95, 1.1);
+      for (let yy = 0.44; yy < WALL_H - 0.1; yy += 0.34) { // clapboard lines, round the doorway
+        if (yy > HOLE_H + 0.12) crack(L, [[-WALL_W / 2, yy, zf], [WALL_W / 2, yy, zf]], 0.014, INK);
+        else for (const s of [-1, 1]) crack(L, [[s * (HOLE_W / 2 + 0.14), yy, zf], [s * WALL_W / 2, yy, zf]], 0.014, INK);
       }
-      // a shallow vestibule behind the doorway (the door swings into it; its back wall glows when the door opens)
-      const vz = wz - WALL_T / 2 - VEST / 2;
-      for (const s of [-1, 1]) P(new THREE.BoxGeometry(0.1, HOLE_H + 0.1, VEST), TRIM, 0.7, s * (HOLE_W / 2 + 0.05), (HOLE_H + 0.1) / 2, vz);
-      P(new THREE.BoxGeometry(HOLE_W + 0.2, 0.1, VEST), TRIM, 0.7, 0, HOLE_H + 0.05, vz);
-      P(new THREE.BoxGeometry(HOLE_W + 0.2, HOLE_H + 0.1, 0.08), TRIM, 0.5, 0, (HOLE_H + 0.1) / 2, vz - VEST / 2);
-      { // gable: a triangle (apex 1.15 m over the wall) and two boards along its edges, eaves 0.7 m out over the door
-        const r = 1.15 / 1.5, g = new THREE.CylinderGeometry(r, r, WALL_T, 3).rotateX(-Math.PI / 2).scale((WALL_W / 2) / (0.866 * r), 1, 1);
-        P(g, WALL, 1, 0, WALL_H + 0.5 * r, wz);
-        const a = Math.atan2(1.15, WALL_W / 2), L = Math.hypot(1.15, WALL_W / 2) + 0.3;
-        for (const s of [-1, 1]) P(new THREE.BoxGeometry(L, 0.09, 1.0), ROOF, 1, s * (WALL_W / 4), WALL_H + 0.6, wz + 0.36, 0, 0, -s * a);
+      for (const s of [-1, 1]) L.add(chamferBox(0.2, WALL_H, 0.28, 0.03), TRIM, s * (WALL_W / 2 - 0.06), WALL_H / 2, wz);
+      vgrad(L.add(chamferBox(WALL_W + 0.3, 0.2, WALL_T + 0.3, 0.04), TRIM, 0, WALL_H + 0.02, wz), 0.8, 1.15);
+      // the door's frame: two boards and a peaked lintel
+      for (const s of [-1, 1]) L.add(chamferBox(0.14, HOLE_H + 0.1, 0.1, 0.02), TRIM, s * (HOLE_W / 2 + 0.05), (HOLE_H + 0.1) / 2, zf + 0.03);
+      const ped = new THREE.Shape(); ped.moveTo(-(HOLE_W + 0.5) / 2, 0); ped.lineTo((HOLE_W + 0.5) / 2, 0); ped.lineTo(0, 0.3); ped.closePath();
+      vgrad(L.add(new THREE.ExtrudeGeometry(ped, { depth: 0.12, bevelEnabled: false }).translate(0, 0, -0.06), TRIM, 0, HOLE_H + 0.08, zf + 0.04), 0.85, 1.2);
+      // a gable over the wall and two shingled roof slabs, eaves out over the door
+      {
+        const rh = 1.25, tri = new THREE.Shape(); tri.moveTo(-WALL_W / 2, 0); tri.lineTo(WALL_W / 2, 0); tri.lineTo(0, rh); tri.closePath();
+        vgrad(L.add(new THREE.ExtrudeGeometry(tri, { depth: WALL_T, bevelEnabled: false }).translate(0, 0, -WALL_T / 2), WALL2, 0, WALL_H + 0.1, wz), 0.85, 1.1);
+        L.add(new THREE.TorusGeometry(0.26, 0.05, 4, 14), TRIM, 0, WALL_H + 0.62, zf + 0.02);
+        L.add(new THREE.CircleGeometry(0.25, 12), '#120c14', 0, WALL_H + 0.62, zf + 0.01);
+        const a = Math.atan2(rh, WALL_W / 2), len = Math.hypot(rh, WALL_W / 2) + 0.35;
+        for (const s of [-1, 1]) {
+          vgrad(L.add(chamferBox(len, 0.12, 1.15, 0.03), ROOF, s * (WALL_W / 4 + 0.05), WALL_H + 0.1 + rh / 2 + 0.1, wz + 0.42, 0, 0, -s * a), 0.85, 1.25);
+          for (let q = 1; q < 4; q++) { // shingle rows along the slab (on its top face)
+            const t = (q / 4 - 0.5) * len, cx = s * (WALL_W / 4 + 0.05) + t * Math.cos(a), cy = WALL_H + 0.2 + rh / 2 - s * t * Math.sin(a) + 0.07;
+            crack(L, [[cx, cy, wz - 0.15], [cx, cy, wz + 0.99]], 0.012, '#160f1a', [0, 1, 0]);
+          }
+        }
       }
-      // the lamp's bracket and cage (its glass glows: below), right of the door
+      // the lamp right of the door: a rod, a cap, a cage and a base (its glass glows: below)
       const lx = 0.95, ly = 2.08, lz = -M.d / 2 + 0.2;
-      P(new THREE.BoxGeometry(0.04, 0.04, 0.3), IRON, 1, lx, ly + 0.22, lz - 0.14);
-      P(new THREE.ConeGeometry(0.16, 0.12, 4).rotateY(Math.PI / 4), IRON, 1, lx, ly + 0.2, lz);
-      for (const [cx, cz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) P(new THREE.BoxGeometry(0.02, 0.26, 0.02), IRON, 1, lx + cx * 0.085, ly, lz + cz * 0.085);
-      P(new THREE.BoxGeometry(0.2, 0.03, 0.2), IRON, 1, lx, ly - 0.14, lz);
-      // two newel posts at the mat's front corners; the left one carries the jack-o'-lantern (the round's tracker)
+      L.add(chamferBox(0.05, 0.05, 0.32, 0.01), IRON, lx, ly + 0.25, lz - 0.15);
+      L.add(new THREE.ConeGeometry(0.16, 0.13, 4).rotateY(Math.PI / 4), IRON, lx, ly + 0.2, lz);
+      for (const [cx, cz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) L.add(new THREE.BoxGeometry(0.02, 0.26, 0.02), IRON, lx + cx * 0.085, ly, lz + cz * 0.085);
+      L.add(new THREE.BoxGeometry(0.2, 0.03, 0.2), IRON, lx, ly - 0.14, lz);
+      // two turned newel posts at the mat's front corners; the left one carries the jack-o'-lantern (the tracker)
+      const pz = M.d / 2 - 0.1;
       for (const s of [-1, 1]) {
-        P(new THREE.BoxGeometry(0.13, 0.86, 0.13), TRIM, 1.3, s * 1.3, 0.43, M.d / 2 - 0.1);
-        P(new THREE.BoxGeometry(0.19, 0.06, 0.19), TRIM, 1.3, s * 1.3, 0.88, M.d / 2 - 0.1);
+        L.add(chamferBox(0.22, 0.14, 0.22, 0.03), TRIM, s * 1.3, 0.04, pz);
+        vgrad(L.add(lathe([[0.075, 0], [0.09, 0.08], [0.06, 0.25], [0.065, 0.6], [0.085, 0.7], [0.07, 0.78], [0.1, 0.82], [0.1, 0.86]], 8), TRIM, s * 1.3, 0.04, pz), 0.75, 1.15);
       }
-      P(new THREE.SphereGeometry(0.2, 14, 10), '#c8601c', 1, -1.3, 1.08, M.d / 2 - 0.1, 0, 0, 0, 1.1, 0.82, 1.1);
-      P(new THREE.CylinderGeometry(0.025, 0.035, 0.1, 5), '#4d6a2a', 1, -1.3, 1.29, M.d / 2 - 0.1, 0, 0.2, 0.1);
+      const pg = pumpkinGeometry(R, 24, 0, H ? '#c95a20' : '#e0701e', '#4d6a2a', { seed: 11 + k });
+      for (const a of ['rib', 'glow']) if (pg.attributes[a]) pg.deleteAttribute(a);
+      L.push(place(pg, -1.3, 0.9, pz));
+      L.into(B, M.x, M.y, M.z, S.yaw);
       // ---- glowing parts (channel: 0 lamp + mat, 1 railing, 2 doorway; floor: the level at "off")
+      pm.compose(_p.set(M.x, M.y, M.z), _q.setFromEuler(_e.set(0, S.yaw, 0)), _s.set(1, 1, 1));
       const G = (g, col, k2, x, y, z, ch, floor, ry = 0, rx = 0) => part(glo, pm, g, col, k2, x, y, z, ry, rx, 0, 1, 1, 1, I([k * 3 + ch, floor]));
       // the doormat: a woven middle (dim when the lamp is off) inside a bright border
       G(new THREE.PlaneGeometry(M.w - 0.24, M.d - 0.24).rotateX(-Math.PI / 2), H ? '#6f5a86' : '#c08a52', 1.05, 0, 0.025, 0, 0, 0.28);
       for (const [bw, bd, bx, bz] of [[M.w, 0.12, 0, M.d / 2 - 0.06], [M.w, 0.12, 0, -M.d / 2 + 0.06], [0.12, M.d - 0.24, M.w / 2 - 0.06, 0], [0.12, M.d - 0.24, -M.w / 2 + 0.06, 0]]) {
         G(new THREE.PlaneGeometry(bw, bd).rotateX(-Math.PI / 2), '#ffe2b0', 1.9, bx, 0.03, bz, 0, 0.07);
       }
-      G(new THREE.BoxGeometry(0.15, 0.23, 0.15), '#fff0d2', 2.6, lx, ly, lz, 0, 0.05);                       // the lamp's glass
-      // the pumpkin's carved face (toward the lane): two eyes and a mouth, glowing when the porch is visited
-      for (const s of [-1, 1]) G(new THREE.CircleGeometry(0.045, 3), '#ffb347', 2.4, -1.3 + s * 0.075, 1.12, M.d / 2 - 0.1 + 0.214, 1, 0.04, 0, 0);
-      G(new THREE.PlaneGeometry(0.15, 0.04), '#ffb347', 2.4, -1.3, 1.02, M.d / 2 - 0.1 + 0.205, 1, 0.04, 0, -0.25);
+      G(new THREE.BoxGeometry(0.15, 0.22, 0.15), '#fff0d2', 2.6, lx, ly, lz, 0, 0.05);                       // the lamp's glass
+      // the pumpkin's carved face on its ribbed front (toward the lane): two triangle eyes and a grin
+      for (const [fx, fy, rr, n, rot] of [[-0.07, 0.17, 0.04, 3, 0], [0.07, 0.17, 0.04, 3, 0], [0, 0.085, 0.07, 3, Math.PI]]) {
+        const q = face(fx, fy), ry = Math.atan2(q[3], q[5]), rx = -Math.asin(q[4]);
+        const g = new THREE.CircleGeometry(rr, n).rotateZ(Math.PI / 2 + rot);
+        if (rot) g.scale(1.5, 0.55, 1);
+        G(g, '#ffb347', 2.4, -1.3 + q[0], 0.9 + q[1], pz + q[2] + 0.006, 1, 0.04, ry, rx);
+      }
       // the doorway behind the door: warm light (violet in the haunted house) when the door opens
+      const vz = wz - WALL_T / 2 - VEST / 2;
       G(new THREE.PlaneGeometry(HOLE_W, HOLE_H), H ? '#9a62ff' : '#ffb766', H ? 1.3 : 1.6, 0, HOLE_H / 2, vz - VEST / 2 + 0.05, 2, 0);
+      // a shallow vestibule behind the doorway (the door swings into it): two sides, a lintel, a back wall
+      const V = new Parts();
+      for (const s of [-1, 1]) V.add(new THREE.BoxGeometry(0.1, HOLE_H + 0.1, VEST), '#2a2030', s * (HOLE_W / 2 + 0.05), (HOLE_H + 0.1) / 2, vz);
+      V.add(new THREE.BoxGeometry(HOLE_W + 0.2, 0.1, VEST), '#2a2030', 0, HOLE_H + 0.05, vz);
+      V.add(new THREE.BoxGeometry(HOLE_W + 0.2, HOLE_H + 0.1, 0.08), '#1e1724', 0, (HOLE_H + 0.1) / 2, vz - VEST / 2);
+      V.into(B, M.x, M.y, M.z, S.yaw);
       // colliders: the wall (axis-aligned: one box; a diagonal one in short pieces so no box reaches onto the mat, but
       // their steps trap a kid pushing into them: porch-spots.js keeps the stand-ins axis-aligned)
       const c = this.cs[k], sn = this.sn[k], wx = (lx2) => M.x + lx2 * c + wz * sn, wzz = (lx2) => M.z - lx2 * sn + wz * c, half = WALL_T / 2;
@@ -211,13 +239,12 @@ export class Porches {
       }
     }
     const frontMat = patchDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0.02 }), { scale: 1.7, amount: 0.62, broad: 0.32, streak: 0.55 });
-    this.front = new THREE.Mesh(mergeGeometries(lit), frontMat);
-    this.front.name = 'porchFronts'; this.front.receiveShadow = true; this.front.castShadow = false;
+    this.front = B.build(frontMat, 'porchFronts', this.heightAt);
+    this.front.receiveShadow = true; this.front.castShadow = false;
     scene.add(this.front);
     this.glow = new THREE.Mesh(mergeGeometries(glo), porchGlowMaterial(this.glowLv));
     this.glow.name = 'porchGlow';
     scene.add(this.glow);
-    for (const g of lit) g.dispose();
     for (const g of glo) g.dispose();
   }
 
