@@ -554,6 +554,8 @@ async function jobHero(name, { out, preroll = 14, graves = GHOST_GRAVES, booDist
   try {
     const P = await stageRoute(S, { route: ROUTES.hero, preroll, startAt: 3, pop, pitch, step: 1.9, side: 0.55 });
     if (!hint) await S.ev(() => { window.__game.G.hintBoo = false; });
+    // clean: no call-out banner in the shot (the round-2 streak call-out lands just as the ghosts close in on this route)
+    if (clean) await S.ev(() => { const st = document.createElement('style'); st.textContent = '.hw-call { visibility: hidden !important; }'; document.head.appendChild(st); });
     // nohud: the same shot with every DOM overlay (HUD, touch controls, banners) hidden; only the 3D canvas shows.
     // visibility (not display) so the layout, and with it the touch input, stays exactly as in the HUD version
     if (nohud) await S.ev(() => { const st = document.createElement('style'); st.id = 'media-nohud'; st.media = 'not all'; st.textContent = 'body * { visibility: hidden !important; } canvas { visibility: visible !important; }'; document.head.appendChild(st); });
@@ -569,7 +571,7 @@ async function jobHero(name, { out, preroll = 14, graves = GHOST_GRAVES, booDist
     await runRoute(S, ctl, P, {
       graves, booDist, lureMag,
       onFrame: async (f, s, ev) => {
-        if (ev.phase === 'lure' && s.chaser < range[0] && s.chaser > range[1] && f % every === 0 && (!clean || s.callout < 0.02)) shots.push({ file: await snap(path.join(cand, `c${String(shots.length).padStart(2, '0')}-d${s.chaser.toFixed(1)}.png`)), d: s.chaser });
+        if (ev.phase === 'lure' && s.chaser < range[0] && s.chaser > range[1] && f % every === 0) shots.push({ file: await snap(path.join(cand, `c${String(shots.length).padStart(2, '0')}-d${s.chaser.toFixed(1)}.png`)), d: s.chaser });
         if (ev.phase !== 'run' && ev.phase !== 'lure') return 'stop';
         if (ev.phase === 'lure' && s.chaser <= range[1]) return 'stop';
       },
