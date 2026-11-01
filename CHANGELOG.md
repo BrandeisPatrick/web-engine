@@ -91,17 +91,18 @@ in 1.0.0), driven by the new Halloween game sample (`samples/halloween/`, "Midni
   change): six lit porches; stepping onto a lit doormat is a treat (a knock, the door swings open, 8 candies pour out
   onto the lane side, the lamp dark for 40 s and fading back up over its last 3 s), a BOO on the mat a trick (14, dark
   60 s, and a resident ghost drops from the chimney 0.6 s later and chases), the haunted porch trick-only (22, two
-  residents, 70 s); a porch that relights lays a trail of 5 candies along the lane (taken from the respawn budget);
-  treating or tricking all five lane porches pays the Full Round (+25), each visited porch keeping a lit
-  jack-o'-lantern on its post (no HUD); the Witching Hour relights every porch at once and its candy rain drops from
-  20 to 12. Residents come from the ghost pool (`ghosts.summon`: a dormant ghost from the chimney, else the nearest
-  wandering one; it takes a chase slot). Until the map pass builds the cottages (`porch-spots.js` stands in for its
-  `PORCHES`), each porch is a stand-in front (one merged mesh, its glowing parts in another, the doors one instanced
-  mesh: three draws). Hints go through paced call-outs (`hud.say`: one per 2.5 s, duplicates and stale ones dropped;
-  a trick, a catch or the Witching Hour hold the screen a second against a streak's), once-per-device lessons in
-  `taught` (localStorage `midnight-candy-run.taught.*`; "BOO AT THE DOOR / = TRICK!" with BOO glowing at an opening
-  door until the first trick), "A GHOST RISES..." once a round; ranks v2 (0 / 60 / 140 / 230 / 360 / 520, retuned on the phone bots); the
-  results show porches n/5, tricks, BOOs, catches and the best streak.
+  residents, 70 s); a porch that relights lays a trail of 5 candies along the lane (in place of ordinary respawns; a dry
+  view still gets its candy in view); treating or tricking all five lane porches pays the Full Round (+25), each visited
+  porch keeping a lit jack-o'-lantern on its post (no HUD); the Witching Hour relights every porch at once and its candy
+  rain drops from 20 to 12. Residents come from the ghost pool (`ghosts.summon`: a dormant ghost from the chimney, else
+  the nearest wandering one; it takes a chase slot). Until the map pass builds the cottages (`porch-spots.js` stands in
+  for its `PORCHES`), each porch is a stand-in front built from the `props.js` kit (one merged mesh, its glowing parts
+  in another, the doors one instanced mesh: three draws; the stub turns P1 and P6 along the axes, as the stand-in walls
+  collide as boxes). Hints go through paced call-outs (`hud.say`: one per 2.5 s, duplicates and stale ones dropped; a
+  trick, a catch or the Witching Hour hold the screen a second against a streak's), once-per-device lessons in `taught`
+  (localStorage `midnight-candy-run.taught.*`; "BOO AT THE DOOR / = TRICK!" with BOO glowing at an opening door until
+  the first trick), "A GHOST RISES..." once a round; ranks v2 (0 / 60 / 140 / 230 / 360 / 520, retuned on the phone
+  bots); the results show porches n/5, tricks, BOOs, catches and the best streak.
 
 ## 1.0.0 — 2026-10-30
 The release of the 1.0 roadmap (phases 0.5.0 - 0.9.0, ENGINE.md): a general engine with its graphics and physics pushed as
