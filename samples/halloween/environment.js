@@ -871,7 +871,7 @@ export class Environment {
         if (this._blink[k] > 0) { this._blink[k] -= dt; v *= 0.12 + 0.2 * Math.max(0, Math.sin(t * 24 + k)); }
       } else if (kind === GLOW.BREW) v = 0.86 + 0.14 * Math.sin(t * 1.7 + k) + 0.18 * S;
       else if (kind === GLOW.EMBER) v = 0.85 + 0.1 * Math.sin(t * 5.1 + k) + 0.08 * Math.sin(t * 13.3 + k) + 0.35 * G;
-      else if (kind === GLOW.LAMP) v = 1 - amt * (0.04 + 0.03 * Math.sin(t * 3.1 + k * 1.7)); // a steady lamp (the game scales it after this)
+      else if (kind === GLOW.LAMP) v = 1 - amt * (0.04 + 0.03 * Math.sin(t * 3.1 + k * 1.7)); // steady (the game scales it)
       lv[k] = Math.max(0.15, v);
     }
   }
