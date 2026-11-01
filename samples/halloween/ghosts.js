@@ -4,11 +4,12 @@
 //   dormant (under its grave, hidden) -> rise (out of the ground) -> wander <-> chase -> (caught the kid) retreat,
 //   any awake state -> flee (BOO!) -> wander.
 // A ghost that just caught the kid, was booed, or chased for CHASE_MAX s without catching stays calm (wanders, no chase)
-// for a few seconds, and after a catch the other ghosts within CALM_R calm down too (CALM_NEAR; the farther ones for
-// CALM_FAR, a little longer than the kid's safety), so the round has breathing room between attacks instead of one long pile-on (a pack used to catch a cornered kid again every time its
-// 2 s of safety ran out). At most `maxChasers` ghosts chase at once (the game sets 2 on phones); the others wait
-// their turn at HOLD_R from the kid (closer, a free chase slot would start a chase from point-blank range). A "tame" ghost (g.tame > 0 s, the game's BOO lesson) chases from any distance
-// but slowly (TAME_SPEED) and cannot catch; a BOO or the time running out ends it.
+// for a few seconds, and after a catch the other ghosts within CALM_R calm down too (CALM_NEAR, backing off; the
+// farther ones for CALM_FAR, a little longer than the kid's safety), so the round has breathing room between attacks
+// instead of one long pile-on (a pack used to catch a cornered kid again every time its 2 s of safety ran out).
+// At most `maxChasers` ghosts chase at once (the game sets 2 on phones); the others wait their turn HOLD_R m from the
+// kid (closer, a freed chase slot would start a chase from point-blank range). A "tame" ghost (g.tame > 0 s, the
+// game's BOO lesson) chases from any distance but slowly (TAME_SPEED) and cannot catch; a BOO or its time ends it.
 // Every ghost exists (and is simulated) for the whole round; waking one teleports its head and its whole cloth
 // (positions and previous positions, so no velocity) to a grave. The face (eyes, mouth) is painted in the cloth
 // texture where the dome's front lands in UV. Ghosts pass through everything (head layer 0) and cast no shadow.
