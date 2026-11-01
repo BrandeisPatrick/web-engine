@@ -15,10 +15,12 @@
 //              and mist pouring out of a grave as a ghost rises (additive soft quads, one draw)
 //   lightning  soft sheet lightning (sky, clouds and the ambient fill brighten for under a second, never a hard
 //              strobe; reduced motion: one slow, dim swell), thunder a moment later
-//   crows      Crows (state; drawn by Fliers): perched on the gate finials, the scarecrow, the crypt and the tall
-//              stones; they lift off when the kid runs near (or a BOO / thunder), fly off, and glide back later
-//   lights     every lamp, candle and window of the merged glow mesh flickers by its light group (world.glowLevels):
-//              flames gutter in the gusts, the house windows blink out now and then near midnight and at a strike
+//   crows      Crows (state; drawn by Fliers): perched on the gate finials, the scarecrow, the crypt, the hollow oak,
+//              the cottages' roofs, the signpost and the tall stones (world.perches); they lift off when the kid runs
+//              near (or a BOO / thunder), fly off, and glide back later
+//   lights     every candle and window of the merged glow mesh flickers by its light group (world.glowLevels): flames
+//              gutter in the gusts, the house windows blink out now and then near midnight and at a strike (the porch
+//              lamps, their railings and the oak's glint, GLOW.LAMP, are the game's: left as it sets them)
 //   gate       the graveyard's gate leaves (part of the props mesh, world.js) swing in the gusts, and creak
 // Draw calls: three (Fliers, MistField, MoonClouds); world.js gave back one (the moon and its halo are one quad now).
 //   sound      on the game's AudioBus: wind swells with the gusts, thunder, caws and wing beats, the gate's creak
@@ -859,6 +861,7 @@ export class Environment {
     }
     for (let k = 0; k < groups.length; k++) {
       const [kind, amt] = groups[k];
+      if (kind === GLOW.LAMP) continue; // porch lamps, railings, the oak's glint: the game sets their level
       let v = 1;
       if (kind === GLOW.FLAME) {
         v = 1 - amt * (0.12 + 0.1 * Math.sin(t * 9.3 + k * 2.1) + 0.06 * Math.sin(t * 23.1 + k)) * (1 + 1.4 * gutter);

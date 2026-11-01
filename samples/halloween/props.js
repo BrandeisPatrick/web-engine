@@ -19,10 +19,13 @@
 //   crack(B, pts, w, color)         a thin dark ribbon along a polyline (cracks, engraved lines), lying on a face
 //   Batch                           collects painted parts, merges them (+ the baked ground contact shading)
 // Builders (each appends to a Batch B, glow parts to a glow Batch G; ctx = { glow(kind, amount) -> light group,
-//   spot(x, y, z, size, r, g, b, flicker, group), groundAt(x, z) }):
+//   spot(x, y, z, size, r, g, b, flicker, group) -> halo index, groundAt(x, z) }):
 //   gravestone(B, o)  deadTree(B, o)  ironFence(B, ...)  gatePost(B, ...)  gateArch(B, ...)  gateLeafParts(...)
 //   picketFence(B, ...)  hauntedHouse(B, G, ctx, o)  crypt(B, G, ctx, o)  scarecrow(B, G, ctx, o)
 //   cauldron(B, G, ctx, o)  hayBale(B, o)  candleLantern(B, G, x, y, z, ry)  pumpkinGeometry(...)  pumpkinLeafGeometry()
+//   the village (map v2): cottage(B, G, ctx, o)  doorGeometry()  bridge(B, G, ctx, o)  bankWall(B, o)  reeds(B, o)
+//   standingStone(B, o)  baleBlock(B, o)  well(B, o)  signpost(B, o)  hollowOak(B, G, ctx, o)  bench(B, o)
+//   pickets(B, ...)  pathStones(B, pts, groundAt, o)  jackOLantern(B, G, ctx, o)
 // Builders never touch the level's random stream: every variation comes from a local seeded stream (seedOf(x, z)), so
 // placing a prop never moves anything else (world.js still draws the same numbers it always did).
 import * as THREE from 'three';
@@ -712,9 +715,13 @@ function windowDressing(L, r, lx, ly, z0, ww, hh, { trim = '#4e3f58', shutter = 
  * walls that lean a little, corner boards, a shingled gable roof with ragged rows and a crooked brick chimney, a corner
  * tower under a bent witch-hat roof with a weathervane, dressed windows (shutters, sills, lintels; one boarded up), an
  * arched door and a porch with turned posts, a railing, steps and a lantern. The glowing window panes, the lantern
- * flame and their halos go through ctx (light groups the game flickers).
+ * flame and their halos go through ctx (light groups the game flickers). o.door false: no door leaf (a dark doorway in
+ * the frame: the caller draws a door that opens, see doorGeometry); o.lamp: the porch lantern's light kind ('flame', or
+ * 'lamp': a warm white porch lamp the game drives). Returns { lamp (its light group), lampHalo, chimney: [x, y, z] (the
+ * cowl's top), door: { hinge: [x, y, z], yaw, w, h }, at(lx, ly, lz) -> [x, y, z] (a point of the house's frame, the
+ * lean ignored) }.
  */
-export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw }) {
+export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp = 'flame' }) {
   const r = rngAt(x, z, 21), L = new Parts();
   const WALL = '#33293d', WALL2 = '#3d3148', ROOF = '#241c2b', TRIM = '#6b5a78', STONE = '#454050';
   const c = Math.cos(yaw), s = Math.sin(yaw);
@@ -774,6 +781,7 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw }) {
     L.add(new THREE.BoxGeometry(0.8, 0.06, 0.04), TRIM, gx, 7.1, z0 + gd / 2 + 0.07);
   }
   // ---- the crooked chimney (bricks stacked off true), a cap, and a cowl
+  let chim;
   {
     let cy = 7.4, ox = w / 2 - 2.0, oz = -0.9, k = 0;
     for (; k < 8; k++) {
@@ -783,6 +791,7 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw }) {
       cy += 0.4; ox -= 0.03 * k;
     }
     vgrad(L.add(chamferBox(0.92, 0.14, 0.92, 0.03), '#2b2230', ox - 0.05, cy - 0.12, oz, 0.1, 0, -0.18), 0.9, 1.2);
+    chim = [ox - 0.05 + 0.03 * (cy - 0.6), cy, oz]; // its top (local, after the house's lean)
   }
   // ---- the tower (front left): walls, siding, bands, and a witch-hat roof with a bent tip and a weathervane
   const tx = -w / 2 + 1, tz = d / 2 - 1, TW = 3.2;
@@ -821,10 +830,12 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw }) {
   winF.forEach(([lx, ly], i) => windowDressing(L, r, lx, ly, d / 2, 1, 1.3, { crooked: i === 1 || i === 4, boarded: i === 2 }));
   windowDressing(L, r, tx, 7.6, d / 2 + 0.6, 0.9, 1.2, { crooked: true });
   windowDressing(L, r, tx, 4.2, d / 2 + 0.6, 0.8, 1.1, {});
-  // ---- the door (arched, panelled, a brass knob) in a trimmed frame
-  vgrad(L.add(slab(1.3, 2.35, 0.1, 'round', 0.02), '#3b1d2b', 1.2, 0.3, d / 2 + 0.02), 0.75, 1.1);
-  for (const [px, py] of [[-0.3, 0.75], [0.3, 0.75], [-0.3, 1.55], [0.3, 1.55]]) lineOn(L, [[1.2 + px - 0.18, 0.3 + py - 0.25, d / 2 + 0.075], [1.2 + px + 0.18, 0.3 + py - 0.25, d / 2 + 0.075], [1.2 + px + 0.18, 0.3 + py + 0.25, d / 2 + 0.075], [1.2 + px - 0.18, 0.3 + py + 0.25, d / 2 + 0.075], [1.2 + px - 0.18, 0.3 + py - 0.25, d / 2 + 0.075]], 0.012, '#24101a');
-  L.add(new THREE.SphereGeometry(0.06, 8, 6), '#d6a640', 1.7, 1.45, d / 2 + 0.11);
+  // ---- the door (arched, panelled, a brass knob) in a trimmed frame (or a dark doorway: the caller's door opens)
+  if (door) {
+    vgrad(L.add(slab(1.3, 2.35, 0.1, 'round', 0.02), '#3b1d2b', 1.2, 0.3, d / 2 + 0.02), 0.75, 1.1);
+    for (const [px, py] of [[-0.3, 0.75], [0.3, 0.75], [-0.3, 1.55], [0.3, 1.55]]) lineOn(L, [[1.2 + px - 0.18, 0.3 + py - 0.25, d / 2 + 0.075], [1.2 + px + 0.18, 0.3 + py - 0.25, d / 2 + 0.075], [1.2 + px + 0.18, 0.3 + py + 0.25, d / 2 + 0.075], [1.2 + px - 0.18, 0.3 + py + 0.25, d / 2 + 0.075], [1.2 + px - 0.18, 0.3 + py - 0.25, d / 2 + 0.075]], 0.012, '#24101a');
+    L.add(new THREE.SphereGeometry(0.06, 8, 6), '#d6a640', 1.7, 1.45, d / 2 + 0.11);
+  } else L.add(slab(1.3, 2.35, 0.02, 'round', 0), '#07040a', 1.2, 0.3, d / 2 + 0.012);
   for (const sx of [-0.78, 0.78]) L.add(chamferBox(0.16, 2.55, 0.16, 0.03), TRIM, 1.2 + sx, 1.5, d / 2 + 0.04);
   vgrad(L.add(slab(1.75, 0.4, 0.16, 'round', 0.02), TRIM, 1.2, 2.4, d / 2 + 0.04), 0.85, 1.15);
   // ---- the porch: a planked deck, steps, turned posts, a railing, a roof with brackets
@@ -850,6 +861,7 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw }) {
   L.bend((px, py, pz2) => [px + 0.03 * Math.max(0, py - 0.6), py - 0.004 * px * Math.max(0, py - 0.6) / 6, pz2]);
   L.into(B, x, y, z, yaw);
   // ---- glow: the porch lantern (a flame group), the windows (window groups: blink near midnight)
+  let lampG = 0, lampHalo = -1;
   {
     const [px, pz2] = W(2.3 + 0.03 * 2.3, d / 2 + 1.2);
     const LT = new Parts();
@@ -858,9 +870,10 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw }) {
     for (const [ex, ez] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) LT.add(new THREE.BoxGeometry(0.02, 0.26, 0.02), '#141016', ex * 0.085, 2.34, ez * 0.085);
     LT.add(new THREE.BoxGeometry(0.2, 0.03, 0.2), '#141016', 0, 2.2, 0);
     LT.into(B, px, y, pz2, yaw);
-    const gp = ctx.glow('flame', 1);
-    G.add(new THREE.BoxGeometry(0.15, 0.22, 0.15), '#ffb253', px, y + 2.34, pz2, yaw, 0, 0, 1, 1, 1, 2.4);
-    ctx.spot(px, y + 2.34, pz2, 2.2, 0.55, 0.26, 0.07, 1, gp);
+    const white = lamp === 'lamp';
+    lampG = ctx.glow(lamp, 1);
+    G.add(new THREE.BoxGeometry(0.15, 0.22, 0.15), white ? '#fff1d2' : '#ffb253', px, y + 2.34, pz2, yaw, 0, 0, 1, 1, 1, white ? 3.4 : 2.4);
+    lampHalo = ctx.spot(px, y + 2.34, pz2, white ? 2.8 : 2.2, ...(white ? LAMP_HALO : [0.55, 0.26, 0.07]), 1, lampG);
   }
   const lean = (lx, ly) => lx + 0.03 * Math.max(0, ly - 0.6);
   const win = (lx, ly, lz, ww, hh, col, k) => { const [px, pz2] = W(lx, lz); G.add(new THREE.PlaneGeometry(ww, hh), col, px, y + ly, pz2, yaw, 0, 0, 1, 1, 1, k); };
@@ -873,6 +886,8 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw }) {
   ctx.glow('window', 0.2); win(lean(tx, 7.6) - 0.018 * 7, 7.6, d / 2 + 0.62 + 0.008 * 7, 0.9, 1.2, '#ffcf6a', 4);
   ctx.glow('window', 0.2); win(lean(tx, 4.2) - 0.018 * 3.6, 4.2, d / 2 + 0.62 + 0.008 * 3.6, 0.8, 1.1, '#ff9a3a', 3);
   ctx.glow('steady', 0);
+  const at = (lx, ly, lz) => { const [px, pz2] = W(lx, lz); return [px, y + ly, pz2]; };
+  return { lamp: lampG, lampHalo, chimney: at(chim[0], chim[1] + 0.2, chim[2]), door: { hinge: at(1.2 - 0.65, 0.3, d / 2 + 0.05), yaw, w: 1.3, h: 2.35 }, at };
 }
 
 // ------------------------------------------------------------------ the crypt
@@ -880,7 +895,8 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw }) {
  * A mausoleum at (x, y, z) facing +z: stepped plinth, a block of rusticated stone with pilasters, a cornice, a stone
  * roof whose ridge runs along x (its cap top at 5.06: the crows' perch), a portico of two fluted columns under a
  * pediment with a wreath, a banded double door, ivy, cracks and moss; the door candles and the green glow under the
- * door go through ctx.
+ * door go through ctx. Returns { door: [x, y, z] (the door's foot, its front face), crack (the green glow's light
+ * group), crackHalo }.
  */
 export function crypt(B, G, ctx, { x, y, z }) {
   const r = rngAt(x, z, 31), L = new Parts(), STONE = '#58535f', DARK = '#3b3743', LIGHT = '#6a6574';
@@ -941,8 +957,9 @@ export function crypt(B, G, ctx, { x, y, z }) {
   }
   const gd = ctx.glow('brew', 0.5);
   G.add(new THREE.PlaneGeometry(1.5, 0.07), '#7dff9a', x, y + 0.585, z + 2.2, 0, 0, 0, 1, 1, 1, 4);
-  ctx.spot(x, y + 0.75, z + 2.6, 2.2, 0.05, 0.22, 0.09, 0, gd);
+  const crackHalo = ctx.spot(x, y + 0.75, z + 2.6, 2.2, 0.05, 0.22, 0.09, 0, gd);
   ctx.glow('steady', 0);
+  return { door: [x, y + 0.6, z + 2.27], crack: gd, crackHalo };
 }
 
 // ------------------------------------------------------------------ the scarecrow
@@ -998,7 +1015,8 @@ export function scarecrow(B, G, ctx, { x, y, z }) {
 /**
  * A witch's cauldron at (x, y, z): a pot-bellied iron pot with a rolled rim, claw feet and ring handles, bubbling
  * glowing brew with a ladle in it and goo dripping over the rim, on crossed logs over embers in a ring of stones (the
- * brew and the embers are light groups through ctx). Its rim is at 1.24 m.
+ * brew and the embers are light groups through ctx). Its rim is at 1.24 m. Returns { brew, ember (light groups),
+ * brewHalo, emberHalo (halo indices) }.
  */
 export function cauldron(B, G, ctx, { x, y, z }) {
   const r = rngAt(x, z, 51), L = new Parts(), IRONC = '#1d1a23';
@@ -1032,9 +1050,10 @@ export function cauldron(B, G, ctx, { x, y, z }) {
     const a = (k / 3) * Math.PI * 2 + r(), ca = Math.cos(a), sa = Math.sin(a), len = 0.08 + r() * 0.14;
     G.add(sweep(curve([[ca * 0.72, 1.27, sa * 0.72], [ca * 0.82, 1.12, sa * 0.82], [ca * 0.87, 1.12 - len, sa * 0.87]], 5), (t) => 0.022 * (1 - 0.3 * t) + (t > 0.85 ? 0.01 : 0), 4, { caps: [false, 0.02] }), '#4ad85a', x, y, z, 0, 0, 0, 1, 1, 1, 0.9);
   }
-  ctx.spot(x, y + 1.45, z, 3.2, 0.1, 0.42, 0.12, 0.4, gb);
-  ctx.spot(x, y + 0.2, z, 2.2, 0.5, 0.18, 0.03, 1, ge);
+  const brewHalo = ctx.spot(x, y + 1.45, z, 3.2, 0.1, 0.42, 0.12, 0.4, gb);
+  const emberHalo = ctx.spot(x, y + 0.2, z, 2.2, 0.5, 0.18, 0.03, 1, ge);
   ctx.glow('steady', 0);
+  return { brew: gb, ember: ge, brewHalo, emberHalo };
 }
 
 // ------------------------------------------------------------------ hay bales
@@ -1063,4 +1082,508 @@ export function hayBale(B, { x, y, z, ry = 0 }) {
   for (const k of [-0.28, 0.28]) L.add(new THREE.TorusGeometry(R + 0.008, 0.016, 3, 16).rotateY(Math.PI / 2), '#5e4520', k, R * 0.86, 0, 0, 0, 0, 1, 0.93, 1);
   for (let k = 0; k < 5; k++) { const a = r() * 6.28, sx = (r() - 0.5) * 0.9; L.add(new THREE.ConeGeometry(0.012, 0.22, 3), '#d8b25a', sx, R * 0.86 + Math.cos(a) * R * 0.95, Math.sin(a) * R, 0, Math.sin(a) * 1.2 + (r() - 0.5), (r() - 0.5) * 1.2); }
   L.into(B, x, y, z, ry);
+}
+
+// ------------------------------------------------------------------ the village (map v2)
+// The v2 map's structures: cottages with porches, footbridges, the creek's banks and reeds, standing stones, straw-bale
+// blocks, the well, the signpost, the hollow oak, a bench, picket fences, path stones and small jack-o'-lanterns.
+// village.js places them, adds their colliders and keeps the anchors the game needs.
+
+/** A porch lamp's halo (warm white: the colour language keeps it for the porches). */
+export const LAMP_HALO = [0.5, 0.44, 0.32];
+const LAMP_GLASS = '#fff1d2';
+
+/** A small iron candle lantern standing on the ground at (x, y, z): frame, glowing glass, a pyramid roof, a ring. */
+export function candleLantern(B, G, x, y, z, ry = 0) {
+  const IR = '#17141c';
+  B.add(new THREE.BoxGeometry(0.24, 0.04, 0.24), IR, x, y + 0.02, z, ry);
+  for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+    const c = Math.cos(ry), sn = Math.sin(ry), lx = dx * 0.105, lz = dz * 0.105;
+    B.add(new THREE.BoxGeometry(0.022, 0.3, 0.022), IR, x + lx * c + lz * sn, y + 0.19, z - lx * sn + lz * c, ry);
+  }
+  B.add(new THREE.ConeGeometry(0.19, 0.13, 4).rotateY(Math.PI / 4), IR, x, y + 0.405, z, ry);
+  B.add(new THREE.TorusGeometry(0.035, 0.008, 4, 10), IR, x, y + 0.49, z, ry);
+  G.add(new THREE.BoxGeometry(0.18, 0.27, 0.18), '#ffb253', x, y + 0.19, z, ry, 0, 0, 1, 1, 1, 2.2);
+}
+
+/**
+ * A small carved jack-o'-lantern sitting at (x, y, z), its face toward yaw: the body in B (unlit), the carved face in
+ * G in a light group of its own (ctx `kind`, default 'lamp': the game lights it), with a small orange halo. Returns
+ * { group, halo }.
+ */
+export function jackOLantern(B, G, ctx, { x, y, z, yaw = 0, r = 0.17, kind = 'lamp' }) {
+  const body = pumpkinGeometry(r, 14, 0, '#b8581a', '#4a5a22', { lobes: 6, depth: 0.1, seed: (seedOf(x, z) % 89) + 1, lite: true });
+  body.deleteAttribute('rib');
+  B.push(place(body, x, y, z, yaw));
+  const group = ctx.glow(kind, 0.4);
+  const v = [], cy = 0.72 * r, ey = 0.74 * r;
+  const on = (px, py) => 0.97 * r * Math.sqrt(Math.max(0.02, 1 - (px / r) ** 2 - ((py - cy) / ey) ** 2)) + 0.004;
+  const tri = (pts) => { for (const [px, py] of pts) v.push(px, py, on(px, py)); };
+  tri([[-0.55 * r, 0.84 * r], [-0.14 * r, 0.84 * r], [-0.34 * r, 1.12 * r]]);
+  tri([[0.14 * r, 0.84 * r], [0.55 * r, 0.84 * r], [0.34 * r, 1.12 * r]]);
+  tri([[-0.09 * r, 0.66 * r], [0.09 * r, 0.66 * r], [0, 0.78 * r]]);
+  const grin = (u) => 0.4 * r + 0.22 * r * u * u;
+  for (let i = 0; i < 5; i++) { // a grin of five cut quads, the middle one left as a tooth
+    if (i === 2) continue;
+    const a = -0.6 + i * 0.24, b = a + 0.24, ya = grin(a / 0.6), yb = grin(b / 0.6), t = 0.13 * r;
+    tri([[a * r, ya], [b * r, yb], [b * r, yb + t]]); tri([[a * r, ya], [b * r, yb + t], [a * r, ya + t]]);
+  }
+  const face = new THREE.BufferGeometry();
+  face.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+  face.computeVertexNormals();
+  G.add(face, '#ffc35a', x, y, z, yaw, 0, 0, 1, 1, 1, 3);
+  const halo = ctx.spot(x + Math.sin(yaw) * r * 1.4, y + cy, z + Math.cos(yaw) * r * 1.4, 1.1, 0.5, 0.22, 0.05, 0.6, group);
+  ctx.glow('steady', 0);
+  return { group, halo };
+}
+
+const COTTAGE_PAL = [
+  { wall: '#3a3247', roof: '#2a2231', trim: '#8a7a99', shutter: '#2e3d3a', rug: '#5a2028' }, // violet
+  { wall: '#2e3a3b', roof: '#2b2a25', trim: '#94897a', shutter: '#4a2f33', rug: '#24405c' }, // teal
+  { wall: '#443830', roof: '#212b2d', trim: '#a0947e', shutter: '#2a3a4a', rug: '#4f3c16' }, // brown
+  { wall: '#3b3142', roof: '#2c2523', trim: '#7f8c94', shutter: '#3d2f45', rug: '#3c2a52' }, // plum
+  { wall: '#34393f', roof: '#2c2330', trim: '#94826e', shutter: '#2f3a2c', rug: '#5c3020' }, // slate
+];
+
+/**
+ * A cottage on the ground at (x, y, z) (y: its floor's ground), w x d, turned by yaw (its front, with the door, faces
+ * local +z = (sin yaw, cos yaw)), on a stone footing reaching `foot` m below y: clapboard walls (o.stone: rubble) with
+ * corner boards, a shingled gable roof (the ridge along local x) with bargeboards, a brick chimney, dressed windows
+ * (glow panes: one ctx 'window' light group per cottage), a framed dark doorway at local x doorX (the door leaf is the
+ * caller's: doorGeometry, so it can open), and a porch: a deck deckW x deckD whose top is 0.3 m up, a step round it, two
+ * posts under a little roof, a railing either side of the steps with a small jack-o'-lantern on its end post (its own
+ * light group, dark until the game lights it), a hanging lamp (ctx 'lamp': the porch light the game drives) and a
+ * doormat 2.2 x 1.6 whose border glows with the lamp. Returns world anchors: { lamp, lampHalo, matHalo, railing,
+ * railingHalo, window, windowHalo, deckTop, mat: { x, z, w, d, y }, door: { hinge: [x, y, z], yaw, w, h }, chimney:
+ * [x, y, z], deck (local extents, for colliders), at(lx, ly, lz) }.
+ */
+export function cottage(B, G, ctx, { x, y, z, w = 7, d = 6, yaw = 0, foot = 0.6, doorX = -0.9, deckW = 4.2, deckD = 1.9, palette = 0, stone = false }) {
+  const r = rngAt(x, z, 81), L = new Parts(), P = COTTAGE_PAL[palette % COTTAGE_PAL.length];
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  const at = (lx, ly, lz) => [x + lx * c + lz * s, y + ly, z - lx * s + lz * c];
+  const FL = 0.3, SILL = 0.4, WT = 3.15, DW = 1.1, DH = 2.1, fz = d / 2;
+  // ---- footing + walls (+ clapboards or rubble courses), corner boards, the eave band
+  vgrad(L.add(chamferBox(w + 0.3, foot + SILL, d + 0.3, 0.05), '#4a4552', 0, (SILL - foot) / 2, 0), 0.55, 0.95);
+  vgrad(L.add(new THREE.BoxGeometry(w, WT - SILL + 0.05, d), stone ? '#4d4757' : P.wall, 0, SILL - 0.05 + (WT - SILL + 0.05) / 2, 0), 0.72, 1.08);
+  for (const [nx, nz, len] of [[0, 1, w], [0, -1, w], [1, 0, d], [-1, 0, d]]) {
+    const off = nx ? w / 2 + 0.004 : d / 2 + 0.004, nrm = [nx, 0, nz];
+    const P3 = (u, v) => (nx ? [nx * off, v, u] : [u, v, nz * off]);
+    if (stone) { // rubble courses: wavy lines and staggered joints
+      for (let yy = 0.75, k = 0; yy < WT - 0.1; yy += 0.36, k++) {
+        const pts = []; for (let u = -len / 2; u <= len / 2 + 1e-6; u += len / 8) pts.push(P3(u, yy + (r() - 0.5) * 0.06));
+        lineOn(L, pts, 0.012, '#2e2a36', nrm);
+        for (let u = -len / 2 + 0.3 + (k % 2) * 0.35 + r() * 0.2; u < len / 2 - 0.2; u += 0.6 + r() * 0.35) lineOn(L, [P3(u, yy), P3(u + (r() - 0.5) * 0.05, yy + 0.35)], 0.011, '#2e2a36', nrm);
+      }
+    } else for (let yy = 0.7; yy < WT - 0.05; yy += 0.28) lineOn(L, [P3(-len / 2, yy), P3(len / 2, yy)], 0.013, '#1b1622', nrm);
+  }
+  for (const [cx, cz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) L.add(chamferBox(0.22, WT - SILL, 0.22, 0.03), P.trim, cx * w / 2, SILL + (WT - SILL) / 2, cz * d / 2);
+  vgrad(L.add(chamferBox(w + 0.3, 0.2, d + 0.3, 0.04), P.trim, 0, WT, 0), 0.8, 1.15);
+  // ---- gable roof: two slabs, shingle rows in ragged pieces, a ridge cap, gable ends with bargeboards and a round vent
+  const rh = 1.9, half = d / 2 + 0.45, slope = Math.atan2(rh, half), sl = Math.hypot(rh, half), RW = w + 0.8;
+  for (const sd of [1, -1]) {
+    vgrad(L.add(chamferBox(RW, 0.14, sl + 0.1, 0.04), P.roof, 0, WT + 0.05 + rh / 2, sd * half / 2, 0, sd * slope, 0), 0.85, 1.2);
+    for (let k = 0; k < 6; k++) {
+      const u = (k + 0.5) / 6, ry = WT + 0.05 + rh * (1 - u) + 0.09, rz = sd * half * u;
+      let xx = -RW / 2;
+      while (xx < RW / 2 - 0.2) {
+        const pw = Math.min(RW / 2 - xx, 1.6 + r() * 2.4);
+        if (r() > 0.05) vgrad(L.add(new THREE.BoxGeometry(pw - 0.05, 0.06, sl / 6 + 0.12), r() < 0.5 ? P.roof : '#352b3c', xx + pw / 2, ry + r() * 0.02, rz, (r() - 0.5) * 0.03, sd * (slope - 0.07), (r() - 0.5) * 0.04), 0.9, 1.3, 0.06, (r() * 1e6) | 0);
+        xx += pw;
+      }
+    }
+  }
+  vgrad(L.add(chamferBox(RW + 0.1, 0.16, 0.28, 0.05), '#2b2333', 0, WT + 0.05 + rh + 0.1, 0), 0.9, 1.3);
+  for (const sx of [-1, 1]) {
+    const tri = new THREE.Shape(); tri.moveTo(-d / 2, 0); tri.lineTo(d / 2, 0); tri.lineTo(0, rh - 0.05); tri.closePath();
+    vgrad(L.add(new THREE.ExtrudeGeometry(tri, { depth: 0.16, bevelEnabled: false }).translate(0, 0, -0.08), stone ? '#4d4757' : P.wall, sx * (w / 2 - 0.06), WT + 0.05, 0, Math.PI / 2), 0.8, 1.05);
+    for (const sd of [1, -1]) L.add(chamferBox(0.08, 0.2, sl + 0.25, 0.02), P.trim, sx * (w / 2 + 0.36), WT + 0.05 + rh / 2 - 0.02, sd * half / 2, 0, sd * slope, 0);
+    L.add(new THREE.TorusGeometry(0.28, 0.05, 4, 14), P.trim, sx * (w / 2 + 0.05), WT + 0.75, 0, Math.PI / 2);
+    L.add(new THREE.CircleGeometry(0.26, 12), '#120c14', sx * (w / 2 + 0.035), WT + 0.75, 0, sx * Math.PI / 2);
+  }
+  // ---- chimney (back slope, toward +x): brick courses, a cap; the residents drop out of it
+  const chx = w / 2 - 1.2, chz = -d / 4, chTop = WT + rh + 0.75;
+  for (let yy = WT + 0.5, k = 0; yy < chTop; yy += 0.4, k++) {
+    vgrad(L.add(chamferBox(0.66, 0.4, 0.66, 0.03), k % 2 ? '#4f3238' : '#46302f', chx + (r() - 0.5) * 0.03, yy + 0.2, chz, (r() - 0.5) * 0.06), 0.8, 1.1, 0.08, (r() * 1e6) | 0);
+    lineOn(L, [[chx - 0.33, yy + 0.4, chz + 0.332], [chx + 0.33, yy + 0.4, chz + 0.332]], 0.012, '#24161a');
+  }
+  vgrad(L.add(chamferBox(0.86, 0.12, 0.86, 0.03), '#2b2230', chx, chTop + 0.25, chz), 0.9, 1.2);
+  // ---- the doorway: a dark opening in a trimmed frame with a lintel (the door leaf opens into it)
+  L.add(new THREE.PlaneGeometry(DW + 0.04, DH), '#07040a', doorX, SILL + DH / 2, fz + 0.012);
+  for (const sx of [-1, 1]) L.add(chamferBox(0.14, DH + 0.1, 0.12, 0.02), P.trim, doorX + sx * (DW / 2 + 0.07), SILL + (DH + 0.1) / 2, fz + 0.04);
+  vgrad(L.add(chamferBox(DW + 0.5, 0.16, 0.16, 0.03), P.trim, doorX, SILL + DH + 0.12, fz + 0.05), 0.85, 1.2);
+  L.add(chamferBox(DW + 0.3, 0.06, 0.3, 0.02), '#4a4552', doorX, SILL - 0.02, fz + 0.12);
+  // ---- windows: one on the front (right of the porch), one on each side, one at the back (dressed; panes glow)
+  const front = doorX + deckW / 2 + 0.95, wins = [];
+  if (front + 0.6 < w / 2) { windowDressing(L, r, front, 1.75, fz, 0.9, 1.05, { trim: P.trim, shutter: P.shutter, crooked: r() < 0.3 }); wins.push([front, 1.75, fz + 0.02, 0, 0.9, 1.05]); }
+  for (const [px, pz, ry, ww] of [[w / 2, 0.4, Math.PI / 2, 0.8], [-w / 2, -0.4, -Math.PI / 2, 0.8], [1.2, -d / 2, Math.PI, 0.9]]) {
+    const T = new Parts();
+    windowDressing(T, r, 0, 1.75, 0, ww, 1.0, { trim: P.trim, shutter: P.shutter });
+    T.into(L, px, 0, pz, ry);
+    wins.push([px + Math.sin(ry) * 0.02, 1.75, pz + Math.cos(ry) * 0.02, ry, ww, 1.0]);
+  }
+  // ---- the porch: deck (planks), a step all round its front, posts, a sloping roof, railings either side of the steps
+  const dx0 = doorX - deckW / 2, dx1 = doorX + deckW / 2, dz1 = fz + deckD;
+  vgrad(L.add(chamferBox(deckW + 0.7, FL / 2 + 0.25, deckD + 0.35, 0.03), '#3a2e29', doorX, FL / 2 - (FL / 2 + 0.25) / 2, fz + (deckD + 0.35) / 2), 0.6, 0.9);
+  vgrad(L.add(chamferBox(deckW, FL + 0.25, deckD, 0.03), '#4a3a30', doorX, FL - (FL + 0.25) / 2, fz + deckD / 2), 0.65, 1.0);
+  for (let k = 1; k < deckW / 0.32; k++) lineOn(L, [[dx0 + k * 0.32, FL + 0.003, fz + 0.05], [dx0 + k * 0.32, FL + 0.003, dz1 - 0.05]], 0.011, '#231a17', [0, 1, 0]);
+  const postZ = dz1 - 0.14;
+  for (const px of [dx0 + 0.14, dx1 - 0.14]) {
+    const post = lathe([[0.08, 0], [0.1, 0.12], [0.065, 0.3], [0.07, 1.1], [0.095, 1.22], [0.07, 1.34], [0.07, 2.2], [0.1, 2.32], [0.1, 2.42]], 8);
+    vgrad(L.add(post, P.trim, px, FL, postZ), 0.8, 1.1);
+  }
+  vgrad(L.add(chamferBox(deckW + 0.5, 0.12, deckD + 0.55, 0.03), P.roof, doorX, FL + 2.55, fz + (deckD + 0.55) / 2 - 0.05, 0, 0.16, 0), 0.85, 1.2);
+  L.add(chamferBox(deckW + 0.5, 0.18, 0.07, 0.02), P.trim, doorX, FL + 2.38, dz1 + 0.24, 0, 0.16, 0);
+  const rails = [[dx0 + 0.14, doorX - 0.85], [doorX + 0.85, dx1 - 0.14]];
+  for (const [a, b] of rails) {
+    L.add(chamferBox(b - a, 0.07, 0.1, 0.02), P.trim, (a + b) / 2, FL + 0.86, postZ);
+    L.add(chamferBox(b - a, 0.05, 0.06, 0.015), P.trim, (a + b) / 2, FL + 0.15, postZ);
+    for (let bx = a + 0.18; bx < b - 0.08; bx += 0.19) L.add(new THREE.BoxGeometry(0.045, 0.7, 0.045), P.trim, bx, FL + 0.5, postZ);
+    for (const e of [a, b]) vgrad(L.add(chamferBox(0.13, 0.95, 0.13, 0.02), P.trim, e, FL + 0.475, postZ), 0.8, 1.1);
+  }
+  const MW = 2.2, MD = 1.6, mz = fz + 0.05 + MD / 2;
+  // ---- the lamp: an iron bracket right of the door, a lantern hanging from it
+  const lx = doorX + DW / 2 + 0.38, lz = fz + 0.34;
+  L.add(new THREE.BoxGeometry(0.05, 0.05, 0.4), '#141016', lx, SILL + 2.22, fz + 0.2);
+  L.add(new THREE.ConeGeometry(0.15, 0.13, 4).rotateY(Math.PI / 4), '#141016', lx, SILL + 2.0, lz);
+  L.add(new THREE.CylinderGeometry(0.008, 0.008, 0.16, 3), '#141016', lx, SILL + 2.12, lz);
+  for (const [ex, ez] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) L.add(new THREE.BoxGeometry(0.018, 0.24, 0.018), '#141016', lx + ex * 0.075, SILL + 1.82, lz + ez * 0.075);
+  L.add(new THREE.BoxGeometry(0.18, 0.03, 0.18), '#141016', lx, SILL + 1.69, lz);
+  L.into(B, x, y, z, yaw);
+  const m = at(doorX, FL, mz);
+  doormat(B, { x: m[0], y: m[1], z: m[2], yaw, rug: P.rug, w: MW, d: MD });
+  // ---- glow: windows (one group), the lamp + the mat (the porch's group), the railing jack-o'-lantern (its own)
+  const window = ctx.glow('window', 0.2);
+  let windowHalo = -1;
+  for (const [px, py, pz, ry, ww, hh] of wins) {
+    const [gx, gy, gz] = at(px, py, pz);
+    G.add(new THREE.PlaneGeometry(ww, hh), '#ffc66e', gx, gy, gz, yaw + ry, 0, 0, 1, 1, 1, 1.9);
+    if (windowHalo < 0 && ry === 0) { const h = at(px, py, pz + 0.45); windowHalo = ctx.spot(h[0], h[1], h[2], 1.9, 0.2, 0.11, 0.03, 0.2, window); }
+  }
+  const lamp = ctx.glow('lamp', 0.1);
+  { const [gx, gy, gz] = at(lx, SILL + 1.82, lz); G.add(new THREE.BoxGeometry(0.13, 0.22, 0.13), LAMP_GLASS, gx, gy, gz, yaw, 0, 0, 1, 1, 1, 4.2); }
+  const lh = at(lx, SILL + 1.82, lz + 0.05), lampHalo = ctx.spot(lh[0], lh[1], lh[2], 2.9, ...LAMP_HALO, 0.1, lamp);
+  doormatGlow(G, { x: m[0], y: m[1], z: m[2], yaw, w: MW, d: MD });
+  const mh = at(doorX, FL + 0.35, mz), matHalo = ctx.spot(mh[0], mh[1], mh[2], 2.3, 0.2, 0.16, 0.09, 0.1, lamp);
+  const jp = at(doorX + 0.85, FL + 0.95, postZ);
+  const jack = jackOLantern(B, G, ctx, { x: jp[0], y: jp[1], z: jp[2], yaw: yaw + 0.25, r: 0.16 });
+  ctx.glow('steady', 0);
+  return {
+    lamp, lampHalo, matHalo, railing: jack.group, railingHalo: jack.halo, window, windowHalo, deckTop: y + FL,
+    mat: { x: m[0], z: m[2], w: MW, d: MD, y: y + FL },
+    door: { hinge: at(doorX - DW / 2, SILL, fz + 0.045), yaw, w: DW, h: DH },
+    chimney: at(chx, chTop + 0.4, chz),
+    deck: { x0: dx0, x1: dx1, z0: fz, z1: dz1, rails: rails.map(([a, b]) => [a, b, postZ]) },
+    at,
+  };
+}
+
+/** A doormat w x d lying on the deck at (x, y, z), turned by yaw: a rug with two woven border lines (in B). */
+export function doormat(B, { x, y, z, yaw = 0, rug = '#5a2028', w = 2.2, d = 1.6 }) {
+  const L = new Parts();
+  L.add(chamferBox(w, 0.025, d, 0.008), rug, 0, 0.012, 0);
+  for (const k of [0.32, 0.5]) lineOn(L, [[-w / 2 + k, 0.027, -d / 2 + k], [w / 2 - k, 0.027, -d / 2 + k], [w / 2 - k, 0.027, d / 2 - k], [-w / 2 + k, 0.027, d / 2 - k], [-w / 2 + k, 0.027, -d / 2 + k]], 0.02, '#c9a86a', [0, 1, 0]);
+  L.into(B, x, y, z, yaw);
+}
+/** The doormat's glowing border and pumpkin emblem (into the glow batch G, in its current light group: the lamp's). */
+export function doormatGlow(G, { x, y, z, yaw = 0, w = 2.2, d = 1.6 }) {
+  const L = new Parts();
+  for (const [ax, az, bx, bz] of [[-1, -1, 1, -1], [1, -1, 1, 1], [1, 1, -1, 1], [-1, 1, -1, -1]]) {
+    const cx = ((ax + bx) / 2) * (w / 2 - 0.1), cz = ((az + bz) / 2) * (d / 2 - 0.1), len = ax === bx ? d - 0.14 : w - 0.14;
+    L.add(new THREE.BoxGeometry(ax === bx ? 0.06 : len, 0.006, ax === bx ? len : 0.06), '#ffd9a0', cx, 0.03, cz);
+  }
+  L.add(new THREE.CircleGeometry(0.2, 12).rotateX(-Math.PI / 2), '#ffb062', 0, 0.03, 0);
+  for (const g of L.list) { const C = g.attributes.color.array; for (let i = 0; i < C.length; i++) C[i] *= 1.5; }
+  L.into(G, x, y, z, yaw);
+}
+
+/**
+ * A porch door leaf, w x h (x from 0 at the hinge to w, y from 0, 0.07 thick, centred on z = 0): planks under an
+ * arched top, iron strap hinges, a ring knocker. Vertex coloured near-white (tinted per instance). One geometry for
+ * every porch door (village.js: an InstancedMesh that swings them).
+ */
+export function doorGeometry(w = 1.1, h = 2.1) {
+  const L = new Parts();
+  vgrad(L.add(slab(w, h, 0.07, 'round', 0.012), '#ffffff', w / 2, 0, 0), 0.72, 1.05);
+  for (const k of [0.25, 0.5, 0.75]) lineOn(L, [[w * k, 0.06, 0.037], [w * k, h - (Math.abs(k - 0.5) < 0.1 ? 0.06 : 0.2), 0.037]], 0.01, '#3a3a3a');
+  for (const yy of [0.45, h - 0.78]) {
+    L.add(new THREE.BoxGeometry(w * 0.72, 0.06, 0.02), '#2a2428', w * 0.36, yy, 0.045);
+    L.add(new THREE.CylinderGeometry(0.03, 0.03, 0.08, 6), '#2a2428', 0.0, yy, 0.0);
+  }
+  L.add(new THREE.TorusGeometry(0.065, 0.012, 4, 10), '#3b3236', w * 0.8, 1.12, 0.05);
+  L.add(new THREE.SphereGeometry(0.035, 6, 4), '#c09a48', w * 0.8, 1.2, 0.05);
+  for (const g of L.list) g.clearGroups();
+  const out = mergeGeometries(L.list);
+  for (const g of L.list) g.dispose();
+  return out;
+}
+
+/**
+ * A plank footbridge running along z from z0 to z1 at x, w wide, its deck top at y (flush with the banks): stone piers
+ * from the creek bed (bedY), two stringers, cross planks (a few askew), posts with a top and a mid rail, and a candle
+ * lantern on an end post at each end (ctx 'flame' light groups). Returns { candles: [[group, halo, x, y, z], ...] }.
+ */
+export function bridge(B, G, ctx, { x, y, z0, z1, w = 2.6, bedY }) {
+  const r = rngAt(x, z0, 91), L = new Parts(), WD = '#4b3b30';
+  const za = z0 - 0.45, zb = z1 + 0.45, len = zb - za, zc = (za + zb) / 2;
+  for (const zz of [z0 + 0.2, z1 - 0.2]) for (const sx of [-1, 1]) {
+    const ph = y - bedY + 0.1;
+    vgrad(L.add(chamferBox(0.75, ph, 0.7, 0.05), '#4a4552', x + sx * (w / 2 - 0.3), bedY - 0.1 + ph / 2 - 0.15, zz), 0.5, 0.9);
+  }
+  for (const sx of [-1, 1]) vgrad(L.add(chamferBox(0.22, 0.26, len, 0.03), '#3a2d25', x + sx * (w / 2 - 0.3), y - 0.22, zc), 0.7, 1.0);
+  for (let zz = za + 0.16; zz < zb - 0.1; zz += 0.31) {
+    const g = L.add(chamferBox(w + 0.2 + (r() - 0.5) * 0.25, 0.08, 0.27, 0.02), r() < 0.5 ? WD : '#54433a', x + (r() - 0.5) * 0.1, y - 0.04, zz, (r() - 0.5) * 0.06);
+    vgrad(g, 0.8, 1.1, 0.06, (r() * 1e6) | 0);
+  }
+  for (const sx of [-1, 1]) {
+    for (const zz of [za + 0.1, zc, zb - 0.1]) vgrad(L.add(chamferBox(0.14, 1.12, 0.14, 0.02), '#3f3129', x + sx * w / 2, y + 0.5, zz, (r() - 0.5) * 0.08), 0.75, 1.05);
+    L.add(chamferBox(0.09, 0.09, len - 0.1, 0.02), '#4f3f33', x + sx * w / 2, y + 0.98, zc);
+    L.add(chamferBox(0.06, 0.07, len - 0.1, 0.015), '#45362c', x + sx * w / 2, y + 0.5, zc);
+  }
+  L.into(B);
+  const candles = [];
+  for (const [sx, zz] of [[-1, za + 0.1], [1, zb - 0.1]]) {
+    const cx = x + sx * w / 2, cy = y + 1.06, g = ctx.glow('flame', 1);
+    candleLantern(B, G, cx, cy, zz, r() * 0.6);
+    candles.push([g, ctx.spot(cx, cy + 0.2, zz, 1.7, 0.55, 0.26, 0.07, 1, g), cx, cy, zz]);
+  }
+  ctx.glow('steady', 0);
+  return { candles };
+}
+
+/**
+ * A creek bank's retaining face from x0 to x1 along z = zf, facing dir (+1: toward +z), from the bed (bedY) to its lip
+ * (topY): a dark earth face 0.4 m thick with a course of rounded stones along the lip and a few half-buried lower down.
+ */
+export function bankWall(B, { x0, x1, zf, dir, topY, bedY }) {
+  const r = rngAt(x0, zf, 101), L = new Parts(), len = x1 - x0, h = topY - bedY + 0.15;
+  vgrad(L.add(chamferBox(len + 0.02, h, 0.42, 0.04), '#2e2722', (x0 + x1) / 2, bedY - 0.15 + h / 2, zf - dir * 0.21), 0.45, 0.95, 0.08, (r() * 1e6) | 0);
+  for (let xx = x0 + 0.2 + r() * 0.2; xx < x1 - 0.1; xx += 0.42 + r() * 0.25) {
+    const sz = 0.18 + r() * 0.1, g = L.add(new THREE.DodecahedronGeometry(sz, 0), r() < 0.5 ? '#4f4a56' : '#5a5560', xx, topY - 0.05, zf - dir * (0.1 + r() * 0.1), r() * 6, 0, 0, 1.3, 0.55, 1);
+    vgrad(g, 0.6, 1.15, 0.06, (r() * 1e6) | 0);
+  }
+  for (let k = 0; k < 2; k++) {
+    const g = L.add(new THREE.DodecahedronGeometry(0.2 + r() * 0.12, 0), '#3f3b45', x0 + 0.4 + r() * (len - 0.8), bedY + 0.2 + r() * (topY - bedY - 0.6), zf + dir * 0.02, r() * 6, r(), 0, 1.2, 0.8, 0.6);
+    vgrad(g, 0.5, 1.0, 0.06, (r() * 1e6) | 0);
+  }
+  L.into(B);
+}
+
+/** A clump of reeds and cattails at (x, y, z): thin tapering blades that sway (the tree-sway attribute), brown heads. */
+export function reeds(B, { x, y, z, n = 7, h = 1.1 }) {
+  const r = rngAt(x, z, 121), L = new Parts(), phase = (x * 0.37 + z * 0.21) % 6.28;
+  for (let k = 0; k < n; k++) {
+    const a = r() * 6.28, lean = 0.1 + r() * 0.25, hh = h * (0.6 + r() * 0.6), ox = Math.cos(a) * 0.15 * r(), oz = Math.sin(a) * 0.15 * r();
+    const pts = [[ox, -0.05, oz], [ox + Math.cos(a) * lean * 0.3, hh * 0.5, oz + Math.sin(a) * lean * 0.3], [ox + Math.cos(a) * lean, hh, oz + Math.sin(a) * lean]];
+    L.add(sweep(curve(pts, 4), (t) => 0.018 * (1 - t) + 0.003, 3, { caps: [false, 0.02] }), r() < 0.5 ? '#3d4a26' : '#4a5530');
+    if (k < 2) L.add(new THREE.CapsuleGeometry(0.035, 0.16, 2, 5), '#4a2f1c', pts[2][0] - Math.cos(a) * 0.04, hh - 0.1, pts[2][2] - Math.sin(a) * 0.04, 0, Math.cos(a) * lean, -Math.sin(a) * lean);
+  }
+  for (const g of L.list) {
+    const P2 = g.attributes.position.array, W2 = new Float32Array((P2.length / 3) * 2);
+    for (let i = 0; i < P2.length / 3; i++) { const k = Math.max(0, P2[i * 3 + 1] / (h * 1.2)); W2[i * 2] = 0.35 * k * k; W2[i * 2 + 1] = phase; }
+    g.setAttribute('sway', new THREE.BufferAttribute(W2, 2));
+  }
+  L.into(B, x, y, z);
+}
+
+/** Deterministic lumpy noise in about [-1, 1] at a point (rough stone). */
+const lump = (x, y, z, k) => Math.sin(x * 5.1 + k) * Math.sin(y * 3.7 + k * 2.3) * Math.cos(z * 4.3 + k * 0.7) * 0.6 + Math.sin(x * 11.3 - y * 7.9 + z * 9.1 + k) * 0.4;
+/**
+ * A standing stone (a menhir) on the ground at (x, y, z): a rough slab w x h x d that tapers and rounds off at the top,
+ * leaning a little, with lichen, moss at the foot and a carved spiral on its face (toward yaw).
+ */
+export function standingStone(B, { x, y, z, h = 2.2, w = 0.85, d = 0.55, yaw = 0, lean = 0.06 }) {
+  const r = rngAt(x, z, 131), L = new Parts(), k0 = r() * 10;
+  const g = new THREE.BoxGeometry(w, h, d, 3, 7, 2);
+  const P2 = g.attributes.position;
+  for (let i = 0; i < P2.count; i++) {
+    const px = P2.getX(i), py = P2.getY(i), pz = P2.getZ(i), t = clamp((py + h / 2) / h, 0, 1);
+    const taper = 1 - 0.32 * Math.pow(t, 1.4), round = t > 0.8 ? 1 - ((t - 0.8) / 0.2) ** 2 * 0.45 : 1, n = 1 + 0.09 * lump(px, py, pz, k0);
+    P2.setXYZ(i, px * taper * round * n, py - (t > 0.85 ? (Math.abs(px) / w) * 0.25 * h * (t - 0.85) : 0), pz * taper * n);
+  }
+  g.translate(0, h / 2 - 0.15, 0);
+  g.computeVertexNormals();
+  const body = L.add(g, r() < 0.5 ? '#5e5a66' : '#6a6672');
+  vgrad(body, 0.6, 1.1, 0.07, (r() * 1e6) | 0);
+  shade(body, (px, py, pz) => 0.92 + 0.12 * lump(px * 2, py * 2, pz * 2, k0 + 3));
+  const pts = []; // a carved spiral on the face
+  const zf = (d / 2) * (1 - 0.32 * Math.pow(0.6, 1.4)) + 0.025;
+  for (let k = 0; k <= 20; k++) { const a = k * 0.55, rr = 0.03 + k * 0.011; pts.push([Math.cos(a) * rr, h * 0.5 + Math.sin(a) * rr, zf]); }
+  lineOn(L, pts, 0.012, '#3a3640');
+  moss(L, r, 0, 0.05, 0, w * 0.9, d * 0.9, 4, 0.08);
+  for (let k = 0; k < 3; k++) { const gg = L.add(new THREE.CircleGeometry(0.06 + r() * 0.06, 7), '#7d8a5a', (r() - 0.5) * w * 0.4, h * (0.25 + r() * 0.45), zf - 0.012); vgrad(gg, 0.8, 1.1, 0.1, k); }
+  L.into(B, x, y, z, yaw, lean, (r() - 0.5) * 0.08);
+}
+
+/**
+ * A block of stacked straw bales on the ground at (x, y, z): w x h x d (the bales' courses `course` m high, joints
+ * staggered, twine), loose straws on top. The Bale Yard's stairs are three of them.
+ */
+export function baleBlock(B, { x, y, z, w, h, d, course = 0.35, yaw = 0 }) {
+  const r = rngAt(x, z, 141), L = new Parts();
+  const g = L.add(chamferBox(w, h + 0.1, d, 0.05), '#c69a46', 0, (h + 0.1) / 2 - 0.1, 0);
+  const ph = r() * 10;
+  shade(g, (px, py, pz, nx, ny) => (ny > 0.5 ? 1.08 : 0.82 + 0.25 * (0.5 + 0.5 * Math.sin(px * 31 + pz * 29 + Math.sin(py * 17) * 2 + ph))) * (0.9 + 0.2 * smooth((py + 0.1) / (h + 0.1))));
+  for (const [nx, nz, len] of [[0, 1, w], [0, -1, w], [1, 0, d], [-1, 0, d]]) {
+    const off = nx ? w / 2 + 0.004 : d / 2 + 0.004, P3 = (u, v) => (nx ? [nx * off, v, u] : [u, v, nz * off]), nrm = [nx, 0, nz];
+    for (let yy = course; yy < h - 0.05; yy += course) lineOn(L, [P3(-len / 2, yy), P3(len / 2, yy)], 0.016, '#7a5a26', nrm);
+    let k = 0;
+    for (let yy = 0; yy < h - 0.05; yy += course, k++) for (let u = -len / 2 + 0.55 + (k % 2) * 0.45; u < len / 2 - 0.2; u += 0.95) lineOn(L, [P3(u, yy + 0.02), P3(u, Math.min(h, yy + course) - 0.02)], 0.014, '#7a5a26', nrm);
+  }
+  for (let k = 0; k < 8; k++) L.add(new THREE.ConeGeometry(0.012, 0.26, 3), '#d8b25a', (r() - 0.5) * (w - 0.3), h + 0.02, (r() - 0.5) * (d - 0.3), r() * 6, 1.45, r() * 6);
+  L.into(B, x, y, z, yaw);
+}
+
+/**
+ * A stone well at (x, y, z): a ring of dressed stones in three courses round dark water, two posts and a crossbeam with
+ * a crank, a little shingled roof, a bucket on its rope. Its ring is 1.1 m in radius.
+ */
+export function well(B, { x, y, z, yaw = 0 }) {
+  const r = rngAt(x, z, 151), L = new Parts();
+  for (let k = 0; k < 3; k++) {
+    const n = 11, rr = 0.92;
+    for (let i = 0; i < n; i++) {
+      const a = ((i + (k % 2) * 0.5) / n) * Math.PI * 2, g = L.add(chamferBox(0.5, 0.27, 0.3, 0.04), r() < 0.5 ? '#5a5563' : '#666170', Math.sin(a) * rr, 0.13 + k * 0.28, Math.cos(a) * rr, a + (r() - 0.5) * 0.08);
+      vgrad(g, 0.7, 1.1, 0.06, (r() * 1e6) | 0);
+    }
+  }
+  vgrad(L.add(lathe([[1.1, 0.84], [1.12, 0.9], [0.8, 0.92], [0.76, 0.86]], 18), '#6e6979'), 0.85, 1.15);
+  L.add(new THREE.CircleGeometry(0.8, 16).rotateX(-Math.PI / 2), '#05070b', 0, 0.35, 0);
+  for (const sx of [-1, 1]) vgrad(L.add(chamferBox(0.14, 2.3, 0.14, 0.02), '#4a3a2e', sx * 0.95, 1.15, 0, (r() - 0.5) * 0.06), 0.75, 1.05);
+  L.add(new THREE.CylinderGeometry(0.06, 0.06, 2.1, 7).rotateZ(Math.PI / 2), '#3f3129', 0, 1.85, 0);
+  L.add(new THREE.BoxGeometry(0.05, 0.3, 0.05), '#2a2428', 1.1, 1.72, 0.1);
+  L.add(new THREE.BoxGeometry(0.2, 0.04, 0.04), '#2a2428', 1.18, 1.58, 0.1);
+  L.add(new THREE.CylinderGeometry(0.008, 0.008, 0.75, 3), '#8a7a5a', 0, 1.47, 0);
+  vgrad(L.add(lathe([[0.1, 0], [0.13, 0.22], [0.12, 0.23]], 10), '#4a3a2e', 0, 0.95, 0), 0.7, 1.1);
+  L.add(new THREE.TorusGeometry(0.1, 0.01, 3, 8, Math.PI), '#2a2428', 0, 1.18, 0);
+  for (const sd of [1, -1]) vgrad(L.add(chamferBox(2.5, 0.08, 0.95, 0.02), '#2d2530', 0, 2.48, sd * 0.38, 0, sd * 0.62, 0), 0.85, 1.25);
+  L.add(chamferBox(2.55, 0.1, 0.14, 0.03), '#3a2e33', 0, 2.78, 0);
+  L.into(B, x, y, z, yaw);
+}
+
+/**
+ * A crooked signpost at (x, y, z): a post with a cap and arrow boards at different heights, each [heading (rad: it
+ * points along (sin a, cos a)), colour] (painted in the colour of what lies that way), no lettering.
+ */
+export function signpost(B, { x, y, z, arms }) {
+  const r = rngAt(x, z, 161), L = new Parts();
+  vgrad(L.add(sweep(curve([[0, -0.3, 0], [0.03, 1.2, 0.02], [-0.02, 2.6, 0]], 6), (t) => 0.08 - 0.015 * t, 6, { caps: [false, 0] }), '#3d3029'), 0.7, 1.05);
+  L.add(new THREE.ConeGeometry(0.13, 0.18, 4).rotateY(Math.PI / 4), '#2a2230', -0.02, 2.68, 0);
+  const arrow = new THREE.Shape();
+  arrow.moveTo(-0.08, -0.11); arrow.lineTo(0.72, -0.11); arrow.lineTo(0.9, 0); arrow.lineTo(0.72, 0.11); arrow.lineTo(-0.08, 0.11); arrow.lineTo(-0.02, 0); arrow.closePath();
+  arms.forEach(([a, col], i) => {
+    const yy = 2.35 - i * 0.34, ry = a - Math.PI / 2; // the board's +x turned onto (sin a, cos a)
+    const g = L.add(new THREE.ExtrudeGeometry(arrow, { depth: 0.045, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.01, bevelSegments: 1 }).translate(0, 0, -0.0225), col, 0, yy, 0, ry, 0, (r() - 0.5) * 0.1);
+    vgrad(g, 0.75, 1.15, 0.06, i + 1);
+    L.add(new THREE.BoxGeometry(0.03, 0.03, 0.03), '#1a1418', Math.sin(a) * 0.06, yy, Math.cos(a) * 0.06);
+  });
+  L.into(B, x, y, z);
+}
+
+/**
+ * The hollow oak at (x, y, z): a huge gnarled trunk, hollow up to 2.1 m with an opening toward heading `open` (lathe
+ * convention: (sin a, cos a)), a dark inside, roots, and bare limbs forking into twigs (they sway: the tree-sway
+ * attribute). A faint glint inside (its own light group: ctx 'lamp'). Returns { glint, glintHalo, inside: [x, z],
+ * perches: [[x, y, z, yaw], ...] }. The trunk's wall is ~0.3 m thick round a 2 m hollow.
+ */
+export function hollowOak(B, G, ctx, { x, y, z, open = Math.PI / 4 }) {
+  const r = rngAt(x, z, 171), L = new Parts(), BARK = '#3f3431', gap = 0.78;
+  const bark = (th, t) => 1 + 0.08 * Math.sin(th * 5 + t * 3) + 0.04 * Math.sin(th * 13 + t * 9);
+  const OUT = [[1.75, -0.3], [1.5, 0.15], [1.36, 0.6], [1.3, 1.2], [1.25, 2.15]], IN = [[1.02, 2.1], [1.02, 1.2], [1.04, 0.4], [1.08, -0.05]];
+  vgrad(L.add(lathe(OUT, 16, { phi0: open + gap, phiLen: Math.PI * 2 - 2 * gap, mod: bark }), BARK), 0.55, 1.0, 0.06, 3);
+  vgrad(L.add(lathe(IN, 14, { phi0: open + gap, phiLen: Math.PI * 2 - 2 * gap, mod: bark }), '#1a1213'), 0.4, 0.8, 0.05, 4);
+  for (const sg of [-1, 1]) { // the opening's lips: the wall's thickness, ragged
+    const a = open + sg * gap, ca = Math.sin(a), sa = Math.cos(a), pts = [];
+    for (let k = 0; k <= 6; k++) { const yy = -0.2 + k * 0.38, rr = 1.16 + 0.1 * (1 - k / 6); pts.push([ca * rr, yy, sa * rr]); }
+    L.add(sweep(pts, (t) => 0.18 - 0.04 * t, 5, { caps: [false, false] }), '#352b29');
+  }
+  vgrad(L.add(lathe([[1.27, 2.05], [1.18, 2.6], [1.04, 3.4], [0.88, 4.0], [0.62, 4.5], [0, 4.6]], 14, { mod: bark }), BARK), 0.8, 1.05, 0.06, 5);
+  L.add(new THREE.CircleGeometry(1.05, 14).rotateX(Math.PI / 2), '#0d0909', 0, 2.08, 0);
+  L.add(new THREE.CircleGeometry(1.05, 14).rotateX(-Math.PI / 2), '#120c0c', 0, 0.03, 0);
+  for (let k = 0; k < 6; k++) { // roots crawling out (none across the opening)
+    const a = open + gap + 0.4 + (k / 5) * (Math.PI * 2 - 2 * gap - 0.8), ca = Math.sin(a), sa = Math.cos(a), l = 2.2 + r() * 1.2;
+    L.add(sweep(curve([[ca * 1.1, 0.5, sa * 1.1], [ca * 1.7, 0.2, sa * 1.7], [ca * l, 0, sa * l], [ca * (l + 0.5), -0.25, sa * (l + 0.5)]], 5), (t) => 0.3 * (1 - 0.8 * t) + 0.02, 5, { caps: [false, 0] }), '#3a2f2d');
+  }
+  const limbs0 = L.list.length, tips = [];
+  const up = new THREE.Vector3(0, 1, 0);
+  const limb = (o, dir, len, rad, depth) => {
+    const side = new THREE.Vector3().crossVectors(dir, up).normalize();
+    const k1 = (r() - 0.5) * 0.8, end = o.clone().addScaledVector(dir, len).addScaledVector(up, len * (depth ? 0.12 : -0.08));
+    const mid = o.clone().addScaledVector(dir, len * 0.5).addScaledVector(side, len * k1 * 0.25).addScaledVector(up, len * 0.1);
+    const cp = curve([[o.x, o.y, o.z], [mid.x, mid.y, mid.z], [end.x, end.y, end.z]], depth ? 6 : 4);
+    L.add(sweep(cp, (t) => rad * (1 - 0.6 * t) + 0.01, depth >= 2 ? 6 : 4, { caps: [false, 0] }), depth ? BARK : '#4a3d39');
+    if (depth === 2) tips.push(cp[Math.round(cp.length * 0.6)]);
+    if (depth <= 0) return;
+    for (let j = 0; j < 2; j++) {
+      const q = cp[Math.min(cp.length - 1, 2 + j * 2)], d2 = dir.clone().applyAxisAngle(up, (j ? 1 : -1) * (0.5 + r() * 0.5)).addScaledVector(up, 0.3 + r() * 0.3).normalize();
+      limb(new THREE.Vector3(q.x, q.y, q.z), d2, len * 0.55, rad * 0.5, depth - 1);
+    }
+  };
+  for (let k = 0; k < 5; k++) {
+    const a = k * 1.256 + r() * 0.5, el = 0.65 + r() * 0.35;
+    limb(new THREE.Vector3(Math.sin(a) * 0.5, 4.0 + r() * 0.4, Math.cos(a) * 0.5), new THREE.Vector3(Math.sin(a) * Math.sin(el), Math.cos(el), Math.cos(a) * Math.sin(el)).normalize(), 2.6 + r() * 1.0, 0.32, 2);
+  }
+  const phase = (x * 0.37 + z * 0.21) % 6.28;
+  for (let k = 0; k < L.list.length; k++) {
+    const g = L.list[k], P2 = g.attributes.position.array, W2 = new Float32Array((P2.length / 3) * 2);
+    if (k >= limbs0) for (let i = 0; i < P2.length / 3; i++) { const t = Math.max(0, (P2[i * 3 + 1] - 3.6) / 4); W2[i * 2] = 0.5 * t * t; W2[i * 2 + 1] = phase; }
+    g.setAttribute('sway', new THREE.BufferAttribute(W2, 2));
+  }
+  L.into(B, x, y, z);
+  const perches = tips.slice(0, 2).map((t) => [x + t.x, y + t.y + 0.04, z + t.z, r() * 6.28]);
+  const glint = ctx.glow('lamp', 0.3);
+  const ix = x + Math.sin(open) * 0.1, iz = z + Math.cos(open) * 0.1;
+  G.add(new THREE.OctahedronGeometry(0.07, 0), '#ffe08a', ix, y + 0.3, iz, 0.5, 0, 0, 1, 1.4, 1, 2.5);
+  const glintHalo = ctx.spot(ix, y + 0.35, iz, 0.9, 0.32, 0.25, 0.07, 0.3, glint);
+  ctx.glow('steady', 0);
+  return { glint, glintHalo, inside: [x, z], perches };
+}
+
+/** A wooden bench at (x, y, z) facing yaw: two plank seat boards, a backrest, iron legs with scrolls. */
+export function bench(B, { x, y, z, yaw = 0 }) {
+  const L = new Parts();
+  for (const zz of [-0.1, 0.1]) vgrad(L.add(chamferBox(1.7, 0.05, 0.17, 0.015), '#5a4536', 0, 0.45, zz), 0.8, 1.1);
+  for (const yy of [0.68, 0.86]) L.add(chamferBox(1.7, 0.12, 0.04, 0.015), '#5a4536', 0, yy, -0.24, 0, -0.12, 0);
+  for (const sx of [-0.7, 0.7]) {
+    L.add(new THREE.BoxGeometry(0.05, 0.45, 0.05), '#1d1a20', sx, 0.22, 0.14);
+    L.add(new THREE.BoxGeometry(0.05, 0.95, 0.05), '#1d1a20', sx, 0.47, -0.2, 0, -0.12, 0);
+    L.add(new THREE.TorusGeometry(0.1, 0.012, 3, 8, Math.PI * 1.4), '#1d1a20', sx, 0.62, 0.05, Math.PI / 2);
+  }
+  L.into(B, x, y, z, yaw);
+}
+
+/**
+ * A picket fence h m high from (ax, az) to (bx, bz) on groundAt: posts every ~2 m, two rails, pointed pickets (pale,
+ * weathered: they read in the moonlight).
+ */
+export function pickets(B, ax, az, bx, bz, groundAt, h = 1.0) {
+  const r = rngAt(ax, az, 181), L = new Parts(), len = Math.hypot(bx - ax, bz - az), dx = (bx - ax) / len, dz = (bz - az) / len, yaw = Math.atan2(dx, dz);
+  const n = Math.max(1, Math.round(len / 2));
+  for (let i = 0; i <= n; i++) {
+    const t = (i / n) * len, px = ax + dx * t, pz = az + dz * t, py = groundAt(px, pz);
+    vgrad(L.add(chamferBox(0.11, h + 0.15, 0.11, 0.02), '#6e675e', px, py + (h + 0.15) / 2 - 0.05, pz, yaw), 0.7, 1.05);
+  }
+  const y0 = groundAt(ax, az), y1 = groundAt(bx, bz);
+  for (const yy of [0.28, h - 0.22]) L.add(chamferBox(0.05, 0.08, len, 0.015), '#6a635a', (ax + bx) / 2, (y0 + y1) / 2 + yy, (az + bz) / 2, yaw, Math.atan2(y0 - y1, len));
+  for (let t = 0.12; t < len - 0.06; t += 0.16) {
+    const px = ax + dx * t, pz = az + dz * t, py = groundAt(px, pz), lean = (r() - 0.5) * 0.06, hh = h - 0.1 + (r() - 0.5) * 0.06;
+    const col = r() < 0.15 ? '#7b746a' : '#8f897e', ox = -dz * 0.035, oz = dx * 0.035;
+    L.add(new THREE.BoxGeometry(0.025, hh, 0.075), col, px + ox, py + hh / 2 - 0.04, pz + oz, yaw, 0, lean);
+    L.add(new THREE.ConeGeometry(0.053, 0.1, 4, 1).scale(0.35, 1, 1), col, px + ox, py + hh - 0.04 + 0.05, pz + oz, yaw, 0, lean);
+  }
+  L.into(B);
+}
+
+/** Flat path stones along the polyline pts ([[x, z], ...]) every ~`step` m on groundAt, tilted to the slope. */
+export function pathStones(B, pts, groundAt, { step = 0.85, spread = 0.7 } = {}) {
+  const r = rngAt(pts[0][0], pts[0][1], 191), L = new Parts();
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [ax, az] = pts[i], [bx, bz] = pts[i + 1], len = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / len, uz = (bz - az) / len;
+    for (let t = r() * step; t < len; t += step * (0.8 + r() * 0.4)) {
+      const o = (r() - 0.5) * spread, px = ax + ux * t - uz * o, pz = az + uz * t + ux * o, py = groundAt(px, pz);
+      const sx = groundAt(px + 0.3, pz) - groundAt(px - 0.3, pz), sz = groundAt(px, pz + 0.3) - groundAt(px, pz - 0.3);
+      const g = L.add(new THREE.CylinderGeometry(0.28 + r() * 0.12, 0.32 + r() * 0.12, 0.08, 7), r() < 0.5 ? '#5d5866' : '#686371', px, py + 0.015, pz, 0, -Math.atan2(sz, 0.6), Math.atan2(sx, 0.6), 1, 1, 0.75 + r() * 0.3);
+      vgrad(g, 0.75, 1.1, 0.06, (r() * 1e6) | 0);
+    }
+  }
+  L.into(B);
 }

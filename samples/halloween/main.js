@@ -221,7 +221,7 @@ async function boot() {
       W.candy = new Candy({ scene, heightAt, candySpot: W.world.candySpot });
       W.porches = new Porches({ scene, physics, heightAt, candy: W.candy, ghosts: W.ghosts, world: W.world });
       W.fx = new Effects({ scene, heightAt, low: LOW });
-      W.glows = new Glows(360);
+      W.glows = new Glows(384); // (the porches' doorways, the village's lamps, mats, windows and candles: ~40 halos)
       scene.add(W.glows.mesh);
       W.bats = new Bats({ scene, count: LOW ? 6 : 9 });
       // the living night: wind, leaves, clouds over the moon, mist, lightning, crows; escalates toward midnight
@@ -272,7 +272,7 @@ async function boot() {
   };
   let pace = loadPace(); // the best run's candy at the PACE_N moments (null: no best run recorded yet)
   const paceRec = new Array(PACE_N).fill(0);
-  let booedEver = loadTaught(), lookHinted = false, smashedEver = false;
+  let booedEver = loadTaught(), lookHinted = false, smashedEver = false, creekT = 0, creekTold = false;
   // START / RESUME / PLAY AGAIN run inside the click (a user gesture): the same call captures the mouse on desktop
   const hud = new HUD({
     touch: TOUCH, streak: STREAK_EVERY,
@@ -669,7 +669,8 @@ async function boot() {
   const _tspot = [0, 0];
   const wakeTutor = (p) => {
     let g = null;
-    if (ringSpot(_spot, p.x, p.z, TUTOR_R[0], TUTOR_R[1], rig.yaw, 0.25)) { _tspot[0] = _spot[0]; _tspot[1] = _spot[2]; g = ghosts.wake(p.x, p.z, Math.random, _tspot); }
+    // (nearer when a house stands there: a player heading for the first porch faces it at 5 s)
+    if (ringSpot(_spot, p.x, p.z, TUTOR_R[0], TUTOR_R[1], rig.yaw, 0.25) || ringSpot(_spot, p.x, p.z, 6.5, TUTOR_R[0], rig.yaw, 0.25)) { _tspot[0] = _spot[0]; _tspot[1] = _spot[2]; g = ghosts.wake(p.x, p.z, Math.random, _tspot); }
     if (!g) g = ghosts.wake(p.x, p.z);
     if (!g) return;
     g.tame = TUTOR_T;
@@ -899,6 +900,8 @@ async function boot() {
         if (porches.knocking >= 0 && G.booT >= BOO_CD && taught.has('treat') && !taught.has('trick') && !taught.has('trickHint')) {
           taught.set('trickHint'); hud.say('BOO AT THE DOOR', 'boo', '= TRICK!');
         }
+        // down in the creek's bed for 2 s (its banks are walls): how to get out (once)
+        if (!creekTold && cc.grounded && world.inCreek(p.x, p.y, p.z)) { if ((creekT += dt) > 2) { creekTold = true; hud.callout('JUMP OUT!', 'warn'); } } else creekT = 0;
         // candy trickles back; big pops now and then
         G.spawnT -= dt;
         if (G.spawnT <= 0) {
