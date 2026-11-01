@@ -292,8 +292,11 @@ const CSS = `
 .hw-hidden-touch .ui-touch{display:none}
 `;
 
-// rank thresholds (candy in a 3-minute round)
-export const RANKS = [[0, 'Little Pumpkin'], [30, 'Trick-or-Treater'], [70, 'Candy Collector'], [130, 'Sugar Goblin'], [210, 'Pumpkin Royalty'], [320, 'Lord of the Night']];
+// rank thresholds (candy in a 3-minute round), tuned on the phone bots after gameplay round 2 (18 rounds: novice and
+// one-hand 92..165, casual 108..175, skilled 306..454): a fumbled first round is a Little Pumpkin, novice and casual
+// rounds split between Candy Collector and Sugar Goblin, skilled ones are Pumpkin Royalty, and Lord of the Night takes
+// the best third of the skilled bot's rounds (a bot that sees every candy on the map)
+export const RANKS = [[0, 'Little Pumpkin'], [40, 'Trick-or-Treater'], [90, 'Candy Collector'], [160, 'Sugar Goblin'], [260, 'Pumpkin Royalty'], [420, 'Lord of the Night']];
 /** Index into RANKS for n candy. */
 export const rankIndex = (n) => { let r = 0; for (let k = 1; k < RANKS.length; k++) if (n >= RANKS[k][0]) r = k; return r; };
 export const rankFor = (n) => RANKS[rankIndex(n)][1];
@@ -487,7 +490,7 @@ export class HUD {
     this.streakEl.classList.toggle('on', on);
     if (on) for (let k = 0; k < this.pips.length; k++) this.pips[k].classList.toggle('f', k < filled);
   }
-  /** The last-ten countdown is up (the landscape call-outs move lower, out of its way). */
+  /** The last-ten countdown is up under the clock (the call-outs move lower, out of its way). */
   setCounting(on) { if (on !== this._c.counting) { this._c.counting = on; this.hud.classList.toggle('counting', on); } }
   /** A short message at the bottom of the results ("COPIED!"). */
   toast(text) { const t = this.toastEl; t.textContent = text; t.classList.remove('go'); void t.offsetWidth; t.classList.add('go'); }
