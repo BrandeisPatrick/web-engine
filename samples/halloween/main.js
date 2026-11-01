@@ -872,7 +872,7 @@ async function boot() {
         // the clock: the one-minute warning, the Witching Hour, the last ten seconds
         const s = Math.ceil(G.left);
         if (s !== G.lastCount) {
-          if (s === 60) { hud.callout('ONE MINUTE TO MIDNIGHT', 'warn'); audio.bell(1); }
+          if (s === 60) { hud.callout('ONE MINUTE', 'warn', 'TO MIDNIGHT'); audio.bell(1); }
           else if (s <= 10 && s > 0) { hud.countdown(s); audio.tick(s <= 3); }
           G.lastCount = s;
         }

@@ -137,6 +137,7 @@ const CSS = `
 .hw-call.go{animation:hwCall 1.15s cubic-bezier(.2,.9,.25,1) forwards}
 .hw-call.boo{--glow:rgba(176,120,255,1)}.hw-call.bad{--glow:rgba(150,96,255,1)}.hw-call.warn{--glow:rgba(255,120,56,1)}.hw-call.good{--glow:rgba(80,255,130,.95)}
 .hw-call.rank,.hw-call.witch{--glow:rgba(255,176,40,1)}
+.hw-call.rank{font-size:clamp(23px,6.4vmin,52px)} /* "LORD OF THE NIGHT!" fits a 360 px phone */
 .hw-call small{display:block;font-size:.42em;letter-spacing:.14em;margin-top:.3em;color:#ffe9b8;
   text-shadow:1px 1px 0 var(--ink),-1px 1px 0 var(--ink),1px -1px 0 var(--ink),-1px -1px 0 var(--ink),0 2px 0 var(--ink),0 0 14px var(--glow)}
 .hw-call.good small{color:#c8ffd4}.hw-call.boo small,.hw-call.bad small{color:#e6d6ff}
