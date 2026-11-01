@@ -166,12 +166,13 @@ export class GameAudio {
     const ctx = this.bus.ctx, out = this.bus.bus('effects'), t = ctx.currentTime;
     for (let k = 0; k < Math.min(3, n); k++) playTone(ctx, out, { type: 'triangle', pitch: [[0, 600 + k * 90], [0.25, 1500 + k * 120]], peak: 0.06, attack: 0.01, decay: 0.3, when: t + 0.12 + k * 0.1, pan: (k - 1) * 0.6 });
   }
-  moan() {
+  /** A ghost starts a chase; pan -1..1 (left..right of the view; default: anywhere). */
+  moan(pan = Math.random() - 0.5) {
     if (!this.ready) return;
     const ctx = this.bus.ctx, out = this.bus.bus('effects'), t = ctx.currentTime, f = 210 + Math.random() * 60;
     const pts = []; for (let k = 0; k <= 12; k++) pts.push([k * 0.11, f * (1 + 0.25 * Math.sin(k * 0.55)) * (1 + 0.02 * Math.sin(k * 3))]);
     pts[0][0] = 0;
-    playTone(ctx, out, { type: 'sine', pitch: pts, peak: 0.07, attack: 0.3, decay: 1.1, filter: { type: 'lowpass', frequency: 900 }, when: t, pan: Math.random() - 0.5 });
+    playTone(ctx, out, { type: 'sine', pitch: pts, peak: 0.07, attack: 0.3, decay: 1.1, filter: { type: 'lowpass', frequency: 900 }, when: t, pan });
   }
   caught() {
     if (!this.ready) return;
