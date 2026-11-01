@@ -1,85 +1,126 @@
-# inbrowser-game-engine
+# web-engine
 
-`@vibe/engine` 1.0: a browser game engine on Three.js / WebGL2, extracted from the Roadster flying-car game
-([roadster](https://github.com/BrandeisPatrick/roadster), which embeds this repository as its `engine/` submodule) and
-grown into a general engine: a fixed-step core with services, deterministic pure-JS physics (query hub, vehicle and
-character controllers, a unified XPBD solver for rigid bodies, joints, cloth, ropes, soft bodies, buoyancy and
-fracture), a measured render pipeline (forward MSAA or G-buffer + TAA, clustered lights, cascaded shadows, SSR,
-volumetrics, water refraction, motion blur, depth of field, LUTs, GPU particles), animation (state machine, IK,
-ragdolls), input, camera rigs, synth audio, UI widgets and a data-driven city world. Design notes, measurements and the
-record of decisions: [ENGINE.md](ENGINE.md); releases: [CHANGELOG.md](CHANGELOG.md). MIT.
+A game engine for the web browser, built on Three.js and WebGL2. It gives you physics, lighting, animation, sound
+and phone touch controls as plain JavaScript modules (`@vibe/engine`).
+
+<a href="https://brandeispatrick.github.io/web-engine/halloween/"><img src="samples/public/halloween/share.jpg" width="720" alt="Midnight Candy Run: a kid in a witch costume at a moonlit graveyard gate, a cloth ghost behind the fence"></a>
+
+### 🎃 [Play the Halloween game](https://brandeispatrick.github.io/web-engine/halloween/)
+
+**Midnight Candy Run:** grab candy before midnight, smash jack-o'-lanterns, scare off the ghosts. It runs in the
+browser on a phone or a computer, with nothing to install. [About the game](samples/halloween/README.md)
+
+Both the engine and the game were built with Claude (AI agents).
+
+## Live samples
+
+All of them are at **[brandeispatrick.github.io/web-engine](https://brandeispatrick.github.io/web-engine/)**.
+
+| Sample | What it shows |
+|---|---|
+| [Midnight Candy Run](https://brandeispatrick.github.io/web-engine/halloween/) | The Halloween game: cloth ghosts, fracture, synth audio, touch controls |
+| [Canyon Run](https://brandeispatrick.github.io/web-engine/canyon-run/) | Off-road buggy time trial: terrain, vehicle physics, post-processing |
+| [Procedural city](https://brandeispatrick.github.io/web-engine/city/) | Buildings, roads, traffic, water and tile streaming, with a free-fly camera |
+| [Character](https://brandeispatrick.github.io/web-engine/character/) | Third-person controller, animation, hand IK on ledges, ragdolls |
+| [Physics sandbox](https://brandeispatrick.github.io/web-engine/sandbox/) | Stacks, joints, ragdolls, cloth, ropes, soft bodies, buoyancy, fracture |
+
+## What's inside
+
+- **Physics:** deterministic and pure JS. Rigid bodies, joints, cloth, ropes, soft bodies, buoyancy and fracture share
+  one XPBD solver. Vehicle and character controllers sit on top.
+- **Rendering:** forward MSAA or G-buffer + TAA, clustered lights, cascaded shadows, screen-space reflections,
+  volumetric light, water, motion blur, depth of field, GPU particles.
+- **Animation:** state machine with blend trees, IK, ragdolls.
+- **Input and camera:** keyboard, mouse, gamepad and touch (floating sticks, safe-area aware); chase, orbit, free-fly,
+  third- and first-person rigs.
+- **Audio and UI:** synth music and effects, positional sound, DOM HUD widgets.
+- **Core:** 120 Hz fixed step with render interpolation, adaptive resolution, a CPU / GPU profiler.
+- **Worlds:** city worlds baked from OpenStreetMap and terrain data, with traffic.
+
+Plain ES modules with JSDoc types. The only (peer) dependency is `three`. MIT licensed.
+
+## Quick start
+
+Run the samples on your machine (Node 20.19 or newer):
+
+```sh
+git clone https://github.com/BrandeisPatrick/web-engine.git
+cd web-engine
+npm install
+npm run dev     # samples at http://localhost:5190
+npm test        # 31 headless test suites
+```
+
+Use it in your own game:
+
+```sh
+npm install three github:BrandeisPatrick/web-engine
+```
 
 ```js
-import { Engine, PhysicsWorld, DynamicsWorld, CharacterController, Atmosphere, PostFX } from '@vibe/engine';
-import { Cloth, FracturedBody } from '@vibe/engine/physics';   // one subpath per layer: core, physics, render, anim, input, camera, audio, ui, world
+import { Engine, Atmosphere, PostFX, CharacterController } from '@vibe/engine';
+import { Cloth, FracturedBody } from '@vibe/engine/physics'; // also core, render, anim, input, camera, audio, ui, world
 ```
-Pure ES modules; `three >= 0.170` is the only (peer) dependency; TypeScript declarations emitted from the JSDoc ship
-with the package and are exported for the root and every subpath.
 
-## Install
-- From git: `npm install github:BrandeisPatrick/inbrowser-game-engine` (no build step; `prepack` emits `types/`), or
-  as a git submodule listed in the game's `workspaces` (what roadster does: `node_modules/@vibe/engine -> engine`).
-- Standalone: `npm install`, then `npm run dev` serves the samples at http://localhost:5190 (an index page lists the
-  five). `npm test` runs the 31 headless suites (`test/all.mjs`; Node >= 20 runs them, the allocation budgets are
-  calibrated on Node 26, which CI uses), `npm run build` builds the samples into `dist/`, `npm run types` emits
-  `types/` and `npm run types:check` compiles a strict TypeScript consumer against them, `npm run smoke` /
-  `npm run bench` drive the samples in Chrome (Playwright; see ENGINE.md "Measurement protocol"), `npm run pack:check`
-  lists the tarball (~285 files, ~1.1 MB).
+A minimal setup is in [ENGINE.md, "Engine API"](ENGINE.md#engine-api). Each sample's `main.js` is a full example.
 
-## Samples
-Every engine sample (not the Halloween game, which exposes `window.__game`) exposes `window.__sample` (poses,
-settings, `run(plan)`) under `?bench=1&size=WxH`, and they share the render flags of `samples/shared/fx-flags.js`:
-`?gbuffer=1`, `?aa=taa|fxaa|msaa`, `?shadows=pcf|fast|pcss`, `?cascades=2|3|4`, `?ssr=1`, `?volumetric=1`,
-`?motionblur=1`, `?dof=1`, `?lut=warm|bleach`, `?aonormals=gbuffer`, `?fps=60`.
-- `samples/canyon-run/` — off-road buggy time trial built only on the engine (it drove 15 engine fixes, ENGINE.md
-  "Changelog / sample findings"); `?lamps=1&t=night` lights the canyon with clustered lamps, `?gpuparticles=1` runs
-  the dust devils on the GPU. Without Poly Haven texture sets under its public dir it falls back to procedural textures.
-- `samples/city/` — the procedural city without map data (free-fly camera, traffic, streaming, post stack, F3
-  profiler) at http://localhost:5190/city/; `?clustered`, `?water=refraction`, `?notraffic`, `?nostream=1`.
-- `samples/sandbox/` — the physics sandbox:
-  `?scene=stack|joints|chain|ragdoll|car|bench1000|cloth|rope|soft|buoyancy|destructible`, `?worker=1` runs the rigid
-  scenes in a Worker, `?debug=1` draws the solver.
-- `samples/character/` — third-person character playground: a glTF character (`node tools/fetch-models.mjs`
-  downloads the CC0 RobotExpressive model; `?model=` loads any other) or a procedural rigged fallback, driven by
-  `CharacterController`, `AnimationController`, `ThirdPersonRig` / `FirstPersonRig` and `CharacterInput`; it pushes
-  crates, rides an elevator, mantles ledges with hand IK and ragdolls on hard falls (K).
-- `samples/halloween/` — "Midnight Candy Run", the Halloween 2026 game: collect candy before midnight, smash
-  jack-o'-lanterns (fracture pieces), BOO the cloth ghosts; plays on phones (touch, portrait and landscape) and desktop.
-  See its [README](samples/halloween/README.md); `node test/browser/halloween.mjs` drives it in phone emulation.
+## Learn more
 
-## Tests (`npm test`, 31 suites)
-- `test/car-sim.mjs` — 90 range checks of the Roadster vehicle model and the PhysicsWorld queries: the determinism
-  gate, bit-identical since 0.4.0. The street-drive and traffic checks that need the San Francisco map live in the
-  game repository.
-- `test/world-build.mjs` — builds the procedural city headless (`MapWorld` with `renderer: null`, the canvas painters on
-  `test/helpers/dom-shim.mjs`) and pins its stats, physics queries and 10 s of deterministic traffic; `world-lights`.
-- `test/core.mjs`, `assets`, `rigs`, `character-input`, `anim`, `character-sim` — the core services, loaders, camera
-  rigs, character input, animation layer and the kinematic character controller.
-- `test/dyn-*.mjs` — the dynamics: shapes, broadphase, narrowphase, joints, world, PhysicsWorld bridge, serialize /
-  worker protocol (golden hashes), cloth, soft bodies, buoyancy, fracture; `character-dyn`, `ragdoll`.
+- [ENGINE.md](ENGINE.md): design notes, the API, measurements and the record of decisions.
+- [CHANGELOG.md](CHANGELOG.md): what changed in each release.
+- [tools/README.md](tools/README.md): the map, terrain and texture bakers.
+- [Roadster](https://github.com/BrandeisPatrick/roadster): the flying-car game this engine was extracted from.
+
+<details>
+<summary><b>Developer notes:</b> scripts, sample flags, tests, source layout</summary>
+
+### Scripts
+- `npm run build` builds every sample into `dist/`; `npm run preview` serves it at http://localhost:5191.
+- `npm run types` emits TypeScript declarations into `types/`; `npm run types:check` compiles a strict TypeScript
+  consumer against them.
+- `npm run smoke` and `npm run bench` drive the samples in Chrome with Playwright (ENGINE.md, "Measurement protocol").
+- `npm run pack:check` lists the package tarball.
+- Installed as a git submodule listed in a game's `workspaces`, the engine resolves as `@vibe/engine` (Roadster does
+  this: `node_modules/@vibe/engine -> engine`).
+
+### Sample flags
+Every engine sample exposes `window.__sample` (poses, settings, `run(plan)`) under `?bench=1&size=WxH` (the Halloween
+game exposes `window.__game` instead). They share the render flags in `samples/shared/fx-flags.js`: `?gbuffer=1`,
+`?aa=taa|fxaa|msaa`, `?shadows=pcf|fast|pcss`, `?cascades=2|3|4`, `?ssr=1`, `?volumetric=1`, `?motionblur=1`,
+`?dof=1`, `?lut=warm|bleach`, `?aonormals=gbuffer`, `?fps=60`.
+- **Canyon Run:** `?lamps=1&t=night` lights the canyon with clustered lamps; `?gpuparticles=1` runs the dust devils on
+  the GPU. Without Poly Haven texture sets in its public folder it uses procedural textures.
+- **City:** `?clustered`, `?water=refraction`, `?notraffic`, `?nostream=1`.
+- **Sandbox:** `?scene=stack|joints|chain|ragdoll|car|bench1000|cloth|rope|soft|buoyancy|destructible`; `?worker=1`
+  runs the rigid scenes in a Worker; `?debug=1` draws the solver.
+- **Character:** `node tools/fetch-models.mjs` downloads the CC0 RobotExpressive model (`?model=` loads another);
+  without it a procedural rig is used. K triggers a ragdoll.
+- **Halloween:** see [its README](samples/halloween/README.md).
+
+### Tests (`npm test`, 31 suites)
+- `test/car-sim.mjs`: the Roadster vehicle model and the PhysicsWorld queries, the determinism gate (bit-identical
+  since 0.4.0).
+- `test/world-build.mjs`, `world-lights`: the procedural city built headless, its stats, queries and 10 s of traffic.
+- `test/core.mjs`, `assets`, `rigs`, `character-input`, `anim`, `character-sim`: core services, loaders, camera rigs,
+  input, animation and the character controller.
+- `test/dyn-*.mjs`, `character-dyn`, `ragdoll`: the dynamics, from shapes and joints to cloth, soft bodies, buoyancy
+  and fracture.
 - `test/gpu-particles.mjs`, `clustered`, `shadows`, `postfx-options`, `gbuffer-chunks`, `ssr-ao`, `volumetric`,
-  `blur-dof-lut`, `water` — the render pipeline's shader anchors, options and defaults (shader texts pinned by hash).
-- `test/types/check.ts` — the emitted declarations compile for a strict TypeScript consumer (`npm run types:check`).
-- `test/browser/smoke.mjs` (12 pages, two identical captures per pose) and `test/browser/bench.mjs` need Chrome and
-  run locally; CI (`.github/workflows/ci.yml`, Node 26) runs `npm test`, the build and `types:check`.
+  `blur-dof-lut`, `water`: the render pipeline's shaders, options and defaults.
+- `test/browser/` (`smoke`, `bench`, `halloween`) needs Chrome and runs locally. CI (`.github/workflows/ci.yml`,
+  Node 26) runs `npm test`, the build and `types:check`.
 
-## Layers
-- `src/core/` — `Engine` (fixed-step loop, systems, adaptive resolution, `clock`), `Profiler`, `Assets`, `Events`,
-  `Clock`, `Entity` / `EntitySystem`, deterministic math (`MathDet`), the bench harness (`createBenchHarness`).
-- `src/physics/` — `PhysicsWorld` (query hub), `VehicleController`, `CharacterController` (pushes and rides dynamics),
-  and `dynamics/`: the unified XPBD solver (`DynamicsWorld`, shapes, joints, queries, `attachToPhysicsWorld`,
-  `DynamicsClient` worker; particles, `Cloth`, `Rope`, `SoftBody`, `ParticleCollider`, `Buoyancy`, `FracturedBody`).
-- `src/render/` — `Atmosphere`, `PostFX` (G-buffer + TAA, GTAO, SSR, volumetrics, motion blur, DoF, bloom, LUT, FXAA /
-  MSAA), `ClusteredLights`, shadow cascades and kernels, `GpuParticleSystem`, instancing / LOD / impostor utilities,
-  `TextureSets` (KTX2), `SoftMeshes`, `FractureMesh`, `PhysicsDebug`.
-- `src/anim/` — `AnimationController` (states, blend trees, transitions, root motion over `AnimationMixer`),
-  `TwoBoneIK`, `CCDIK`, `Ragdoll`.
-- `src/input/`, `src/camera/`, `src/audio/`, `src/ui/` — `InputMap` with the vehicle and character presets and
-  `PointerLock`; `CameraRig` with chase, orbit, free-fly, third-person and first-person rigs; `AudioBus`, synth voices,
-  `SamplePlayer`, positional emitters; DOM HUD widgets.
-- `src/world/` — data-driven city worlds: `MapWorld` (map + terrain + options + plugins) and its systems: `Terrain`,
-  `MapData`, `RoadNetwork`, `Buildings` + `FacadeTextures`, `Props` + `Furniture` + `Vehicles`, `Traffic`,
-  `Vegetation` (+ `Veg*`), `Water` (Gerstner waves, refraction), `Shore`, `Boats`, plus `MeshChunker`, `ShadowPasses`,
-  `NearestLights`. API, plugin hooks and the city.json / terrain.json / farland.json contracts: ENGINE.md, "World layer".
-- `tools/` — parameterised data bakers (`bake-map`, `bake-terrain`, `bake-farland`, `fetch-textures`, `fetch-models`;
-  `--help`, `--dry-run`), see [tools/README.md](tools/README.md).
+### Source layout
+- `src/core/`: `Engine`, `Profiler`, `Assets`, `Events`, `Clock`, `Entity`, deterministic math, the bench harness.
+- `src/physics/`: `PhysicsWorld`, `VehicleController`, `CharacterController`, and `dynamics/` (the XPBD solver,
+  `Cloth`, `Rope`, `SoftBody`, `Buoyancy`, `FracturedBody`, a Worker client).
+- `src/render/`: `Atmosphere`, `PostFX`, `ClusteredLights`, shadows, `GpuParticleSystem`, instancing / LOD /
+  impostors, `TextureSets` (KTX2), `SoftMeshes`, `FractureMesh`, `PhysicsDebug`.
+- `src/anim/`: `AnimationController`, `TwoBoneIK`, `CCDIK`, `Ragdoll`.
+- `src/input/`, `src/camera/`, `src/audio/`, `src/ui/`: input maps and touch controls, camera rigs, `AudioBus` and
+  synth voices, HUD widgets.
+- `src/world/`: `MapWorld` and its systems (terrain, roads, buildings, props, traffic, vegetation, water). The data
+  contracts are in ENGINE.md, "World layer".
+- `tools/`: the data bakers, see [tools/README.md](tools/README.md).
+
+</details>
