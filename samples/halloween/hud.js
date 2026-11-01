@@ -14,8 +14,12 @@
 //             toward chasers that are off screen or behind; BOO glows ("hot") while a chaser is in reach; a look
 //             hint pill (desktop: how the mouse looks)
 //   pause     resume / restart / how to play / title / music / sound
-//   results   candy, rank title, the rank ladder and what the next rank takes, best (NEW BEST), stats, PLAY AGAIN /
-//             TITLE / share (the game shares through Web Share on phones, else copies; a toast says so)
+//   results   candy, rank title, the rank ladder and what the next rank takes, best (NEW BEST), stats (porches n/5,
+//             tricks, BOOs, catches, best streak), PLAY AGAIN / TITLE / share (the game shares through Web Share on
+//             phones, else copies; a toast says so)
+// Call-outs come two ways: callout() at once (the answer to the player's own action: BOO!, a trick, a catch, a rank,
+// the Witching Hour) and say() paced (hints and news: at most one per CALL_GAP s, duplicates dropped, stale ones too).
+// taught.has / taught.set keep the once-per-device lessons (localStorage midnight-candy-run.taught.<key>).
 // Everything sits inside env(safe-area-inset-*) and scales with the viewport (clamp + vmin), so it works in portrait
 // and landscape phones as well as desktop. Interactive elements have z-index 40 (over the touch layer's 30). Every
 // button is at least 44 x 44 CSS px. setTouch(on) switches between the touch and the keyboard / mouse presentation
@@ -225,8 +229,8 @@ const CSS = `
 .hw-newbest{display:inline-block;padding:5px 14px;border-radius:999px;background:linear-gradient(90deg,#9b5cff,#ff8a1e);font-weight:900;letter-spacing:.25em;font-size:13px;color:#fff;
   text-shadow:0 1px 0 rgba(60,10,40,.6);animation:hwBest 1s ease-in-out infinite}
 @keyframes hwBest{50%{transform:scale(1.08);box-shadow:0 0 18px rgba(255,150,60,.75)}}
-.hw-stats{display:grid;grid-template-columns:repeat(4,auto);gap:6px clamp(14px,4vmin,30px);justify-content:center}
-.hw-stats div{display:flex;flex-direction:column;align-items:center;gap:2px}
+.hw-stats{display:flex;flex-wrap:wrap;gap:6px clamp(14px,4vmin,30px);justify-content:center;max-width:min(620px,100%)}
+.hw-stats div{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:4.6em}
 .hw-stats b{font-size:clamp(18px,4vmin,24px);font-weight:800}
 .hw-stats span{font-size:10.5px;letter-spacing:.2em;color:rgba(255,235,220,.65);font-weight:700}
 /* results: the rank ladder (one segment per rank, the current one filled up to the next) and what the next rank takes */
@@ -270,7 +274,7 @@ const CSS = `
   .hw-title-wrap .hw-cards{display:flex}.hw-card{padding:6px 10px}.hw-card svg{width:30px;height:30px}.hw-card span{font-size:11px}
 }
 @media (orientation:portrait){
-  .hw-stats{grid-template-columns:repeat(2,auto)}
+  .hw-stats{max-width:min(330px,100%)}
   .hw-cards{flex-direction:column;align-items:stretch;max-width:340px}
   .hw-card{max-width:none}
   .hw-clock{top:calc(var(--sa-t) + 64px)}
@@ -293,16 +297,28 @@ const CSS = `
 .hw-hidden-touch .ui-touch{display:none}
 `;
 
-// rank thresholds (candy in a 3-minute round), tuned on the phone bots after gameplay round 2 (18 rounds: novice and
-// one-hand 92..165, casual 108..175, skilled 306..454): a fumbled first round is a Little Pumpkin, novice and casual
-// rounds split between Candy Collector and Sugar Goblin, skilled ones are Pumpkin Royalty, and Lord of the Night takes
-// the best third of the skilled bot's rounds (a bot that sees every candy on the map)
-export const RANKS = [[0, 'Little Pumpkin'], [40, 'Trick-or-Treater'], [90, 'Candy Collector'], [160, 'Sugar Goblin'], [260, 'Pumpkin Royalty'], [420, 'Lord of the Night']];
+// rank thresholds (candy in a 3-minute round), v2 with the porches (design 2.6: 0 / 60 / 140 / 240 / 360 / 520, Sugar
+// Goblin retuned to 230 on 36 pass-2 phone-bot rounds): a novice ends a Trick-or-Treater or a Candy Collector, a
+// casual player a Collector or a Sugar Goblin, a skilled one Pumpkin Royalty, and Lord of the Night is rare even for the
+// skilled bot (1 of 6 of its rounds; a bot that sees every candy on the map)
+export const RANKS = [[0, 'Little Pumpkin'], [60, 'Trick-or-Treater'], [140, 'Candy Collector'], [230, 'Sugar Goblin'], [360, 'Pumpkin Royalty'], [520, 'Lord of the Night']];
 /** Index into RANKS for n candy. */
 export const rankIndex = (n) => { let r = 0; for (let k = 1; k < RANKS.length; k++) if (n >= RANKS[k][0]) r = k; return r; };
 export const rankFor = (n) => RANKS[rankIndex(n)][1];
 /** The next rank's threshold above n candy (null at the top rank). */
-export const nextRankAt = (n) => { const k = rankIndex(n) + 1; return k < RANKS.length ? RANKS[k][0] : null; };const ICON_SHARE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 7.5L12 3l4.5 4.5" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 10.5H6.5a1.5 1.5 0 0 0-1.5 1.5v7a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5v-7a1.5 1.5 0 0 0-1.5-1.5H16" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>';
+export const nextRankAt = (n) => { const k = rankIndex(n) + 1; return k < RANKS.length ? RANKS[k][0] : null; };
+/** Once-per-device lessons (localStorage midnight-candy-run.taught.<key>; cached; blocked storage: never taught). */
+const TAUGHT = 'midnight-candy-run.taught.', _taught = new Map();
+export const taught = {
+  has(k) { if (!_taught.has(k)) { let v = false; try { v = localStorage.getItem(TAUGHT + k) === '1'; } catch { /* blocked */ } _taught.set(k, v); } return _taught.get(k); },
+  set(k) { _taught.set(k, true); try { localStorage.setItem(TAUGHT + k, '1'); } catch { /* private mode / blocked storage */ } },
+};
+// paced call-outs (say): at most one per CALL_GAP s after any call-out; the same text as one waiting, or as one shown in
+// the last CALL_DUP s, is dropped; one that waited CALL_STALE s is dropped (its moment has passed); CALL_QUEUE wait
+// A call-out of a lower priority (prio) than the one showing waits its turn (say) for CALL_HOLD s: a porch's shower
+// fills a streak at once, and SWEET STREAK! used to cut TRICK! +14 short
+const CALL_GAP = 2.5, CALL_DUP = 5, CALL_STALE = 3, CALL_QUEUE = 2, CALL_HOLD = 1;
+const ICON_SHARE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 7.5L12 3l4.5 4.5" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 10.5H6.5a1.5 1.5 0 0 0-1.5 1.5v7a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5v-7a1.5 1.5 0 0 0-1.5-1.5H16" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>';
 
 export function applyTheme() {
   setTheme({ accent: ACCENT, font: '"Avenir Next","Segoe UI",system-ui,sans-serif' });
@@ -376,7 +392,8 @@ export class HUD {
     // ---- how to play (over the title or the pause screen)
     const help = this.help = el('div', 'hw-screen hw-help off', root);
     help.innerHTML = `<div class="hw-h1">HOW TO PLAY</div><div class="hw-cards">${CARDS}</div><div class="hw-ctrl"></div>
-      <div class="hw-tips">Swirl lollipops under a light beam are worth 5. Jump onto a lantern to stomp it for extra candy.
+      <div class="hw-tips">Lit porches: step on the glowing doormat for a treat, or BOO there for a trick (more candy, but a ghost
+      comes down the chimney). Swirl lollipops under a light beam are worth 5. Jump onto a lantern to stomp it for extra candy.
       When the screen edges frost over, a ghost is close: let it come near, then BOO! Caught? Grab the candy you drop.
       Jump over the graveyard fence! Grab candy fast for a streak bonus. The last 30 seconds are the Witching Hour:
       candy counts double!</div>
@@ -409,6 +426,10 @@ export class HUD {
     over.querySelector('[data-a=share]').addEventListener('click', settled(() => onShare && onShare()));
     for (const s of [title, pause, over, help]) s.addEventListener('pointerdown', (e) => e.stopPropagation());
     this._c = { candy: -1, clock: '', left: '', bar: -1, boo: -1, booReady: null, danger: -1, late: null, hot: false, fx: 50, fy: 50, goal: -2, wh: false, streak: -1, counting: false };
+    // call-out pacing: the HUD's own clock (update(dt)), the last call-out (text, when) and the waiting say()s
+    this._now = 0; this._callT = -99; this._callText = ''; this._callPrio = 0;
+    this._q = Array.from({ length: CALL_QUEUE }, () => ({ on: false, text: '', cls: '', sub: '', t: 0 }));
+    this.said = 0; this.dropped = 0; // (read by the tests)
     this.setTouch(touch);
   }
 
@@ -449,9 +470,9 @@ export class HUD {
 
   /**
    * The results: candy, rank, the rank ladder (filled up to the next rank) with what the next rank takes, the best,
-   * four stats.
+   * the stats (lane porches visited of porchesOf, tricks, ghosts booed, catches, best streak).
    */
-  showResults({ candy, best, isBest, smashed, booed, caught, streak }) {
+  showResults({ candy, best, isBest, booed, caught, streak, porches = 0, porchesOf = 5, tricks = 0 }) {
     this.overN.textContent = String(candy);
     const ri = rankIndex(candy), next = ri + 1 < RANKS.length ? RANKS[ri + 1] : null;
     this.overRank.textContent = RANKS[ri][1];
@@ -461,7 +482,8 @@ export class HUD {
     });
     this.overNext.textContent = next ? `${next[0] - candy} MORE FOR ${next[1].toUpperCase()}` : '';
     this.overBest.innerHTML = isBest ? '<span class="hw-newbest">NEW BEST!</span>' : `<span class="hw-best">BEST ${best}</span>`;
-    this.overStats.innerHTML = `<div><b>${smashed}</b><span>LANTERNS</span></div><div><b>${booed}</b><span>GHOSTS BOOED</span></div><div><b>${streak}</b><span>BEST STREAK</span></div><div><b>${caught}</b><span>TIMES CAUGHT</span></div>`;
+    const stat = (v, label) => `<div><b>${v}</b><span>${label}</span></div>`;
+    this.overStats.innerHTML = stat(`${porches}/${porchesOf}`, 'PORCHES') + stat(tricks, 'TRICKS') + stat(booed, 'BOOS') + stat(caught, 'CAUGHT') + stat(streak, 'BEST STREAK');
     this.toastEl.classList.remove('go');
     this.hud.classList.add('off'); this.over.classList.remove('off');
     this.showHelp(false);
@@ -527,12 +549,45 @@ export class HUD {
     const ready = p >= 1;
     if (ready !== this._c.booReady) { this._c.booReady = ready; this.boo.classList.toggle('ready', ready); }
   }
-  /** A big centre call-out; `sub` (optional) is a smaller second line under it. */
-  callout(text, cls = '', sub = '') {
+  /**
+   * A big centre call-out at once; `sub` (optional) is a smaller second line under it. prio 1 (a trick, the Full Round,
+   * a catch, the Witching Hour, midnight) holds the screen CALL_HOLD s against prio 0 ones (they wait: say).
+   */
+  callout(text, cls = '', sub = '', prio = 0) {
+    if (prio < this._callPrio && this._now - this._callT < CALL_HOLD) { this.say(text, cls, sub); return; }
+    this._callPrio = prio;
     const c = this.call;
     c.textContent = text; c.className = `hw-call ${cls}`;
     if (sub) { this.callSub.textContent = sub; c.appendChild(this.callSub); }
     void c.offsetWidth; c.classList.add('go');
+    this._callT = this._now; this._callText = text;
+  }
+  /**
+   * A paced call-out (a hint, news): shown now if no call-out came in the last CALL_GAP s, else it waits its turn
+   * (dropped after CALL_STALE s of waiting, or when the queue is full); the same text as one waiting or shown in the
+   * last CALL_DUP s is dropped. Returns true if it was shown or queued.
+   */
+  say(text, cls = '', sub = '') {
+    if (text === this._callText && this._now - this._callT < CALL_DUP) { this.dropped++; return false; }
+    let free = null;
+    for (const e of this._q) { if (e.on && e.text === text) { this.dropped++; return false; } if (!e.on && !free) free = e; }
+    if (this._now - this._callT >= CALL_GAP && !this._q.some((e) => e.on)) { this.said++; this.callout(text, cls, sub); return true; }
+    if (!free) { this.dropped++; return false; }
+    free.on = true; free.text = text; free.cls = cls; free.sub = sub; free.t = this._now;
+    return true;
+  }
+  /** Drop every waiting call-out (a new round, the title). */
+  clearCalls() { for (const e of this._q) e.on = false; this._callText = ''; this._callT = -99; this._callPrio = 0; }
+  /** Per frame (game time: a pause holds the queue): show the next waiting call-out when its turn comes. */
+  update(dt) {
+    this._now += dt;
+    let first = null;
+    for (const e of this._q) {
+      if (!e.on) continue;
+      if (this._now - e.t > CALL_STALE) { e.on = false; this.dropped++; continue; }
+      if (!first || e.t < first.t) first = e;
+    }
+    if (first && this._now - this._callT >= CALL_GAP) { first.on = false; this.said++; this.callout(first.text, first.cls, first.sub); }
   }
   /** Desktop look hint: ok true (mouse captured), false (refused: click / arrows), null hides it. */
   lookHint(ok) {
