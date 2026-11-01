@@ -27,6 +27,7 @@
 // double, relights every lantern, rains candy around the kid and caps a catch at 6. Juice: a small camera shake on
 // smashes and catches, an FOV punch on BOO, a hitstop on smash / BOO / catch (gentler on phones; no motion with
 // prefers-reduced-motion). The results share the score (Web Share on phones, else the clipboard).
+// On touch, a push straight into a gravestone, tree, fence or wall slides the kid round it, the short way.
 // window.__game exposes the state for tests (test/browser/halloween.mjs).
 import * as THREE from 'three';
 import { Engine } from '@vibe/engine/core';
@@ -61,6 +62,10 @@ const BOO_CD = 5, BOO_R = 7.5, SAFE_T = 3.0;
 const RECENTRE_TOUCH = 0.7, RECENTRE_DESK = 0.8; // s without look input before the camera eases behind a running kid
 // touch stick response: nothing below STICK_DEAD (a resting thumb's wobble), full speed at STICK_FULL deflection
 const STICK_DEAD = 0.12, STICK_FULL = 0.75;
+// slide around (touch): a push within acos(AROUND_INTO) of straight into a gravestone, tree, fence or wall turns along
+// it (AROUND_ALONG of the speed along it, AROUND_LEAN into it), the short way round the box in the way; the turn holds
+// AROUND_HOLD s while blocked and AROUND_AFTER s past the corner
+const AROUND_INTO = 0.6, AROUND_ALONG = 0.9, AROUND_LEAN = 0.3, AROUND_HOLD = 0.4, AROUND_AFTER = 0.06;
 // a catch costs 10 % of the candy (2..12); 3 catches within MERCY_WINDOW s calm the ghosts (difficulty -MERCY) for MERCY_T s
 const CATCH_SHARE = 0.10, CATCH_MIN = 2, CATCH_MAX = 12, MERCY = 0.35, MERCY_WINDOW = 30, MERCY_T = 20;
 const MAX_CHASERS_TOUCH = 2, MAX_CHASERS_DESK = 3;
@@ -604,6 +609,21 @@ async function boot() {
     P[best * 3] = _spot[0]; P[best * 3 + 1] = _spot[1]; P[best * 3 + 2] = _spot[2];
     return best;
   };
+  // slide around: the side to turn along a wall of normal (nx, nz) for a push (mx, mz): the push's own lean along it,
+  // else the short way round the box in the way (projected on the wall's tangent)
+  const around = { t: 0, s: 1, nx: 0, nz: 0 };
+  const aroundSide = (nx, nz, mx, mz) => {
+    const tx = -nz, tz = nx, tan = (mx * tx + mz * tz) / (Math.hypot(mx, mz) || 1);
+    if (Math.abs(tan) > 0.25) return tan > 0 ? 1 : -1;
+    const p = cc.position;
+    _cols.length = 0; physics.queryColliders(p.x - nx * 0.45, p.z - nz * 0.45, 0.3, _cols);
+    let b = null;
+    for (let i = 0; i < _cols.length; i++) { const q = _cols[i]; if (q.maxY > p.y + 0.35 && q.minX !== undefined) { b = q; break; } }
+    if (!b) return tan >= 0 ? 1 : -1;
+    const a0 = b.minX * tx, a1 = b.maxX * tx, c0 = b.minZ * tz, c1 = b.maxZ * tz, kp = p.x * tx + p.z * tz;
+    const tmin = Math.min(a0, a1) + Math.min(c0, c1), tmax = Math.max(a0, a1) + Math.max(c0, c1);
+    return tmax - kp < kp - tmin ? 1 : -1;
+  };
   // the arrow toward a world point, from the camera's view: ahead / behind / left / right
   const arrowTo = (x, z) => {
     const p = cc.position, dx = x - p.x, dz = z - p.z, d = Math.hypot(dx, dz) || 1;
@@ -700,6 +720,23 @@ async function boot() {
       let mx = _r.x * sx + _f.x * sy, mz = _r.z * sx + _f.z * sy;
       const l2 = mx * mx + mz * mz;
       if (l2 > 1) { const k = 1 / Math.sqrt(l2); mx *= k; mz *= k; }
+      // slide around (touch): a thumb steers at the candy it sees, not at the gaps, and pushing straight into a
+      // gravestone used to stop the kid dead (bots lost 20-100 s a round that way, mostly in the graveyard)
+      const il = Math.sqrt(Math.min(1, l2));
+      if (touchUI && cc.grounded && il > 0.5) {
+        if (cc.blocked) {
+          const nx = cc.wallNormal.x, nz = cc.wallNormal.z;
+          if (-(mx * nx + mz * nz) / il > AROUND_INTO) {
+            if (around.t <= 0 || nx * around.nx + nz * around.nz < 0.5) around.s = aroundSide(nx, nz, mx, mz);
+            around.t = AROUND_HOLD; around.nx = nx; around.nz = nz;
+          }
+        } else if (around.t > AROUND_AFTER) around.t = AROUND_AFTER;
+        if (around.t > 0 && -(mx * around.nx + mz * around.nz) / il > 0.2) {
+          around.t -= dt;
+          const tx = -around.nz * around.s, tz = around.nx * around.s;
+          mx = (tx * AROUND_ALONG - around.nx * AROUND_LEAN) * il; mz = (tz * AROUND_ALONG - around.nz * AROUND_LEAN) * il;
+        } else around.t = 0;
+      } else around.t = 0;
       intent.moveX = mx; intent.moveZ = mz;
       // how much the stick / keys point "into the screen" (1 straight ahead, 0 sideways, < 0 toward the camera)
       const ml = Math.hypot(sx, sy);
@@ -748,7 +785,9 @@ async function boot() {
       // the kid: interpolated pose, facing toward the move intent, animation, blink while safe
       yOff *= Math.exp(-20 * dt);
       player.position.lerpVectors(prev, cur, alpha); player.position.y += yOff;
-      if (intent.moveX * intent.moveX + intent.moveZ * intent.moveZ > 1e-4) { // any real push (the stick dead zone is upstream)
+      // any real push (the stick dead zone is upstream); not while sliding round an obstacle (the kid keeps facing
+      // where the thumb points, so the follow camera does not swing after the slide)
+      if (around.t <= 0 && intent.moveX * intent.moveX + intent.moveZ * intent.moveZ > 1e-4) {
         const goal = Math.atan2(-intent.moveX, -intent.moveZ);
         camState.facing = wrapPi(camState.facing + wrapPi(goal - camState.facing) * (1 - Math.exp(-12 * dt)));
       }
@@ -987,7 +1026,7 @@ async function boot() {
   const loadMs = Math.round(performance.now() - t0);
   window.__game = {
     THREE, engine, G, cc, ctl, camState, rig, orbit, input, hud, audio, world, dyn, lanterns, ghosts, candy, fx, postfx, atmo, physics, player,
-    loadMs, TOUCH, LOW, startRound, toTitle, setPaused, endRound, juice, paceRec, shareScore,
+    loadMs, TOUCH, LOW, startRound, toTitle, setPaused, endRound, juice, paceRec, shareScore, RANKS, around,
     get pace() { return pace; }, get baseFov() { return baseFov; },
     get touchUI() { return touchUI; },
     /** Test hook: jump the clock (seconds left). */
