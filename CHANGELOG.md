@@ -123,6 +123,24 @@ in 1.0.0), driven by the new Halloween game sample (`samples/halloween/`, "Midni
   the touch slide-around follows a wall through the boxes that continue it (a picket fence into a cottage front) and
   takes an open way out of an inside corner (a bot stood 85 s in the graveyard's corner pushing at the gatekeeper's lit
   mat beyond it).
+- Midnight Candy Run enemies (design pass 3, phones first, no engine change, no new light, physics body or HUD box):
+  **grave hands** (`samples/halloween/hands.js`) at ten fixed spots (the graveyard aisle, among the graves, and where
+  the creek's bridges will be; `hand-spots.js` stands in for the map pass's `HAND_SPOTS`): hidden 7..12 s (3..6 s in
+  the Witching Hour), a 0.8 s telegraph (a crimson soil ring, dirt puffs, a crack, the fingertips poking out), then two
+  bony hands stand 2.5 s; at most 4 out at once, awake from 0:40. A grounded kid in reach (0.9 m, feet under 0.6 m) is
+  grabbed: held 1.0 s (`cc.hold`, the kid wiggles), then let go with 3 candies spilled round it. JUMP clears them, BOO
+  within 4 m sends them down; a grab always ends (its timer, a BOO, a ghost's catch, midnight), never while safe, and
+  not again for 1.2 s. One instanced mesh drawn only while some are out; the ring and puffs use the shared glows and
+  sparks. **The candy thief** (`thief.js`): a raccoon in a little bedsheet with eye holes and a pink sack that swells and
+  glows with its loot (one skinned mesh, 13 bones posed in code). It comes out of its den at 1:00 ("A CANDY THIEF!" and
+  an edge marker while off screen), runs at 5 m/s to the cluster of candy the kid is heading for and eats one every
+  0.5 s (sack max 20), keeps 6 m from the kid and bolts (6.5 m/s, zigzag) when the kid comes within 4 m; cornered, its
+  touch snatches 5. BOO within 7.5 m stuns it 1.8 s (stars); a touch then TAGS it: its sack + 5 spill out ("TAGGED!
+  +N") and it runs home for 25 s. The Witching Hour brings it back with 10 in its sack. Lessons once per device: "JUMP
+  THE HANDS!" at the first telegraph in view, "BOO IT, / THEN TAG IT!" when it is in reach; BOO glows with the thief in
+  reach. Sounds: the crack, the hands bursting out, a grab's rattle, the chitter, the stun's stars, the tag's chimes.
+  The results add TAGS. `test/halloween-enemies.mjs` (headless, in `npm test`) pins their rules and their allocation
+  per frame (none for the hands; for the thief only the boxed arguments of two engine calls).
 
 ## 1.0.0 — 2026-10-30
 The release of the 1.0 roadmap (phases 0.5.0 - 0.9.0, ENGINE.md): a general engine with its graphics and physics pushed as

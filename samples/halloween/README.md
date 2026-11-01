@@ -34,9 +34,14 @@ Esc to pause, M for sound. A gamepad works too.
   candy in its bed is the reward).
 - **Ghosts** chase you and steal candy when they touch you. Press **BOO!** when one gets close: it scares every ghost
   nearby, and each one drops 2 candies. BOO recharges in 5 s.
+- **Grave hands:** when a ring of soil glows red and crackles, bony hands are about to burst out of it. **JUMP** over
+  them, or **BOO!** them back down. If they catch you, they hold you for a second and you drop 3 candies.
+- **The candy thief:** from 11:58 a raccoon in a little bedsheet runs to the candy you're heading for and eats it,
+  stuffing its glowing pink sack. It keeps away from you. **BOO!** it when it's close to make it dizzy, then run into
+  it to tag it: its whole sack spills out, plus 5 extra.
 - **Streaks:** grab candy quickly, one after another. Every 10th in a row adds 3 bonus candy.
 - **The Witching Hour:** in the last 30 seconds candy counts double, every lantern and porch lights up again and candy
-  rains down around you.
+  rains down around you. The hands come up twice as often, and the thief is back with a sack already full of candy.
 - **Ranks:** the number after your candy count is the next rank. Your best score is saved on your device; once you have
   one, the clock shows now and then how far ahead of it (or behind) you are. Share your score from the results.
 
