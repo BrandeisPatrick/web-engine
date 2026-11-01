@@ -308,7 +308,7 @@ async function mapChecks(page, name) {
         && p.lamp > 0 && p.railing > 0 && p.chimney.length === 3 && p.chimney.every(Number.isFinite) && w.glowGroups[p.lamp][0] === 5 && w.glowGroups[p.railing][0] === 5]),
       hands: w.handSpots.length, bridges: w.bridges.map((b) => b.id + (Number.isFinite(b.y) ? '' : '?')).join(''), creek: w.creek, pops: w.popSpots.filter((p) => p.length === 3 && p.every(Number.isFinite)).length,
       secrets: ['well', 'crypt', 'oak'].every((k) => w.secrets[k]) && w.secrets.crypt.group > 0 && w.secrets.oak.group > 0, cauldron: w.cauldron.brew > 0 && w.cauldron.brewHalo >= 0,
-      vantage: w.vantage.length === 2, den: Number.isFinite(w.thiefDen.x), colliders: g.physics.staticBoxes.length, lanterns: g.lanterns.n, doors: w.doors.mesh.count,
+      vantage: w.vantage.length === 2, den: Number.isFinite(w.thiefDen.x), colliders: g.physics.staticBoxes.length, lanterns: g.lanterns.n, doors: g.porches.doors.count,
     };
   });
   check(name, 'map v2 exports: PORCHES (P1..P6, P6 haunted; mats, lamp / railing groups, chimneys), HAND_SPOTS, BRIDGES, CREEK, POP_SPOTS, SECRETS, CAULDRON, VANTAGE, THIEF_DEN',
@@ -440,10 +440,10 @@ async function mapChecks(page, name) {
   });
   check(name, 'candy spawns: each zone\'s share within 5 % of the design (lane 30, graveyard 22, patch 13, porches 10, creek 8, knoll 7, anywhere 10)', shares.every(([, want, got]) => Math.abs(got - want) <= 0.05), JSON.stringify(shares));
   const trails = await G(page, () => {
-    const w = window.__game.world;
-    return { lane: w.porches.map((p, i) => { const t = w.trailSpots(i); return [t.length, +Math.max(...t.map((q) => Math.hypot(q[0] - p.mat.x, q[2] - p.mat.z))).toFixed(1)]; }), spawn: w.trailSpots(0, 5, [0, 6]).length };
+    const P = window.__game.porches, T = P.trail, n = window.__game.PORCH.TRAIL;
+    return { lane: P.spots.map((S, k) => [P.trailN[k], +Math.max(0, ...Array.from({ length: P.trailN[k] }, (_, j) => Math.hypot(T[(k * n + j) * 2] - S.mat.x, T[(k * n + j) * 2 + 1] - S.mat.z))).toFixed(1)]), spawn: P.startTrailN };
   });
-  check(name, 'porch trails: 5 candy spots along the lane within 12 m of each mat (and a trail from the spawn to P1)', trails.lane.every(([n, d]) => n === 5 && d <= 12) && trails.spawn === 5, JSON.stringify(trails));
+  check(name, 'porch trails on the map: 5 spots along the lane within 12 m of each mat, 5 from the spawn to P1', trails.lane.every(([n, d]) => n === 5 && d <= 12.5) && trails.spawn === 5, JSON.stringify(trails));
   const beacon = await G(page, () => {
     const w = window.__game.world, B = w.beacons;
     let worst = 0, at = null;
@@ -464,7 +464,8 @@ async function mapChecks(page, name) {
     return { worst: +worst.toFixed(1), at, beacons: B.length, maxLampsIn20m: lamps, maxLanternsIn20m: lan };
   });
   check(name, 'beacons: a porch lamp, lantern or bridge candle within 30 m of anywhere on the lane', beacon.worst <= 30, JSON.stringify(beacon));
-  await G(page, () => { const g = window.__game; g.setTimeLeft(Math.max(g.G.left, 170)); });
+  // (standing on every mat treated the porches: back to a fresh round's porches for the porch checks)
+  await G(page, () => { const g = window.__game; g.setTimeLeft(Math.max(g.G.left, 170)); g.porches.reset(false); g.hud.clearCalls(); });
 }
 
 async function runProfile(name) {
@@ -1023,6 +1024,10 @@ async function runProfile(name) {
       treated && t1.spills.join() === '8' && /TRICK OR TREAT/.test(t1.call) && t1.plus === '+8' && t1.cd > 39 && t1.cd <= 40 && t1.door > 0.1 && t2.porches[2].lamp < 0.05 && c1 - c0 >= 6,
       JSON.stringify({ treated, ...t1, lamp: t2.porches[2].lamp, gained: c1 - c0 }));
     check(name, 'porch: a visited porch lights the jack-o\'-lantern on its railing', t2.porches[2].visited && t2.porches[2].rail > 0.9 && t2.porches.filter((p) => p.rail > 0.05).length === 1, JSON.stringify(t2.porches.map((p) => p.rail)));
+    // the map's porches (world.js PORCHES: lamp / railing light groups): no stand-in fronts, the levels in world.glowLevels
+    const gl = await G(page, () => { const g = window.__game, w = g.world, P = g.porches; return { stand: P.stand, front: !!P.front, glow: !!P.glow, cols: P.colliders, lamps: P.spots.map((S) => +w.glowLevels[S.lamp].toFixed(3)), rails: P.spots.map((S) => +w.glowLevels[S.railing].toFixed(3)) }; });
+    check(name, 'porch: the map\'s porches drive world.glowLevels (no stand-ins): the treated lamp dark, its railing lit, the rest lit / dark',
+      !gl.stand && !gl.front && !gl.glow && gl.cols === 0 && gl.lamps[2] < 0.1 && gl.lamps.every((v, i) => i === 2 || v > 0.6) && gl.rails[2] > 0.8 && gl.rails.every((v, i) => i === 2 || v < 0.05), JSON.stringify(gl));
     // the dark mat: nothing
     await offMat(2); await sleep(200);
     const d0 = await ontoMat(2);

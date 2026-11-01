@@ -23,7 +23,7 @@
 //   gravestone(B, o)  deadTree(B, o)  ironFence(B, ...)  gatePost(B, ...)  gateArch(B, ...)  gateLeafParts(...)
 //   picketFence(B, ...)  hauntedHouse(B, G, ctx, o)  crypt(B, G, ctx, o)  scarecrow(B, G, ctx, o)
 //   cauldron(B, G, ctx, o)  hayBale(B, o)  candleLantern(B, G, x, y, z, ry)  pumpkinGeometry(...)  pumpkinLeafGeometry()
-//   the village (map v2): cottage(B, G, ctx, o)  doorGeometry()  bridge(B, G, ctx, o)  bankWall(B, o)  reeds(B, o)
+//   the village (map v2): cottage(B, G, ctx, o)  doormat(B, o)  bridge(B, G, ctx, o)  bankWall(B, o)  reeds(B, o)
 //   standingStone(B, o)  baleBlock(B, o)  well(B, o)  signpost(B, o)  hollowOak(B, G, ctx, o)  bench(B, o)
 //   pickets(B, ...)  pathStones(B, pts, groundAt, o)  jackOLantern(B, G, ctx, o)
 // Builders never touch the level's random stream: every variation comes from a local seeded stream (seedOf(x, z)), so
@@ -715,11 +715,11 @@ function windowDressing(L, r, lx, ly, z0, ww, hh, { trim = '#4e3f58', shutter = 
  * walls that lean a little, corner boards, a shingled gable roof with ragged rows and a crooked brick chimney, a corner
  * tower under a bent witch-hat roof with a weathervane, dressed windows (shutters, sills, lintels; one boarded up), an
  * arched door and a porch with turned posts, a railing, steps and a lantern. The glowing window panes, the lantern
- * flame and their halos go through ctx (light groups the game flickers). o.door false: no door leaf (a dark doorway in
- * the frame: the caller draws a door that opens, see doorGeometry); o.lamp: the porch lantern's light kind ('flame', or
- * 'lamp': a warm white porch lamp the game drives). Returns { lamp (its light group), lampHalo, chimney: [x, y, z] (the
- * cowl's top), door: { hinge: [x, y, z], yaw, w, h }, at(lx, ly, lz) -> [x, y, z] (a point of the house's frame, the
- * lean ignored) }.
+ * flame and their halos go through ctx (light groups the game flickers). o.door false: no door leaf, a doorway
+ * (HOLE_W x HOLE_H from the porch deck up, a dark vestibule behind it: the porch logic's door swings into it); o.lamp:
+ * the porch lantern's light kind ('flame', or 'lamp': a warm white porch lamp the game drives). Returns { lamp (its
+ * light group), lampHalo, chimney: [x, y, z] (the cowl's top), at(lx, ly, lz) -> [x, y, z] (a point of the house's
+ * frame, the lean ignored) }.
  */
 export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp = 'flame' }) {
   const r = rngAt(x, z, 21), L = new Parts();
@@ -728,9 +728,16 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp 
   const W = (lx, lz) => [x + lx * c + lz * s, z - lx * s + lz * c];
   // ---- foundation + walls + siding + corner boards (main block)
   vgrad(L.add(chamferBox(w + 0.3, 0.8, d + 0.3, 0.05), STONE, 0, 0.2, 0), 0.6, 0.95);
-  vgrad(L.add(new THREE.BoxGeometry(w, 5.6, d), WALL, 0, 3.2, 0), 0.75, 1.1);
+  const hx0 = 1.2 - HOLE_W / 2, hx1 = 1.2 + HOLE_W / 2, ht = 0.5 + HOLE_H; // the doorway (door false), from the deck up
+  if (door) vgrad(L.add(new THREE.BoxGeometry(w, 5.6, d), WALL, 0, 3.2, 0), 0.75, 1.1);
+  else doorwayBlock(L, { w, d, y0: 0.4, y1: 6.0, hx0, hx1, ht, color: WALL, grad: [0.75, 1.1] });
   const siding = (len, axis, at, nrm, y0, y1) => {
     for (let yy = y0; yy < y1; yy += 0.34) {
+      if (!door && axis === 'x' && at > 0 && yy < ht + 0.02) { // round the doorway
+        lineOn(L, [[-len / 2, yy, at], [hx0 - 0.05, yy, at]], 0.014, '#1d1724', nrm);
+        lineOn(L, [[hx1 + 0.05, yy, at], [len / 2, yy, at]], 0.014, '#1d1724', nrm);
+        continue;
+      }
       const pts = axis === 'x' ? [[-len / 2, yy, at], [len / 2, yy, at]] : [[at, yy, -len / 2], [at, yy, len / 2]];
       lineOn(L, pts, 0.014, '#1d1724', nrm);
     }
@@ -835,7 +842,7 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp 
     vgrad(L.add(slab(1.3, 2.35, 0.1, 'round', 0.02), '#3b1d2b', 1.2, 0.3, d / 2 + 0.02), 0.75, 1.1);
     for (const [px, py] of [[-0.3, 0.75], [0.3, 0.75], [-0.3, 1.55], [0.3, 1.55]]) lineOn(L, [[1.2 + px - 0.18, 0.3 + py - 0.25, d / 2 + 0.075], [1.2 + px + 0.18, 0.3 + py - 0.25, d / 2 + 0.075], [1.2 + px + 0.18, 0.3 + py + 0.25, d / 2 + 0.075], [1.2 + px - 0.18, 0.3 + py + 0.25, d / 2 + 0.075], [1.2 + px - 0.18, 0.3 + py - 0.25, d / 2 + 0.075]], 0.012, '#24101a');
     L.add(new THREE.SphereGeometry(0.06, 8, 6), '#d6a640', 1.7, 1.45, d / 2 + 0.11);
-  } else L.add(slab(1.3, 2.35, 0.02, 'round', 0), '#07040a', 1.2, 0.3, d / 2 + 0.012);
+  }
   for (const sx of [-0.78, 0.78]) L.add(chamferBox(0.16, 2.55, 0.16, 0.03), TRIM, 1.2 + sx, 1.5, d / 2 + 0.04);
   vgrad(L.add(slab(1.75, 0.4, 0.16, 'round', 0.02), TRIM, 1.2, 2.4, d / 2 + 0.04), 0.85, 1.15);
   // ---- the porch: a planked deck, steps, turned posts, a railing, a roof with brackets
@@ -887,7 +894,7 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp 
   ctx.glow('window', 0.2); win(lean(tx, 4.2) - 0.018 * 3.6, 4.2, d / 2 + 0.62 + 0.008 * 3.6, 0.8, 1.1, '#ff9a3a', 3);
   ctx.glow('steady', 0);
   const at = (lx, ly, lz) => { const [px, pz2] = W(lx, lz); return [px, y + ly, pz2]; };
-  return { lamp: lampG, lampHalo, chimney: at(chim[0], chim[1] + 0.2, chim[2]), door: { hinge: at(1.2 - 0.65, 0.3, d / 2 + 0.05), yaw, w: 1.3, h: 2.35 }, at };
+  return { lamp: lampG, lampHalo, chimney: at(chim[0], chim[1] + 0.2, chim[2]), at };
 }
 
 // ------------------------------------------------------------------ the crypt
@@ -1137,6 +1144,28 @@ export function jackOLantern(B, G, ctx, { x, y, z, yaw = 0, r = 0.17, kind = 'la
   return { group, halo };
 }
 
+/** The doorway every porch house leaves for the porch logic's door (1.06 x 2.1, hinged at the mat's back-left edge). */
+export const HOLE_W = 1.12, HOLE_H = 2.14;
+/**
+ * A block of walls w x d (local, centred on the origin, y0..y1) with a doorway hx0..hx1 wide and y0..ht high in its front
+ * (+z) face, and a vestibule `vest` m deep behind it in a dark lining: four boxes instead of one, so a door can swing in.
+ * The light gradient runs over the whole height (bottom .. top factor), whichever box a vertex is in.
+ */
+function doorwayBlock(L, { w, d, y0, y1, hx0, hx1, ht, vest = 1.2, color, grad = [0.72, 1.08] }) {
+  const fz = d / 2, H = y1 - y0;
+  const box = (x0, x1, z0, z1, ya, yb) => shade(L.add(new THREE.BoxGeometry(x1 - x0, yb - ya, z1 - z0), color, (x0 + x1) / 2, (ya + yb) / 2, (z0 + z1) / 2),
+    (px, py, pz, nx, ny) => (grad[0] + (grad[1] - grad[0]) * smooth((py - y0) / H)) * (1 + 0.08 * ny));
+  box(-w / 2, hx0, -fz, fz, y0, y1);     // left of the doorway
+  box(hx1, w / 2, -fz, fz, y0, y1);      // right of it
+  box(hx0, hx1, -fz, fz - vest, y0, y1); // behind the vestibule
+  box(hx0, hx1, fz - vest, fz, ht, y1);  // over it
+  const LINE = '#1a1320', vy = (y0 + ht) / 2, vh = ht - y0;
+  L.add(new THREE.PlaneGeometry(vest, vh), LINE, hx0 + 0.005, vy, fz - vest / 2, Math.PI / 2);
+  L.add(new THREE.PlaneGeometry(vest, vh), LINE, hx1 - 0.005, vy, fz - vest / 2, -Math.PI / 2);
+  L.add(new THREE.PlaneGeometry(hx1 - hx0, vest).rotateX(Math.PI / 2), LINE, (hx0 + hx1) / 2, ht - 0.005, fz - vest / 2);
+  L.add(new THREE.PlaneGeometry(hx1 - hx0, vh), '#100a14', (hx0 + hx1) / 2, vy, fz - vest + 0.005);
+}
+
 const COTTAGE_PAL = [
   { wall: '#3a3247', roof: '#2a2231', trim: '#8a7a99', shutter: '#2e3d3a', rug: '#5a2028' }, // violet
   { wall: '#2e3a3b', roof: '#2b2a25', trim: '#94897a', shutter: '#4a2f33', rug: '#24405c' }, // teal
@@ -1149,32 +1178,41 @@ const COTTAGE_PAL = [
  * A cottage on the ground at (x, y, z) (y: its floor's ground), w x d, turned by yaw (its front, with the door, faces
  * local +z = (sin yaw, cos yaw)), on a stone footing reaching `foot` m below y: clapboard walls (o.stone: rubble) with
  * corner boards, a shingled gable roof (the ridge along local x) with bargeboards, a brick chimney, dressed windows
- * (glow panes: one ctx 'window' light group per cottage), a framed dark doorway at local x doorX (the door leaf is the
- * caller's: doorGeometry, so it can open), and a porch: a deck deckW x deckD whose top is 0.3 m up, a step round it, two
+ * (glow panes: one ctx 'window' light group per cottage), a framed doorway at local x doorX, HOLE_W x HOLE_H from the
+ * deck up, with a dark vestibule behind it (the door leaf is the porch logic's: hinged at the doormat's back-left edge,
+ * it swings into the vestibule), and a porch: a deck deckW x deckD whose top is 0.3 m up, a step round it, two
  * posts under a little roof, a railing either side of the steps with a small jack-o'-lantern on its end post (its own
  * light group: the porch logic lights it once the porch is visited), a hanging lamp (ctx 'lamp': the porch light the
  * game drives) and a doormat 2.2 x 1.6 whose border glows with the lamp. Returns world anchors: { lamp, lampHalo,
- * matHalo, railing, railingHalo, window, windowHalo, deckTop, mat: { x, z, w, d, y }, door: { hinge: [x, y, z], yaw, w,
- * h }, chimney: [x, y, z], deck (local extents, for colliders), at(lx, ly, lz) }.
+ * matHalo, railing, railingHalo, window, windowHalo, deckTop, mat: { x, z, w, d, y }, chimney: [x, y, z], deck (local
+ * extents, for colliders), at(lx, ly, lz) }.
  */
 export function cottage(B, G, ctx, { x, y, z, w = 7, d = 6, yaw = 0, foot = 0.6, doorX = -0.9, deckW = 4.2, deckD = 1.9, palette = 0, stone = false }) {
   const r = rngAt(x, z, 81), L = new Parts(), P = COTTAGE_PAL[palette % COTTAGE_PAL.length];
   const c = Math.cos(yaw), s = Math.sin(yaw);
   const at = (lx, ly, lz) => [x + lx * c + lz * s, y + ly, z - lx * s + lz * c];
-  const FL = 0.3, SILL = 0.4, WT = 3.15, DW = 1.1, DH = 2.1, fz = d / 2;
-  // ---- footing + walls (+ clapboards or rubble courses), corner boards, the eave band
+  const FL = 0.3, SILL = FL, WT = 3.15, DW = HOLE_W, DH = HOLE_H, fz = d / 2, hx0 = doorX - DW / 2, hx1 = doorX + DW / 2;
+  // ---- footing + walls round the doorway (+ clapboards or rubble courses), corner boards, the eave band
   vgrad(L.add(chamferBox(w + 0.3, foot + SILL, d + 0.3, 0.05), '#4a4552', 0, (SILL - foot) / 2, 0), 0.55, 0.95);
-  vgrad(L.add(new THREE.BoxGeometry(w, WT - SILL + 0.05, d), stone ? '#4d4757' : P.wall, 0, SILL - 0.05 + (WT - SILL + 0.05) / 2, 0), 0.72, 1.08);
+  doorwayBlock(L, { w, d, y0: SILL - 0.05, y1: WT, hx0, hx1, ht: SILL + DH, color: stone ? '#4d4757' : P.wall });
+  const INK = stone ? '#2e2a36' : '#1b1622', LW = stone ? 0.012 : 0.013;
   for (const [nx, nz, len] of [[0, 1, w], [0, -1, w], [1, 0, d], [-1, 0, d]]) {
     const off = nx ? w / 2 + 0.004 : d / 2 + 0.004, nrm = [nx, 0, nz];
     const P3 = (u, v) => (nx ? [nx * off, v, u] : [u, v, nz * off]);
+    const hole = (u, v) => nz === 1 && v < SILL + DH + 0.02 && u > hx0 - 0.05 && u < hx1 + 0.05; // (no lines in the doorway)
+    const run = (pts) => { // a polyline, broken where it crosses the doorway
+      let seg = [];
+      const flush = () => { if (seg.length > 1) lineOn(L, seg.map((o) => P3(o[0], o[1])), LW, INK, nrm); seg = []; };
+      for (const q of pts) { if (hole(q[0], q[1])) flush(); else seg.push(q); }
+      flush();
+    };
     if (stone) { // rubble courses: wavy lines and staggered joints
       for (let yy = 0.75, k = 0; yy < WT - 0.1; yy += 0.36, k++) {
-        const pts = []; for (let u = -len / 2; u <= len / 2 + 1e-6; u += len / 8) pts.push(P3(u, yy + (r() - 0.5) * 0.06));
-        lineOn(L, pts, 0.012, '#2e2a36', nrm);
-        for (let u = -len / 2 + 0.3 + (k % 2) * 0.35 + r() * 0.2; u < len / 2 - 0.2; u += 0.6 + r() * 0.35) lineOn(L, [P3(u, yy), P3(u + (r() - 0.5) * 0.05, yy + 0.35)], 0.011, '#2e2a36', nrm);
+        const pts = []; for (let u = -len / 2; u <= len / 2 + 1e-6; u += len / 16) pts.push([u, yy + (r() - 0.5) * 0.06]);
+        run(pts);
+        for (let u = -len / 2 + 0.3 + (k % 2) * 0.35 + r() * 0.2; u < len / 2 - 0.2; u += 0.6 + r() * 0.35) if (!hole(u, yy)) lineOn(L, [P3(u, yy), P3(u + (r() - 0.5) * 0.05, yy + 0.35)], 0.011, INK, nrm);
       }
-    } else for (let yy = 0.7; yy < WT - 0.05; yy += 0.28) lineOn(L, [P3(-len / 2, yy), P3(len / 2, yy)], 0.013, '#1b1622', nrm);
+    } else for (let yy = 0.7; yy < WT - 0.05; yy += 0.28) { const pts = []; for (let u = -len / 2; u <= len / 2 + 1e-6; u += len / 28) pts.push([u, yy]); run(pts); }
   }
   for (const [cx, cz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) L.add(chamferBox(0.22, WT - SILL, 0.22, 0.03), P.trim, cx * w / 2, SILL + (WT - SILL) / 2, cz * d / 2);
   vgrad(L.add(chamferBox(w + 0.3, 0.2, d + 0.3, 0.04), P.trim, 0, WT, 0), 0.8, 1.15);
@@ -1207,11 +1245,9 @@ export function cottage(B, G, ctx, { x, y, z, w = 7, d = 6, yaw = 0, foot = 0.6,
     lineOn(L, [[chx - 0.33, yy + 0.4, chz + 0.332], [chx + 0.33, yy + 0.4, chz + 0.332]], 0.012, '#24161a');
   }
   vgrad(L.add(chamferBox(0.86, 0.12, 0.86, 0.03), '#2b2230', chx, chTop + 0.25, chz), 0.9, 1.2);
-  // ---- the doorway: a dark opening in a trimmed frame with a lintel (the door leaf opens into it)
-  L.add(new THREE.PlaneGeometry(DW + 0.04, DH), '#07040a', doorX, SILL + DH / 2, fz + 0.012);
+  // ---- the doorway's frame: two boards and a lintel (the door leaf swings into the vestibule behind)
   for (const sx of [-1, 1]) L.add(chamferBox(0.14, DH + 0.1, 0.12, 0.02), P.trim, doorX + sx * (DW / 2 + 0.07), SILL + (DH + 0.1) / 2, fz + 0.04);
-  vgrad(L.add(chamferBox(DW + 0.5, 0.16, 0.16, 0.03), P.trim, doorX, SILL + DH + 0.12, fz + 0.05), 0.85, 1.2);
-  L.add(chamferBox(DW + 0.3, 0.06, 0.3, 0.02), '#4a4552', doorX, SILL - 0.02, fz + 0.12);
+  vgrad(L.add(chamferBox(DW + 0.5, 0.16, 0.16, 0.03), P.trim, doorX, SILL + DH + 0.08, fz + 0.05), 0.85, 1.2);
   // ---- windows: one on the front (right of the porch), one on each side, one at the back (dressed; panes glow)
   const front = doorX + deckW / 2 + 0.95, wins = [];
   if (front + 0.6 < w / 2) { windowDressing(L, r, front, 1.75, fz, 0.9, 1.05, { trim: P.trim, shutter: P.shutter, crooked: r() < 0.3 }); wins.push([front, 1.75, fz + 0.02, 0, 0.9, 1.05]); }
@@ -1270,7 +1306,6 @@ export function cottage(B, G, ctx, { x, y, z, w = 7, d = 6, yaw = 0, foot = 0.6,
   return {
     lamp, lampHalo, matHalo, railing: jack.group, railingHalo: jack.halo, window, windowHalo, deckTop: y + FL,
     mat: { x: m[0], z: m[2], w: MW, d: MD, y: y + FL },
-    door: { hinge: at(doorX - DW / 2, SILL, fz + 0.045), yaw, w: DW, h: DH },
     chimney: at(chx, chTop + 0.4, chz),
     deck: { x0: dx0, x1: dx1, z0: fz, z1: dz1, rails: rails.map(([a, b]) => [a, b, postZ]) },
     at,
@@ -1294,27 +1329,6 @@ export function doormatGlow(G, { x, y, z, yaw = 0, w = 2.2, d = 1.6 }) {
   L.add(new THREE.CircleGeometry(0.2, 12).rotateX(-Math.PI / 2), '#ffb062', 0, 0.03, 0);
   for (const g of L.list) { const C = g.attributes.color.array; for (let i = 0; i < C.length; i++) C[i] *= 1.5; }
   L.into(G, x, y, z, yaw);
-}
-
-/**
- * A porch door leaf, w x h (x from 0 at the hinge to w, y from 0, 0.07 thick, centred on z = 0): planks under an
- * arched top, iron strap hinges, a ring knocker. Vertex coloured near-white (tinted per instance). One geometry for
- * every porch door (village.js: an InstancedMesh that swings them).
- */
-export function doorGeometry(w = 1.1, h = 2.1) {
-  const L = new Parts();
-  vgrad(L.add(slab(w, h, 0.07, 'round', 0.012), '#ffffff', w / 2, 0, 0), 0.72, 1.05);
-  for (const k of [0.25, 0.5, 0.75]) lineOn(L, [[w * k, 0.06, 0.037], [w * k, h - (Math.abs(k - 0.5) < 0.1 ? 0.06 : 0.2), 0.037]], 0.01, '#3a3a3a');
-  for (const yy of [0.45, h - 0.78]) {
-    L.add(new THREE.BoxGeometry(w * 0.72, 0.06, 0.02), '#2a2428', w * 0.36, yy, 0.045);
-    L.add(new THREE.CylinderGeometry(0.03, 0.03, 0.08, 6), '#2a2428', 0.0, yy, 0.0);
-  }
-  L.add(new THREE.TorusGeometry(0.065, 0.012, 4, 10), '#3b3236', w * 0.8, 1.12, 0.05);
-  L.add(new THREE.SphereGeometry(0.035, 6, 4), '#c09a48', w * 0.8, 1.2, 0.05);
-  for (const g of L.list) g.clearGroups();
-  const out = mergeGeometries(L.list);
-  for (const g of L.list) g.dispose();
-  return out;
 }
 
 /**

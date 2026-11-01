@@ -273,7 +273,7 @@ async function boot() {
   };
   let pace = loadPace(); // the best run's candy at the PACE_N moments (null: no best run recorded yet)
   const paceRec = new Array(PACE_N).fill(0);
-  let booedEver = loadTaught(), lookHinted = false, smashedEver = false, creekT = 0, creekTold = false;
+  let booedEver = loadTaught(), lookHinted = false, smashedEver = false, creekT = 0;
   // START / RESUME / PLAY AGAIN run inside the click (a user gesture): the same call captures the mouse on desktop
   const hud = new HUD({
     touch: TOUCH, streak: STREAK_EVERY,
@@ -908,8 +908,8 @@ async function boot() {
         if (porches.knocking >= 0 && G.booT >= BOO_CD && taught.has('treat') && !taught.has('trick') && !taught.has('trickHint')) {
           taught.set('trickHint'); hud.say('BOO AT THE DOOR', 'boo', '= TRICK!');
         }
-        // down in the creek's bed for 2 s (its banks are walls): how to get out (once)
-        if (!creekTold && cc.grounded && world.inCreek(p.x, p.y, p.z)) { if ((creekT += dt) > 2) { creekTold = true; hud.callout('JUMP OUT!', 'warn'); } } else creekT = 0;
+        // down in the creek's bed for 2 s (its banks are walls): how to get out (once per device)
+        if (!taught.has('creek') && cc.grounded && world.inCreek(p.x, p.y, p.z)) { if ((creekT += dt) > 2) { taught.set('creek'); hud.say('JUMP OUT!', 'warn'); } } else creekT = 0;
         // candy trickles back; big pops now and then
         G.spawnT -= dt;
         if (G.spawnT <= 0) {

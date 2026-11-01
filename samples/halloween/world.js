@@ -10,8 +10,8 @@
 //     at the creek's edges keep its bank walls tight on the mesh)
 //   - static props, built by props.js's reusable builders and placed by village.js (cottages, bridges, banks, stones,
 //     bales, the oak, the well, the signpost): ONE merged vertex-coloured mesh + ONE merged unlit glow mesh (windows,
-//     lamps, candles, the cauldron's brew), so the whole level is a handful of draw calls; plus the porch doors (one
-//     InstancedMesh) and the creek's water (one additive mesh)
+//     lamps, candles, the cauldron's brew), so the whole level is a handful of draw calls; plus the creek's water (one
+//     additive mesh). Each porch house leaves a doorway for the porch logic's door (porches.js)
 //   - instanced decor pumpkins + leaves (1 draw each, the patch only), grass tufts (1 draw; fewer on phones)
 //   - sky dressing: a big moon billboard + halo and a ring of tree-line silhouettes, both depth-less (the post fog reads
 //     them as sky) and following the camera
@@ -188,7 +188,7 @@ const COTTAGE = { w: 7, d: 6, doorX: -0.9, deckW: 4.2, deckD: 1.9 };
  * faces (sin yaw, cos yaw)), mat { x, z, w (along the wall), d (out from it), y (the deck's top) }, chimney [x, y, z]
  * (where a resident ghost drops from), haunted (P6: trick only); lamp / railing: light groups of the glow mesh (the
  * porch lamp with its glowing mat; the railing's jack-o'-lantern: the porch logic scales their levels in glowLevels after
- * environment.js has written them each frame), door { hinge, yaw, w, h }, halos
+ * environment.js has written them each frame), halos
  * (indices into glowSpots), floor (the ground at its steps) and build (the cottage's dimensions): filled by buildWorld.
  */
 function porch(id, x, z, yaw, build, haunted = false) {
@@ -198,7 +198,7 @@ function porch(id, x, z, yaw, build, haunted = false) {
   const [fx, fz] = W(doorX, fd + (haunted ? 2.3 : b.deckD + 0.2)), floor = heightAt(fx, fz);
   const [mx, mz] = W(doorX, fd + 0.85), [cx, cz] = haunted ? W(2.9, -0.9) : W(b.w / 2 - 1.2, -b.d / 4);
   return {
-    id, x, z, yaw, haunted, floor, build: b, lamp: -1, railing: -1, window: -1, door: null, halos: null,
+    id, x, z, yaw, haunted, floor, build: b, lamp: -1, railing: -1, window: -1, halos: null,
     mat: { x: +mx.toFixed(3), z: +mz.toFixed(3), w: 2.2, d: 1.6, y: floor + 0.3 },
     chimney: [cx, floor + (haunted ? 10.6 : 6.2), cz],
   };
@@ -665,8 +665,13 @@ export function buildWorld({ scene, physics, low }) {
   const glowMat = patchGlowGroups(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }), glowLevels);
   const glow = G.build(glowMat, 'glow');
   scene.add(glow);
-  const doors = V.porchDoors(PORCHES);
-  scene.add(doors.mesh);
+  // each light group's centre (its glowing parts' mean position: a window dims as the camera comes near it, halos())
+  const groupPos = new Float32Array(GLOW.MAX * 3);
+  {
+    const GP = glow.geometry.attributes.position.array, GR = glow.geometry.attributes.grp.array, cnt = new Float32Array(GLOW.MAX);
+    for (let i = 0; i < GR.length; i++) { const k = Math.round(GR[i]); groupPos[k * 3] += GP[i * 3]; groupPos[k * 3 + 1] += GP[i * 3 + 1]; groupPos[k * 3 + 2] += GP[i * 3 + 2]; cnt[k]++; }
+    for (let k = 0; k < GLOW.MAX; k++) if (cnt[k]) for (let j = 0; j < 3; j++) groupPos[k * 3 + j] /= cnt[k];
+  }
   const water = V.creekWater(CREEK, heightAt, WIND.time);
   scene.add(water);
   // the gate: its leaves stand open a0 / a1 (rad from closed, folded inward; built at `open`), through the props material
@@ -881,43 +886,12 @@ export function buildWorld({ scene, physics, low }) {
   const bankAt = (x) => Math.max(heightAt(x, C.z0 - 0.05), heightAt(x, C.z1 + 0.05));
 
   self = {
-    terrain, props, glow, pumpkins, leaves, tufts, moon, moonColor, sky, doors, water, lanternSpots, ghostSpawns, graves, candySpot, heightAt, glowSpots, beacons,
+    terrain, props, glow, pumpkins, leaves, tufts, moon, moonColor, sky, water, lanternSpots, ghostSpawns, graves, candySpot, heightAt, glowSpots, beacons,
     /** Light groups ([kind, flicker amount], see GLOW) and their levels (glowLevels: set per frame by the game; 1). */
     glowGroups: groups, glowLevels, gate, perches,
     // the map v2 (also exported from world.js): the porch logic sets porchLit(i) -> bool (candy near lit mats only)
     porches: PORCHES, bridges: BRIDGES, creek: CREEK, handSpots: HAND_SPOTS, popSpots: POP_SPOTS, secrets: SECRETS, cauldron: CAULDRON, vantage: VANTAGE, thiefDen: THIEF_DEN, knoll: KNOLL,
     paths: PATHS, trees: trees.map((t) => [+t.x.toFixed(2), +t.z.toFixed(2), t.lod]), porchLit: null, zoneOf, pathDist,
-    /**
-     * A porch's candy trail (DESIGN 2.2): n spots [x, y, z] along the lane within 12 m of porch i's mat, nearest first,
-     * clear of colliders; with `from` ([x, z], e.g. the spawn) a straight trail from there to the porch's steps instead.
-     */
-    trailSpots(i, n = 5, from = null) {
-      const p = PORCHES[i], m = p.mat, fx = Math.sin(p.yaw), fz = Math.cos(p.yaw), sx = m.x + fx * 2.6, sz = m.z + fz * 2.6, out = [];
-      const ok = (x, z) => Math.abs(x) < PLAY - 2 && Math.abs(z) < PLAY - 2 && physics.queryColliders(x, z, 0.6, []).length === 0 && out.every((q) => Math.hypot(q[0] - x, q[2] - z) > 1.6);
-      if (from) { // evenly from 20 % of the way to the steps, zigzagging 0.6 m; a blocked spot tries either side
-        const dx = sx - from[0], dz = sz - from[1], L = Math.hypot(dx, dz), nx = -dz / L, nz = dx / L;
-        for (let k = 0; k < n; k++) {
-          const t = 0.2 + (0.78 * k) / Math.max(1, n - 1), o = k % 2 ? 0.6 : -0.6;
-          for (const oo of [o, -o, 2 * o, -2 * o]) {
-            const x = from[0] + dx * t + nx * oo, z = from[1] + dz * t + nz * oo;
-            if (ok(x, z)) { out.push([x, heightAt(x, z), z]); break; }
-          }
-        }
-        return out;
-      }
-      // the lane's points within 12 m of the mat, by distance, alternating sides of the centre line
-      const cand = [];
-      for (const L of PATHS) for (let s = 0; s < L.length - 1; s++) {
-        const [ax, az] = L[s], [bx, bz] = L[s + 1], len = Math.hypot(bx - ax, bz - az);
-        for (let u = 0; u <= len; u += 1.1) {
-          const x = ax + ((bx - ax) * u) / len, z = az + ((bz - az) * u) / len, d = Math.hypot(x - m.x, z - m.z);
-          if (d < 12 && d > 2.2) cand.push([d, x - ((bz - az) / len) * 0.7 * (cand.length % 2 ? 1 : -1), z + ((bx - ax) / len) * 0.7 * (cand.length % 2 ? 1 : -1)]);
-        }
-      }
-      cand.sort((a, b) => a[0] - b[0]);
-      for (let k = 0; k < cand.length && out.length < n; k++) if (ok(cand[k][1], cand[k][2])) out.push([cand[k][1], heightAt(cand[k][1], cand[k][2]), cand[k][2]]);
-      return out;
-    },
     /** Is a kid at (x, y, z) down in the creek's bed (below its banks, not on a bridge)? */
     inCreek(x, y, z) {
       if (C.depth <= C.ford || z < C.z0 + C.lip - 0.1 || z > C.z1 - C.lip + 0.1) return false;
@@ -925,19 +899,19 @@ export function buildWorld({ scene, physics, low }) {
       return y < bankAt(x) - C.depth * 0.5;
     },
     /**
-     * The halos over the static glowing props into `glows` from slot `base`, each at its light group's level. A window's
-     * halo dims as the camera comes within 14 m (up close the lit panes show; five window halos overlapping washed the
-     * haunted house's front out when the kid stood on its porch).
+     * The halos over the static glowing props into `glows` from slot `base`, each at its light group's level; first (after
+     * the environment has written this frame's levels) a lit window within 16 m of the camera dims toward 45 %: up close
+     * the haunted house's bright panes bloomed over the whole view from its porch, a destination now.
      */
     halos(glows, base) {
       const GS = glowSpots, L = glowLevels, c = _camP;
+      for (let k = 0; k < groups.length; k++) {
+        if (kinds[k] !== GLOW.WINDOW) continue;
+        const dx = groupPos[k * 3] - c.x, dy = groupPos[k * 3 + 1] - c.y, dz = groupPos[k * 3 + 2] - c.z, d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 < 256) L[k] *= 0.45 + 0.55 * smooth((Math.sqrt(d2) - 4) / 12);
+      }
       for (let k = 0; k < GS.length; k++) {
-        const q = GS[k];
-        let f = L[q[8]];
-        if (kinds[q[8]] === GLOW.WINDOW) {
-          const dx = q[0] - c.x, dy = q[1] - c.y, dz = q[2] - c.z, d2 = dx * dx + dy * dy + dz * dz;
-          if (d2 < 196) f *= 0.3 + 0.7 * smooth((Math.sqrt(d2) - 3) / 11);
-        }
+        const q = GS[k], f = L[q[8]];
         glows.set(base + k, q[0], q[1], q[2], q[3], q[4] * f, q[5] * f, q[6] * f);
       }
       return GS.length;

@@ -5,12 +5,11 @@
 //   colliders  static boxes, axis-aligned: every building is turned by a multiple of 90 degrees so its boxes fit it
 //              (a diagonal wall built of box steps traps the kid); the creek's banks and the fences come in pieces of
 //              4 m at most (the slide-around assist goes round one piece at a time, as along the graveyard fence)
-//   meshes     two of their own: the porch doors (ONE InstancedMesh: doors.set(i, open 0..1) swings door i into its
-//              house) and the creek's water (ONE additive mesh: the water strip with ripples and the moon's glint, and
-//              low mist wisps over it). Everything else goes into the merged props / glow meshes (no draw call).
+//   meshes     one of its own: the creek's water (ONE additive mesh: the water strip with ripples and the moon's
+//              glint, and low mist wisps over it). Everything else goes into the merged props / glow meshes (no draw
+//              call); the porch doors are the porch logic's (porches.js), hinged in each house's doorway.
 import * as THREE from 'three';
 import * as P from './props.js';
-import { patchDetail } from './looks.js';
 
 /**
  * A static box for the rectangle lx0..lx1 x lz0..lz1 in the frame of a building at (x, z) turned by yaw (a multiple of
@@ -37,7 +36,7 @@ function lowest(groundAt, x, z, yaw, hw, hd, front = 0) {
 /**
  * A trick-or-treat cottage for porch p (world.js PORCHES: x, z, yaw, floor, build {w, d, doorX, deckW, deckD, palette,
  * stone}): the house, its colliders (the shell, the deck, the step round it, the two railings) and p's anchors (lamp,
- * railing, chimney, door, halos; the mat as built).
+ * railing, chimney, halos; the mat as built).
  */
 export function porchCottage(B, G, ctx, physics, groundAt, p) {
   const o = p.build, y = p.floor, { w, d } = o;
@@ -48,7 +47,7 @@ export function porchCottage(B, G, ctx, physics, groundAt, p) {
   box(D.x0, D.x1, D.z0, D.z1, a.deckTop);
   box(D.x0 - 0.35, D.x1 + 0.35, D.z0, D.z1 + 0.35, y + 0.15);
   for (const [ra, rb, rz] of D.rails) box(ra - 0.07, rb + 0.07, rz - 0.07, rz + 0.07, a.deckTop + 0.95);
-  Object.assign(p, { lamp: a.lamp, railing: a.railing, chimney: a.chimney, door: a.door, halos: { lamp: a.lampHalo, mat: a.matHalo, railing: a.railingHalo, window: a.windowHalo }, window: a.window });
+  Object.assign(p, { lamp: a.lamp, railing: a.railing, chimney: a.chimney, halos: { lamp: a.lampHalo, mat: a.matHalo, railing: a.railingHalo, window: a.windowHalo }, window: a.window });
   p.mat.y = a.deckTop;
   return a;
 }
@@ -80,33 +79,9 @@ export function hauntedPorch(B, G, ctx, physics, groundAt, p, house) {
   ctx.glow('steady', 0);
   const jp = h.at(2.36, 1.5, pz);
   const jack = P.jackOLantern(B, G, ctx, { x: jp[0], y: jp[1], z: jp[2], yaw: p.yaw + 0.3, r: 0.16 });
-  Object.assign(p, { lamp: h.lamp, railing: jack.group, chimney: h.chimney, door: h.door, halos: { lamp: h.lampHalo, mat: mh, railing: jack.halo, window: -1 }, window: -1 });
+  Object.assign(p, { lamp: h.lamp, railing: jack.group, chimney: h.chimney, halos: { lamp: h.lampHalo, mat: mh, railing: jack.halo, window: -1 }, window: -1 });
   p.mat.y = deckTop;
   return h;
-}
-
-/**
- * The porch doors: one InstancedMesh (a plank leaf under an arched top, tinted per porch), each hinged at its porch's
- * door frame. doors.set(i, open) swings door i (0 shut .. 1 open: 100 degrees, into the dark house).
- */
-export function porchDoors(porches) {
-  const geo = P.doorGeometry(1.1, 2.1);
-  const mat = patchDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0.02 }), { scale: 1.7, amount: 0.5, broad: 0.3, streak: 0.55 });
-  const mesh = new THREE.InstancedMesh(geo, mat, porches.length);
-  mesh.name = 'porchDoors'; mesh.castShadow = false; mesh.receiveShadow = true;
-  const TINT = ['#7a3038', '#3e6a54', '#4c3e7c', '#8a5a2a', '#6a2a50', '#4a2438'], col = new THREE.Color();
-  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();
-  const list = porches.map((p) => ({ hinge: p.door.hinge, yaw: p.door.yaw, sx: p.door.w / 1.1, sy: p.door.h / 2.1, open: 0 }));
-  const set = (i, open) => {
-    const d = list[i]; d.open = open;
-    q.setFromEuler(e.set(0, d.yaw + open * 1.75, 0));
-    mesh.setMatrixAt(i, m.compose(v.set(d.hinge[0], d.hinge[1], d.hinge[2]), q, sc.set(d.sx, d.sy, 1)));
-    mesh.instanceMatrix.needsUpdate = true;
-  };
-  list.forEach((_, i) => { set(i, 0); mesh.setColorAt(i, col.set(TINT[i % TINT.length])); });
-  mesh.instanceColor.needsUpdate = true;
-  mesh.computeBoundingSphere();
-  return { mesh, set, list };
 }
 
 // ------------------------------------------------------------------ the creek
