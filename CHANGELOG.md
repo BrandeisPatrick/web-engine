@@ -119,7 +119,9 @@ in 1.0.0), driven by the new Halloween game sample (`samples/halloween/`, "Midni
   the graveyard 22, the patch 13, porch approaches 10, the creek's bed 8, the knoll 7, anywhere 10); `world.js` exports
   `HAND_SPOTS`, `BRIDGES`, `CREEK`, `POP_SPOTS`, `SECRETS`, `CAULDRON`, `VANTAGE`, `THIEF_DEN` for the later passes.
   Every collider is an axis-aligned box (every house faces along an axis). Spilled candy lands on a deck, a bridge or a
-  bale (`Candy` `floorAt`); the dry-view candy's clear run ignores what a jump clears; lit windows dim near the camera.
+  bale (`Candy` `floorAt`); the dry-view candy's clear run ignores what a jump clears; lit windows dim near the camera;
+  the touch slide-around takes the long way out of a fence's inside corner (a bot stood 85 s in the graveyard's corner
+  pushing at the gatekeeper's lit mat beyond it).
 
 ## 1.0.0 — 2026-10-30
 The release of the 1.0 roadmap (phases 0.5.0 - 0.9.0, ENGINE.md): a general engine with its graphics and physics pushed as
