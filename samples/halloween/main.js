@@ -905,8 +905,9 @@ async function boot() {
           G.spawnT = 1.2;
           const dry = !candyInView(p, DRY_R, DRY_NEED);
           G.dryT = dry ? G.dryT + 1.2 : 0;
-          // (a porch's trail took the place of this many respawns: porches.takeDebt)
-          const i = candy.restingCount < CANDY_TARGET ? (porches.takeDebt() ? -1 : respawnCandy(p, dry)) : G.dryT >= DRY_T ? relocateFar(p) : -1;
+          // a porch's trail takes the place of that many ordinary respawns (porches.takeDebt); a dry view still gets its
+          // candy in view
+          const i = candy.restingCount < CANDY_TARGET ? (!dry && porches.takeDebt() ? -1 : respawnCandy(p, dry)) : G.dryT >= DRY_T ? relocateFar(p) : -1;
           if (i >= 0) fx.motes(candy.p[i * 3], candy.p[i * 3 + 1], candy.p[i * 3 + 2], 6, 1.2, 0.8, 1.6);
         }
         G.popT -= dt;
