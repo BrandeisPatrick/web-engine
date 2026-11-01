@@ -297,10 +297,11 @@ const CSS = `
 .hw-hidden-touch .ui-touch{display:none}
 `;
 
-// rank thresholds (candy in a 3-minute round), v2 with the porches (design 2.6, retuned on the pass-2 phone bots): a
-// novice ends a Trick-or-Treater or a Candy Collector, a casual player a Collector or a Sugar Goblin, a skilled one
-// Pumpkin Royalty, and Lord of the Night is rare even for the skilled bot (a bot that sees every candy on the map)
-export const RANKS = [[0, 'Little Pumpkin'], [60, 'Trick-or-Treater'], [140, 'Candy Collector'], [240, 'Sugar Goblin'], [360, 'Pumpkin Royalty'], [520, 'Lord of the Night']];
+// rank thresholds (candy in a 3-minute round), v2 with the porches (design 2.6: 0 / 60 / 140 / 240 / 360 / 520, Sugar
+// Goblin retuned to 230 on 36 pass-2 phone-bot rounds): a novice ends a Trick-or-Treater or a Candy Collector, a
+// casual player a Collector or a Sugar Goblin, a skilled one Pumpkin Royalty, and Lord of the Night is rare even for the
+// skilled bot (1 of 6 of its rounds; a bot that sees every candy on the map)
+export const RANKS = [[0, 'Little Pumpkin'], [60, 'Trick-or-Treater'], [140, 'Candy Collector'], [230, 'Sugar Goblin'], [360, 'Pumpkin Royalty'], [520, 'Lord of the Night']];
 /** Index into RANKS for n candy. */
 export const rankIndex = (n) => { let r = 0; for (let k = 1; k < RANKS.length; k++) if (n >= RANKS[k][0]) r = k; return r; };
 export const rankFor = (n) => RANKS[rankIndex(n)][1];

@@ -100,7 +100,7 @@ in 1.0.0), driven by the new Halloween game sample (`samples/halloween/`, "Midni
   mesh: three draws). Hints go through paced call-outs (`hud.say`: one per 2.5 s, duplicates and stale ones dropped;
   a trick, a catch or the Witching Hour hold the screen a second against a streak's), once-per-device lessons in
   `taught` (localStorage `midnight-candy-run.taught.*`; "BOO AT THE DOOR / = TRICK!" with BOO glowing at an opening
-  door until the first trick), "A GHOST RISES..." once a round; ranks v2 (0 / 60 / 140 / 240 / 360 / 520); the
+  door until the first trick), "A GHOST RISES..." once a round; ranks v2 (0 / 60 / 140 / 230 / 360 / 520, retuned on the phone bots); the
   results show porches n/5, tricks, BOOs, catches and the best streak.
 
 ## 1.0.0 — 2026-10-30
