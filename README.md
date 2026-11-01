@@ -20,17 +20,17 @@ with the package and are exported for the root and every subpath.
 - From git: `npm install github:BrandeisPatrick/inbrowser-game-engine` (no build step; `prepack` emits `types/`), or
   as a git submodule listed in the game's `workspaces` (what roadster does: `node_modules/@vibe/engine -> engine`).
 - Standalone: `npm install`, then `npm run dev` serves the samples at http://localhost:5190 (an index page lists the
-  four). `npm test` runs the 31 headless suites (`test/all.mjs`; Node >= 20 runs them, the allocation budgets are
+  five). `npm test` runs the 31 headless suites (`test/all.mjs`; Node >= 20 runs them, the allocation budgets are
   calibrated on Node 26, which CI uses), `npm run build` builds the samples into `dist/`, `npm run types` emits
   `types/` and `npm run types:check` compiles a strict TypeScript consumer against them, `npm run smoke` /
   `npm run bench` drive the samples in Chrome (Playwright; see ENGINE.md "Measurement protocol"), `npm run pack:check`
   lists the tarball (~285 files, ~1.1 MB).
 
 ## Samples
-Every sample exposes `window.__sample` (poses, settings, `run(plan)`) under `?bench=1&size=WxH`, and they share the
-render flags of `samples/shared/fx-flags.js`: `?gbuffer=1`, `?aa=taa|fxaa|msaa`, `?shadows=pcf|fast|pcss`,
-`?cascades=2|3|4`, `?ssr=1`, `?volumetric=1`, `?motionblur=1`, `?dof=1`, `?lut=warm|bleach`, `?aonormals=gbuffer`,
-`?fps=60`.
+Every engine sample (not the Halloween game, which exposes `window.__game`) exposes `window.__sample` (poses,
+settings, `run(plan)`) under `?bench=1&size=WxH`, and they share the render flags of `samples/shared/fx-flags.js`:
+`?gbuffer=1`, `?aa=taa|fxaa|msaa`, `?shadows=pcf|fast|pcss`, `?cascades=2|3|4`, `?ssr=1`, `?volumetric=1`,
+`?motionblur=1`, `?dof=1`, `?lut=warm|bleach`, `?aonormals=gbuffer`, `?fps=60`.
 - `samples/canyon-run/` — off-road buggy time trial built only on the engine (it drove 15 engine fixes, ENGINE.md
   "Changelog / sample findings"); `?lamps=1&t=night` lights the canyon with clustered lamps, `?gpuparticles=1` runs
   the dust devils on the GPU. Without Poly Haven texture sets under its public dir it falls back to procedural textures.
@@ -43,6 +43,9 @@ render flags of `samples/shared/fx-flags.js`: `?gbuffer=1`, `?aa=taa|fxaa|msaa`,
   downloads the CC0 RobotExpressive model; `?model=` loads any other) or a procedural rigged fallback, driven by
   `CharacterController`, `AnimationController`, `ThirdPersonRig` / `FirstPersonRig` and `CharacterInput`; it pushes
   crates, rides an elevator, mantles ledges with hand IK and ragdolls on hard falls (K).
+- `samples/halloween/` — "Midnight Candy Run", the Halloween 2026 game: collect candy before midnight, smash
+  jack-o'-lanterns (fracture pieces), BOO the cloth ghosts; plays on phones (touch, portrait and landscape) and desktop.
+  See its [README](samples/halloween/README.md); `node test/browser/halloween.mjs` drives it in phone emulation.
 
 ## Tests (`npm test`, 31 suites)
 - `test/car-sim.mjs` — 90 range checks of the Roadster vehicle model and the PhysicsWorld queries: the determinism

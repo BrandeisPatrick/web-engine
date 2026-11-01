@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased — Halloween 2026
+Phone touch options for the input layer, all opt-in (without them the touch controls are placed and behave exactly as
+in 1.0.0), driven by the new Halloween game sample (`samples/halloween/`, "Midnight Candy Run").
+- `TouchControls`: `safeArea: true` measures every offset from `env(safe-area-inset-*)` (notch, home indicator);
+  per-entry `portrait: { ... }` overrides re-applied on rotation (`relayout()`; listeners only when an entry has one);
+  `floating: true` sticks whose base jumps under the thumb anywhere in their `zone` and returns on release;
+  `setProgress(id, p)` draws a cooldown ring on a button (no string built per call), `setLabel(id, text)`, `get(id)`.
+  New helpers `isPortrait()`, `resolveTouchEntry(entry, portrait)`, `touchEdge(px, edge, safeArea)` (pure, tested in
+  `test/character-input.mjs`).
+- `CharacterInput`: `touchOptions` (passed to TouchControls, e.g. `{ safeArea: true }`); touchpad entries take the
+  safe-area insets and `portrait` overrides too; `touchReveal: { hideOnKey, onChange }` shows hidden touch controls on
+  the first real touch (a laptop with a touchscreen) and hides them on a key press; `touchShown`.
+- `isTouchDevice({ multiTouch: true })` also counts a coarse multi-touch device with a fine pointer attached (an iPad
+  with a keyboard / trackpad: iPadOS Safari reports a Mac user agent; a phone with a stylus). Without the option the
+  rule is unchanged.
+- Samples: `samples/halloween/` (third-person candy hunt: CharacterController + AnimationController, XPBD cloth ghosts on
+  kinematic heads, fracturePieces pumpkin shards on the DynamicsWorld, NearestLights lantern lights, night Atmosphere +
+  PostFX, synth music / SFX, phone-first touch HUD); `test/browser/halloween.mjs` drives it on desktop and in phone
+  emulation (iPhone / Pixel / small / tall, portrait, landscape, rotation, safe-area insets, two-thumb input,
+  backgrounding, five rounds with flat resource counts, `--perf` under 4x CPU throttling) and saves screenshots to the
+  gitignored `test/browser/out/halloween/`.
+
 ## 1.0.0 — 2026-10-30
 The release of the 1.0 roadmap (phases 0.5.0 - 0.9.0, ENGINE.md): a general engine with its graphics and physics pushed as
 far as the phases took them, measured. No engine behaviour changes against 0.9.0: the source changes are JSDoc comments,

@@ -1025,7 +1025,12 @@ unchanged).
   is read from the state getter (`facing` / `heading`), head bob from `speed` / `grounded`.
 - `CharacterInput` (`input/`): the `CHARACTER_ACTIONS` preset (move / look / jump / sprint / crouch / interact /
   toggleCamera / menu) with touch layout; look deltas are radians per frame and only flow under pointer lock or a
-  right-button hold; `PointerLock` wraps the DOM API (`request() -> Promise<boolean>`, `releasedByUser`).
+  right-button hold; `PointerLock` wraps the DOM API (`request() -> Promise<boolean>`, `releasedByUser`). Phone
+  options (opt-in, the default layout is unchanged): `touchOptions: { safeArea: true }` (offsets from
+  `env(safe-area-inset-*)`), per-entry `portrait` overrides re-applied on rotation, `floating` sticks (the base follows
+  the thumb inside a zone), `TouchControls.setProgress(id, p)` cooldown rings, `touchReveal` (controls on the first
+  touch, hidden on a key press) and `isTouchDevice({ multiTouch: true })` (iPads with a keyboard); `samples/halloween/`
+  uses them all.
 - `anim` layer: `AnimationController` (states, 1D blend trees, transition table, markers, root motion with the
   hips' horizontal track neutralised) and `TwoBoneIK` / CCD helpers.
 - `samples/character/`: third-person playground (glTF via `?model=` or `tools/fetch-models.mjs`, procedural rigged
