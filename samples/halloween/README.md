@@ -23,7 +23,11 @@ Esc to pause, M for sound. A gamepad works too.
 - **Jack-o'-lanterns:** run into one to kick it apart, or jump on it for more candy.
 - **Ghosts** chase you and steal candy when they touch you. Press **BOO!** when one gets close: it scares every ghost
   nearby, and each one drops 2 candies. BOO recharges in 5 s.
-- Your best score is saved on your device.
+- **Streaks:** grab candy quickly, one after another. Every 10th in a row adds 3 bonus candy.
+- **The Witching Hour:** in the last 30 seconds candy counts double, every lantern lights up again and candy rains
+  down around you.
+- **Ranks:** the number after your candy count is the next rank. Your best score is saved on your device; once you have
+  one, the clock shows now and then how far ahead of it (or behind) you are. Share your score from the results.
 
 <p>
 <img src="screenshots/phone-portrait.jpg" width="200" alt="Portrait gameplay with ghosts and the touch controls">
@@ -48,6 +52,9 @@ Esc to pause, M for sound. A gamepad works too.
 - On Android, short vibrations mark a candy, a smashed lantern, a BOO and a ghost's touch.
 - On a laptop with a touchscreen, the touch controls appear with the first touch and hide when you press a key.
 - The camera swings in behind you while you run forward, so one thumb is enough. You can turn the phone mid-round.
+- On a touchscreen, pushing straight into a gravestone, a tree or a fence slides you round it.
+- Smashes, BOO and catches shake the camera a little (less on phones). With reduced motion turned on in the device's
+  settings, nothing shakes or zooms.
 
 </details>
 
@@ -76,8 +83,9 @@ The engine changes this game needed are opt-in and listed in the [CHANGELOG](../
 | `ghosts.js` | Each ghost is a `Cloth.grid` sheet pinned to a kinematic head sphere, drawn with `ClothMesh`, moved by a small state machine (rise, wander, chase, flee, retreat). |
 | `candy.js` | The candy pool: instanced meshes, the magnet and spilled candy. |
 | `effects.js` | Glow billboards, the engine `ParticleSystem` sparks and the BOO ring. |
+| `reach.js` | The faint ring on the ground that shows BOO's reach while a ghost is inside it. |
 | `audio.js` | All synth sound on `AudioBus`: a D-minor music loop, ambience, effects and the midnight bells. |
-| `hud.js` | The DOM title, HUD, pause, how-to-play and results screens, and the full-screen toggle. |
+| `hud.js` | The DOM title, HUD (candy and the next rank, the streak meter, the clock and the pace against your best, call-outs), pause, how-to-play and results screens (rank ladder, share), and the full-screen toggle. |
 
 </details>
 

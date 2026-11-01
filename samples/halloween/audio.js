@@ -190,6 +190,25 @@ export class GameAudio {
       }
     }
   }
+  /** The Witching Hour starts: a rising minor arpeggio with a shimmer over the bells. */
+  witching() {
+    if (!this.ready) return;
+    const ctx = this.bus.ctx, out = this.bus.bus('effects'), t = ctx.currentTime;
+    [62, 65, 69, 74, 77, 81].forEach((m, i) => playTone(ctx, out, { type: 'triangle', pitch: [[0, hz(m)], [0.2, hz(m) * 1.004]], peak: 0.08, attack: 0.005, decay: 0.45, when: t + 0.05 + i * 0.07, pan: (i / 5 - 0.5) * 0.8 }));
+    playNoiseBurst(ctx, out, this.pink, { peak: 0.08, attack: 0.25, decay: 0.8, filter: { type: 'highpass', frequency: 5000 }, when: t });
+  }
+  /** A streak bonus: a quick sparkle up the chime ladder. */
+  streak() {
+    if (!this.ready) return;
+    const ctx = this.bus.ctx, out = this.bus.bus('ui'), t = ctx.currentTime;
+    for (let k = 0; k < 4; k++) playTone(ctx, out, { type: 'sine', pitch: [[0, hz(PENTA[5 + k])]], peak: 0.07, attack: 0.002, decay: 0.16, when: t + k * 0.045 });
+  }
+  /** A new rank (or the best passed): a short fanfare. */
+  rankUp() {
+    if (!this.ready) return;
+    const ctx = this.bus.ctx, out = this.bus.bus('ui'), t = ctx.currentTime;
+    [[69, 0], [74, 0.09], [78, 0.18], [81, 0.27]].forEach(([m, d]) => playTone(ctx, out, { type: 'triangle', pitch: [[0, hz(m)]], peak: 0.09, attack: 0.004, decay: d === 0.27 ? 0.5 : 0.16, when: t + d }));
+  }
   tick(high = false) { if (!this.ready) return; playTone(this.bus.ctx, this.bus.bus('ui'), { type: 'square', pitch: [[0, high ? 1500 : 1100]], peak: 0.05, decay: 0.05, filter: { type: 'lowpass', frequency: 3000 } }); }
   ui() { if (!this.ready) return; playTone(this.bus.ctx, this.bus.bus('ui'), { type: 'triangle', pitch: [[0, 660], [0.06, 990]], peak: 0.08, decay: 0.12 }); }
   regrow() { if (!this.ready) return; playTone(this.bus.ctx, this.bus.bus('effects'), { type: 'sine', pitch: [[0, 220], [0.3, 440]], peak: 0.03, attack: 0.05, decay: 0.3 }); }

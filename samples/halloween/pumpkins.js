@@ -153,6 +153,17 @@ export class Lanterns {
     return { x, y: y + 0.76 * R, z };
   }
 
+  /** Every smashed lantern grows back now (the Witching Hour); onRelight(i) per lantern. */
+  relightAll(onRelight) {
+    let any = false;
+    for (let i = 0; i < this.n; i++) {
+      if (this.alive[i]) continue;
+      this.alive[i] = 1; this.regrow[i] = 0; this.grow[i] = 0.001; any = true;
+      if (onRelight) onRelight(i);
+    }
+    if (any) this._sync(false);
+  }
+
   /** Fixed step: shard lifetimes (bodies removed at the end). */
   fixedUpdate(dt) {
     for (const s of this.slots) {

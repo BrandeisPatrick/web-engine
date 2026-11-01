@@ -3,15 +3,19 @@
 //             full-screen buttons, three how-to cards (hidden on short landscape screens: HOW TO PLAY opens them),
 //             the control scheme for this device, best score
 //   help      the how-to-play panel (cards, controls, tips), from the title and the pause screen
-//   hud       candy counter (+N pops), the clock to midnight with a progress bar, full-screen (where the Fullscreen API
-//             exists: not on iPhone) / sound / pause buttons, centre call-outs
-//             (STOMP!, CAUGHT -6, BOO!), the last-ten-seconds countdown, a purple danger vignette when a ghost is close,
-//             and (desktop) a BOO cooldown meter; on phones the BOO button itself shows the ring (TouchControls).
+//   hud       candy counter (+N pops) with the next rank's threshold after it ("/130"), a streak meter along its bottom
+//             edge while a streak runs and a gold "x2" badge in the Witching Hour; the clock to midnight with a progress
+//             bar (its time-left line shows "+12 VS BEST" for a moment every 20 s once a best run is recorded);
+//             full-screen (where the Fullscreen API exists: not on iPhone) / sound / pause buttons; centre call-outs
+//             (STOMP!, CAUGHT -6, BOO!, a new rank: white letters, a dark outline, a coloured glow); the last ten
+//             seconds counting down under the clock; a cold frost on the edges when a ghost is close, and (desktop) a
+//             BOO cooldown meter; on phones the BOO button itself shows the ring (TouchControls).
 //             Edge markers: a lollipop + distance at the screen edge toward an off-screen big pop, ghost chevrons
 //             toward chasers that are off screen or behind; BOO glows ("hot") while a chaser is in reach; a look
 //             hint pill (desktop: how the mouse looks)
 //   pause     resume / restart / how to play / title / music / sound
-//   results   candy, rank title, best (NEW BEST), stats, PLAY AGAIN
+//   results   candy, rank title, the rank ladder and what the next rank takes, best (NEW BEST), stats, PLAY AGAIN /
+//             TITLE / share (the game shares through Web Share on phones, else copies; a toast says so)
 // Everything sits inside env(safe-area-inset-*) and scales with the viewport (clamp + vmin), so it works in portrait
 // and landscape phones as well as desktop. Interactive elements have z-index 40 (over the touch layer's 30). Every
 // button is at least 44 x 44 CSS px. setTouch(on) switches between the touch and the keyboard / mouse presentation
@@ -82,6 +86,20 @@ const CSS = `
 .hw-candy.bump b{animation:hwBump .28s ease-out}
 @keyframes hwBump{0%{transform:scale(1.35);color:#ffe27a}100%{transform:scale(1)}}
 .hw-candy{position:absolute}
+/* the next rank's threshold after the count ("/100"), muted; empty at the top rank */
+.hw-candy .goal{font-size:clamp(13px,2.7vmin,18px);font-weight:700;color:rgba(255,226,196,.6);margin-left:-8px;font-variant-numeric:tabular-nums;align-self:flex-end;
+  margin-bottom:.5em;white-space:nowrap}
+.hw-candy .goal:empty{display:none}
+/* Witching Hour: a gold "x2" badge on the pill's corner, the pill glows */
+.hw-x2{position:absolute;right:-9px;top:-8px;padding:2px 7px 2px 6px;border-radius:999px;font-style:normal;font-weight:900;font-size:13px;line-height:1.15;
+  color:#2a1000;background:linear-gradient(180deg,#ffe27a,#ff8a1e);box-shadow:0 0 12px rgba(255,150,40,.85);opacity:0;transform:scale(.5);transition:opacity .3s,transform .3s}
+.hw-candy.wh .hw-x2{opacity:1;transform:none}
+.hw-candy.wh{border-color:rgba(255,196,96,.8);box-shadow:0 0 22px rgba(255,140,30,.5),0 6px 24px rgba(0,0,0,.35)}
+/* a streak (5+ quick pickups): a segmented meter along the candy pill's bottom edge fills toward the bonus */
+.hw-streak{position:absolute;left:14px;right:14px;bottom:4px;height:4px;display:flex;gap:3px;opacity:0;transition:opacity .2s}
+.hw-streak.on{opacity:1}
+.hw-streak i{flex:1;border-radius:2px;background:rgba(255,255,255,.16)}
+.hw-streak i.f{background:#ffd36a;box-shadow:0 0 6px rgba(255,190,80,.95)}
 .hw-plus{position:absolute;left:calc(100% + 8px);top:50%;margin-top:-.6em;font-weight:800;font-size:clamp(18px,3.6vmin,26px);line-height:1.2;
   color:#ffe27a;text-shadow:0 0 10px rgba(255,180,60,.8),0 2px 0 rgba(0,0,0,.4);opacity:0;white-space:nowrap}
 .hw-plus.go{animation:hwPlus .9s ease-out forwards}
@@ -95,22 +113,42 @@ const CSS = `
 .hw-clock .bar{width:100%;height:5px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden}
 .hw-clock .bar i{display:block;height:100%;width:0;border-radius:3px;background:linear-gradient(90deg,var(--hw-purple),var(--hw-orange))}
 .hw-clock.late .time{color:#ffb35c;animation:hwPulse 1s ease-in-out infinite}
+/* the pace against the best run: for a moment it takes the place of the time-left line */
+.hw-clock .pace{position:absolute;left:0;right:0;bottom:9px;text-align:center;font-size:11px;line-height:normal;letter-spacing:.2em;font-weight:800;opacity:0;
+  white-space:nowrap;font-variant-numeric:tabular-nums}
+.hw-clock .pace.up{color:#8dffa6;text-shadow:0 0 10px rgba(80,255,130,.6)}.hw-clock .pace.down{color:#ffa08e;text-shadow:0 0 10px rgba(255,110,80,.55)}
+.hw-clock.pacing .pace{animation:hwPace 2.6s ease forwards}
+.hw-clock.pacing .left{animation:hwPaceOut 2.6s ease forwards}
+@keyframes hwPace{0%{opacity:0}10%,84%{opacity:1}100%{opacity:0}}
+@keyframes hwPaceOut{0%{opacity:1}10%,84%{opacity:0}100%{opacity:1}}
 @keyframes hwPulse{50%{color:#ff5a3c;text-shadow:0 0 14px rgba(255,90,60,.8)}}
 .hw-btns{position:absolute;right:calc(var(--sa-r) + 12px);top:calc(var(--sa-t) + 10px);display:flex;gap:10px;pointer-events:auto;z-index:40}
 .hw-icon{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;cursor:pointer;
   background:linear-gradient(160deg,rgba(40,18,58,.8),rgba(18,8,28,.72));border:1px solid rgba(255,170,90,.25);padding:0}
 .hw-icon svg{width:22px;height:22px}
 .hw-icon:active{transform:scale(.92)}
+/* call-outs: white letters with a dark outline (8 hard shadows) and a glow in the call-out's colour: lavender on the
+   purple night used to vanish. Landscape: higher, over the sky instead of the path ahead (lower while the last-ten
+   countdown shows under the clock) */
 .hw-call{position:absolute;left:50%;top:34%;transform:translate(-50%,-50%);text-align:center;font-weight:900;font-size:clamp(30px,8vmin,64px);letter-spacing:.04em;
-  white-space:nowrap;opacity:0;text-shadow:0 4px 0 rgba(0,0,0,.35),0 0 26px currentColor;color:#ffcf5a}
+  white-space:nowrap;opacity:0;color:#fff;--glow:rgba(255,190,70,.95);--ink:#1b0b28;
+  text-shadow:2px 2px 0 var(--ink),-2px 2px 0 var(--ink),2px -2px 0 var(--ink),-2px -2px 0 var(--ink),0 3px 0 var(--ink),0 -3px 0 var(--ink),3px 0 0 var(--ink),-3px 0 0 var(--ink),
+  0 6px 0 rgba(0,0,0,.3),0 0 26px var(--glow)}
 .hw-call.go{animation:hwCall 1.15s cubic-bezier(.2,.9,.25,1) forwards}
-.hw-call.boo{color:#c9a2ff}.hw-call.bad{color:#b88cff}.hw-call.warn{color:#ff8a5a}.hw-call.good{color:#7dff9a}
-.hw-call small{display:block;font-size:.42em;letter-spacing:.14em;margin-top:.25em;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.45),0 0 14px rgba(255,170,90,.8)}
+.hw-call.boo{--glow:rgba(176,120,255,1)}.hw-call.bad{--glow:rgba(150,96,255,1)}.hw-call.warn{--glow:rgba(255,120,56,1)}.hw-call.good{--glow:rgba(80,255,130,.95)}
+.hw-call.rank,.hw-call.witch{--glow:rgba(255,176,40,1)}
+.hw-call.rank{font-size:clamp(23px,6.4vmin,52px)} /* "LORD OF THE NIGHT!" fits a 360 px phone */
+.hw-call small{display:block;font-size:.42em;letter-spacing:.14em;margin-top:.3em;color:#ffe9b8;
+  text-shadow:1px 1px 0 var(--ink),-1px 1px 0 var(--ink),1px -1px 0 var(--ink),-1px -1px 0 var(--ink),0 2px 0 var(--ink),0 0 14px var(--glow)}
+.hw-call.good small{color:#c8ffd4}.hw-call.boo small,.hw-call.bad small{color:#e6d6ff}
 @keyframes hwCall{0%{opacity:0;transform:translate(-50%,-50%) scale(1.6)}14%{opacity:1;transform:translate(-50%,-50%) scale(1)}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-62%) scale(.96)}}
-.hw-count{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-weight:900;font-size:clamp(70px,22vmin,180px);color:#fff;opacity:0;
-  text-shadow:0 0 40px rgba(255,120,40,.9),0 6px 0 rgba(0,0,0,.3)}
+@media (orientation:landscape){.hw-call{top:max(30%,calc(var(--sa-t) + 120px))}}
+.hw-hud.counting .hw-call{top:44%}
+/* the last ten seconds count down just under the clock pill (at the centre they covered the action) */
+.hw-count{position:absolute;left:50%;top:calc(100% + 2px);transform:translateX(-50%);font-weight:900;font-size:clamp(36px,8.5vmin,64px);line-height:1;color:#fff;opacity:0;
+  text-shadow:0 0 24px rgba(255,120,40,.95),0 3px 0 rgba(0,0,0,.4);font-variant-numeric:tabular-nums}
 .hw-count.go{animation:hwCount .9s ease-out forwards}
-@keyframes hwCount{0%{opacity:0;transform:translate(-50%,-50%) scale(1.5)}20%{opacity:.95;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(.85)}}
+@keyframes hwCount{0%{opacity:0;transform:translateX(-50%) scale(1.5)}20%{opacity:.95;transform:translateX(-50%) scale(1)}100%{opacity:0;transform:translateX(-50%) scale(.85)}}
 /* a ghost close by: a cold, pale frost on the screen edges (a purple one vanished into the purple night) */
 /* its clear centre moves away from the ghost, so the frost is thickest on the side it comes from */
 .hw-danger{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at var(--fx,50%) var(--fy,50%),rgba(0,0,0,0) 48%,rgba(150,205,255,.32) 80%,rgba(225,240,255,.62) 100%);transition:opacity .2s}
@@ -191,6 +229,26 @@ const CSS = `
 .hw-stats div{display:flex;flex-direction:column;align-items:center;gap:2px}
 .hw-stats b{font-size:clamp(18px,4vmin,24px);font-weight:800}
 .hw-stats span{font-size:10.5px;letter-spacing:.2em;color:rgba(255,235,220,.65);font-weight:700}
+/* results: the rank ladder (one segment per rank, the current one filled up to the next) and what the next rank takes */
+.hw-ladder{display:flex;gap:4px;width:clamp(180px,44vmin,300px);height:7px;margin-top:-2px;flex-shrink:0}
+.hw-ladder i{flex:1;border-radius:4px;background:rgba(255,255,255,.14);overflow:hidden;position:relative}
+.hw-ladder i b{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,#9b5cff,#ff8a1e);border-radius:4px}
+.hw-break{display:none}
+@media (orientation:portrait){.hw-break{display:block;flex-basis:100%;height:0}}
+.hw-next{font-size:12px;letter-spacing:.2em;color:rgba(255,226,196,.8);font-weight:700}
+.hw-next:empty{display:none}
+.hw-toast{position:absolute;left:50%;bottom:calc(var(--sa-b) + 18px);transform:translateX(-50%);padding:8px 18px;font-size:13px;font-weight:800;letter-spacing:.16em;
+  white-space:nowrap;opacity:0;pointer-events:none}
+.hw-toast.go{animation:hwToast 1.8s ease forwards}
+@keyframes hwToast{0%{opacity:0}12%,75%{opacity:1}100%{opacity:0}}
+/* reduced motion: no zooming call-outs or bouncing badges (the game also skips the camera shake and FOV punch) */
+@media (prefers-reduced-motion:reduce){
+  .hw-call.go,.hw-count.go{animation-name:hwFade}.hw-candy.bump b{animation:none}
+  .hw-logo .b,.hw-start,.hw-newbest{animation:none}
+  .hw-touch-on .ui-touch-btn.hw-boo-btn.hw-boo-hot{animation:none;box-shadow:0 0 30px 8px rgba(190,140,255,.9),0 6px 18px rgba(0,0,0,.35)}
+  .hw-boo.hot .ring{animation:none;box-shadow:0 0 26px 6px rgba(190,140,255,.95)}
+}
+@keyframes hwFade{0%{opacity:0}12%,75%{opacity:1}100%{opacity:0}}
 @media (max-height:500px){
   .hw-cards{display:none}
   .hw-screen{gap:5px}
@@ -235,8 +293,16 @@ const CSS = `
 .hw-hidden-touch .ui-touch{display:none}
 `;
 
-const RANKS = [[0, 'Scaredy-Cat'], [30, 'Trick-or-Treater'], [70, 'Candy Collector'], [120, 'Sugar Goblin'], [180, 'Pumpkin Royalty'], [260, 'Lord of the Night']];
-export const rankFor = (n) => { let r = RANKS[0][1]; for (const [k, name] of RANKS) if (n >= k) r = name; return r; };
+// rank thresholds (candy in a 3-minute round), tuned on the phone bots after gameplay round 2 (18 rounds: novice and
+// one-hand 92..165, casual 108..175, skilled 306..454): a fumbled first round is a Little Pumpkin, novice and casual
+// rounds split between Candy Collector and Sugar Goblin, skilled ones are Pumpkin Royalty, and Lord of the Night takes
+// the best third of the skilled bot's rounds (a bot that sees every candy on the map)
+export const RANKS = [[0, 'Little Pumpkin'], [40, 'Trick-or-Treater'], [90, 'Candy Collector'], [160, 'Sugar Goblin'], [260, 'Pumpkin Royalty'], [420, 'Lord of the Night']];
+/** Index into RANKS for n candy. */
+export const rankIndex = (n) => { let r = 0; for (let k = 1; k < RANKS.length; k++) if (n >= RANKS[k][0]) r = k; return r; };
+export const rankFor = (n) => RANKS[rankIndex(n)][1];
+/** The next rank's threshold above n candy (null at the top rank). */
+export const nextRankAt = (n) => { const k = rankIndex(n) + 1; return k < RANKS.length ? RANKS[k][0] : null; };const ICON_SHARE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 7.5L12 3l4.5 4.5" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 10.5H6.5a1.5 1.5 0 0 0-1.5 1.5v7a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5v-7a1.5 1.5 0 0 0-1.5-1.5H16" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>';
 
 export function applyTheme() {
   setTheme({ accent: ACCENT, font: '"Avenir Next","Segoe UI",system-ui,sans-serif' });
@@ -244,7 +310,7 @@ export function applyTheme() {
 }
 
 export class HUD {
-  constructor({ touch = false, onStart, onPause, onResume, onRestart, onTitle, onMute, onMusic } = {}) {
+  constructor({ touch = false, streak = 10, onStart, onPause, onResume, onRestart, onTitle, onMute, onMusic, onShare } = {}) {
     applyTheme();
     this.touch = touch;
     const root = this.root = el('div', 'hw', document.body);
@@ -256,11 +322,14 @@ export class HUD {
     const hud = this.hud = el('div', 'hw-hud off', root);
     this.danger = el('div', 'hw-danger', hud);
     this.flashEl = el('div', 'hw-flash', hud);
-    const candy = this.candyEl = el('div', 'hw-pill hw-candy', hud, `${ICON.candy}<b>0</b>`);
-    this.candyNum = candy.querySelector('b');
+    const candy = this.candyEl = el('div', 'hw-pill hw-candy', hud, `${ICON.candy}<b>0</b><small class="goal"></small><i class="hw-x2">×2</i>`);
+    this.candyNum = candy.querySelector('b'); this.goalEl = candy.querySelector('.goal');
     this.plus = el('div', 'hw-plus', candy);
+    this.streakEl = el('div', 'hw-streak', candy, '<i></i>'.repeat(streak));
+    this.pips = [...this.streakEl.children];
     const clock = this.clock = el('div', 'hw-pill hw-clock', hud, `<div class="row">${ICON.moon}<span class="time">11:57 PM</span></div><div class="bar"><i></i></div><div class="left">3:00 TO MIDNIGHT</div>`);
     this.clockTime = clock.querySelector('.time'); this.clockBar = clock.querySelector('.bar i'); this.clockLeft = clock.querySelector('.left');
+    this.paceEl = el('div', 'pace', clock);
     const btns = el('div', 'hw-btns', hud);
     if (fs) { const b = el('button', 'hw-icon hw-fs', btns, ICON.fullscreen); b.setAttribute('aria-label', 'Full screen'); this.fsBtns.push(b); }
     this.muteBtn = el('button', 'hw-icon hw-mute', btns, ICON.sound); this.muteBtn.setAttribute('aria-label', 'Sound');
@@ -268,7 +337,7 @@ export class HUD {
     this.muteBtns.push(this.muteBtn);
     wire(this.pauseBtn, () => onPause && onPause());
     this.call = el('div', 'hw-call', hud);
-    this.count = el('div', 'hw-count', hud);
+    this.count = el('div', 'hw-count', clock);
     this.boo = el('div', 'hw-pill hw-boo ready', hud, '<div class="ring"><span>BOO</span></div><small>PRESS <kbd>E</kbd></small>');
     this.booRing = this.boo.querySelector('.ring');
     this.hint = el('div', 'hw-pill hw-hint', hud);
@@ -309,7 +378,8 @@ export class HUD {
     help.innerHTML = `<div class="hw-h1">HOW TO PLAY</div><div class="hw-cards">${CARDS}</div><div class="hw-ctrl"></div>
       <div class="hw-tips">Swirl lollipops under a light beam are worth 5. Jump onto a lantern to stomp it for extra candy.
       When the screen edges frost over, a ghost is close: let it come near, then BOO! Caught? Grab the candy you drop.
-      Jump over the graveyard fence!</div>
+      Jump over the graveyard fence! Grab candy fast for a streak bonus. The last 30 seconds are the Witching Hour:
+      candy counts double!</div>
       <div class="hw-small-btns"><button class="hw-start" data-a="close">GOT IT</button></div>`;
     wire(help.querySelector('[data-a=close]'), () => this.showHelp(false));
     for (const b of root.querySelectorAll('[data-a=help]')) wire(b, () => this.showHelp(true));
@@ -323,10 +393,12 @@ export class HUD {
     const over = this.over = el('div', 'hw-screen off', root);
     over.innerHTML = `<div class="hw-sub">THE CLOCK STRUCK</div><div class="hw-h1">MIDNIGHT!</div>
       <div class="hw-score">${ICON.candy}<span class="n">0</span></div>
-      <div class="hw-rank"></div><div class="hw-best-line"></div>
+      <div class="hw-rank"></div><div class="hw-ladder">${'<i><b></b></i>'.repeat(RANKS.length)}</div><div class="hw-next"></div><div class="hw-best-line"></div>
       <div class="hw-stats"></div>
-      <div class="hw-small-btns hw-row" style="margin-top:6px"><button class="hw-start" data-a="again">PLAY AGAIN</button><button class="hw-btn2" data-a="title">TITLE</button></div>`;
+      <div class="hw-small-btns hw-row" style="margin-top:6px"><button class="hw-start" data-a="again">PLAY AGAIN</button><i class="hw-break"></i><button class="hw-btn2" data-a="title">TITLE</button><button class="hw-icon hw-share" data-a="share" aria-label="Share your score">${ICON_SHARE}</button></div>
+      <div class="hw-pill hw-toast"></div>`;
     this.overN = over.querySelector('.n'); this.overRank = over.querySelector('.hw-rank'); this.overBest = over.querySelector('.hw-best-line'); this.overStats = over.querySelector('.hw-stats');
+    this.ladder = [...over.querySelectorAll('.hw-ladder b')]; this.overNext = over.querySelector('.hw-next'); this.toastEl = over.querySelector('.hw-toast');
     this.againBtn = over.querySelector('[data-a=again]');
     // the results come up while a thumb may still be hammering JUMP / BOO (TITLE sits where JUMP was in portrait):
     // taps in the first moments after they appear are ignored
@@ -334,8 +406,9 @@ export class HUD {
     const settled = (fn) => stop(() => { if (performance.now() - this._overAt > 800) fn(); });
     this.againBtn.addEventListener('click', settled(() => onRestart && onRestart()));
     over.querySelector('[data-a=title]').addEventListener('click', settled(() => onTitle && onTitle()));
+    over.querySelector('[data-a=share]').addEventListener('click', settled(() => onShare && onShare()));
     for (const s of [title, pause, over, help]) s.addEventListener('pointerdown', (e) => e.stopPropagation());
-    this._c = { candy: -1, clock: '', left: '', bar: -1, boo: -1, booReady: null, danger: -1, late: null, hot: false, fx: 50, fy: 50 };
+    this._c = { candy: -1, clock: '', left: '', bar: -1, boo: -1, booReady: null, danger: -1, late: null, hot: false, fx: 50, fy: 50, goal: -2, wh: false, streak: -1, counting: false };
     this.setTouch(touch);
   }
 
@@ -359,6 +432,7 @@ export class HUD {
   showPlay() {
     this.title.classList.add('off'); this.pause.classList.add('off'); this.over.classList.add('off'); this.hud.classList.remove('off');
     this.hideEdges(); this.lookHint(null); this.setBooHot(false);
+    this.setWitching(false); this.setStreak(0, false); this.setCounting(false); this.clock.classList.remove('pacing');
     this.showHelp(false);
     this.setTouchVisible(true);
   }
@@ -373,16 +447,54 @@ export class HUD {
     }
   }
 
-  showResults({ candy, best, isBest, smashed, booed, caught, pops }) {
+  /**
+   * The results: candy, rank, the rank ladder (filled up to the next rank) with what the next rank takes, the best,
+   * four stats.
+   */
+  showResults({ candy, best, isBest, smashed, booed, caught, streak }) {
     this.overN.textContent = String(candy);
-    this.overRank.textContent = rankFor(candy);
+    const ri = rankIndex(candy), next = ri + 1 < RANKS.length ? RANKS[ri + 1] : null;
+    this.overRank.textContent = RANKS[ri][1];
+    this.ladder.forEach((b, k) => {
+      const f = k < ri ? 1 : k > ri ? 0 : next ? (candy - RANKS[ri][0]) / (next[0] - RANKS[ri][0]) : 1;
+      b.style.width = `${Math.round(Math.max(0, Math.min(1, f)) * 100)}%`;
+    });
+    this.overNext.textContent = next ? `${next[0] - candy} MORE FOR ${next[1].toUpperCase()}` : '';
     this.overBest.innerHTML = isBest ? '<span class="hw-newbest">NEW BEST!</span>' : `<span class="hw-best">BEST ${best}</span>`;
-    this.overStats.innerHTML = `<div><b>${smashed}</b><span>LANTERNS</span></div><div><b>${booed}</b><span>GHOSTS BOOED</span></div><div><b>${pops}</b><span>BIG POPS</span></div><div><b>${caught}</b><span>TIMES CAUGHT</span></div>`;
+    this.overStats.innerHTML = `<div><b>${smashed}</b><span>LANTERNS</span></div><div><b>${booed}</b><span>GHOSTS BOOED</span></div><div><b>${streak}</b><span>BEST STREAK</span></div><div><b>${caught}</b><span>TIMES CAUGHT</span></div>`;
+    this.toastEl.classList.remove('go');
     this.hud.classList.add('off'); this.over.classList.remove('off');
     this.showHelp(false);
     this._overAt = performance.now();
     this.setTouchVisible(false);
   }
+
+  /** The next rank's threshold after the count ("/100"); null (top rank) shows nothing. */
+  setGoal(at) {
+    const v = at == null ? -1 : at;
+    if (v !== this._c.goal) { this._c.goal = v; this.goalEl.textContent = v < 0 ? '' : `/${v}`; }
+  }
+  /** Witching Hour on the candy pill: the x2 badge and a warm glow. */
+  setWitching(on) { if (on !== this._c.wh) { this._c.wh = on; this.candyEl.classList.toggle('wh', on); } }
+  /** The pace against the best run at this moment of the round, in the clock's time-left line for ~2.6 s. */
+  pace(diff) {
+    const p = this.paceEl, c = this.clock;
+    p.textContent = `${diff >= 0 ? '+' : '−'}${Math.abs(diff)} VS BEST`;
+    p.classList.toggle('up', diff >= 0); p.classList.toggle('down', diff < 0);
+    c.classList.remove('pacing'); void c.offsetWidth; c.classList.add('pacing');
+  }
+  /** The streak meter on the candy pill: `filled` segments lit, on = shown. */
+  setStreak(filled, on) {
+    const v = on ? filled : -1;
+    if (v === this._c.streak) return;
+    this._c.streak = v;
+    this.streakEl.classList.toggle('on', on);
+    if (on) for (let k = 0; k < this.pips.length; k++) this.pips[k].classList.toggle('f', k < filled);
+  }
+  /** The last-ten countdown is up under the clock (the call-outs move lower, out of its way). */
+  setCounting(on) { if (on !== this._c.counting) { this._c.counting = on; this.hud.classList.toggle('counting', on); } }
+  /** A short message at the bottom of the results ("COPIED!"). */
+  toast(text) { const t = this.toastEl; t.textContent = text; t.classList.remove('go'); void t.offsetWidth; t.classList.add('go'); }
 
   setCandy(n, bump = true) {
     if (this._c.candy === n) return;
@@ -444,6 +556,7 @@ export class HUD {
     if (d !== m.d) { m.d = d; m.num.textContent = d < 0 ? '' : `${d} m`; }
   }
   countdown(n) {
+    this.setCounting(true);
     const c = this.count;
     c.textContent = String(n); c.classList.remove('go'); void c.offsetWidth; c.classList.add('go');
   }

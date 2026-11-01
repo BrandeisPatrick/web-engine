@@ -30,6 +30,13 @@
 // chasers at once on phones (3 on desktop), BOO glowing while a chaser is in reach, the edge markers for an off-screen
 // big pop and a ghost behind the kid; the BOO lesson of a first session (the first ghost rises in view ahead, tame) and
 // its end after the first BOO that lands (localStorage); desktop: the graveyard fence stops a walk and a jump clears it.
+// Round 2: the candy pill's next-rank threshold and a rank-up call-out (white letters), a streak bonus on the 10th quick
+// pickup (the meter on the pill), the pace against the best (localStorage, shown in the clock line in the next round),
+// juice (a hitstop and a shake on a smash, an FOV punch on BOO, a shake on a catch; desktop: none of the motion with
+// prefers-reduced-motion), the Witching Hour (call-out, x2 badge, every lantern relit, candy x2, candy rain, a catch
+// capped at 6, orange auras), the last-ten countdown under the clock pill, the results' rank ladder and next-rank line,
+// sharing (phones: Web Share, stubbed; desktop: the clipboard, stubbed, and a toast); phones: pushing straight into a
+// gravestone slides round it. --perf also measures a finale storm (the Witching Hour on top of the storm).
 // Mobile controls: every button (title, HUD, pause, how-to-play, results) is at least 44 x 44 px inside the safe area,
 // HOW TO PLAY opens and closes by touch, the sound and pause buttons work, the full-screen button exists exactly where
 // the Fullscreen API does and toggles, haptics fire on candy / smash / BOO / catch (navigator.vibrate stubbed; none on
@@ -142,6 +149,10 @@ function instrument() {
   };
   Document.prototype.exitPointerLock = function () { if (lockEl) { lockEl = null; Promise.resolve().then(lockChanged); } };
   window.__unlock = () => { lockEl = null; lockChanged(); };
+  // sharing: navigator.share and the async clipboard are recorded, not used
+  window.__shared = []; window.__copied = [];
+  Object.defineProperty(Navigator.prototype, 'share', { configurable: true, value(d) { window.__shared.push(d); return Promise.resolve(); } });
+  if (navigator.clipboard) navigator.clipboard.writeText = (t) => { window.__copied.push(t); return Promise.resolve(); };
 }
 /** Resource counts that must stay flat from round to round. */
 const counts = (page) => G(page, () => {
@@ -491,24 +502,61 @@ async function runProfile(name) {
       if (vp.height > vp.width) check(name, 'portrait: BOO sits below JUMP (where the thumb rests)', bo.cy > ju.cy + 40, `BOO ${Math.round(bo.cy)}, JUMP ${Math.round(ju.cy)}`);
       const rings = await G(page, () => [...document.querySelectorAll('.ui-touch-slop')].map((e) => { const r = e.getBoundingClientRect(); return Math.round(r.width); }));
       check(name, 'BOO and JUMP carry a 16 px hit ring', rings.length === 2 && rings.every((w) => w >= 76 + 32), rings.join(', '));
+      // ---- slide around: the stick pushed straight at a free-standing gravestone 2 m ahead: the kid slides round it
+      const grave = await G(page, () => { const g = window.__game; for (const s of g.world.graves) if (g.physics.queryColliders(s.x, s.z, 2.6, []).length === 1 && !g.physics.queryColliders(s.x, s.z + 2, 0.5, []).length) return [s.x, s.z]; return null; });
+      if (!grave) check(name, 'slide around: a free-standing gravestone to test on', false);
+      else {
+        await calmAll();
+        await G(page, ([x, z]) => { const g = window.__game; g.cc.teleport(x, g.world.heightAt(x, z) + 0.05, z); g.rig.yaw = 0; g.camState.facing = 0; g.rig.snap(); }, [grave[0], grave[1] + 2]);
+        await sleep(200);
+        await T.start([{ x: hx, y: hy, id: 1 }]);
+        for (let i = 1; i <= 4; i++) { await T.move([{ x: hx, y: hy - i * 13, id: 1 }]); await sleep(16); }
+        const past = await waitFor(page, (gz) => window.__game.cc.position.z < gz - 0.7, grave[1], 1500);
+        await T.end();
+        const pe = await G(page, () => ({ x: window.__game.cc.position.x, z: window.__game.cc.position.z }));
+        check(name, 'slide around: pushing straight into a gravestone slides round it (past within 1.5 s)', past && Math.abs(pe.x - grave[0]) < 3, `past ${past}, ended ${(pe.x - grave[0]).toFixed(2)} m to the side`);
+      }
     }
     // ---- the BOO lesson (a first session): the first ghost rose 9..11 m ahead of the camera, tame (slow, no catch)
     const tw = await waitFor(page, () => !!window.__game.G.tutorWake, null, 8000) && await G(page, () => ({ ...window.__game.G.tutorWake, tame: window.__game.ghosts.list.some((q) => q.tame > 0 || q.state !== 'dormant') }));
     check(name, 'BOO lesson: the first ghost rises in view, 9..11 m ahead', !!tw && tw.d > 8 && tw.d < 12 && tw.ahead > 0.85 && tw.tame, JSON.stringify(tw));
-    // ---- smash a lantern by running into it
+    // ---- smash a lantern by running into it (and the juice: a hitstop, a camera shake)
     await lineUpLantern(page);
     await sleep(200);
+    const juice0 = await G(page, () => { const g = window.__game, j = g.juice; window.__minTS = 1; const tick = () => { window.__minTS = Math.min(window.__minTS, g.engine.clock.timeScale); if (!window.__tsDone) requestAnimationFrame(tick); }; window.__tsDone = false; requestAnimationFrame(tick); return { shakes: j.shakes, stops: j.stops }; });
     a = await state(page);
     if (phone) { const zone = await rect(page, '.ui-touch-zone'); await T.drag(zone.x + zone.w * 0.45, zone.y + zone.h * 0.7, 0, -70, { steps: 4, hold: 900 }); }
     else { await page.keyboard.down('KeyW'); await sleep(900); await page.keyboard.up('KeyW'); }
     const smashed = await waitFor(page, (n) => window.__game.G.smashed > n, a.smashed, 2500);
     check(name, 'running into a jack-o\'-lantern smashes it', smashed);
+    await sleep(300);
+    const juice1 = await G(page, () => { window.__tsDone = true; const g = window.__game; return { shakes: g.juice.shakes, stops: g.juice.stops, minTS: window.__minTS, ts: g.engine.clock.timeScale }; });
+    check(name, 'juice: a smash gives a hitstop (game speed 0.15, back to 1) and a camera shake', juice1.stops > juice0.stops && juice1.shakes > juice0.shakes && juice1.minTS === 0.15 && juice1.ts === 1, JSON.stringify(juice1));
     // ---- candy: spilled candy + a resting one get collected
     await sleep(1400);
     await nearCandy(page);
     const got = await waitFor(page, () => window.__game.G.candy > 0, null, 4000);
     s = await state(page);
     check(name, 'candy is collected (counter up)', got, `candy ${s.candy}`);
+    // ---- ranks: the pill shows the next rank's threshold; a pickup that reaches a rank calls it out (white letters)
+    const pick = (setup) => G(page, (src) => new Promise((done) => {
+      const g = window.__game, p = g.cc.position, C = g.candy;
+      g.cc.teleport(0, g.world.heightAt(0, 6) + 0.05, 6); // the spawn, with no candy in reach
+      for (let i = 0; i < C.state.length; i++) if (C.state[i] && Math.hypot(C.p[i * 3], C.p[i * 3 + 2] - 6) < 5) C.state[i] = 0;
+      g.G.safeT = 3; (0, eval)(src)(g); g.hud.setCandy(g.G.candy);
+      C.place(p.x, p.y, p.z, 0);
+      setTimeout(() => {
+        const c = document.querySelector('.hw-call');
+        done({ candy: g.G.candy, call: c.textContent, color: getComputedStyle(c).color, goal: document.querySelector('.hw-candy .goal').textContent,
+          bonus: g.G.streakBonus, meter: [...document.querySelectorAll('.hw-streak i.f')].length, meterOn: document.querySelector('.hw-streak').classList.contains('on'),
+          R: g.RANKS });
+      }, 250);
+    }), setup.toString());
+    const ru = await pick((g) => { g.G.candy = g.RANKS[2][0] - 1; g.G.rankMax = 1; g.G.streak = 0; });
+    check(name, 'ranks: a pickup reaching a rank calls it out (white), the pill shows the next threshold', ru.candy === ru.R[2][0] && ru.call.startsWith(`${ru.R[2][1].toUpperCase()}!`) && ru.color === 'rgb(255, 255, 255)' && ru.goal === `/${ru.R[3][0]}`, JSON.stringify({ candy: ru.candy, call: ru.call, color: ru.color, goal: ru.goal }));
+    // ---- a streak: the 10th quick pickup in a row adds a bonus of 3 (the meter on the pill is full)
+    const st = await pick((g) => { g.G.candy = 40; g.G.streak = 9; g.G.lastPick = g.G.time; g.G.streakBonus = 0; });
+    check(name, 'streak: the 10th quick pickup adds +3 with "SWEET STREAK!", the meter full', st.candy === 44 && st.bonus === 3 && /SWEET STREAK/.test(st.call) && st.meterOn && st.meter === 10, JSON.stringify({ candy: st.candy, bonus: st.bonus, call: st.call, meter: st.meter, on: st.meterOn }));
     await G(page, () => { window.__game.G.safeT = 0; }); // no invulnerability blink in the shot
     await sleep(500);
     await page.screenshot({ path: path.join(OUT, `${name}-play.png`), scale: 'css' });
@@ -577,9 +625,25 @@ async function runProfile(name) {
     await sleep(700);
     if (name === 'desktop' || name === 'iphone-portrait') await page.screenshot({ path: path.join(OUT, `${name}-ghost.png`), scale: 'css' });
     a = await state(page);
+    await G(page, () => { const g = window.__game; window.__minFov = 999; window.__fovDone = false; const tick = () => { window.__minFov = Math.min(window.__minFov, g.engine.camera.fov); if (!window.__fovDone) requestAnimationFrame(tick); }; requestAnimationFrame(tick); });
     if (phone) { const bo = await rect(page, '.hw-boo-btn'); await T.tap(bo.cx, bo.cy); } else await page.keyboard.press('KeyE');
     const fled = await waitFor(page, () => window.__testGhost.state === 'flee' && window.__game.G.booed > 0, null, 1500);
     check(name, 'BOO scares a nearby ghost away', fled);
+    await sleep(500);
+    const punch = await G(page, () => { window.__fovDone = true; const g = window.__game; return { min: +window.__minFov.toFixed(2), fov: g.engine.camera.fov, base: g.baseFov }; });
+    check(name, `juice: BOO punches the FOV in (${phone ? '-3' : '-5'} deg) and back`, punch.min < punch.base - (phone ? 1.5 : 2.5) && punch.min > punch.base - 5.5 && punch.fov === punch.base, JSON.stringify(punch));
+    if (!phone) {
+      // prefers-reduced-motion: no FOV punch (nor shake); the call-outs only fade
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await G(page, () => { const g = window.__game; g.G.booT = 5; window.__p0 = g.juice.punches; window.__minFov = 999; window.__fovDone = false; const tick = () => { window.__minFov = Math.min(window.__minFov, g.engine.camera.fov); if (!window.__fovDone) requestAnimationFrame(tick); }; requestAnimationFrame(tick); });
+      await page.keyboard.press('KeyE');
+      await sleep(150);
+      const anim = await G(page, () => getComputedStyle(document.querySelector('.hw-call')).animationName);
+      await sleep(300);
+      const rm = { ...(await G(page, () => { window.__fovDone = true; const g = window.__game; return { punches: g.juice.punches - window.__p0, min: window.__minFov, base: g.baseFov, booT: g.G.booT }; })), anim };
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
+      check(name, 'reduced motion: BOO without the FOV punch, call-outs only fade', rm.booT < 1 && rm.punches === 0 && rm.min === rm.base && rm.anim === 'hwFade', JSON.stringify(rm));
+    }
     check(name, 'the first BOO that lands ends the lesson for good (localStorage)', await G(page, () => { try { return localStorage.getItem('midnight-candy-run.taught') === '1'; } catch { return false; } }));
     await sleep(400);
     if (name === 'desktop' || name === 'iphone-portrait') await page.screenshot({ path: path.join(OUT, `${name}-boo.png`), scale: 'css' });
@@ -656,6 +720,36 @@ async function runProfile(name) {
     });
     const cost2 = await waitFor(page, () => window.__game.G.caught > 1, null, 2000) && await G(page, () => window.__minus.join(' '));
     check(name, 'catch at 300 candy: capped at 12', cost2 === '−10 −12', String(cost2));
+    await sleep(250); // the catch's hitstop is over
+    const cj = await G(page, () => ({ shakes: window.__game.juice.shakes, ts: window.__game.engine.clock.timeScale }));
+    check(name, 'juice: catches shake the camera (gentler on phones), game speed back to 1', cj.shakes >= (phone ? 3 : 3) && cj.ts === 1, JSON.stringify(cj));
+    // ---- the Witching Hour (the last 30 s): call-out, x2 badge, every lantern relit, candy x2, rain, a catch costs <= 6
+    await G(page, () => {
+      const g = window.__game, L = g.lanterns;
+      g.G.safeT = 3; for (const q of g.ghosts.list) { q.calm = 99; if (q.state === 'chase') q.state = 'wander'; }
+      for (let i = 0; i < L.n; i++) if (L.alive[i]) { L.smash(i, 1, 0, 1); break; }
+      const C = g.candy, p = g.cc.position; // no spilled candy in reach (a streak call-out would cover the finale's)
+      for (let i = 0; i < C.state.length; i++) if (C.state[i] && Math.hypot(C.p[i * 3] - p.x, C.p[i * 3 + 2] - p.z) < 8) C.state[i] = 0;
+      g.G.streak = 0;
+      window.__deadBefore = L.n - L.alive.reduce((a, v) => a + v, 0);
+      g.setTimeLeft(30.4);
+    });
+    await sleep(700);
+    const wh = await G(page, () => { const g = window.__game, L = g.lanterns; return { on: g.G.witching, call: document.querySelector('.hw-call').textContent, badge: +getComputedStyle(document.querySelector('.hw-x2')).opacity, pill: document.querySelector('.hw-candy').classList.contains('wh'), dead: L.n - L.alive.reduce((a, v) => a + v, 0), before: window.__deadBefore, auras: g.ghosts.witch, rain: g.G.rainLeft }; });
+    check(name, 'Witching Hour: call-out, x2 badge on the pill, every lantern relit, orange auras', wh.on && /WITCHING HOUR/.test(wh.call) && wh.pill && wh.badge > 0.9 && wh.before >= 1 && wh.dead === 0 && wh.auras, JSON.stringify(wh));
+    const x2 = await pick((g) => { g.G.candy = 50; g.G.streak = 0; });
+    check(name, 'Witching Hour: a candy counts 2', x2.candy === 52, `candy 50 -> ${x2.candy}`);
+    await sleep(1500);
+    const rain = await G(page, () => { const g = window.__game, C = g.candy; let n = 0; for (let i = 0; i < C.state.length; i++) if (C.state[i] === 2 && C.ttl[i] === 60) n++; return { left: g.G.rainLeft, falling: n }; });
+    check(name, 'Witching Hour: candy rains in around the kid', rain.left <= 17 && rain.falling >= 2, JSON.stringify(rain));
+    await G(page, () => {
+      const g = window.__game, gh = g.ghosts, p = g.cc.position, q = window.__catcher;
+      g.G.safeT = 0; g.G.candy = 100; g.hud.setCandy(100); window.__minus.length = 0;
+      gh._teleport(q, p.x + 0.3, p.y + 1.6, p.z + 0.3); q.state = 'chase'; q.t = 0; q.calm = 0; q.tame = 0; q.alpha = 1; q.mesh.mesh.visible = true;
+    });
+    const whc = await waitFor(page, () => window.__minus.length > 0, null, 2000) && await G(page, () => window.__minus.join(' '));
+    check(name, 'Witching Hour: a catch at 100 candy costs 6 (not 10)', whc === '−6', String(whc));
+    await G(page, () => { const g = window.__game; g.G.safeT = 3; for (const q of g.ghosts.list) { q.calm = 99; if (q.state === 'chase') q.state = 'wander'; } });
     const vib = await G(page, () => window.__vib.map((v) => JSON.stringify(v)));
     const has = (v) => vib.includes(JSON.stringify(v));
     if (phone) check(name, 'haptics: candy, smash, BOO and catch pulses (navigator.vibrate)', has(8) && (has(35) || has([30, 40, 50])) && has(22) && has([70, 50, 90]), `${vib.length} calls: ${[...new Set(vib)].join(' ')}`);
@@ -683,6 +777,11 @@ async function runProfile(name) {
       await page.setViewportSize(vp);
       await sleep(500);
     }
+    // ---- the last ten seconds count down just under the clock pill (not over the action at the centre)
+    await G(page, () => window.__game.setTimeLeft(8.95));
+    await sleep(450);
+    const cd = await G(page, () => { const c = document.querySelector('.hw-count'), k = document.querySelector('.hw-clock'), a = c.getBoundingClientRect(), b = k.getBoundingClientRect(); return { text: c.textContent, top: Math.round(a.top), bottom: Math.round(a.bottom), cx: Math.round(a.left + a.width / 2), clockBottom: Math.round(b.bottom), clockCx: Math.round(b.left + b.width / 2), counting: document.querySelector('.hw-hud').classList.contains('counting'), h: innerHeight }; });
+    check(name, 'countdown under the clock pill', cd.text === '9' && cd.top >= cd.clockBottom - 4 && Math.abs(cd.cx - cd.clockCx) < 3 && cd.bottom < cd.h * 0.45 && cd.counting, JSON.stringify(cd));
     // ---- midnight: the round ends, results, best saved, play again
     await G(page, () => window.__game.setTimeLeft(1.2));
     check(name, 'the clock strikes midnight (ending)', await waitFor(page, () => window.__game.G.state === 'ending', null, 4000));
@@ -691,12 +790,29 @@ async function runProfile(name) {
     s = await state(page);
     check(name, 'best score kept (localStorage)', s.best >= s.candy && (await G(page, () => { try { return +localStorage.getItem('midnight-candy-run.best'); } catch { return -1; } })) === s.best, `best ${s.best}`);
     await page.screenshot({ path: path.join(OUT, `${name}-end.png`), scale: 'css' });
+    const lad = await G(page, () => ({ seg: document.querySelectorAll('.hw-screen:not(.off) .hw-ladder i').length, h: document.querySelector('.hw-ladder').getBoundingClientRect().height, next: document.querySelector('.hw-next').textContent, rank: document.querySelector('.hw-rank').textContent, candy: window.__game.G.candy, top: window.__game.RANKS[window.__game.RANKS.length - 1] }));
+    const nextOk = lad.candy >= lad.top[0] ? lad.next === '' : /^\d+ MORE FOR [A-Z' -]+$/.test(lad.next);
+    check(name, 'results: the rank ladder and what the next rank takes', lad.seg === 6 && lad.h >= 6 && nextOk && lad.rank.length > 0, JSON.stringify(lad));
+    const shb = await rect(page, '.hw-screen:not(.off) [data-a=share]');
+    if (phone) await T.tap(shb.cx, shb.cy); else await page.mouse.click(shb.cx, shb.cy);
+    await sleep(300);
+    const sh = await G(page, () => ({ shared: window.__shared, copied: window.__copied, toast: document.querySelector('.hw-toast').textContent, candy: window.__game.G.candy, rank: document.querySelector('.hw-rank').textContent }));
+    const shText = phone ? (sh.shared[0] ? `${sh.shared[0].text} ${sh.shared[0].url}` : '') : (sh.copied[0] || '');
+    check(name, `share: ${phone ? 'Web Share' : 'copied to the clipboard + a toast'} with the score, the rank and the game URL`, shText.includes(`${sh.candy} candy`) && shText.includes(sh.rank) && /https?:\/\/\S+\/halloween\/$/.test(shText) && (phone ? sh.shared.length === 1 && sh.copied.length === 0 : sh.copied.length === 1 && sh.toast === 'SCORE COPIED!'), JSON.stringify(sh));
     const again = await rect(page, '.hw-screen:not(.off) [data-a=again]');
     check(name, 'PLAY AGAIN inside the viewport', inside(again, vp));
     const rbs = await buttons(page, '.hw-screen:not(.off) button');
     check(name, 'results buttons >= 44 x 44 px, inside the safe area', rbs.length >= 2 && rbs.every((b) => b.w >= 44 && b.h >= 44 && inSafe(b)));
     if (phone) await T.tap(again.cx, again.cy); else await page.mouse.click(again.cx, again.cy);
     check(name, 'PLAY AGAIN restarts (candy 0, clock full; BOO learnt: no lesson ghost)', await waitFor(page, () => window.__game.G.state === 'play' && window.__game.G.candy === 0 && window.__game.G.left > 170 && !window.__game.G.tutor, null, 3000));
+    // ---- the best run's pace (kept with the best) shows in the clock line at 20 s of the next round
+    const pk = await G(page, () => { let a = null; try { a = JSON.parse(localStorage.getItem('midnight-candy-run.pace')); } catch { /* */ } return { a, best: window.__game.G.best }; });
+    await G(page, () => { const g = window.__game; g.G.safeT = 3; g.setTimeLeft(180 - 20.2); });
+    const pacing = await waitFor(page, () => document.querySelector('.hw-clock').classList.contains('pacing'), null, 1500);
+    const paceText = await G(page, () => document.querySelector('.hw-clock .pace').textContent);
+    check(name, 'pace: the best run is kept (18 moments) and the next round compares at 20 s ("−N VS BEST")', Array.isArray(pk.a) && pk.a.length === 18 && pk.a[17] === pk.best && pacing && /^[+−]\d+ VS BEST$/.test(paceText), JSON.stringify({ n: pk.a && pk.a.length, last: pk.a && pk.a[17], best: pk.best, paceText }));
+    const nb = await pick((g) => { g.G.candy = g.G.best; g.G.streak = 0; });
+    check(name, 'passing the best mid-round calls out "NEW BEST!" (once)', nb.candy === pk.best + 1 && /^NEW BEST!/.test(nb.call), JSON.stringify({ candy: nb.candy, call: nb.call }));
     if (name === 'iphone-portrait' || args.rounds) {
       // ---- five rounds back to back (lanterns smashed, every ghost up, candy spilled, then midnight, PLAY AGAIN):
       // geometries, textures, programs, physics bodies, scene objects, DOM nodes and listeners stay flat
@@ -747,6 +863,22 @@ async function runProfile(name) {
       const q = (a, f) => { const b = [...a].sort((x, y) => x - y); return b[Math.min(b.length - 1, Math.floor(b.length * f))]; };
       const msg = `CPU ms per frame at 4x: calm p50 ${q(calm, 0.5).toFixed(1)} p95 ${q(calm, 0.95).toFixed(1)}; storm p50 ${q(hot, 0.5).toFixed(1)} p95 ${q(hot, 0.95).toFixed(1)} max ${Math.max(...hot).toFixed(1)}`;
       check(name, 'perf: 4x throttled storm stays under 16 ms CPU at p95', q(hot, 0.95) < 16, msg);
+      // the finale on top: the Witching Hour (candy rain, every lantern relit, orange auras), a storm again
+      await c2.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+      await G(page, () => { const g = window.__game; g.setTimeLeft(30.4); });
+      await sleep(1000);
+      const fin = sample(3000);
+      await G(page, () => {
+        const g = window.__game, p = g.cc.position;
+        g.G.safeT = 99;
+        for (const q of g.ghosts.list) { g.ghosts._teleport(q, p.x + (Math.random() - 0.5) * 8, p.y + 1.6, p.z + (Math.random() - 0.5) * 8); q.state = 'chase'; q.alpha = 1; }
+        for (let i = 0, n = 0; i < g.lanterns.n && n < 8; i++) if (g.lanterns.alive[i]) { g.lanterns.smash(i, 1, 0, 1.5); n++; }
+        g.candy.spill(p.x, p.y + 1, p.z, 80, 4);
+      });
+      const fh = await fin;
+      await c2.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+      const fmsg = `finale storm at 4x: p50 ${q(fh, 0.5).toFixed(1)} p95 ${q(fh, 0.95).toFixed(1)} max ${Math.max(...fh).toFixed(1)} (witching ${await G(page, () => window.__game.G.witching)})`;
+      check(name, 'perf: 4x throttled finale storm (Witching Hour) under 16 ms CPU at p95', q(fh, 0.95) < 16, fmsg);
     }
     // page sanity: no scroll, no text selection
     const sane = await G(page, () => ({ sx: scrollX, sy: scrollY, sel: String(getSelection()), bodyScroll: document.scrollingElement.scrollHeight <= innerHeight + 1 }));

@@ -142,6 +142,19 @@ export class Candy {
     }
   }
 
+  /**
+   * A candy falling from `height` m above (x, ground y, z) (the Witching Hour rain): it lands, bounces and stays until
+   * `ttl` s; collectable at once. Returns the slot or -1.
+   */
+  drop(x, y, z, kind, height = 7, ttl = 60) {
+    const i = this._alloc(); if (i < 0) return -1;
+    this.state[i] = 2; this.kind[i] = kind; this.color[i] = (Math.random() * WRAP_COLORS.length) | 0;
+    this.p[i * 3] = x; this.p[i * 3 + 1] = y + height; this.p[i * 3 + 2] = z;
+    this.v[i * 3] = 0; this.v[i * 3 + 1] = -2; this.v[i * 3 + 2] = 0;
+    this.age[i] = 0; this.ttl[i] = ttl; this.spin[i] = Math.random() * 6.28; this.delay[i] = 0;
+    return i;
+  }
+
   countKind(kind) { let n = 0; for (let i = 0; i < MAX; i++) if (this.state[i] !== 0 && this.kind[i] === kind) n++; return n; }
   get restingCount() { let n = 0; for (let i = 0; i < MAX; i++) if (this.state[i] === 1) n++; return n; }
 

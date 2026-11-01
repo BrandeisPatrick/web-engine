@@ -21,6 +21,13 @@
 // catch the pack backs off, and on phones at most two ghosts chase at once. Until a player's first BOO lands (kept in
 // localStorage), the first ghost is a lesson: it rises in view ahead, drifts in slowly and cannot catch for 12 s.
 // Edge markers point at an off-screen big pop and at ghosts coming from off screen or from behind.
+// Score chasing: ranks (hud.js RANKS) with the next one's threshold on the candy pill and a call-out on reaching one,
+// the pace against the best run (kept in localStorage) every 20 s, "NEW BEST!" when the run passes it. A streak of
+// quick pickups fills a meter; every 10th pickup of one adds a bonus. The Witching Hour (the last 30 s) counts candy
+// double, relights every lantern, rains candy around the kid and caps a catch at 6. Juice: a small camera shake on
+// smashes and catches, an FOV punch on BOO, a hitstop on smash / BOO / catch (gentler on phones; no motion with
+// prefers-reduced-motion). The results share the score (Web Share on phones, else the clipboard).
+// On touch, a push straight into a gravestone, tree, fence or wall slides the kid round it, the short way.
 // window.__game exposes the state for tests (test/browser/halloween.mjs).
 import * as THREE from 'three';
 import { Engine } from '@vibe/engine/core';
@@ -36,8 +43,9 @@ import { Lanterns } from './pumpkins.js';
 import { Candy, CANDY_KIND } from './candy.js';
 import { Ghosts } from './ghosts.js';
 import { Effects, Glows, Bats } from './effects.js';
+import { BooReach } from './reach.js';
 import { GameAudio } from './audio.js';
-import { HUD, ACCENT, applyTheme } from './hud.js';
+import { HUD, ACCENT, applyTheme, RANKS, rankIndex, rankFor, nextRankAt } from './hud.js';
 import { LOOK } from './looks.js';
 
 const params = new URLSearchParams(location.search);
@@ -48,12 +56,16 @@ const LOW = params.has('quality') ? params.get('quality') === 'low' : TOUCH;
 const NOFX = flag('nofx');
 const SHADOWS = !(params.has('shadows') && params.get('shadows') === '0');
 const ROUND = Math.max(10, +params.get('round') || 180);
-const BEST_KEY = 'midnight-candy-run.best', TAUGHT_KEY = 'midnight-candy-run.taught';
+const BEST_KEY = 'midnight-candy-run.best', TAUGHT_KEY = 'midnight-candy-run.taught', PACE_KEY = 'midnight-candy-run.pace';
 const SPAWN = [0, 6];
 const BOO_CD = 5, BOO_R = 7.5, SAFE_T = 3.0;
 const RECENTRE_TOUCH = 0.7, RECENTRE_DESK = 0.8; // s without look input before the camera eases behind a running kid
 // touch stick response: nothing below STICK_DEAD (a resting thumb's wobble), full speed at STICK_FULL deflection
 const STICK_DEAD = 0.12, STICK_FULL = 0.75;
+// slide around (touch): a push within acos(AROUND_INTO) of straight into a gravestone, tree, fence or wall turns along
+// it (AROUND_ALONG of the speed along it, AROUND_LEAN into it), the short way round the box in the way; the turn holds
+// AROUND_HOLD s while blocked and AROUND_AFTER s past the corner
+const AROUND_INTO = 0.6, AROUND_ALONG = 0.9, AROUND_LEAN = 0.3, AROUND_HOLD = 0.4, AROUND_AFTER = 0.06;
 // a catch costs 10 % of the candy (2..12); 3 catches within MERCY_WINDOW s calm the ghosts (difficulty -MERCY) for MERCY_T s
 const CATCH_SHARE = 0.10, CATCH_MIN = 2, CATCH_MAX = 12, MERCY = 0.35, MERCY_WINDOW = 30, MERCY_T = 20;
 const MAX_CHASERS_TOUCH = 2, MAX_CHASERS_DESK = 3;
@@ -77,6 +89,21 @@ const GHOSTS = LOW ? 5 : 6;
 const WAKE_AT = [5, 24, 50, 80, 110, 140];
 // the BOO lesson (until the first BOO that scares a ghost): the first ghost rises TUTOR_R m ahead, tame for TUTOR_T s
 const TUTOR_R = [9, 11], TUTOR_T = 12, LANTERN_HINT = { until: 20, r: 6 };
+// the best run's candy at PACE_N even moments of the round (every 10 s of 3 minutes); every PACE_SHOW-th of them the
+// HUD says how the run compares ("+12 VS BEST")
+const PACE_N = 18, PACE_SHOW = 2;
+// Witching Hour, the finale: the last WITCH_S s (of 180; scaled with ?round=) candy counts WITCH_MULT times, every
+// smashed lantern relights, WITCH_RAIN candies rain over WITCH_RAIN_T s into a ring WITCH_RAIN_R m around the kid
+// (WITCH_VIEW of them inside the view), a catch costs at most WITCH_CATCH (and spills that much back in value)
+const WITCH_S = 30, WITCH_MULT = 2, WITCH_RAIN = 20, WITCH_RAIN_T = 10, WITCH_RAIN_R = [6, 14], WITCH_VIEW = 0.65, WITCH_CATCH = 6;
+// a streak: pickups less than STREAK_GAP s apart; every STREAK_EVERY-th pickup of one adds STREAK_BONUS candy (the pips
+// under the candy pill show from STREAK_SHOW)
+const STREAK_GAP = 0.9, STREAK_EVERY = 10, STREAK_BONUS = 3, STREAK_SHOW = 5;
+// juice: camera shake [m, s, roll rad] (phones get SHAKE_TOUCH of it; none with reduced motion), BOO's FOV punch (deg
+// over s), hitstop (s of game time at HITSTOP_SCALE)
+const SHAKE = { smash: [0.05, 0.12, 0], stomp: [0.1, 0.18, 0], catch: [0.18, 0.3, 4 * Math.PI / 180] }, SHAKE_TOUCH = 0.6;
+const FOV_PUNCH = -5, FOV_PUNCH_T = 0.3, HITSTOP_SCALE = 0.15;
+const HITSTOP = { smash: 0.035, stomp: 0.07, boo: 0.05, boo3: 0.08, catch: 0.09 };
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const wrapPi = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
 
@@ -117,6 +144,21 @@ function loadBest() { try { return Math.max(0, parseInt(localStorage.getItem(BES
 function saveBest(n) { try { localStorage.setItem(BEST_KEY, String(n)); } catch { /* private mode / blocked storage */ } }
 function loadTaught() { try { return localStorage.getItem(TAUGHT_KEY) === '1'; } catch { return false; } }
 function saveTaught() { try { localStorage.setItem(TAUGHT_KEY, '1'); } catch { /* private mode / blocked storage */ } }
+function loadPace() {
+  try { const a = JSON.parse(localStorage.getItem(PACE_KEY)); return Array.isArray(a) && a.length === PACE_N && a.every((v) => Number.isFinite(v)) ? a : null; } catch { return null; }
+}
+function savePace(a) { try { localStorage.setItem(PACE_KEY, JSON.stringify(a)); } catch { /* private mode / blocked storage */ } }
+/** Copy text the old way (a hidden textarea + execCommand), for when the async clipboard is missing or refused. */
+function copyText(text) {
+  try {
+    const t = document.createElement('textarea');
+    t.value = text; t.setAttribute('readonly', ''); t.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+    document.body.appendChild(t); t.select();
+    const ok = document.execCommand('copy');
+    t.remove();
+    return !!ok;
+  } catch { return false; }
+}
 
 const nextFrame = () => new Promise((r) => setTimeout(r, 0));
 
@@ -180,6 +222,7 @@ async function boot() {
   }, 'world-load');
   await engine.load((p, label) => loading.setProgress(p, label));
   const { world, dyn, lanterns, ghosts, candy, fx, glows, bats } = W;
+  const booReach = new BooReach(scene); // BOO's reach on the ground while BOO glows
 
   // ---------------------------------------------------------------- the kid
   const kid = buildKid();
@@ -214,11 +257,16 @@ async function boot() {
     booT: BOO_CD, safeT: 0, streak: 0, lastPick: -9, wakeIdx: 0, spawnT: 0, popT: 12, endT: 0, lastCount: 99, music: true,
     pickups: 0, hintBoo: false, hintT: 0, newBest: false,
     catch1: -99, catch2: -99, mercyT: 0, lookHintT: 0, lookHintRad: 0, dryT: 0,
+    witching: false, rainLeft: 0, rainT: 0, streakMax: 0, streakBonus: 0, bonusFrame: 0, rankMax: 0, passedBest: false,
+    paceK: 0,
   };
+  let pace = loadPace(); // the best run's candy at the PACE_N moments (null: no best run recorded yet)
+  const paceRec = new Array(PACE_N).fill(0);
   let booedEver = loadTaught(), lookHinted = false, smashedEver = false;
   // START / RESUME / PLAY AGAIN run inside the click (a user gesture): the same call captures the mouse on desktop
   const hud = new HUD({
-    touch: TOUCH,
+    touch: TOUCH, streak: STREAK_EVERY,
+    onShare: () => shareScore(),
     onStart: () => { startRound(); captureMouse(); },
     onPause: () => setPaused(true),
     onResume: () => { setPaused(false); captureMouse(); },
@@ -270,10 +318,10 @@ async function boot() {
   // portrait phones: a wider view, the camera higher, further back and pitched down more (more ground ahead, less of
   // the sky behind the HUD: a narrow portrait view used to show no candy at all for most of a round)
   const PITCH = { landscape: -0.3, portrait: -0.42 };
-  let portraitCam = null;
+  let portraitCam = null, baseFov = camera.fov; // baseFov: the view's FOV before BOO's punch
   const fitCamera = (w, h) => {
     const portrait = h > w;
-    camera.fov = portrait ? 74 : 58; camera.updateProjectionMatrix();
+    camera.fov = baseFov = portrait ? 74 : 58; camera.updateProjectionMatrix();
     rig.distance = portrait ? 7.0 : 5.4; rig.height = portrait ? 1.6 : 1.2;
     if (portraitCam !== null && portraitCam !== portrait) rig.pitch += portrait ? PITCH.portrait - PITCH.landscape : PITCH.landscape - PITCH.portrait;
     portraitCam = portrait;
@@ -329,10 +377,13 @@ async function boot() {
   };
   function startRound() {
     audioHeld = false; audio.start(); audio.ui();
-    Object.assign(G, { state: 'play', time: 0, left: ROUND, candy: 0, smashed: 0, booed: 0, caught: 0, pops: 0, booT: BOO_CD, safeT: 0, streak: 0, lastPick: -9, wakeIdx: 0, spawnT: 0, popT: 12, endT: 0, lastCount: 99, pickups: 0, catch1: -99, catch2: -99, mercyT: 0, lookHintT: 0, dryT: 0 });
+    Object.assign(G, { state: 'play', time: 0, left: ROUND, candy: 0, smashed: 0, booed: 0, caught: 0, pops: 0, booT: BOO_CD, safeT: 0, streak: 0, lastPick: -9, wakeIdx: 0, spawnT: 0, popT: 12, endT: 0, lastCount: 99, pickups: 0, catch1: -99, catch2: -99, mercyT: 0, lookHintT: 0, dryT: 0,
+      witching: false, rainLeft: 0, rainT: 0, streakMax: 0, streakBonus: 0, bonusFrame: 0, rankMax: 0, passedBest: false, paceK: 0 });
+    paceRec.fill(0);
     if (engine.clock.paused) engine.clock.resume();
+    endJuice();
     lanterns.reset(); ghosts.reset(); fx.clear(); fillCandy(); placeKid();
-    hud.setCandy(0, false); hud.setClock(ROUND, ROUND); hud.showPlay(); hud.setDanger(0);
+    hud.setCandy(0, false); hud.setGoal(nextRankAt(0)); hud.setClock(ROUND, ROUND); hud.showPlay(); hud.setDanger(0);
     input.map.enabled = true;
     rig.yaw = 0; rig.pitch = portraitCam ? PITCH.portrait : PITCH.landscape; setRig(rig); rig.recentre();
     G.skipJump = true;
@@ -343,7 +394,7 @@ async function boot() {
     if (lock.locked) lock.exit();
     if (engine.clock.paused) setClockPaused(false);
     holdAudio(false);
-    G.state = 'title';
+    G.state = 'title'; endJuice();
     lanterns.reset(); ghosts.reset(); fx.clear(); fillCandy(); placeKid();
     orbitTarget.position.set(-2, 0, -4); orbit.distance = 30; orbit.elevation = 0.3; orbit.azimuth = 0.4; // title framing
     hud.showTitle(G.best); setRig(orbit);
@@ -362,9 +413,11 @@ async function boot() {
   }
   function endRound() {
     G.state = 'ending'; G.endT = 0;
-    // the best is saved right at midnight (closing the tab during the bells must not lose it)
+    endJuice();
+    // the best is saved right at midnight (closing the tab during the bells must not lose it), with its pace
+    for (let k = G.paceK; k < PACE_N; k++) paceRec[k] = G.candy;
     G.newBest = G.candy > G.best;
-    if (G.newBest) { G.best = G.candy; saveBest(G.best); }
+    if (G.newBest) { G.best = G.candy; saveBest(G.best); pace = paceRec.slice(); savePace(pace); }
     audio.bell(12, 0.5, 174); hud.flash(); hud.callout('MIDNIGHT!', 'warn');
     input.touch && input.touch.releaseAll();
     if (lock.locked) lock.exit();
@@ -372,7 +425,7 @@ async function boot() {
   }
   function showResults() {
     G.state = 'over';
-    hud.showResults({ candy: G.candy, best: G.best, isBest: G.newBest, smashed: G.smashed, booed: G.booed, caught: G.caught, pops: G.pops });
+    hud.showResults({ candy: G.candy, best: G.best, isBest: G.newBest, smashed: G.smashed, booed: G.booed, caught: G.caught, streak: G.streakMax });
     orbitTarget.position.copy(cc.position); orbit.distance = 12; orbit.elevation = 0.35; orbit.azimuth = rig.yaw + Math.PI;
     setRig(orbit);
   }
@@ -383,6 +436,49 @@ async function boot() {
     else if (G.state !== 'paused') holdAudio(false);
   });
 
+  // ---------------------------------------------------------------- juice: camera shake, BOO's FOV punch, hitstop
+  // The shake and the punch run on real time (they play through a hitstop) and are added after the rig placed the
+  // camera; phones get SHAKE_TOUCH of the amplitude, and none of it moves with prefers-reduced-motion. A hitstop slows
+  // the game clock (engine.clock.timeScale) for a few hundredths of a second of real time: a freeze, not a motion.
+  const reducedMotion = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+  const juice = { t: 1, dur: 1, amp: 0, roll: 0, seed: 0, pt: 1, pdur: 1, deg: 0, fov: false, stopUntil: 0, real: 0, shakes: 0, punches: 0, stops: 0 };
+  const _cr = new THREE.Vector3(), _cu = new THREE.Vector3(), _qr = new THREE.Quaternion(), _zAxis = new THREE.Vector3(0, 0, 1);
+  const calmMotion = () => !!(reducedMotion && reducedMotion.matches);
+  /** A camera jolt [amp m, dur s, roll rad]; a stronger one still running is not cut short by a weaker one. */
+  const jolt = (spec) => {
+    if (calmMotion()) return;
+    const k = touchUI ? SHAKE_TOUCH : 1, amp = spec[0] * k;
+    if (juice.t < juice.dur && amp < juice.amp * (1 - juice.t / juice.dur)) return;
+    juice.t = 0; juice.dur = spec[1]; juice.amp = amp; juice.roll = spec[2] * k; juice.seed = Math.random() * 50; juice.shakes++;
+  };
+  const fovPunch = () => { if (calmMotion()) return; juice.pt = 0; juice.pdur = FOV_PUNCH_T; juice.deg = FOV_PUNCH * (touchUI ? SHAKE_TOUCH : 1); juice.punches++; };
+  const hitstop = (sec) => {
+    const c = engine.clock;
+    juice.stopUntil = Math.max(juice.stopUntil, c.unscaledTime + sec); c.timeScale = HITSTOP_SCALE; juice.stops++;
+  };
+  /** Every effect off at once (round start / end): full speed, no offset, the plain FOV. */
+  const endJuice = () => {
+    juice.t = juice.dur; juice.pt = juice.pdur; juice.stopUntil = 0; engine.clock.timeScale = 1;
+    if (juice.fov) { juice.fov = false; camera.fov = baseFov; camera.updateProjectionMatrix(); }
+  };
+  /** After the rig: the shake offset / roll and the FOV punch on the camera (real-time dt). */
+  const applyJuice = () => {
+    const now = engine.clock.unscaledTime, rdt = Math.min(0.1, Math.max(0, now - juice.real)); juice.real = now;
+    if (juice.t < juice.dur) {
+      juice.t += rdt;
+      const u = Math.min(1, juice.t / juice.dur), env = (1 - u) * (1 - u), a = juice.amp * env, w = juice.seed + juice.t;
+      const q = camera.quaternion;
+      _cr.set(1, 0, 0).applyQuaternion(q); _cu.set(0, 1, 0).applyQuaternion(q);
+      camera.position.addScaledVector(_cr, a * Math.sin(w * 71)).addScaledVector(_cu, a * 0.8 * Math.sin(w * 53 + 1.3));
+      if (juice.roll) q.multiply(_qr.setFromAxisAngle(_zAxis, juice.roll * env * Math.sin(w * 37 + 0.4)));
+    }
+    if (juice.pt < juice.pdur) {
+      juice.pt += rdt;
+      const u = Math.min(1, juice.pt / juice.pdur), c = u < 0.18 ? u / 0.18 : (1 - (u - 0.18) / 0.82) ** 2;
+      camera.fov = baseFov + juice.deg * c; camera.updateProjectionMatrix(); juice.fov = true;
+    } else if (juice.fov) { juice.fov = false; camera.fov = baseFov; camera.updateProjectionMatrix(); }
+  };
+
   // ---------------------------------------------------------------- gameplay helpers
   const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _v = new THREE.Vector3();
   const kidInfo = { x: 0, y: 0, z: 0, vx: 0, vz: 0, safe: false };
@@ -391,22 +487,40 @@ async function boot() {
     if (G.booT < BOO_CD) { audio.tick(); return; }
     G.booT = 0;
     const p = cc.position;
-    fx.boo(p.x, p.y, p.z, BOO_R); audio.boo(); buzz(BUZZ.boo);
+    fx.boo(p.x, p.y, p.z, BOO_R); audio.boo(); buzz(BUZZ.boo); fovPunch();
     const scared = ghosts.boo(p.x, p.z, BOO_R);
     if (scared.length) {
       G.booed += scared.length; audio.scared(scared.length); G.hintBoo = false;
+      hitstop(scared.length >= 3 ? HITSTOP.boo3 : HITSTOP.boo);
       if (!booedEver) { booedEver = true; saveTaught(); } // the lesson is learnt: from now on the normal ghost schedule
       for (const g of scared) { candy.spill(g.x, g.y - 0.3, g.z, 2, 2.5, 0.25, 10); fx.burst(g.x, g.y, g.z, 18, 0.7, 0.6, 1.6, 3, 1.5); fx.flash(g.x, g.y, g.z, 3.4, 0.35, 0.55, 1.1, 0.4); }
       hud.callout(scared.length > 1 ? `BOO! ×${scared.length}` : 'BOO!', 'boo');
     } else hud.callout('BOO!', 'boo');
   };
+  // a pickup: the streak (pickups under STREAK_GAP s apart; every STREAK_EVERY-th one adds a bonus: a call-out and a
+  // golden burst from the pail), the chime rising with it, haptics, a pop's call-out
   const onPick = (i, kind, x, y, z) => {
-    const t = G.time;
-    G.streak = t - G.lastPick < 0.9 ? G.streak + 1 : 0; G.lastPick = t;
+    const t = G.time, mult = G.witching ? WITCH_MULT : 1;
+    G.streak = t - G.lastPick < STREAK_GAP ? G.streak + 1 : 1; G.lastPick = t;
+    if (G.streak > G.streakMax) G.streakMax = G.streak;
     G.pickups++;
     if (t - buzzT > CANDY_BUZZ_GAP) { buzzT = t; buzz(kind === CANDY_KIND.POP ? BUZZ.pop : BUZZ.candy); }
-    if (kind === CANDY_KIND.POP) { G.pops++; audio.candy(0, true); fx.flash(x, y + 0.8, z, 5, 1.2, 0.35, 0.9, 0.5); fx.burst(x, y + 0.6, z, 40, 1.6, 0.5, 1.4, 4, 2.5, 1); hud.callout('+5 BIG POP!', 'good'); }
-    else { audio.candy(G.streak); fx.burst(x, y, z, 8, 1.4, 1.0, 0.5, 1.6, 1.4, 0.45, 0.09); }
+    if (kind === CANDY_KIND.POP) { G.pops++; audio.candy(0, true); fx.flash(x, y + 0.8, z, 5, 1.2, 0.35, 0.9, 0.5); fx.burst(x, y + 0.6, z, 40, 1.6, 0.5, 1.4, 4, 2.5, 1); hud.callout(`+${5 * mult} BIG POP!`, 'good'); }
+    else { audio.candy(G.streak - 1); fx.burst(x, y, z, 8, 1.4, 1.0, 0.5, 1.6, 1.4, 0.45, 0.09); }
+    if (G.streak % STREAK_EVERY === 0) {
+      const b = STREAK_BONUS * mult, p = cc.position;
+      G.bonusFrame += b; G.streakBonus += b;
+      hud.callout('SWEET STREAK!', 'good', `+${b} BONUS`); audio.streak();
+      fx.burst(p.x, p.y + 0.8, p.z, 30, 2.4, 1.6, 0.35, 2.6, 3, 0.8, 0.1); fx.flash(p.x, p.y + 0.9, p.z, 3.2, 0.9, 0.6, 0.15, 0.4);
+    }
+  };
+  // the HUD's goal (the next rank's threshold) and a call-out on reaching a new rank / passing the best (once a round)
+  const candyChanged = () => {
+    hud.setCandy(G.candy); hud.setGoal(nextRankAt(G.candy));
+    const ri = rankIndex(G.candy), up = ri > G.rankMax;
+    if (up) G.rankMax = ri;
+    if (!G.passedBest && G.best >= 20 && G.candy > G.best) { G.passedBest = true; hud.callout('NEW BEST!', 'rank', up ? RANKS[ri][1].toUpperCase() : ''); audio.rankUp(); }
+    else if (up) { hud.callout(`${RANKS[ri][1].toUpperCase()}!`, 'rank', 'NEW RANK'); audio.rankUp(); }
   };
   const smash = (i, stomp) => {
     const v = cc.velocity, sp = Math.hypot(v.x, v.z);
@@ -418,17 +532,20 @@ async function boot() {
     fx.burst(c.x, c.y, c.z, 34, 2.2, 0.9, 0.2, 3.5, 2.5, 0.9, 0.14);
     fx.burst(c.x, c.y, c.z, 14, 1.8, 1.6, 0.6, 2, 3.5, 0.6, 0.08);
     audio.smash(stomp); buzz(stomp ? BUZZ.stomp : BUZZ.smash);
+    jolt(stomp ? SHAKE.stomp : SHAKE.smash); hitstop(stomp ? HITSTOP.stomp : HITSTOP.smash);
     if (stomp) { v.y = 6.4; hud.callout('STOMP!', ''); }
   };
-  // a catch costs 10 % (2..12): it used to be 3 + 12 % uncapped (-36 at 0:10). The loss spills around the kid, quick to
-  // grab back (collectable after 0.45 s, gone after 10 s); three catches within 30 s calm the ghosts for a while
+  // a catch costs 10 % (2..12; in the Witching Hour at most WITCH_CATCH): it used to be 3 + 12 % uncapped (-36 at
+  // 0:10). The loss spills around the kid, quick to grab back (collectable after 0.45 s, gone after 10 s; in the
+  // Witching Hour each candy counts double, so half as many spill); three catches within 30 s calm the ghosts a while
   const caught = (g) => {
     G.caught++; G.safeT = SAFE_T;
-    const lose = Math.min(G.candy, clamp(Math.round(G.candy * CATCH_SHARE), CATCH_MIN, CATCH_MAX));
-    G.candy -= lose; hud.setCandy(G.candy);
+    const lose = Math.min(G.candy, clamp(Math.round(G.candy * CATCH_SHARE), CATCH_MIN, G.witching ? WITCH_CATCH : CATCH_MAX));
+    G.candy -= lose; candyChanged();
     const p = cc.position, dx = p.x - g.x, dz = p.z - g.z, d = Math.hypot(dx, dz) || 1;
     cc.velocity.set(dx / d * 6.5, 4.6, dz / d * 6.5);
-    if (lose > 0) { candy.spill(p.x, p.y + 0.8, p.z, lose, 4.5, 0.45, 10); hud.plusText(`−${lose}`, true); }
+    jolt(SHAKE.catch); hitstop(HITSTOP.catch);
+    if (lose > 0) { candy.spill(p.x, p.y + 0.8, p.z, G.witching ? Math.ceil(lose / WITCH_MULT) : lose, 4.5, 0.45, 10); hud.plusText(`−${lose}`, true); }
     fx.burst(p.x, p.y + 0.8, p.z, 24, 0.8, 0.6, 1.8, 3, 2);
     if (lose > 0) hud.callout(`CAUGHT! −${lose}`, 'bad', 'GRAB IT BACK!'); else hud.callout('CAUGHT!', 'bad');
     audio.caught(); buzz(BUZZ.caught);
@@ -492,6 +609,21 @@ async function boot() {
     P[best * 3] = _spot[0]; P[best * 3 + 1] = _spot[1]; P[best * 3 + 2] = _spot[2];
     return best;
   };
+  // slide around: the side to turn along a wall of normal (nx, nz) for a push (mx, mz): the push's own lean along it,
+  // else the short way round the box in the way (projected on the wall's tangent)
+  const around = { t: 0, s: 1, nx: 0, nz: 0 };
+  const aroundSide = (nx, nz, mx, mz) => {
+    const tx = -nz, tz = nx, tan = (mx * tx + mz * tz) / (Math.hypot(mx, mz) || 1);
+    if (Math.abs(tan) > 0.25) return tan > 0 ? 1 : -1;
+    const p = cc.position;
+    _cols.length = 0; physics.queryColliders(p.x - nx * 0.45, p.z - nz * 0.45, 0.3, _cols);
+    let b = null;
+    for (let i = 0; i < _cols.length; i++) { const q = _cols[i]; if (q.maxY > p.y + 0.35 && q.minX !== undefined) { b = q; break; } }
+    if (!b) return tan >= 0 ? 1 : -1;
+    const a0 = b.minX * tx, a1 = b.maxX * tx, c0 = b.minZ * tz, c1 = b.maxZ * tz, kp = p.x * tx + p.z * tz;
+    const tmin = Math.min(a0, a1) + Math.min(c0, c1), tmax = Math.max(a0, a1) + Math.max(c0, c1);
+    return tmax - kp < kp - tmin ? 1 : -1;
+  };
   // the arrow toward a world point, from the camera's view: ahead / behind / left / right
   const arrowTo = (x, z) => {
     const p = cc.position, dx = x - p.x, dz = z - p.z, d = Math.hypot(dx, dz) || 1;
@@ -522,9 +654,50 @@ async function boot() {
     return false;
   };
 
+  // Witching Hour: the finale (a call-out, bells, the x2 badge, every lantern lit again, orange ghost auras, candy rain)
+  const WITCH_AT = Math.min(WITCH_S, ROUND / 6);
+  const relit = (i) => fx.motes(lanterns.x[i], lanterns.y[i] + 0.3, lanterns.z[i], 12, 2, 1, 0.3);
+  const startWitching = () => {
+    G.witching = true; G.rainLeft = WITCH_RAIN; G.rainT = 0.8;
+    hud.setWitching(true); hud.callout('WITCHING HOUR!', 'witch', `CANDY ×${WITCH_MULT}`);
+    audio.bell(2, 0.8); audio.witching();
+    lanterns.relightAll(relit);
+    ghosts.witch = true;
+    // env.setFinale(true); // ENVIRONMENT HOOK (feat/halloween-environment): the environment's finale starts here
+  };
+  /** One candy of the rain: falls from high up into the ring around the kid (most of them inside the view). */
+  const rainCandy = (p) => {
+    const half = Math.random() < WITCH_VIEW ? viewHalf() : Math.PI;
+    if (!ringSpot(_spot, p.x, p.z, WITCH_RAIN_R[0], WITCH_RAIN_R[1], rig.yaw, half)) return;
+    const i = candy.drop(_spot[0], _spot[1], _spot[2], randomKind(), 7);
+    if (i >= 0) fx.burst(_spot[0], _spot[1] + 7, _spot[2], 6, 2, 1.3, 0.4, 0.8, 0, 0.6, 0.1);
+  };
+  // share the score without a server: the phone's share sheet (Web Share), else (or when it fails) the clipboard,
+  // else a hidden textarea copy. Every browser call is guarded; a share the player cancels does nothing.
+  const shareScore = () => {
+    const n = G.candy, url = location.origin + location.pathname.replace(/index\.html$/, '');
+    const text = `I grabbed ${n} candy before midnight (${rankFor(n)}) in Midnight Candy Run. Can you beat it?`;
+    const copy = () => {
+      const both = `${text} ${url}`, done = (ok) => hud.toast(ok ? 'SCORE COPIED!' : 'COULD NOT SHARE');
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(both).then(() => done(true), () => done(copyText(both))); return; }
+      } catch { /* no clipboard: the textarea copy below */ }
+      done(copyText(both));
+    };
+    try {
+      if (touchUI && typeof navigator.share === 'function') {
+        navigator.share({ title: 'Midnight Candy Run', text, url }).catch((e) => { if (!e || e.name !== 'AbortError') copy(); });
+        return;
+      }
+    } catch { /* share threw synchronously: copy instead */ }
+    copy();
+  };
+
   // ---------------------------------------------------------------- systems (registration order = run order)
   engine.addSystem({
     earlyUpdate(dt) {
+      // a hitstop ends after its real time (whatever the scaled dt)
+      if (juice.stopUntil > 0 && engine.clock.unscaledTime >= juice.stopUntil) { juice.stopUntil = 0; engine.clock.timeScale = 1; }
       input.update(dt);
       const c = input.controls, m = input.map;
       if (m.justPressed('mute')) hud.setMuted(audio.toggleMute());
@@ -547,6 +720,23 @@ async function boot() {
       let mx = _r.x * sx + _f.x * sy, mz = _r.z * sx + _f.z * sy;
       const l2 = mx * mx + mz * mz;
       if (l2 > 1) { const k = 1 / Math.sqrt(l2); mx *= k; mz *= k; }
+      // slide around (touch): a thumb steers at the candy it sees, not at the gaps, and pushing straight into a
+      // gravestone used to stop the kid dead (bots lost 20-100 s a round that way, mostly in the graveyard)
+      const il = Math.sqrt(Math.min(1, l2));
+      if (touchUI && cc.grounded && il > 0.5) {
+        if (cc.blocked) {
+          const nx = cc.wallNormal.x, nz = cc.wallNormal.z;
+          if (-(mx * nx + mz * nz) / il > AROUND_INTO) {
+            if (around.t <= 0 || nx * around.nx + nz * around.nz < 0.5) around.s = aroundSide(nx, nz, mx, mz);
+            around.t = AROUND_HOLD; around.nx = nx; around.nz = nz;
+          }
+        } else if (around.t > AROUND_AFTER) around.t = AROUND_AFTER;
+        if (around.t > 0 && -(mx * around.nx + mz * around.nz) / il > 0.2) {
+          around.t -= dt;
+          const tx = -around.nz * around.s, tz = around.nx * around.s;
+          mx = (tx * AROUND_ALONG - around.nx * AROUND_LEAN) * il; mz = (tz * AROUND_ALONG - around.nz * AROUND_LEAN) * il;
+        } else around.t = 0;
+      } else around.t = 0;
       intent.moveX = mx; intent.moveZ = mz;
       // how much the stick / keys point "into the screen" (1 straight ahead, 0 sideways, < 0 toward the camera)
       const ml = Math.hypot(sx, sy);
@@ -595,7 +785,9 @@ async function boot() {
       // the kid: interpolated pose, facing toward the move intent, animation, blink while safe
       yOff *= Math.exp(-20 * dt);
       player.position.lerpVectors(prev, cur, alpha); player.position.y += yOff;
-      if (intent.moveX * intent.moveX + intent.moveZ * intent.moveZ > 1e-4) { // any real push (the stick dead zone is upstream)
+      // any real push (the stick dead zone is upstream); not while sliding round an obstacle (the kid keeps facing
+      // where the thumb points, so the follow camera does not swing after the slide)
+      if (around.t <= 0 && intent.moveX * intent.moveX + intent.moveZ * intent.moveZ > 1e-4) {
         const goal = Math.atan2(-intent.moveX, -intent.moveZ);
         camState.facing = wrapPi(camState.facing + wrapPi(goal - camState.facing) * (1 - Math.exp(-12 * dt)));
       }
@@ -677,13 +869,20 @@ async function boot() {
             if (i >= 0) hud.callout(`BIG POP SPOTTED ${arrowTo(candy.p[i * 3], candy.p[i * 3 + 2])}`, 'good');
           }
         }
-        // the clock: warnings and the last ten seconds
+        // the clock: the one-minute warning, the Witching Hour, the last ten seconds
         const s = Math.ceil(G.left);
         if (s !== G.lastCount) {
-          if (s === 60) { hud.callout('ONE MINUTE TO MIDNIGHT', 'warn'); audio.bell(1); }
-          else if (s === 30) { hud.callout('30 SECONDS!', 'warn'); audio.bell(2, 0.8); }
+          if (s === 60) { hud.callout('ONE MINUTE', 'warn', 'TO MIDNIGHT'); audio.bell(1); }
           else if (s <= 10 && s > 0) { hud.countdown(s); audio.tick(s <= 3); }
           G.lastCount = s;
+        }
+        if (!G.witching && G.left <= WITCH_AT) startWitching();
+        if (G.witching && G.rainLeft > 0 && (G.rainT -= dt) <= 0) { G.rainT = WITCH_RAIN_T / WITCH_RAIN; G.rainLeft--; rainCandy(p); }
+        // the best run's pace: record this run's candy at each of the PACE_N moments; every PACE_SHOW-th, compare
+        while (G.paceK < PACE_N - 1 && elapsed >= (G.paceK + 1) * ROUND / PACE_N) {
+          paceRec[G.paceK] = G.candy;
+          if (pace && (G.paceK + 1) % PACE_SHOW === 0) hud.pace(G.candy - pace[G.paceK]);
+          G.paceK++;
         }
         if (G.left <= 0) { G.left = 0; endRound(); }
       } else if (G.state === 'ending') {
@@ -692,15 +891,21 @@ async function boot() {
       } else if (G.state === 'over') G.endT += dt;
       // candy pickups only during the round (after midnight, candy spilled next to the kid must not vanish into it
       // uncounted); the candy still animates on every screen
+      G.bonusFrame = 0;
       candy.update(dt, playing ? cc.position : OFFSTAGE, G.time, playing ? onPick : null);
       if (playing && candy.valueThisFrame > 0) {
-        G.candy += candy.valueThisFrame; hud.setCandy(G.candy);
-        if (candy.popThisFrame === 0) hud.plusText(`+${candy.valueThisFrame}`);
+        const gain = candy.valueThisFrame * (G.witching ? WITCH_MULT : 1) + G.bonusFrame;
+        G.candy += gain; candyChanged();
+        if (candy.popThisFrame === 0) hud.plusText(`+${gain}`);
+      }
+      if (playing) { // the streak meter, while a streak of STREAK_SHOW+ runs
+        const on = G.streak >= STREAK_SHOW && G.time - G.lastPick < STREAK_GAP;
+        hud.setStreak(on ? ((G.streak - 1) % STREAK_EVERY) + 1 : 0, on);
       }
     },
   }, 'game');
 
-  engine.addSystem({ update: (dt) => { if (rigOn) rigOn.update(dt); } }, 'camera');
+  engine.addSystem({ update: (dt) => { if (rigOn) rigOn.update(dt); if (rigOn === rig) applyJuice(); } }, 'camera');
 
   const _pm = new THREE.Matrix4(), _frustum = new THREE.Frustum(), _dir = new THREE.Vector3();
   const lightView = { position: camera.position, frustum: _frustum, direction: _dir };
@@ -772,6 +977,8 @@ async function boot() {
         // BOO glows while it is ready and a chaser is in reach (novices had BOO ready at 25 of 28 catches)
         const hot = playing && G.booT >= BOO_CD && d < BOO_R;
         if (hot !== booHot) { booHot = hot; if (booBtn) booBtn.el.classList.toggle('hw-boo-hot', hot); hud.setBooHot(hot); }
+        // BOO's reach on the ground while it glows: inside the ring means BOO now
+        booReach.update(dt, hot, player.position.x, heightAt(player.position.x, player.position.z), player.position.z, BOO_R);
         // the nearest big pop, while it is off screen
         let pi = -1, pd = Infinity;
         const C = candy;
@@ -795,6 +1002,7 @@ async function boot() {
         }
         for (; k < hud.ghostEdges.length; k++) hud.setEdge(hud.ghostEdges[k], false);
       } else if (booHot) { booHot = false; if (booBtn) booBtn.el.classList.remove('hw-boo-hot'); hud.setBooHot(false); }
+      if (G.state !== 'play' && G.state !== 'ending') booReach.update(dt, false, 0, 0, 0, BOO_R);
     },
   }, 'hud');
   engine.addSystem({ lateUpdate: (dt) => audio.update(dt, G.state === 'play') }, 'audio');
@@ -807,7 +1015,7 @@ async function boot() {
   // pumpkin shards, the BOO rings), so their geometry and textures upload now instead of in a frame mid-round (a
   // hitch on a phone, and the first sight of a ghost no longer adds GPU resources during play)
   {
-    const warm = [fx.ring, fx.ring2, fx.dome];
+    const warm = [fx.ring, fx.ring2, fx.dome, booReach.mesh];
     for (const g of ghosts.list) warm.push(g.mesh.mesh);
     for (const sl of lanterns.slots) warm.push(...sl.meshes);
     const was = warm.map((o) => [o.visible, o.frustumCulled]);
@@ -818,7 +1026,8 @@ async function boot() {
   const loadMs = Math.round(performance.now() - t0);
   window.__game = {
     THREE, engine, G, cc, ctl, camState, rig, orbit, input, hud, audio, world, dyn, lanterns, ghosts, candy, fx, postfx, atmo, physics, player,
-    loadMs, TOUCH, LOW, startRound, toTitle, setPaused, endRound,
+    loadMs, TOUCH, LOW, startRound, toTitle, setPaused, endRound, juice, paceRec, shareScore, RANKS, around,
+    get pace() { return pace; }, get baseFov() { return baseFov; },
     get touchUI() { return touchUI; },
     /** Test hook: jump the clock (seconds left). */
     setTimeLeft(s) { G.left = s; },
