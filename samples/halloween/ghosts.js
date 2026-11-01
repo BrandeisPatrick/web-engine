@@ -24,8 +24,9 @@ const FLAT = [-Math.SQRT1_2, 0, 0, Math.SQRT1_2]; // grid normal (local +Z) -> w
 const HEAD_R = 0.32, PIN_THETA = 1.3, SHEET = 2.15, HOVER = 1.55;
 // pacing (s): calm after a catch / a BOO / a chase given up; how long a chase lasts before the ghost gives up
 const CALM_CAUGHT = 5, CALM_NEAR = 5, CALM_R = 14, CALM_FAR = 4.5, CALM_BOO = 3, CALM_GIVEUP = 3.5, CHASE_MAX = 8, TAME_SPEED = 2.4, HOLD_R = 9;
-// a ghost fades out when it comes this close to the camera (m): a sheet over the lens hides the whole view
-const CAM_FADE0 = 1.4, CAM_FADE1 = 3.6;
+// a ghost fades out when it comes this close to the camera (m): a sheet over the lens hides the whole view. It keeps
+// CAM_FLOOR of its opacity, so one chasing in from behind the camera still shows as a veil (it used to keep 0.08)
+const CAM_FADE0 = 1.4, CAM_FADE1 = 3.6, CAM_FLOOR = 0.25;
 const _q = new THREE.Quaternion(), _e = new THREE.Euler();
 const wrapPi = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
 
@@ -337,7 +338,7 @@ export class Ghosts {
       let near = 1;
       if (cam) {
         const d = Math.hypot(g.x - cam.x, g.y - 0.4 - cam.y, g.z - cam.z), u = Math.min(1, Math.max(0, (d - CAM_FADE0) / (CAM_FADE1 - CAM_FADE0)));
-        near = 0.08 + 0.92 * u * u * (3 - 2 * u);
+        near = CAM_FLOOR + (1 - CAM_FLOOR) * u * u * (3 - 2 * u);
       }
       m.opacity = 0.86 * Math.min(1, g.alpha * 1.4) * near;
       m.depthWrite = near > 0.95; // a faded sheet must not hide what is behind it

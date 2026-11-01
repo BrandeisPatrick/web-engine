@@ -42,6 +42,7 @@ import { Lanterns } from './pumpkins.js';
 import { Candy, CANDY_KIND } from './candy.js';
 import { Ghosts } from './ghosts.js';
 import { Effects, Glows, Bats } from './effects.js';
+import { BooReach } from './reach.js';
 import { GameAudio } from './audio.js';
 import { HUD, ACCENT, applyTheme, RANKS, rankIndex, rankFor, nextRankAt } from './hud.js';
 import { LOOK } from './looks.js';
@@ -216,6 +217,7 @@ async function boot() {
   }, 'world-load');
   await engine.load((p, label) => loading.setProgress(p, label));
   const { world, dyn, lanterns, ghosts, candy, fx, glows, bats } = W;
+  const booReach = new BooReach(scene); // BOO's reach on the ground while BOO glows
 
   // ---------------------------------------------------------------- the kid
   const kid = buildKid();
@@ -641,6 +643,7 @@ async function boot() {
     audio.bell(2, 0.8); audio.witching();
     lanterns.relightAll(relit);
     ghosts.witch = true;
+    // env.setFinale(true); // ENVIRONMENT HOOK (feat/halloween-environment): the environment's finale starts here
   };
   /** One candy of the rain: falls from high up into the ring around the kid (most of them inside the view). */
   const rainCandy = (p) => {
@@ -935,6 +938,8 @@ async function boot() {
         // BOO glows while it is ready and a chaser is in reach (novices had BOO ready at 25 of 28 catches)
         const hot = playing && G.booT >= BOO_CD && d < BOO_R;
         if (hot !== booHot) { booHot = hot; if (booBtn) booBtn.el.classList.toggle('hw-boo-hot', hot); hud.setBooHot(hot); }
+        // BOO's reach on the ground while it glows: inside the ring means BOO now
+        booReach.update(dt, hot, player.position.x, heightAt(player.position.x, player.position.z), player.position.z, BOO_R);
         // the nearest big pop, while it is off screen
         let pi = -1, pd = Infinity;
         const C = candy;
@@ -958,6 +963,7 @@ async function boot() {
         }
         for (; k < hud.ghostEdges.length; k++) hud.setEdge(hud.ghostEdges[k], false);
       } else if (booHot) { booHot = false; if (booBtn) booBtn.el.classList.remove('hw-boo-hot'); hud.setBooHot(false); }
+      if (G.state !== 'play' && G.state !== 'ending') booReach.update(dt, false, 0, 0, 0, BOO_R);
     },
   }, 'hud');
   engine.addSystem({ lateUpdate: (dt) => audio.update(dt, G.state === 'play') }, 'audio');
@@ -970,7 +976,7 @@ async function boot() {
   // pumpkin shards, the BOO rings), so their geometry and textures upload now instead of in a frame mid-round (a
   // hitch on a phone, and the first sight of a ghost no longer adds GPU resources during play)
   {
-    const warm = [fx.ring, fx.ring2, fx.dome];
+    const warm = [fx.ring, fx.ring2, fx.dome, booReach.mesh];
     for (const g of ghosts.list) warm.push(g.mesh.mesh);
     for (const sl of lanterns.slots) warm.push(...sl.meshes);
     const was = warm.map((o) => [o.visible, o.frustumCulled]);
