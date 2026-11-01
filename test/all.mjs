@@ -38,6 +38,7 @@ const SUITES = [
   { file: 'water.mjs', shim: true },
   // physics (0.9.0): particles / cloth / rope, soft bodies, coupling + buoyancy, fracture, character dynamics, ragdoll
   { file: 'dyn-cloth.mjs' },
+  { file: 'cloth-mesh.mjs' },
   { file: 'dyn-soft.mjs' },
   { file: 'dyn-buoyancy.mjs' },
   { file: 'dyn-fracture.mjs' },

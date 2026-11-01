@@ -11,10 +11,15 @@
 // capture sets both); update(alpha) draws previous + (current - previous) * alpha. Before the first capture() update()
 // draws the store's positions as they are (alpha ignored).
 //
-// - ClothMesh(store, cloth, material): one indexed grid (cloth.nx x cloth.ny vertices, vertex i + j * nx = particle
-//   cloth.indexOf(i, j), uv (i / (nx - 1), j / (ny - 1)), two triangles per cell). Smooth normals from an
-//   allocation-free area-weighted pass over the index (not computeVertexNormals: it allocates temporaries per call).
-//   Meant for a double-sided material (three flips the normal on back faces).
+// - ClothMesh(store, cloth, material, { subdivide = 1 }): one indexed grid (cloth.nx x cloth.ny vertices, vertex
+//   i + j * nx = particle cloth.indexOf(i, j), uv (i / (nx - 1), j / (ny - 1)), two triangles per cell). Smooth normals
+//   from an allocation-free area-weighted pass over the index (not computeVertexNormals: it allocates temporaries per
+//   call). Meant for a double-sided material (three flips the normal on back faces). Opt-in `subdivide: k` (k >= 2)
+//   draws a k times finer grid ((nx - 1) k + 1 per side, uv over it the same way) through the particles: a
+//   Catmull-Rom surface (tensor product, the border extrapolated linearly) whose vertices at every k-th row and column
+//   are the particles themselves, so a coarse cloth folds smoothly instead of in facets. capture() keeps the coarse
+//   poses, update() interpolates them and refines once per frame (the refinement is linear, so that equals
+//   interpolating refined grids); allocation-free; default 1 = exactly the plain grid.
 // - SoftBodyMesh(store, soft, material, { inflate, geometry }): an indexed mesh over soft.surface (boundary
 //   triangles as particle ids, counter-clockwise seen from outside) whose vertices are the surface particles
 //   (soft.surfaceVertices, or the distinct ids of the surface), smooth normals recomputed in place; `inflate` (m,
@@ -153,34 +158,146 @@ class SurfaceMesh {
 }
 
 // ------------------------------------------------------------------ cloth
+/**
+ * Catmull-Rom refinement taps of one axis: n coarse samples -> (n - 1) k + 1 fine ones, 4 (coarse index, weight)
+ * pairs each, the end extrapolation (p[-1] = 2 p[0] - p[1]) folded into the weights.
+ */
+function crTaps(n, k) {
+  const m = (n - 1) * k + 1, idx = new Int32Array(m * 4), w = new Float32Array(m * 4);
+  for (let I = 0; I < m; I++) {
+    const i0 = Math.min(n - 1, Math.floor(I / k)), t = I / k - i0, t2 = t * t, t3 = t2 * t;
+    const cw = [(-t3 + 2 * t2 - t) / 2, (3 * t3 - 5 * t2 + 2) / 2, (-3 * t3 + 4 * t2 + t) / 2, (t3 - t2) / 2];
+    const acc = new Map();
+    const add = (i, x) => { acc.set(i, (acc.get(i) || 0) + x); };
+    for (let q = 0; q < 4; q++) {
+      const i = i0 - 1 + q, c = cw[q];
+      if (c === 0) continue;
+      if (n === 1) add(0, c);
+      else if (i < 0) { add(0, 2 * c); add(1, -c); } else if (i > n - 1) { add(n - 1, 2 * c); add(n - 2, -c); } else add(i, c);
+    }
+    let q = 0;
+    for (const [i, x] of acc) { idx[I * 4 + q] = i; w[I * 4 + q] = x; q++; }
+    for (; q < 4; q++) { idx[I * 4 + q] = i0; w[I * 4 + q] = 0; }
+  }
+  return { m, idx, w };
+}
+
 export class ClothMesh extends SurfaceMesh {
   /**
    * @param {object} store  ParticleStore (world.particles)
    * @param {object} cloth  Cloth.grid result ({ nx, ny, indexOf(i, j) | first })
    * @param {THREE.Material} material  double-sided (THREE.DoubleSide) lit material
+   * @param {{ subdivide?: number }} [o]  subdivide: draw a k x finer Catmull-Rom grid through the particles (default 1)
    */
-  constructor(store, cloth, material) {
-    const nx = cloth.nx, ny = cloth.ny, n = nx * ny;
-    const ids = new Uint32Array(n), uv = new Float32Array(n * 2);
+  constructor(store, cloth, material, o = {}) {
+    const nx = cloth.nx, ny = cloth.ny, n = nx * ny, k = Math.max(1, Math.floor(o.subdivide ?? 1));
+    const ids = new Uint32Array(n);
     for (let j = 0; j < ny; j++) {
       for (let i = 0; i < nx; i++) {
         const v = i + j * nx;
         ids[v] = typeof cloth.indexOf === 'function' ? cloth.indexOf(i, j) : cloth.first + v;
-        uv[v * 2] = nx > 1 ? i / (nx - 1) : 0; uv[v * 2 + 1] = ny > 1 ? j / (ny - 1) : 0;
       }
     }
-    const index = indexArray((nx - 1) * (ny - 1) * 6, n);
+    const NX = (nx - 1) * k + 1, NY = (ny - 1) * k + 1, N = NX * NY;
+    const uv = new Float32Array(N * 2);
+    for (let j = 0; j < NY; j++) {
+      for (let i = 0; i < NX; i++) { const v = i + j * NX; uv[v * 2] = NX > 1 ? i / (NX - 1) : 0; uv[v * 2 + 1] = NY > 1 ? j / (NY - 1) : 0; }
+    }
+    const index = indexArray((NX - 1) * (NY - 1) * 6, N);
     let t = 0;
-    for (let j = 0; j < ny - 1; j++) {
-      for (let i = 0; i < nx - 1; i++) {
-        const a = i + j * nx, b = a + 1, c = a + nx, d = c + 1;
+    for (let j = 0; j < NY - 1; j++) {
+      for (let i = 0; i < NX - 1; i++) {
+        const a = i + j * NX, b = a + 1, c = a + NX, d = c + 1;
         index[t++] = a; index[t++] = b; index[t++] = d;
         index[t++] = a; index[t++] = d; index[t++] = c;
       }
     }
-    super(n, index, uv, material, 'clothMesh', (out) => readParticles(store.pos, ids, n, out));
+    const read = (out) => readParticles(store.pos, ids, n, out);
+    let refine = null;
+    if (k > 1) {
+      // coarse positions + normals -> rows refined along i -> the fine grid refined along j, both in one pass (the
+      // normals renormalised); a sample on a coarse row / column takes its one tap (scratch allocated once)
+      const rows = new Float32Array(NX * ny * 6), ti = crTaps(nx, k), tj = crTaps(ny, k);
+      refine = (cp, cn, op, on) => {
+        const Ii = ti.idx, Wi = ti.w, Ij = tj.idx, Wj = tj.w;
+        for (let j = 0; j < ny; j++) {
+          for (let I = 0; I < NX; I++) {
+            const o6 = (I + j * NX) * 6;
+            if (I % k === 0) {
+              const c = (I / k + j * nx) * 3;
+              rows[o6] = cp[c]; rows[o6 + 1] = cp[c + 1]; rows[o6 + 2] = cp[c + 2]; rows[o6 + 3] = cn[c]; rows[o6 + 4] = cn[c + 1]; rows[o6 + 5] = cn[c + 2];
+              continue;
+            }
+            let x = 0, y = 0, z = 0, u = 0, v = 0, w2 = 0;
+            for (let q = 0; q < 4; q++) {
+              const c = (Ii[I * 4 + q] + j * nx) * 3, w = Wi[I * 4 + q];
+              x += cp[c] * w; y += cp[c + 1] * w; z += cp[c + 2] * w; u += cn[c] * w; v += cn[c + 1] * w; w2 += cn[c + 2] * w;
+            }
+            rows[o6] = x; rows[o6 + 1] = y; rows[o6 + 2] = z; rows[o6 + 3] = u; rows[o6 + 4] = v; rows[o6 + 5] = w2;
+          }
+        }
+        for (let J = 0; J < NY; J++) {
+          const exact = J % k === 0, jr = J / k;
+          for (let I = 0; I < NX; I++) {
+            let x, y, z, u, v, w2;
+            if (exact) {
+              const c = (I + jr * NX) * 6;
+              x = rows[c]; y = rows[c + 1]; z = rows[c + 2]; u = rows[c + 3]; v = rows[c + 4]; w2 = rows[c + 5];
+            } else {
+              x = 0; y = 0; z = 0; u = 0; v = 0; w2 = 0;
+              for (let q = 0; q < 4; q++) {
+                const c = (I + Ij[J * 4 + q] * NX) * 6, w = Wj[J * 4 + q];
+                x += rows[c] * w; y += rows[c + 1] * w; z += rows[c + 2] * w; u += rows[c + 3] * w; v += rows[c + 4] * w; w2 += rows[c + 5] * w;
+              }
+            }
+            const o3 = (I + J * NX) * 3, l = Math.sqrt(u * u + v * v + w2 * w2);
+            op[o3] = x; op[o3 + 1] = y; op[o3 + 2] = z;
+            if (l > 1e-20) { on[o3] = u / l; on[o3 + 1] = v / l; on[o3 + 2] = w2 / l; } else { on[o3] = 0; on[o3 + 1] = 1; on[o3 + 2] = 0; }
+          }
+        }
+      };
+    }
+    super(N, index, uv, material, 'clothMesh', read);
     this.store = store; this.cloth = cloth; this.ids = ids;
     this.nx = nx; this.ny = ny;
+    /** Subdivision factor and the drawn grid's size (= nx, ny when subdivide is 1). */
+    this.subdivide = k; this.gridX = NX; this.gridY = NY;
+    this._refine = refine; this._coarse = null;
+    if (refine) {
+      // the coarse grid's own index and normals: normals are computed on the coarse cloth and refined like the
+      // positions (then renormalised), a fraction of an area-weighted pass over the fine triangles
+      const ci = indexArray((nx - 1) * (ny - 1) * 6, n);
+      let q = 0;
+      for (let j = 0; j < ny - 1; j++) {
+        for (let i = 0; i < nx - 1; i++) { const a = i + j * nx, b = a + 1, c = a + nx, d = c + 1; ci[q++] = a; ci[q++] = b; ci[q++] = d; ci[q++] = a; ci[q++] = d; ci[q++] = c; }
+      }
+      this._coarse = new Float32Array(n * 3); this._coarseNrm = new Float32Array(n * 3); this._coarseIndex = ci;
+      this.update(1); // (the base constructor drew before the refinement existed)
+    }
+  }
+  /** After each fixed step (subdivided: the captured poses stay coarse, the particles only). */
+  capture() {
+    if (!this._refine) { super.capture(); return; }
+    const n = this.nx * this.ny;
+    if (this.cur === null) { this.cur = new Float32Array(n * 3); this._read(this.cur); this.prev = this.cur.slice(); return; }
+    const t = this.prev; this.prev = this.cur; this.cur = t;
+    this._read(this.cur);
+  }
+  /**
+   * Per frame (subdivided: interpolate the coarse poses, refine them once; the normals come from the coarse cloth,
+   * refined the same way and renormalised; the bounds from the coarse poses plus a margin for the curve's overshoot).
+   */
+  update(alpha = 1) {
+    if (!this._refine) { super.update(alpha); return; }
+    const c = this._coarse, cn = this._coarseNrm, p = this.positions, nrm = this.normals;
+    if (this.cur === null) this._read(c); else lerp(this.prev, this.cur, alpha, c);
+    vertexNormals(c, this._coarseIndex, cn, null);
+    this._refine(c, cn, p, nrm);
+    const f = this.inflate;
+    if (f !== 0) for (let i = 0, n = p.length; i < n; i++) p[i] += nrm[i] * f;
+    this.positionAttr.needsUpdate = true;
+    this.normalAttr.needsUpdate = true;
+    applyBounds(this.geometry, c, 0.1 + Math.abs(f));
   }
 }
 

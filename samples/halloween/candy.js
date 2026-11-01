@@ -1,9 +1,12 @@
 // Candy: a fixed pool of pickups (structure of arrays, no allocation per frame) drawn as three instanced meshes
-// (wrapped sweets, candy corn, big swirl lollipops worth 5) plus a soft halo each (Glows). Candy rests bobbing and
+// (wrapped sweets with pleated bow-tie ends, flattened candy-corn kernels, big swirl lollipops worth 5: three distinct
+// silhouettes) plus a soft halo each (Glows). Unlit so it glows, but hand-shaded (patchCandy: a fixed key light, a
+// glossy highlight, a rim, and the swirl / bands / stripes painted per pixel). Candy rests bobbing and
 // spinning on the grass, flies in arcs when spilled (smashed lanterns, booed ghosts, or the kid dropping some when a
 // ghost catches it), and is pulled toward the kid inside the magnet radius. Spilled candy that nobody picks up blinks
 // and vanishes after a while; resting candy stays.
 import * as THREE from 'three';
+import { lathe } from './props.js';
 
 const MAX = 220;
 export const CANDY_KIND = { WRAP: 0, CORN: 1, POP: 2 };
@@ -13,62 +16,122 @@ const WRAP_COLORS = [[1, 0.18, 0.25], [0.65, 0.3, 1], [0.25, 0.95, 0.45], [1, 0.
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _e = new THREE.Euler();
 const _zero = new THREE.Matrix4().makeScale(0, 0, 0);
 
-function colorize(g, rgb) {
+// Geometry: each part carries `cpat` (the pattern the candy shader paints per pixel from the part's local position):
+// 0 plain (vertex colour x instance colour), 1 the lollipop's swirl, 2 candy corn's three bands, 3 a wrapper's
+// diagonal stripes, 4 a wrapper's crinkled end (lighter, the instance colour washed toward white).
+function colorize(g, rgb, pat = 0) {
   const n = g.attributes.position.count, c = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) { c[i * 3] = rgb[0]; c[i * 3 + 1] = rgb[1]; c[i * 3 + 2] = rgb[2]; }
   g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  g.setAttribute('cpat', new THREE.BufferAttribute(new Float32Array(n).fill(pat), 1));
   if (g.attributes.uv) g.deleteAttribute('uv');
+  if (g.index === null) { const ix = new Uint16Array(n); for (let i = 0; i < n; i++) ix[i] = i; g.setIndex(new THREE.BufferAttribute(ix, 1)); }
+  if (!g.attributes.normal) g.computeVertexNormals();
   return g;
 }
 function merge(parts) {
-  // tiny local merge (all indexed): position, normal, color
+  // tiny local merge (all indexed): position, normal, color, cpat
   let nv = 0, ni = 0;
   for (const g of parts) { nv += g.attributes.position.count; ni += g.index.count; }
-  const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), col = new Float32Array(nv * 3), idx = new Uint16Array(ni);
+  const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), col = new Float32Array(nv * 3), pat = new Float32Array(nv), idx = new Uint16Array(ni);
   let v = 0, i = 0;
   for (const g of parts) {
-    pos.set(g.attributes.position.array, v * 3); nor.set(g.attributes.normal.array, v * 3); col.set(g.attributes.color.array, v * 3);
+    pos.set(g.attributes.position.array, v * 3); nor.set(g.attributes.normal.array, v * 3); col.set(g.attributes.color.array, v * 3); pat.set(g.attributes.cpat.array, v);
     const ix = g.index.array; for (let k = 0; k < ix.length; k++) idx[i + k] = ix[k] + v;
     v += g.attributes.position.count; i += ix.length; g.dispose();
   }
   const out = new THREE.BufferGeometry();
   out.setAttribute('position', new THREE.BufferAttribute(pos, 3)); out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
-  out.setAttribute('color', new THREE.BufferAttribute(col, 3)); out.setIndex(new THREE.BufferAttribute(idx, 1));
+  out.setAttribute('color', new THREE.BufferAttribute(col, 3)); out.setAttribute('cpat', new THREE.BufferAttribute(pat, 1));
+  out.setIndex(new THREE.BufferAttribute(idx, 1));
   return out;
 }
+/** A wrapped sweet: a plump striped body and two pleated, crinkled bow-tie ends (the classic candy silhouette). */
 function wrappedGeometry() {
   const W = [1, 1, 1];
-  return merge([
-    colorize(new THREE.SphereGeometry(0.11, 12, 8).scale(1.35, 0.9, 0.9), W),
-    colorize(new THREE.ConeGeometry(0.08, 0.12, 8).rotateZ(Math.PI / 2).translate(0.2, 0, 0), W),
-    colorize(new THREE.ConeGeometry(0.08, 0.12, 8).rotateZ(-Math.PI / 2).translate(-0.2, 0, 0), W),
-  ]);
+  const body = colorize(lathe([[0, -0.12], [0.07, -0.098], [0.09, -0.035], [0.09, 0.035], [0.07, 0.098], [0, 0.12]], 10).rotateZ(Math.PI / 2).scale(1, 1, 0.82), W, 3);
+  const parts = [body];
+  for (const s of [1, -1]) {
+    // a twisted neck, then a fan of pleats flaring out to a wavy rim
+    const fan = lathe([[0.022, 0], [0.05, 0.06], [0.095, 0.105]], 12, {
+      mod: (th, t) => 1 + 0.13 * t * Math.cos(th * 6),
+      dy: (th, t) => (t > 0.6 ? 0.012 * Math.sin(th * 5) : 0),
+    });
+    fan.rotateZ(-s * Math.PI / 2).scale(1, 1.1, 0.45).translate(s * 0.112, 0, 0);
+    parts.push(colorize(fan, W, 4));
+    parts.push(colorize(new THREE.TorusGeometry(0.026, 0.01, 3, 6).rotateY(Math.PI / 2).translate(s * 0.112, 0, 0), W, 0)); // the twist
+  }
+  return merge(parts);
 }
+/** Candy corn: a flattened kernel, wide rounded base to a blunt tip (bands painted per pixel by height). */
 function cornGeometry() {
-  // three bands: yellow base, orange middle, white tip
-  const g = new THREE.CylinderGeometry(0.0, 0.11, 0.26, 10, 6).translate(0, 0.13, 0);
-  const n = g.attributes.position.count, c = new Float32Array(n * 3), p = g.attributes.position;
-  for (let i = 0; i < n; i++) {
-    const y = p.getY(i) / 0.26, col = y < 0.38 ? [1, 0.8, 0.1] : y < 0.72 ? [1, 0.42, 0.05] : [1, 0.98, 0.92];
-    c[i * 3] = col[0]; c[i * 3 + 1] = col[1]; c[i * 3 + 2] = col[2];
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(c, 3)); g.deleteAttribute('uv');
-  return merge([g]);
+  const g = lathe([[0, 0], [0.07, 0.004], [0.112, 0.03], [0.108, 0.07], [0.085, 0.14], [0.05, 0.215], [0.022, 0.255], [0, 0.265]], 14).scale(1, 1, 0.58);
+  return merge([colorize(g, [1, 1, 1], 2)]);
 }
+/** The big swirl lollipop (worth 5): a thick disc with a rounded rim (the swirl painted per pixel), a stick, a bow. */
 function popGeometry() {
-  // big swirl lollipop: a disc with a two-colour spiral (vertex colours by angle + radius) on a stick
-  const disc = new THREE.CylinderGeometry(0.26, 0.26, 0.07, 32, 4).rotateX(Math.PI / 2).translate(0, 0.62, 0);
-  const p = disc.attributes.position, n = p.count, c = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) {
-    const x = p.getX(i), y = p.getY(i) - 0.62, a = Math.atan2(y, x), r = Math.hypot(x, y) / 0.26;
-    const band = Math.sin(a * 2 + r * 9) > 0;
-    const col = band ? [1, 0.2, 0.55] : [1, 0.95, 0.98];
-    c[i * 3] = col[0]; c[i * 3 + 1] = col[1]; c[i * 3 + 2] = col[2];
+  const disc = lathe([[0, -0.036], [0.2, -0.036], [0.25, -0.025], [0.265, 0], [0.25, 0.025], [0.2, 0.036], [0, 0.036]], 36)
+    .rotateX(Math.PI / 2).translate(0, 0.62, 0);
+  const stick = colorize(new THREE.CylinderGeometry(0.017, 0.017, 0.5, 8).translate(0, 0.27, 0), [0.95, 0.92, 0.85]);
+  const parts = [colorize(disc, [1, 1, 1], 1), stick];
+  // a ribbon bow where the stick meets the disc: two loops and two tails
+  for (const s of [1, -1]) {
+    parts.push(colorize(new THREE.TorusGeometry(0.04, 0.014, 6, 12).scale(1.3, 0.8, 0.6).translate(s * 0.05, 0.39, 0.02), [0.55, 0.3, 1]));
+    parts.push(colorize(new THREE.BoxGeometry(0.03, 0.09, 0.008).rotateZ(s * 0.35).translate(s * 0.03, 0.34, 0.02), [0.5, 0.26, 0.95]));
   }
-  disc.setAttribute('color', new THREE.BufferAttribute(c, 3)); disc.deleteAttribute('uv');
-  const stick = colorize(new THREE.CylinderGeometry(0.018, 0.018, 0.5, 6).translate(0, 0.27, 0), [0.95, 0.92, 0.85]);
-  const bow = colorize(new THREE.TorusGeometry(0.05, 0.02, 6, 10).scale(1.6, 1, 1).translate(0, 0.38, 0.02), [0.5, 0.25, 1]);
-  return merge([disc, stick, bow]);
+  parts.push(colorize(new THREE.SphereGeometry(0.022, 8, 6).translate(0, 0.39, 0.025), [0.45, 0.22, 0.9]));
+  return merge(parts);
+}
+
+/**
+ * The candy shader: unlit (candy glows in the dark and blooms, as before) but hand-lit by a fixed key from the top
+ * left in view space, a glossy highlight and a rim, so every sweet reads as a rounded, shiny 3D thing; plus the per-
+ * pixel patterns (cpat) from the part's local position.
+ */
+function patchCandy(mat) {
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float cpat;\nvarying float vPatHw;\nvarying vec3 vLocHw;\nvarying vec3 vNrmHw;\nvarying vec3 vViewHw;')
+      .replace('#include <project_vertex>', `#include <project_vertex>
+  {
+    vec3 n = normal;
+  #ifdef USE_INSTANCING
+    n = mat3( instanceMatrix ) * n;
+  #endif
+    vNrmHw = normalize( normalMatrix * n );
+    vViewHw = - mvPosition.xyz;
+    vLocHw = position; vPatHw = cpat;
+  }`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vPatHw;\nvarying vec3 vLocHw;\nvarying vec3 vNrmHw;\nvarying vec3 vViewHw;')
+      .replace('#include <color_fragment>', `#include <color_fragment>
+  {
+    vec3 p = vLocHw;
+    if ( vPatHw > 0.5 && vPatHw < 1.5 ) { // the swirl: two arms from the middle, pink on white
+      vec2 d = p.xy - vec2( 0.0, 0.62 ); float r = length( d ) / 0.265, a = atan( d.y, d.x );
+      float band = smoothstep( -0.12, 0.12, sin( a * 2.0 + r * 11.0 ) );
+      diffuseColor.rgb = mix( vec3( 1.0, 0.97, 0.99 ), vec3( 1.0, 0.16, 0.5 ), band );
+      diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.55, 0.3, 1.0 ), smoothstep( 0.9, 0.95, r ) * 0.7 );
+    } else if ( vPatHw > 1.5 && vPatHw < 2.5 ) { // candy corn: yellow base, orange middle, white tip
+      float h = p.y / 0.265;
+      diffuseColor.rgb = h < 0.38 ? vec3( 1.0, 0.78, 0.08 ) : h < 0.7 ? vec3( 1.0, 0.4, 0.04 ) : vec3( 1.0, 0.97, 0.9 );
+    } else if ( vPatHw > 2.5 && vPatHw < 3.5 ) { // a wrapper's diagonal stripes
+      float st = smoothstep( 0.45, 0.55, abs( fract( ( p.x * 1.0 + p.y * 1.3 + p.z * 0.4 ) * 14.0 ) - 0.5 ) * 2.0 );
+      diffuseColor.rgb *= mix( 0.85, 1.25, st ) + vec3( 0.12 ) * st; // light and dark of the same hue: saturated
+    } else if ( vPatHw > 3.5 ) { // a crinkled end: the wrapper's colour, lighter
+      diffuseColor.rgb = diffuseColor.rgb * 1.1 + 0.06;
+    }
+    vec3 n = normalize( vNrmHw ), v = normalize( vViewHw );
+    if ( ! gl_FrontFacing ) n = - n;
+    vec3 L = normalize( vec3( - 0.45, 0.75, 0.55 ) );
+    float dif = 0.4 + 0.55 * max( dot( n, L ), 0.0 );
+    float spec = pow( max( dot( reflect( - L, n ), v ), 0.0 ), 28.0 );
+    float rim = pow( 1.0 - max( dot( n, v ), 0.0 ), 3.0 );
+    diffuseColor.rgb = diffuseColor.rgb * dif + vec3( 0.75 ) * spec + diffuseColor.rgb * rim * 0.3;
+  }`);
+  };
+  mat.customProgramCacheKey = () => 'hwCandy';
+  return mat;
 }
 
 export class Candy {
@@ -80,7 +143,7 @@ export class Candy {
     this.state = new Uint8Array(MAX); // 0 free, 1 resting, 2 flying (spilled), 3 pulled by the magnet
     this.kind = new Uint8Array(MAX); this.color = new Uint8Array(MAX); this.delay = f();
     this.count = 0; this.resting = 0;
-    const mat = new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(1.5, 1.5, 1.5) });
+    const mat = patchCandy(new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide }));
     this.meshes = [wrappedGeometry(), cornGeometry(), popGeometry()].map((g, k) => {
       const m = new THREE.InstancedMesh(g, mat, k === 2 ? 8 : MAX);
       m.name = ['candyWrap', 'candyCorn', 'candyPop'][k];

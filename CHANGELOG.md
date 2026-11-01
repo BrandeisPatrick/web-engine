@@ -70,6 +70,23 @@ in 1.0.0), driven by the new Halloween game sample (`samples/halloween/`, "Midni
   path segments near the point (same values, less work per spark). `prefers-reduced-motion` slows it and keeps the
   lightning a dim, slow swell. The Witching Hour calls `env.setFinale(true)`: the storm, the lightning and the blood
   moon at their peak (until Play Again or the title). No engine changes.
+- `ClothMesh(store, cloth, material, { subdivide: k })` (opt-in, default 1 = unchanged): draws a k times finer grid
+  through the particles, a Catmull-Rom surface (tensor product, borders extrapolated linearly) whose every k-th vertex
+  is a particle, so a coarse cloth folds smoothly instead of in facets; refined once per `capture()` into scratch
+  allocated once (linear in the particles, so interpolating refined grids is exact); `subdivide`, `gridX`, `gridY`.
+  `test/cloth-mesh.mjs`.
+- Midnight Candy Run assets pass (`samples/halloween/`, models only, all still built in code: no model, texture or
+  sound files). The kid: chibi proportions, a toon face (glossy eyes with catchlights, blush, freckles, a smile),
+  bangs and two braids that stick out sideways, a floppy brim and a bent drooping hat tip, a pleated cape with a
+  crimson lining and stars, trumpet sleeves, a zigzag hem, curly-toed boots, the pail merged into the one skinned mesh
+  (a per-vertex glow; three draws fewer), its own run / walk / idle / jump clips and a landing pose. Jack-o'-lanterns:
+  ribbed (crisp creases per pixel), a curved stem and a curly vine, a carved face with depth (a mask texture of three
+  faces and a parallax march into the cut), shards shaded with the ribs and with fibres and seeds. Ghosts: a round
+  head and a hanging skirt on the same cloth (pinned lower on a taller dome, 2x subdivided), a scalloped hem, a cute
+  face at twice the texel density (a radial uv warp). Candy: bow-tie wrappers, candy-corn kernels, a chunky swirl
+  lollipop, hand-shaded. Props from reusable builders in the new `props.js` (gravestones, ironwork, gnarled trees, the
+  house, the crypt, the scarecrow, the cauldron, hay bales, decor pumpkins), still merged into one mesh. The layout,
+  colliders and hit radii are unchanged.
 
 ## 1.0.0 — 2026-10-30
 The release of the 1.0 roadmap (phases 0.5.0 - 0.9.0, ENGINE.md): a general engine with its graphics and physics pushed as

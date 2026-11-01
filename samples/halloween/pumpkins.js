@@ -1,17 +1,20 @@
 // Jack-o'-lanterns: carved pumpkins with a flickering HDR face (bloom) and a halo, lit by the engine's NearestLights
 // pool (a few real point lights on the lanterns nearest the view; the rest glow emissively). Running into one kicks it
 // to pieces, landing on one stomps it (more candy, a bounce). Smashing uses the engine's fracture module: the pumpkin's
-// hull is cut ahead of time by fracturePieces (seeded planes, two variants), each piece drawn with pieceGeometry
-// (orange rind outside, pale flesh on the cut faces) and thrown as a real dynamic body on the shared DynamicsWorld,
+// hull is cut ahead of time by fracturePieces (seeded planes, two variants), each piece drawn with pieceGeometry in one
+// draw (ribbed orange rind outside, pale flesh with seeds on the cut faces: one material, a per-vertex `flesh` flag)
+// and thrown as a real dynamic body on the shared DynamicsWorld,
 // so the shards tumble and bounce over the terrain heightfield and gravestones; they sink away after a few seconds.
 // A smashed lantern regrows after REGROW seconds.
 import * as THREE from 'three';
 import { Shapes, fracturePieces } from '@vibe/engine/physics';
-import { pieceGeometry } from '@vibe/engine/render';
+import { pieceGeometry, makeCanvas } from '@vibe/engine/render';
 import { NearestLights } from '@vibe/engine/world';
-import { pumpkinGeometry } from './world.js';
+import { pumpkinGeometry, pumpkinFront, smooth } from './props.js';
+import { patchGlow, patchRibs } from './looks.js';
 
 const R = 0.46;          // lantern radius (m)
+const LOBES = 8, DEPTH = 0.11; // ribs and crease depth of the lantern body
 const REGROW = 26;       // s until a smashed lantern is back
 const SHARD_LIFE = 2.8;  // s before the shards sink away
 const SLOTS = 4;         // smashes whose shards can be alive at once
@@ -29,30 +32,187 @@ function hullPoints() {
   return pts;
 }
 
-/** Carved face (eyes, nose, a toothy grin) on the front (+Z) of the lantern's surface, as flat triangles. */
+// The carved face. Its outline lives in a small mask texture (three faces side by side: a classic toothy grin, a cute
+// round-eyed one, a spooky slanted one; per-lantern `faceVar`), drawn on a thin patch laid on the pumpkin's ribbed
+// front. The fragment shader discards everything outside the carving and, inside it, marches the view ray a few steps
+// into the rind (parallax): where the ray leaves the outline it hit the cut wall (flesh, brighter deeper in, toward
+// the candle), else it sees the glowing inside. So the face reads carved, with depth and a rind thickness from every
+// angle, at ~200 triangles a lantern and no cut geometry; the instance colour still flickers it.
+const FACE_X = 0.6 * R, FACE_Y0 = 0.28 * R, FACE_Y1 = 1.24 * R, FACE_DEPTH = 0.075;
+let _faceTex = null;
+function faceTexture() {
+  if (_faceTex) return _faceTex;
+  const W = 516, H = 128, CW = W / 3, c = makeCanvas(W, H), g = c.getContext('2d');
+  g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#fff';
+  // face-plane units: x in R (-0.6 .. 0.6), y in R (0.28 .. 1.24) above the base
+  const px = (k, x) => k * CW + (x / 1.2 + 0.5) * CW, py = (y) => H - ((y - 0.28) / 0.96) * H;
+  const poly = (k, pts) => { g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(px(k, x), py(y)) : g.moveTo(px(k, x), py(y)))); g.closePath(); g.fill(); };
+  const ell = (k, x, y, rx, ry) => { g.beginPath(); g.ellipse(px(k, x), py(y), (rx / 1.2) * CW, (ry / 0.96) * H, 0, 0, Math.PI * 2); g.fill(); };
+  const grin = (k, x0, x1, top, bottom, teeth, jag = 0) => { // a crescent grin, teeth notched into its top edge
+    const pts = [], n = 18;
+    for (let i = 0; i <= n; i++) { const u = i / n, a = (u - 0.5) * 2; pts.push([x0 + (x1 - x0) * u, top - 0.1 * (1 - a * a) + (jag && i % 2 ? jag : 0)]); }
+    for (let i = n; i >= 0; i--) { const u = i / n, a = (u - 0.5) * 2; pts.push([x0 + (x1 - x0) * u, bottom + (top - bottom) * (a * a) * 0.9 - (jag && i % 2 ? jag : 0)]); }
+    poly(k, pts);
+    g.fillStyle = '#000';
+    for (const [tx, w, h] of teeth) {
+      const a = (tx - (x0 + x1) / 2) / ((x1 - x0) / 2), yTop = top - 0.1 * (1 - a * a);
+      g.fillRect(px(k, tx - w / 2), py(yTop + 0.03), (w / 1.2) * CW, ((h + 0.03) / 0.96) * H);
+    }
+    g.fillStyle = '#fff';
+  };
+  // 0: classic: triangle eyes, a triangle nose, a toothy grin
+  poly(0, [[-0.42, 0.86], [-0.1, 0.86], [-0.24, 1.12]]); poly(0, [[0.42, 0.86], [0.1, 0.86], [0.24, 1.12]]);
+  poly(0, [[-0.07, 0.7], [0.07, 0.7], [0, 0.82]]);
+  grin(0, -0.46, 0.46, 0.6, 0.36, [[-0.16, 0.08, 0.07], [0.12, 0.08, 0.08]]);
+  // 1: cute: big round eyes, a little happy mouth with one fang
+  ell(1, -0.24, 0.96, 0.13, 0.15); ell(1, 0.24, 0.96, 0.13, 0.15);
+  poly(1, [[-0.05, 0.76], [0.05, 0.76], [0, 0.84]]);
+  grin(1, -0.3, 0.3, 0.62, 0.44, [[0.08, 0.06, 0.06]]);
+  // 2: spooky: slanted eyes, a jagged zigzag mouth
+  poly(2, [[-0.44, 1.02], [-0.1, 0.9], [-0.14, 0.8], [-0.38, 0.86]]); poly(2, [[0.44, 1.02], [0.1, 0.9], [0.14, 0.8], [0.38, 0.86]]);
+  poly(2, [[-0.06, 0.68], [0.06, 0.68], [0, 0.78]]);
+  grin(2, -0.48, 0.48, 0.58, 0.34, [], 0.06);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.NoColorSpace; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter;
+  _faceTex = t;
+  return t;
+}
+
+/** The patch the face is drawn on: a grid over the face window laid on the ribbed front (fuv = face-plane metres). */
 function faceGeometry() {
-  const tris = [];
-  const T = (a, b, c) => tris.push([a, b, c]);
-  // eyes: triangles; nose: small triangle; mouth: a crescent with two teeth notches
-  for (const s of [-1, 1]) T([s * 0.09, 0.045], [s * 0.2, 0.05], [s * 0.15, 0.14]);
-  T([-0.035, -0.005], [0.035, -0.005], [0, 0.055]);
-  const M = 9;
-  for (let i = 0; i < M; i++) {
-    const a0 = -0.95 + (i / M) * 1.9, a1 = -0.95 + ((i + 1) / M) * 1.9;
-    const o0 = [Math.sin(a0) * 0.24, -0.04 - Math.cos(a0) * 0.12], o1 = [Math.sin(a1) * 0.24, -0.04 - Math.cos(a1) * 0.12];
-    const tooth = i === 2 || i === 6 ? 0.045 : 0;
-    const i0 = [Math.sin(a0) * 0.2, -0.06 - Math.cos(a0) * 0.05 - tooth], i1 = [Math.sin(a1) * 0.2, -0.06 - Math.cos(a1) * 0.05 - tooth];
-    T(o0, i0, o1); T(i0, i1, o1);
+  const front = pumpkinFront(R, LOBES, DEPTH), NX = 8, NY = 6, pos = [], nor = [], fuv = [], idx = [];
+  for (let j = 0; j <= NY; j++) {
+    for (let i = 0; i <= NX; i++) {
+      const x = -FACE_X + (2 * FACE_X * i) / NX, y = FACE_Y0 + ((FACE_Y1 - FACE_Y0) * j) / NY, q = front(x, y);
+      pos.push(q[0] + q[3] * 0.004, q[1] + q[4] * 0.004, q[2] + q[5] * 0.004); nor.push(q[3], q[4], q[5]); fuv.push(x, y);
+    }
   }
-  const v = [];
-  for (const t of tris) for (const [x, y] of t) {
-    const yy = y * 1.05; // onto the squashed sphere's front: x^2 + (y / 0.78)^2 + z^2 = R^2
-    const z = Math.sqrt(Math.max(0.01, R * R * 0.97 * 0.97 - x * x - (yy / 0.78) ** 2)) + 0.012;
-    v.push(x, yy + 0.76 * R, z);
-  }
+  for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) { const a = j * (NX + 1) + i, b = a + 1, c = a + NX + 1, d = c + 1; idx.push(a, b, d, a, d, c); }
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('fuv', new THREE.Float32BufferAttribute(fuv, 2));
+  g.setIndex(idx);
   return g;
+}
+function patchFace(mat) {
+  const tex = faceTexture();
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.tFaceHw = { value: tex };
+    sh.uniforms.uFaceHw = { value: new THREE.Vector4(1 / (2 * FACE_X), FACE_Y0, 1 / (FACE_Y1 - FACE_Y0), FACE_DEPTH) };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec2 fuv;\nattribute float faceVar;\nvarying vec2 vFuvHw;\nvarying float vVarHw;\nvarying vec3 vPosHw;\nvarying vec3 vTHw;\nvarying vec3 vBHw;\nvarying vec3 vNHw;')
+      .replace('#include <project_vertex>', `#include <project_vertex>
+  {
+    mat3 hwM = mat3( modelViewMatrix );
+  #ifdef USE_INSTANCING
+    hwM = hwM * mat3( instanceMatrix );
+  #endif
+    vTHw = hwM * vec3( 1.0, 0.0, 0.0 ); vBHw = hwM * vec3( 0.0, 1.0, 0.0 ); vNHw = hwM * normal;
+    vPosHw = mvPosition.xyz; vFuvHw = fuv; vVarHw = faceVar;
+  }`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>
+uniform sampler2D tFaceHw;
+uniform vec4 uFaceHw; // 1 / width, y0, 1 / height (face-plane metres), depth of the cut (m)
+varying vec2 vFuvHw;
+varying float vVarHw;
+varying vec3 vPosHw;
+varying vec3 vTHw;
+varying vec3 vBHw;
+varying vec3 vNHw;
+float hwMask( vec2 p ) {
+  vec2 uv = clamp( vec2( p.x * uFaceHw.x + 0.5, ( p.y - uFaceHw.y ) * uFaceHw.z ), 0.02, 0.98 );
+  return texture2D( tFaceHw, vec2( ( uv.x + vVarHw ) / 3.0, uv.y ) ).r;
+}`)
+      .replace('#include <color_fragment>', `{
+    if ( hwMask( vFuvHw ) < 0.5 ) discard;
+    vec3 V = normalize( vPosHw );
+    float vn = max( 0.22, - dot( V, normalize( vNHw ) ) );
+    vec2 dir = vec2( dot( V, normalize( vTHw ) ), dot( V, normalize( vBHw ) ) ) / vn;
+    // march into the cut; where the ray leaves the outline, interpolate the crossing between the two samples
+    float hit = 2.0, mPrev = hwMask( vFuvHw );
+    for ( int i = 1; i <= 6; i ++ ) {
+      float m = hwMask( vFuvHw + dir * uFaceHw.w * float( i ) / 6.0 );
+      if ( hit > 1.5 && m < 0.5 ) hit = ( float( i ) - 1.0 + clamp( ( mPrev - 0.5 ) / max( mPrev - m, 1e-3 ), 0.0, 1.0 ) ) / 6.0;
+      mPrev = m;
+    }
+    // the cut wall: flesh, dim near the rind's skin, bright toward the candle; past it the glowing inside
+    diffuseColor.rgb = hit > 1.5 ? vec3( 1.0 ) : vec3( 1.0, 0.62, 0.3 ) * mix( 0.1, 0.5, hit * hit );
+  }
+#include <color_fragment>`);
+  };
+  mat.customProgramCacheKey = () => 'hwLanternFace';
+  return mat;
+}
+
+/**
+ * Fracture shading in ONE material (one draw per shard instead of two; a storm of smashes is ~56 shards): each piece
+ * geometry carries `orig` (its vertices in the lantern's frame) and `flesh` (1 on the cut faces), so the rind is
+ * shaded round with the ribs painted back in (crease shading + a normal bent round the lantern's axis) and the flesh
+ * gets fibres and seeds, each with its own colour, glow and roughness.
+ */
+function patchShard(mat) {
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec3 orig;\nattribute float flesh;\nvarying vec3 vOrigHw;\nvarying vec3 vTanHw;\nvarying vec3 vRoundHw;\nvarying float vFleshHw;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+  vOrigHw = orig; vFleshHw = flesh;
+  vTanHw = normalize( normalMatrix * normalize( vec3( orig.z, 0.0, - orig.x ) + 1e-5 ) );
+  vRoundHw = normalize( normalMatrix * vec3( orig.x, ( orig.y - ${(0.76 * R).toFixed(4)} ) / 0.61, orig.z ) );`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vOrigHw;
+varying vec3 vTanHw;
+varying vec3 vRoundHw;
+varying float vFleshHw;
+const float LOBES_HW = ${LOBES.toFixed(1)};
+float hwH3( vec3 p ) { return fract( sin( dot( p, vec3( 12.9898, 78.233, 37.719 ) ) ) * 43758.5453 ); }`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+  bool hwFlesh = vFleshHw > 0.5;
+  vec3 p = vOrigHw;
+  if ( hwFlesh ) {
+    // stringy fibres running round the axis, darker toward the rind, and pale seeds in the middle
+    float rr = length( p.xz ) / ${R.toFixed(3)};
+    float fib = 0.5 + 0.5 * sin( atan( p.x, p.z ) * 23.0 + rr * 31.0 + sin( p.y * 47.0 ) * 1.5 );
+    diffuseColor.rgb = vec3( 1.0, 0.68, 0.195 ) * ( 0.82 + 0.18 * fib ) * mix( 1.05, 0.72, smoothstep( 0.55, 0.95, rr ) );
+    vec3 q = p * 26.0, cell = floor( q );
+    vec3 o = vec3( hwH3( cell ), hwH3( cell + 3.1 ), hwH3( cell + 7.7 ) ) * 0.6 + 0.2;
+    vec3 d = ( q - cell - o ) * vec3( 1.0, 1.8, 1.0 );
+    float seed = ( 1.0 - smoothstep( 0.1, 0.16, length( d ) ) ) * step( hwH3( cell + 1.3 ), 0.45 ) * ( 1.0 - smoothstep( 0.35, 0.6, rr ) );
+    diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 1.0, 0.95, 0.8 ), seed );
+  } else {
+    float c = cos( atan( p.x, p.z ) * LOBES_HW * 0.5 );
+    diffuseColor.rgb *= ( 0.62 + 0.38 * pow( abs( c ), 0.6 ) ) * ( 0.8 + 0.3 * smoothstep( 0.0, ${R.toFixed(3)}, p.y ) );
+  }`)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\tif ( hwFlesh ) roughnessFactor = 0.85;')
+      .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
+  if ( vFleshHw < 0.5 ) {
+    float a = atan( vOrigHw.x, vOrigHw.z ) * LOBES_HW * 0.5, c = cos( a ), s = sin( a );
+    float slope = - 0.6 * pow( max( abs( c ), 0.05 ), - 0.4 ) * sign( c ) * s; // d lobe / d phase
+    vec3 rn = normalize( vRoundHw );
+    normal = normalize( ( dot( rn, normal ) > 0.0 ? rn : normal ) - vTanHw * clamp( slope, - 2.5, 2.5 ) * 0.5 );
+  }`)
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\tif ( hwFlesh ) totalEmissiveRadiance = vec3( 1.0, 0.39, 0.03 ) * 0.45; // #ffd77a lit by #ffa830 (linear)');
+  };
+  mat.customProgramCacheKey = () => 'hwShard';
+  return mat;
+}
+/**
+ * The piece's vertices in the lantern frame (`orig` = local - shape.offset + the hull's offset from the lantern origin)
+ * and `flesh` (1 on the cut faces: pieceGeometry's second group); the groups dropped (one material).
+ */
+function withOrig(geo, piece, hullC) {
+  const P = geo.attributes.position.array, so = piece.shape.offset, O = new Float32Array(P.length);
+  for (let i = 0; i < P.length; i += 3) { O[i] = P[i] - so[0] + hullC[0]; O[i + 1] = P[i + 1] - so[1] + hullC[1]; O[i + 2] = P[i + 2] - so[2] + hullC[2]; }
+  geo.setAttribute('orig', new THREE.BufferAttribute(O, 3));
+  const F = new Float32Array(P.length / 3), ix = geo.index.array, cut = geo.groups[1];
+  if (cut) for (let k = cut.start; k < cut.start + cut.count; k++) F[ix[k]] = 1;
+  geo.setAttribute('flesh', new THREE.BufferAttribute(F, 1));
+  geo.clearGroups();
+  return geo;
 }
 
 export class Lanterns {
@@ -68,11 +228,16 @@ export class Lanterns {
       this.flick[i] = i * 1.37;
     });
     // intact lanterns: body (lit, instanced) + face (unlit HDR, instanced)
-    this.bodyMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0, emissive: '#ff4a00', emissiveIntensity: 0.18 });
-    this.body = new THREE.InstancedMesh(pumpkinGeometry(R, 18, 12, '#ff7518', '#3f5a22'), this.bodyMat, n);
+    // the body: ribbed, a curved stem and a curly vine; the rind round the carving glows (light through the thin rind)
+    this.bodyMat = patchRibs(patchGlow(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0, emissive: '#ff4a00', emissiveIntensity: 0.12 }), 'hwLanternBody'), LOBES, 0.5);
+    const glow = (x, y, z) => 0.015 + 0.3 * Math.exp(-((x / (0.5 * R)) ** 2) - (((y - 0.76 * R) / (0.42 * R)) ** 2)) * smooth(z / (0.6 * R));
+    this.body = new THREE.InstancedMesh(pumpkinGeometry(R, 32, 0, '#ff7a1a', '#5a5a24', { lobes: LOBES, depth: DEPTH, vine: true, glow, seed: 11 }), this.bodyMat, n);
     this.body.name = 'lanterns'; this.body.castShadow = true; this.body.receiveShadow = true;
-    this.faceMat = new THREE.MeshBasicMaterial({ color: '#ffffff', side: THREE.DoubleSide });
-    this.face = new THREE.InstancedMesh(faceGeometry(), this.faceMat, n);
+    this.faceMat = patchFace(new THREE.MeshBasicMaterial({ color: '#ffffff', polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+    const fg = faceGeometry(), fv = new Float32Array(n);
+    for (let i = 0; i < n; i++) fv[i] = i % 3;
+    fg.setAttribute('faceVar', new THREE.InstancedBufferAttribute(fv, 1));
+    this.face = new THREE.InstancedMesh(fg, this.faceMat, n);
     this.face.name = 'lanternFaces';
     this.face.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage);
     scene.add(this.body, this.face);
@@ -86,15 +251,15 @@ export class Lanterns {
     this.hullC = [-hull.offset[0], -hull.offset[1], -hull.offset[2]];
     this.variants = [3, 17].map((seed) => {
       const pieces = fracturePieces(hull, { pieces: 7, seed, minFraction: 0.08 });
-      return pieces.map((pc) => ({ piece: pc, geometry: pieceGeometry(pc, true) }));
+      return pieces.map((pc) => ({ piece: pc, geometry: withOrig(pieceGeometry(pc, true), pc, this.hullC) }));
     });
-    this.rindMat = new THREE.MeshStandardMaterial({ color: '#ff6f12', roughness: 0.55, emissive: '#ff3a00', emissiveIntensity: 0.25 });
-    this.fleshMat = new THREE.MeshStandardMaterial({ color: '#ffd27a', roughness: 0.8, emissive: '#ffb030', emissiveIntensity: 0.6 });
+    // the rind's ribs and the flesh's fibres and seeds come from each piece's `orig` (its vertices in the lantern frame)
+    this.shardMat = patchShard(new THREE.MeshStandardMaterial({ color: '#ff8a26', roughness: 0.5, emissive: '#ff6a10', emissiveIntensity: 0.4 }));
     this.slots = [];
     for (let s = 0; s < SLOTS; s++) {
       const v = this.variants[s % this.variants.length], meshes = [];
       for (const p of v) {
-        const m = new THREE.Mesh(p.geometry, [this.rindMat, this.fleshMat]);
+        const m = new THREE.Mesh(p.geometry, this.shardMat);
         m.visible = false; m.castShadow = true; m.frustumCulled = false;
         scene.add(m); meshes.push(m);
       }
