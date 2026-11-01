@@ -439,6 +439,11 @@ async function mapChecks(page, name) {
     return w.candySpot.shares.map(([z, want]) => [z, want, +((n[z] || 0) / tot).toFixed(3)]);
   });
   check(name, 'candy spawns: each zone\'s share within 5 % of the design (lane 30, graveyard 22, patch 13, porches 10, creek 8, knoll 7, anywhere 10)', shares.every(([, want, got]) => Math.abs(got - want) <= 0.05), JSON.stringify(shares));
+  const trails = await G(page, () => {
+    const w = window.__game.world;
+    return { lane: w.porches.map((p, i) => { const t = w.trailSpots(i); return [t.length, +Math.max(...t.map((q) => Math.hypot(q[0] - p.mat.x, q[2] - p.mat.z))).toFixed(1)]; }), spawn: w.trailSpots(0, 5, [0, 6]).length };
+  });
+  check(name, 'porch trails: 5 candy spots along the lane within 12 m of each mat (and a trail from the spawn to P1)', trails.lane.every(([n, d]) => n === 5 && d <= 12) && trails.spawn === 5, JSON.stringify(trails));
   const beacon = await G(page, () => {
     const w = window.__game.world, B = w.beacons;
     let worst = 0, at = null;

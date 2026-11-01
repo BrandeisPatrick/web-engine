@@ -238,8 +238,9 @@ export class Candy {
       const i3 = i * 3;
       if (st === 2) { // flying: ballistic with bounces on the terrain
         V[i3 + 1] -= 14 * dt;
+        const y0 = P[i3 + 1]; // (a surface counts if the candy was above it before this step: it may have dropped past it)
         P[i3] += V[i3] * dt; P[i3 + 1] += V[i3 + 1] * dt; P[i3 + 2] += V[i3 + 2] * dt;
-        const g = F ? F(P[i3], P[i3 + 2], P[i3 + 1]) : H(P[i3], P[i3 + 2]);
+        const g = F ? F(P[i3], P[i3 + 2], y0) : H(P[i3], P[i3 + 2]);
         if (P[i3 + 1] < g) { P[i3 + 1] = g; V[i3 + 1] *= -0.35; V[i3] *= 0.6; V[i3 + 2] *= 0.6; if (Math.abs(V[i3 + 1]) < 0.6) { V[i3] = V[i3 + 1] = V[i3 + 2] = 0; } }
         if (this.age[i] > this.ttl[i]) { this.state[i] = 0; continue; }
         // keep inside the fence

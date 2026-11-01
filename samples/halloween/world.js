@@ -887,6 +887,37 @@ export function buildWorld({ scene, physics, low }) {
     // the map v2 (also exported from world.js): the porch logic sets porchLit(i) -> bool (candy near lit mats only)
     porches: PORCHES, bridges: BRIDGES, creek: CREEK, handSpots: HAND_SPOTS, popSpots: POP_SPOTS, secrets: SECRETS, cauldron: CAULDRON, vantage: VANTAGE, thiefDen: THIEF_DEN, knoll: KNOLL,
     paths: PATHS, trees: trees.map((t) => [+t.x.toFixed(2), +t.z.toFixed(2), t.lod]), porchLit: null, zoneOf, pathDist,
+    /**
+     * A porch's candy trail (DESIGN 2.2): n spots [x, y, z] along the lane within 12 m of porch i's mat, nearest first,
+     * clear of colliders; with `from` ([x, z], e.g. the spawn) a straight trail from there to the porch's steps instead.
+     */
+    trailSpots(i, n = 5, from = null) {
+      const p = PORCHES[i], m = p.mat, fx = Math.sin(p.yaw), fz = Math.cos(p.yaw), sx = m.x + fx * 2.6, sz = m.z + fz * 2.6, out = [];
+      const ok = (x, z) => Math.abs(x) < PLAY - 2 && Math.abs(z) < PLAY - 2 && physics.queryColliders(x, z, 0.6, []).length === 0 && out.every((q) => Math.hypot(q[0] - x, q[2] - z) > 1.6);
+      if (from) { // evenly from 20 % of the way to the steps, zigzagging 0.6 m; a blocked spot tries either side
+        const dx = sx - from[0], dz = sz - from[1], L = Math.hypot(dx, dz), nx = -dz / L, nz = dx / L;
+        for (let k = 0; k < n; k++) {
+          const t = 0.2 + (0.78 * k) / Math.max(1, n - 1), o = k % 2 ? 0.6 : -0.6;
+          for (const oo of [o, -o, 2 * o, -2 * o]) {
+            const x = from[0] + dx * t + nx * oo, z = from[1] + dz * t + nz * oo;
+            if (ok(x, z)) { out.push([x, heightAt(x, z), z]); break; }
+          }
+        }
+        return out;
+      }
+      // the lane's points within 12 m of the mat, by distance, alternating sides of the centre line
+      const cand = [];
+      for (const L of PATHS) for (let s = 0; s < L.length - 1; s++) {
+        const [ax, az] = L[s], [bx, bz] = L[s + 1], len = Math.hypot(bx - ax, bz - az);
+        for (let u = 0; u <= len; u += 1.1) {
+          const x = ax + ((bx - ax) * u) / len, z = az + ((bz - az) * u) / len, d = Math.hypot(x - m.x, z - m.z);
+          if (d < 12 && d > 2.2) cand.push([d, x - ((bz - az) / len) * 0.7 * (cand.length % 2 ? 1 : -1), z + ((bx - ax) / len) * 0.7 * (cand.length % 2 ? 1 : -1)]);
+        }
+      }
+      cand.sort((a, b) => a[0] - b[0]);
+      for (let k = 0; k < cand.length && out.length < n; k++) if (ok(cand[k][1], cand[k][2])) out.push([cand[k][1], heightAt(cand[k][1], cand[k][2]), cand[k][2]]);
+      return out;
+    },
     /** Is a kid at (x, y, z) down in the creek's bed (below its banks, not on a bridge)? */
     inCreek(x, y, z) {
       if (C.depth <= C.ford || z < C.z0 + C.lip - 0.1 || z > C.z1 - C.lip + 0.1) return false;
