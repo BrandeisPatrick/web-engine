@@ -1,0 +1,84 @@
+import{a6 as le,bj as Kt,N as oe,F as re,R as he,br as ae,bT as ce,D as ge}from"./three.module-BGZvNxFX.js";const dt="ENGINE_CLUSTERED",It=64,K=1024,Y=3,Tt=1024,ft=Tt*4,wt=24,pt=1,Rt=.001,fe=1e-4,Et=1,$=2,Ft=4;class de extends ge{clone(){return this}}let G=null;function q(){if(G)return G;const s=(o,r,a)=>{const h=new de(o,1,1,r,a);return h.minFilter=h.magFilter=oe,h.generateMipmaps=!1,h.needsUpdate=!0,h},t=s(new Float32Array(4),he,re),e=s(new Uint32Array(4),ce,ae);t.name="engineClLights",e.name="engineClCells";const n=new Float32Array(4),l=new Float32Array(4),i=new Float32Array(4);return G={lights:t,cells:e,params:n,params2:l,tiles:i,emptyLights:t.image,emptyCells:e.image,uniforms:{engineClLights:{value:t},engineClCells:{value:e},engineClParams:{value:n},engineClParams2:{value:l},engineClTiles:{value:i}},textures:Object.freeze({lights:t,cells:e}),bound:null},G}function ye(){return q().uniforms}const Xt="RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );",rt="#if ( NUM_SPOT_LIGHTS > 0 ) && defined( RE_Direct )",ue=`
+#if defined( ${dt} )
+	uniform highp sampler2D engineClLights;
+	uniform highp usampler2D engineClCells;
+	uniform vec4 engineClParams;
+	uniform vec4 engineClParams2;
+	uniform vec4 engineClTiles;
+	struct EngineClLight {
+		vec3 position;
+		vec3 color;
+		float distance;
+		float decay;
+		vec3 direction;
+		float coneCos;
+		float penumbraCos;
+		bool spot;
+	};
+	highp ivec2 engineClLightTexel( const in highp int li, const in int row ) {
+		return ivec2( li & ${K-1}, ( li >> 10 ) * ${Y} + row );
+	}
+	highp ivec2 engineClCellTexel( const in highp int texel ) {
+		return ivec2( texel & ${Tt-1}, texel >> 10 );
+	}
+	highp int engineClCellIndex( const in vec3 viewPos ) {
+		ivec3 g = ivec3( engineClParams.xyz );
+		ivec2 t = clamp( ivec2( gl_FragCoord.xy * engineClTiles.zw * engineClParams.xy ), ivec2( 0 ), g.xy - 1 );
+		int s = clamp( int( floor( log( max( - viewPos.z, engineClParams2.y ) ) * engineClParams.w + engineClParams2.x ) ), 0, g.z - 1 );
+		return ( s * g.y + t.y ) * g.x + t.x;
+	}
+	EngineClLight engineClFetch( const in highp int li, const in vec4 row0 ) {
+		EngineClLight l;
+		vec4 row1 = texelFetch( engineClLights, engineClLightTexel( li, 1 ), 0 );
+		l.position = row0.xyz;
+		l.distance = abs( row0.w );
+		l.spot = row0.w < 0.0;
+		l.color = row1.rgb;
+		l.decay = row1.a;
+		l.direction = vec3( 0.0, 0.0, 1.0 );
+		l.coneCos = - 1.0;
+		l.penumbraCos = 1.0;
+		if ( l.spot ) {
+			vec4 row2 = texelFetch( engineClLights, engineClLightTexel( li, 2 ), 0 );
+			float k = length( row2.xyz );
+			l.direction = row2.xyz / k;
+			l.coneCos = - row2.w / k;
+			l.penumbraCos = l.coneCos + 1.0 / k;
+		}
+		return l;
+	}
+	void engineClLightInfo( const in EngineClLight l, const in vec3 geometryPosition, out IncidentLight light ) {
+		vec3 lVector = l.position - geometryPosition;
+		light.direction = normalize( lVector );
+		float lightDistance = length( lVector );
+		if ( l.spot ) {
+			float spotAttenuation = getSpotAttenuation( l.coneCos, l.penumbraCos, dot( light.direction, l.direction ) );
+			light.color = l.color * spotAttenuation;
+		} else {
+			light.color = l.color;
+		}
+		light.color *= getDistanceAttenuation( lightDistance, l.distance, l.decay );
+		light.visible = ( light.color != vec3( 0.0 ) );
+	}
+#endif`,_e=`#if defined( ${dt} ) && defined( RE_Direct )
+	if ( engineClParams2.w > 0.0 ) {
+		highp int engineClCell = engineClCellIndex( geometryPosition );
+		highp uvec4 engineClQuad = texelFetch( engineClCells, engineClCellTexel( engineClCell >> 2 ), 0 );
+		highp uint engineClWord = engineClQuad[ engineClCell & 3 ];
+		int engineClCount = int( engineClWord >> ${wt}u );
+		highp int engineClStart = int( engineClWord & ${(1<<wt)-1}u );
+		for ( int engineClK = 0; engineClK < ${It}; engineClK ++ ) {
+			if ( engineClK >= engineClCount ) break;
+			if ( ( engineClK & 3 ) == 0 ) engineClQuad = texelFetch( engineClCells, engineClCellTexel( ( engineClStart + engineClK ) >> 2 ), 0 );
+			highp int engineClLi = int( engineClQuad[ engineClK & 3 ] );
+			vec4 engineClRow0 = texelFetch( engineClLights, engineClLightTexel( engineClLi, 0 ), 0 );
+			vec3 engineClV = engineClRow0.xyz - geometryPosition;
+			if ( dot( engineClV, engineClV ) >= engineClRow0.w * engineClRow0.w ) continue; // attenuation is 0 there
+			engineClLightInfo( engineClFetch( engineClLi, engineClRow0 ), geometryPosition, directLight );
+			if ( directLight.visible ) {
+				${Xt}
+			}
+		}
+	}
+#endif
+`;let ht=null;function me(){if(ht!==null)return ht;const s=le,t=[[s.common,"struct IncidentLight"],[s.lights_pars_begin,"float getDistanceAttenuation( const in float lightDistance, const in float cutoffDistance, const in float decayExponent )"],[s.lights_pars_begin,"float getSpotAttenuation( const in float coneCosine, const in float penumbraCosine, const in float angleCosine )"],[s.lights_fragment_begin,"vec3 geometryPosition = - vViewPosition;"],[s.lights_fragment_begin,"IncidentLight directLight;"],[s.lights_fragment_begin,rt],[s.lights_fragment_begin,Xt]],e=s.lights_fragment_begin;if(!t.every(([l,i])=>typeof l=="string"&&l.includes(i))||e.indexOf(rt)!==e.lastIndexOf(rt)||e.indexOf(rt)<e.indexOf("IncidentLight directLight;"))return console.warn("[render] clustered lights: three.js light chunks changed, clustered lights disabled"),ht=!1,!1;s.lights_pars_begin+=ue,s.lights_fragment_begin=e.replace(rt,_e+rt);const n=q().uniforms;for(const l in Kt){const i=Kt[l].uniforms;i&&i.pointLights&&!i.engineClLights&&Object.assign(i,n)}return ht=!0,!0}const Q=new Float64Array(2);function qt(s,t,e){const n=s*s+t*t,l=e*e;if(n<=l){Q[0]=-1/0,Q[1]=1/0;return}const i=Math.sqrt(n-l),o=t*i+s*e,r=t*i-s*e;Q[0]=o>0?(s*i-t*e)/o:-1/0,Q[1]=r>0?(s*i+t*e)/r:1/0}function Gt(s){const t=new Array(s);for(let e=0;e<s;e++)t[e]={start:0,count:0};return t}class xe{constructor({maxLights:t=1024,grid:e=[16,9,24],zNear:n=.5,zFar:l=400,maxIndices:i=65536,timing:o=!1}={}){const r=e[0]|0,a=e[1]|0,h=e[2]|0;if(!(r>0&&a>0&&h>0&&r<=4096&&a<=4096&&h<=4096))throw new RangeError("ClusteredLights: bad grid");if(!(t>=1&&t<=1<<20))throw new RangeError("ClusteredLights: maxLights must be 1 .. 2^20");if(!(n>0&&l>n))throw new RangeError("ClusteredLights: need 0 < zNear < zFar");this.maxLights=t|0,this.grid=Object.freeze([r,a,h]),this.zNear=n,this.zFar=l,this.timing=!!o,this.enabled=!0;const f=r*a*h;if(this.cellCount=f,this.cellBase=f+3&-4,this.maxIndices=Math.max(4,Math.ceil(i)+3&-4),this.cellBase+this.maxIndices>=2**wt)throw new RangeError("ClusteredLights: cells + maxIndices must stay below 2^24");this.sliceScale=h/Math.log(l/n),this.sliceBias=-Math.log(n)*this.sliceScale;const c=this.maxLights;this._wp=new Float64Array(c*4),this._wb=new Float64Array(c*2),this._wd=new Float64Array(c*4),this._wc=new Float64Array(c),this._flags=new Uint8Array(c),this._count=0,this._spotN=0,this._spotLo=c,this._spotHi=0,this.lightsWidth=Math.min(c,K),this._bands=Math.ceil(c/K),this.lightData=new Float32Array(this.lightsWidth*4*Y*this._bands),this._limg={data:this.lightData,width:this.lightsWidth,height:Y*this._bands},this.cellsHeight=Math.ceil((this.cellBase+this.maxIndices)/ft),this.cellData=new Uint32Array(ft*this.cellsHeight),this._cimg={data:this.cellData,width:Tt,height:this.cellsHeight},this._cnt=new Uint32Array(f),this._start=new Uint32Array(f),this._n=new Uint8Array(f),this._fill=new Uint8Array(f),this._vis=new Uint32Array(c),this._vs0=new Uint16Array(c),this._vs1=new Uint16Array(c),this._rect=new Uint16Array(c*h*4),this._rp=new Uint32Array(c);const _=Math.exp(Rt/this.sliceScale);this._slabLo=new Float64Array(h),this._slabHi=new Float64Array(h);for(let u=0;u<h;u++)this._slabLo[u]=u===0?-1/0:this.sliceDepth(u)/_,this._slabHi[u]=u===h-1?1/0:this.sliceDepth(u+1)*_;this._lr=Gt(Y*this._bands),this._cr=Gt(this.cellsHeight),this.width=1920,this.height=1080,this._mx=pt/1920,this._my=pt/1080,this.stats={lights:0,cells:0,indices:0,overflow:0,ms:0,maxPerCell:0,bytes:0},this._disposed=!1,this._bind()}get uniforms(){return q().uniforms}get textures(){return q().textures}get count(){return this._count}set count(t){t=Math.max(0,Math.min(this.maxLights,t|0));for(let e=t;e<this._count;e++)this._setFlags(e,0);this._count=t}setSize(t,e){this.width=Math.max(1,t|0),this.height=Math.max(1,e|0),this._mx=pt/this.width,this._my=pt/this.height,q().bound===this&&this._writeTiles()}setLight(t,e,n,l,i,o,r,a,h=2){this._check(t);const f=t*4,c=this._wp;c[f]=e,c[f+1]=n,c[f+2]=l,c[f+3]=i,this._wb[t*2]=0,this._wb[t*2+1]=i,this._row1(t,o,r,a,h),this._setFlags(t,i>0&&i<1/0?Et|(o===0&&r===0&&a===0?Ft:0):0)}setSpot(t,e,n,l,i,o,r,a,h,f,c,_,u,R){this._check(t);const v=Math.hypot(f,c,_);if(!(v>0)){this.setLight(t,e,n,l,i,o,r,a,h);return}f/=v,c/=v,_/=v;const m=Math.max(-1,Math.min(1,R)),E=Math.max(u,m+fe),p=t*4,w=this._wp,Z=this._wd;w[p]=e,w[p+1]=n,w[p+2]=l,w[p+3]=i,Z[p]=-f,Z[p+1]=-c,Z[p+2]=-_,Z[p+3]=1/(E-m),this._wc[t]=m;let y=0,tt=i;m>=Math.SQRT1_2?(y=i/(2*m),tt=y):m>0&&(y=i*m,tt=i*Math.sqrt(1-m*m)),this._wb[t*2]=y,this._wb[t*2+1]=tt,this._row1(t,o,r,a,h),this._setFlags(t,i>0&&i<1/0?Et|$|(o===0&&r===0&&a===0?Ft:0):0)}clearLight(t){if(this._check(t),this._setFlags(t,0),t===this._count-1){let e=t;for(;e>0&&!this._flags[e-1];)e--;this._count=e}}sliceOf(t){if(!(t>0))return 0;const e=Math.floor(Math.log(t)*this.sliceScale+this.sliceBias);return e<0?0:e>=this.grid[2]?this.grid[2]-1:e}sliceDepth(t){return this.zNear*Math.pow(this.zFar/this.zNear,t/this.grid[2])}cellOf(t,e,n){const[l,i,o]=this.grid,r=Math.min(l-1,Math.max(0,Math.floor(t/this.width*l))),a=Math.min(i-1,Math.max(0,Math.floor(e/this.height*i)));return(Math.min(o-1,Math.max(0,Math.floor(Math.log(Math.max(n,this.zNear))*this.sliceScale+this.sliceBias)))*i+a)*l+r}update(t){const e=this.timing?performance.now():0,n=this.stats;if(this._disposed)return;this._bind();const l=G;if(!this.enabled||!t){l.params2[3]=0,n.lights=n.cells=n.indices=n.overflow=n.maxPerCell=n.bytes=0,n.ms=this.timing?performance.now()-e:0;return}t.updateWorldMatrix(!0,!1);const i=t.matrixWorldInverse.elements,o=t.projectionMatrix.elements,r=o[11]!==0,a=this.grid[0],h=this.grid[1],f=this.grid[2],c=this.sliceScale,_=this.sliceBias,u=this.zFar,R=this._mx,v=this._my,m=this._flags,E=this._wp,p=this._wb,w=this._wd,Z=this._wc,y=this.lightData,tt=this.lightsWidth,yt=this._cnt,k=this._rect,Ut=this._vis,zt=this._vs0,Nt=this._vs1,Pt=this._rp,te=this._slabLo,ee=this._slabHi;yt.fill(0);let U=0,et=0;const Ot=this._count;for(let g=0;g<Ot;g++){const x=m[g];if(!(x&Et))continue;const d=g*4,M=E[d],at=E[d+1],ct=E[d+2],ut=E[d+3],X=((g>>10)*Y*tt+(g&K-1))*4;let z=i[0]*M+i[4]*at+i[8]*ct+i[12],F=i[1]*M+i[5]*at+i[9]*ct+i[13],gt=i[2]*M+i[6]*at+i[10]*ct+i[14];if(y[X]=z,y[X+1]=F,y[X+2]=gt,y[X+3]=x&$?-ut:ut,x&$){const D=w[d+3],b=w[d],I=w[d+1],B=w[d+2];let T=i[0]*b+i[4]*I+i[8]*B,N=i[1]*b+i[5]*I+i[9]*B,P=i[2]*b+i[6]*I+i[10]*B;const J=1/Math.sqrt(T*T+N*N+P*P);T*=J,N*=J,P*=J;const O=X+2*tt*4;y[O]=T*D,y[O+1]=N*D,y[O+2]=P*D,y[O+3]=-Z[g]*D;const A=p[g*2];z-=T*A,F-=N*A,gt-=P*A}if(x&Ft)continue;const C=p[g*2+1],L=-gt,_t=L-C,mt=L+C;if(r&&mt<=0||_t>u)continue;let st,nt,lt,ot;if(r?(qt(z,L,C),st=Q[0],nt=Q[1],qt(F,L,C),lt=Q[0],ot=Q[1]):(st=z-C,nt=z+C,lt=F-C,ot=F+C),this._tiles(r,o,st,nt,lt,ot,R,v,a,h)===0)continue;const $t=_t>0?Math.min(f-1,Math.max(0,Math.floor(Math.log(_t)*c+_-Rt))):0,jt=mt>0?Math.min(f-1,Math.max(0,Math.floor(Math.log(mt)*c+_+Rt))):0;Ut[U]=g,zt[U]=$t,Nt[U]=jt,Pt[U]=et,U++;const se=C*C;for(let D=$t;D<=jt;D++){const b=Math.max(te[D],_t),I=Math.min(ee[D],mt);let B=1,T=0,N=1,P=0;if(b<=I){const J=L<b?b-L:L>I?L-I:0,O=J>0?Math.sqrt(Math.max(0,se-J*J)):C;let A=z-O,H=z+O,W=F-O,V=F+O;if(r&&(b>0?(A=A<=0?A/b:A/I,H=H>=0?H/b:H/I,W=W<=0?W/b:W/I,V=V>=0?V/b:V/I,st>A&&(A=st),nt<H&&(H=nt),lt>W&&(W=lt),ot<V&&(V=ot)):(A=st,H=nt,W=lt,V=ot)),this._tiles(r,o,A,H,W,V,R,v,a,h)!==0){B=j[0],T=j[1],N=j[2],P=j[3];for(let bt=N;bt<=P;bt++){const ne=(D*h+bt)*a;for(let At=B;At<=T;At++)yt[ne+At]++}}else B=1,T=0}k[et]=B,k[et+1]=T,k[et+2]=N,k[et+3]=P,et+=4}}if(U===0){l.params2[3]=0,n.lights=n.cells=n.indices=n.overflow=n.maxPerCell=n.bytes=0,n.ms=this.timing?performance.now()-e:0;return}const xt=this.cellData,kt=this._start,Lt=this._n,vt=this._fill,ie=this.cellCount,Bt=this.cellBase+this.maxIndices;let it=this.cellBase,Ht=0,Mt=0,Wt=0,Vt=0;for(let g=0;g<ie;g++){const x=yt[g];if(vt[g]=0,x===0){Lt[g]=0,xt[g]=0;continue}x>Mt&&(Mt=x);let d=x<It?x:It,M=d+3&-4;it+M>Bt&&(M=Bt-it,d=M),Ht+=x-d,Lt[g]=d,kt[g]=it,xt[g]=d>0?(it|d<<wt)>>>0:0,it+=M,Vt+=d,d>0&&Wt++}for(let g=0;g<U;g++){const x=Ut[g];let d=Pt[g];for(let M=zt[g],at=Nt[g];M<=at;M++,d+=4){const ct=k[d],ut=k[d+1],X=k[d+2],z=k[d+3];for(let F=X;F<=z;F++){const gt=(M*h+F)*a;for(let C=ct;C<=ut;C++){const L=gt+C;vt[L]<Lt[L]&&(xt[kt[L]+vt[L]++]=x)}}}}l.params[0]=a,l.params[1]=h,l.params[2]=f,l.params[3]=c,l.params2[0]=_,l.params2[1]=this.zNear,l.params2[2]=u,l.params2[3]=U,n.bytes=this._uploadLights(Ot)+this._uploadCells(it),n.lights=U,n.cells=Wt,n.indices=Vt,n.overflow=Ht,n.maxPerCell=Mt,n.ms=this.timing?performance.now()-e:0}dispose(){if(this._disposed)return;this._disposed=!0;const t=q();t.bound===this&&(t.bound=null,Ct(t.lights,t.emptyLights),Ct(t.cells,t.emptyCells),t.params2[3]=0)}_check(t){if(!(t>=0&&t<this.maxLights)||(t|0)!==t)throw new RangeError(`ClusteredLights: light index ${t} outside 0 .. ${this.maxLights-1}`)}_setFlags(t,e){const n=this._flags[t];n&$&&!(e&$)&&--this._spotN===0&&(this._spotLo=this.maxLights,this._spotHi=0),e&$&&!(n&$)&&this._spotN++,e&$&&(t<this._spotLo&&(this._spotLo=t),t+1>this._spotHi&&(this._spotHi=t+1)),this._flags[t]=e,e&&t>=this._count&&(this._count=t+1)}_row1(t,e,n,l,i){const o=(((t>>10)*Y+1)*this.lightsWidth+(t&K-1))*4,r=this.lightData;r[o]=e,r[o+1]=n,r[o+2]=l,r[o+3]=i}_tiles(t,e,n,l,i,o,r,a,h,f){let c,_,u,R;if(t?(c=e[0]*n-e[8],_=e[0]*l-e[8],u=e[5]*i-e[9],R=e[5]*o-e[9]):(c=e[0]*n+e[12],_=e[0]*l+e[12],u=e[5]*i+e[13],R=e[5]*o+e[13]),c>_){const w=c;c=_,_=w}if(u>R){const w=u;u=R,R=w}let v=Math.floor((c*.5+.5-r)*h),m=Math.floor((_*.5+.5+r)*h),E=Math.floor((u*.5+.5-a)*f),p=Math.floor((R*.5+.5+a)*f);return m>=0&&v<=h-1&&p>=0&&E<=f-1?(v>=0||(v=0),m>h-1&&(m=h-1),E>=0||(E=0),p>f-1&&(p=f-1),j[0]=v,j[1]=m,j[2]=E,j[3]=p,1):0}_bind(){const t=q();t.bound!==this&&(t.bound=this,Ct(t.lights,this._limg),Ct(t.cells,this._cimg),t.params[0]=this.grid[0],t.params[1]=this.grid[1],t.params[2]=this.grid[2],t.params[3]=this.sliceScale,t.params2[0]=this.sliceBias,t.params2[1]=this.zNear,t.params2[2]=this.zFar,t.params2[3]=0,this._writeTiles())}_writeTiles(){const t=G.tiles;t[0]=this.width/this.grid[0],t[1]=this.height/this.grid[1],t[2]=1/this.width,t[3]=1/this.height}_uploadLights(t){const e=G.lights,n=this._lr;e.clearUpdateRanges();let l=0,i=0;for(let o=0;o<this._bands;o++){const r=o*K,a=Math.min(r+K,t);if(a<=r)break;l=this._range(e,n,l,o,0,r,a),l=this._range(e,n,l,o,1,r,a),this._spotN>0&&(l=this._range(e,n,l,o,2,Math.max(r,this._spotLo),Math.min(a,this._spotHi)))}if(l===0)return 0;for(let o=0;o<l;o++)i+=n[o].count*4;return e.needsUpdate=!0,i}_range(t,e,n,l,i,o,r){if(r<=o)return n;const a=e[n];return a.start=((l*Y+i)*this.lightsWidth+(o-l*K))*4,a.count=(r-o)*4,t.updateRanges.push(a),n+1}_uploadCells(t){const e=G.cells,n=this._cr;e.clearUpdateRanges();const l=Math.ceil(t/ft);for(let i=0;i<l;i++){const o=n[i];o.start=i*ft,o.count=Math.min(ft,t-o.start),e.updateRanges.push(o)}return e.needsUpdate=!0,t*4}}const j=new Int32Array(4);function Ct(s,t){const e=s.image;(!e||e.width!==t.width||e.height!==t.height)&&s.dispose(),s.image=t,s.clearUpdateRanges(),s.needsUpdate=!0}function pe(s){return!!(s.isMeshStandardMaterial||s.isMeshLambertMaterial||s.isMeshPhongMaterial||s.isMeshToonMaterial||s.isShaderMaterial&&s.lights===!0)}function Qt(s,t){if(!s||!pe(s))return!1;t&&ht===null&&me();const e=!!t&&ht===!0;if(e===!!(s.defines&&dt in s.defines))return!1;if(e){if(s.isShaderMaterial){const n=q().uniforms,l=s.uniforms||(s.uniforms={});for(const i in n)l[i]||(l[i]=n[i])}(s.defines||(s.defines={}))[dt]=""}else delete s.defines[dt];return s.needsUpdate=!0,!0}const S={on:!1,n:0};function Ce(s){const t=s.material;if(t)if(Array.isArray(t))for(let e=0;e<t.length;e++)Qt(t[e],S.on)&&S.n++;else Qt(t,S.on)&&S.n++}function Jt(s,t){const e=S.on,n=S.n;S.on=!!t,S.n=0,s&&s.traverse(Ce);const l=S.n;return S.on=e,S.n=n,l}function St(s){const t=s.child;t&&(Jt(t,!0),t.traverse(Yt))}function Dt(s){s.child&&s.child.traverse(Zt)}function Yt(s){s.hasEventListener("childadded",St)||s.addEventListener("childadded",St),s.hasEventListener("childremoved",Dt)||s.addEventListener("childremoved",Dt)}function Zt(s){s.removeEventListener("childadded",St),s.removeEventListener("childremoved",Dt)}function Le(s,t){const e=Jt(s,t);return s&&s.traverse(t?Yt:Zt),e}export{dt as CLUSTERED_DEFINE,xe as ClusteredLights,It as MAX_PER_CELL,Jt as applyClustered,ye as clusteredUniforms,me as installClusteredChunks,Qt as setMaterialClustered,Le as syncClustered};
