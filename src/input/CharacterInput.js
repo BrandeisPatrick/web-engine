@@ -28,12 +28,20 @@
 //   (below a 96 px top inset by default) under the sticks / buttons, adding its finger's pixel deltas to the virtual
 //   sources `${id}.x` / `${id}.y`; mouse pointers are ignored on it (they look through right-drag / pointer lock).
 //   It sits in TouchControls' root (z-index 30): interactive HUD elements over it need z-index > 30.
+//   `touchReveal: { hideOnKey = true, onChange(on) }` (opt-in): when the controls are hidden (a laptop with a
+//   touchscreen, a tablet that reported a fine pointer), the first real touch (a pointerdown with pointerType 'touch',
+//   or a touchstart) shows them at once, and a key press (not a modifier, not a repeat) hides them again while
+//   hideOnKey; onChange(on) runs on every such switch (the game swaps its HUD). Three passive capture listeners on
+//   window, removed by dispose(); `touchShown` reports the state.
+//   `touchOptions` (opt-in) is passed to TouchControls (e.g. { safeArea: true }: offsets clear the notch / home
+//   indicator, and a touchpad's top / bottom insets are measured from the safe-area insets too). Touchpad entries take
+//   a `portrait` override like the other entries ({ width, top, bottom, side }), re-applied on resize.
 // Virtual sources bound to lookX / lookY are pixel deltas, consumed like mouse movement: update() reads them and
 //   zeroes them, so scripted look writes map.setVirtual('look.x', px) once per frame (a level would turn forever).
 // toggleCamera and menu are alwaysOn (they still fire while `enabled` is false). A custom `actions` map may leave
 // actions out: missing ones read as 0 / false. Safe to import in Node (DOM is only touched when constructed in a page).
 import { InputMap, approach, ramp } from './InputMap.js';
-import { TouchControls, isTouchDevice } from './TouchControls.js';
+import { TouchControls, isTouchDevice, isPortrait, resolveTouchEntry, touchEdge } from './TouchControls.js';
 import { PAD_BUTTONS as B, PAD_AXES as AX } from './Gamepad.js';
 import { PointerLock } from './PointerLock.js';
 
@@ -78,6 +86,7 @@ const pressed = (A, name) => { const a = A.get(name); return !!(a && a.justPress
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const BUTTON_BIT = [1, 4, 2, 8, 16];   // MouseEvent.button index -> MouseEvent.buttons bit
 const LOOK_ACTIONS = ['lookX', 'lookY'];
+const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Fn', 'OS', 'AltGraph', 'Unidentified']);
 
 export class CharacterInput {
   /**
@@ -95,12 +104,15 @@ export class CharacterInput {
    * @param {boolean} [o.invertY=false]
    * @param {number|null} [o.holdButton=2]      mouse button that enables look while held (null: pointer lock only)
    * @param {boolean} [o.clampMove=true]        clamp (moveX, moveY) to the unit circle
+   * @param {object|null} [o.touchOptions=null]  extra TouchControls options (e.g. { safeArea: true }; see header)
+   * @param {{ hideOnKey?: boolean, onChange?: (on: boolean) => void }|null} [o.touchReveal=null]  show the touch
+   *   controls on the first touch, hide them on a key press (see header)
    */
   constructor({
     element = typeof document !== 'undefined' ? document : null, touch = 'auto', gamepad = true,
     actions = CHARACTER_ACTIONS, touchLayout = CHARACTER_TOUCH_LAYOUT, lookSensitivity = 1,
     mouseSpeed = 0.002, touchSpeed = 0.005, stickSpeed = 3, stickCurve = 1.6, invertY = false,
-    holdButton = 2, clampMove = true,
+    holdButton = 2, clampMove = true, touchOptions = null, touchReveal = null,
   } = {}) {
     this.element = element;
     this.lookSensitivity = lookSensitivity;
@@ -118,7 +130,9 @@ export class CharacterInput {
     this.map = new InputMap({ pointerTarget: element || undefined, gamepad, deadzone: 0.12, actions });
     this.touch = null;
     this._touchLayout = touchLayout;
+    this._touchOptions = touchOptions;
     this._pads = [];
+    this._onPadResize = null;
     this._src = { mouse: 0, virtual: 0, pad: 0, keyPos: 0, keyNeg: 0 };   // reused InputMap.readSources output
     this._rate = [0, 0];   // ramped stick turn rate per look axis
     this._holding = false;
@@ -149,6 +163,24 @@ export class CharacterInput {
       window.addEventListener('blur', this._onBlur);
     }
     if (typeof document !== 'undefined' && (touch === true || (touch === 'auto' && isTouchDevice()))) this.enableTouch(true);
+    this._reveal = null;
+    if (touchReveal && typeof window !== 'undefined' && typeof document !== 'undefined') {
+      const R = this._reveal = { hideOnKey: touchReveal.hideOnKey !== false, onChange: touchReveal.onChange || null, pointer: null, key: null };
+      R.pointer = (e) => { if (!this.touchShown && (e.type === 'touchstart' || e.pointerType === 'touch')) this._revealTouch(true); };
+      R.key = (e) => { if (R.hideOnKey && this.touchShown && !e.repeat && !MODIFIER_KEYS.has(e.key)) this._revealTouch(false); };
+      window.addEventListener('pointerdown', R.pointer, { capture: true, passive: true });
+      window.addEventListener('touchstart', R.pointer, { capture: true, passive: true });
+      window.addEventListener('keydown', R.key, { capture: true, passive: true });
+    }
+  }
+
+  /** True while the on-screen touch controls are shown. */
+  get touchShown() { return !!(this.touch && this.touch.visible); }
+
+  _revealTouch(on) {
+    this.enableTouch(on);
+    const cb = this._reveal && this._reveal.onChange;
+    if (cb) cb(on);
   }
 
   get enabled() { return this.map.enabled; }
@@ -158,8 +190,14 @@ export class CharacterInput {
   enableTouch(on = true) {
     if (on && !this.touch) {
       const L = this._touchLayout;
-      this.touch = new TouchControls({ input: this.map, layout: L.filter((c) => c.type !== 'touchpad'), show: true });
+      this.touch = new TouchControls({ ...(this._touchOptions || {}), input: this.map, layout: L.filter((c) => c.type !== 'touchpad'), show: true });
       for (const c of L) if (c.type === 'touchpad') this._pads.push(this._touchpad(c));
+      if (this._pads.some((p) => p.entry.portrait) && typeof window !== 'undefined') {
+        let was = isPortrait();
+        this._onPadResize = () => { const now = isPortrait(); if (now !== was) { was = now; for (const p of this._pads) p.place(); } };
+        window.addEventListener('resize', this._onPadResize);
+        window.addEventListener('orientationchange', this._onPadResize);
+      }
     } else if (this.touch) {
       this.touch.setVisible(on);
       if (!on) for (const p of this._pads) { p.pointer = null; p.dx = p.dy = 0; }
@@ -169,13 +207,18 @@ export class CharacterInput {
 
   /** Transparent drag surface under the touch buttons; accumulates pixel deltas of one finger. */
   _touchpad(c) {
-    const root = this.touch.root, el = document.createElement('div'), s = el.style;
+    const root = this.touch.root, el = document.createElement('div'), s = el.style, sa = !!this.touch.safeArea;
     el.className = 'ui-touch-pad';
     s.position = 'absolute'; s.pointerEvents = 'auto'; s.touchAction = 'none'; s.webkitTapHighlightColor = 'transparent';
-    s.top = `${c.top ?? 0}px`; s.bottom = `${c.bottom ?? 0}px`; s.width = `${(c.width ?? 0.5) * 100}%`;
-    if (c.side === 'left') s.left = '0'; else s.right = '0';
     root.insertBefore(el, root.firstChild);   // earlier sibling = painted under the sticks / buttons
-    const pad = { id: c.id, sx: `${c.id}.x`, sy: `${c.id}.y`, el, pointer: null, lx: 0, ly: 0, dx: 0, dy: 0 };
+    const pad = { id: c.id, entry: c, sx: `${c.id}.x`, sy: `${c.id}.y`, el, pointer: null, lx: 0, ly: 0, dx: 0, dy: 0 };
+    pad.place = () => {
+      const e = resolveTouchEntry(c, c.portrait ? isPortrait() : false);
+      s.top = touchEdge(e.top ?? 0, 'top', sa); s.bottom = touchEdge(e.bottom ?? 0, 'bottom', sa); s.width = `${(e.width ?? 0.5) * 100}%`;
+      if (e.side === 'left') { s.left = '0'; s.right = ''; } else { s.right = '0'; s.left = ''; }
+      pad.pointer = null; pad.dx = pad.dy = 0;
+    };
+    pad.place();
     el.addEventListener('pointerdown', (e) => {
       if (pad.pointer != null || e.pointerType === 'mouse') return;   // the mouse already looks (right-drag / lock)
       pad.pointer = e.pointerId; pad.lx = e.clientX; pad.ly = e.clientY;
@@ -252,6 +295,18 @@ export class CharacterInput {
     this.map.dispose();
     if (this.touch) { this.touch.dispose(); this.touch = null; }
     this._pads.length = 0;
+    if (this._onPadResize) {
+      window.removeEventListener('resize', this._onPadResize);
+      window.removeEventListener('orientationchange', this._onPadResize);
+      this._onPadResize = null;
+    }
+    const R = this._reveal;
+    if (R) {
+      window.removeEventListener('pointerdown', R.pointer, { capture: true });
+      window.removeEventListener('touchstart', R.pointer, { capture: true });
+      window.removeEventListener('keydown', R.key, { capture: true });
+      this._reveal = null;
+    }
     const el = this.element;
     if (typeof window !== 'undefined' && el && el.removeEventListener) {
       el.removeEventListener('pointerdown', this._onPointer);

@@ -4,6 +4,7 @@
 import { CharacterInput } from '../src/input/CharacterInput.js';
 import { InputMap } from '../src/input/InputMap.js';
 import { PointerLock } from '../src/input/PointerLock.js';
+import { resolveTouchEntry, touchEdge, isPortrait, isTouchDevice } from '../src/input/TouchControls.js';
 
 const DT = 1 / 60;
 let failures = 0;
@@ -171,6 +172,48 @@ function fakePad(map) {
   check('PointerLock in Node: supported false, not locked', !lock.supported && !lock.locked, 1);
   check('PointerLock.request() in Node resolves false', (await lock.request()) === false, 1);
   lock.dispose();
+}
+
+// --- touch layout helpers (phone options: portrait overrides, safe-area offsets) --------
+{
+  const plain = { type: 'button', id: 'jump', side: 'right', x: 74, y: 190, size: 76 };
+  check('resolveTouchEntry: no override -> the entry itself (landscape)', resolveTouchEntry(plain, false) === plain, 1);
+  check('resolveTouchEntry: no override -> the entry itself (portrait)', resolveTouchEntry(plain, true) === plain, 1);
+  const resp = { ...plain, portrait: { x: 70, size: 88 } };
+  check('resolveTouchEntry: landscape keeps the entry', resolveTouchEntry(resp, false) === resp, 1);
+  const p = resolveTouchEntry(resp, true);
+  check('resolveTouchEntry: portrait applies x / size, keeps y / side', p.x === 70 && p.size === 88 && p.y === 190 && p.side === 'right', 1);
+  check('resolveTouchEntry: the entry is not mutated', resp.x === 74 && resp.size === 76, 1);
+  check('touchEdge without safeArea: plain px (the 0.5.0 placement)', touchEdge(12, 'left', false) === '12px', 1);
+  check('touchEdge with safeArea: px + env() inset of that edge', touchEdge(12, 'bottom', true) === 'calc(12px + env(safe-area-inset-bottom, 0px))', 1);
+  check('isPortrait in Node: false', isPortrait(), 0);
+}
+
+// --- isTouchDevice: the default rule is unchanged; { multiTouch: true } also takes a coarse multi-touch device that
+// has a fine pointer attached (iPad + keyboard / trackpad, phone + stylus); a touchscreen laptop stays false ----------
+{
+  const had = Object.prototype.hasOwnProperty.call(globalThis, 'window'), saved = globalThis.window;
+  const fake = (coarse, anyFine, touchPoints) => {
+    globalThis.window = { navigator: { maxTouchPoints: touchPoints }, matchMedia: (q) => ({ matches: q === '(pointer: coarse)' ? coarse : q === '(any-pointer: fine)' ? anyFine : false }) };
+  };
+  const cases = [
+    // [name, coarse primary, any fine, maxTouchPoints, default, multiTouch]
+    ['phone', true, false, 5, true, true],
+    ['iPad + trackpad / phone + stylus', true, true, 5, false, true],
+    ['touchscreen laptop (fine primary)', false, true, 10, false, false],
+    ['desktop', false, true, 0, false, false],
+    ['coarse + fine, single touch point', true, true, 1, false, false],
+  ];
+  try {
+    for (const [name, c, f, n, def, multi] of cases) {
+      fake(c, f, n);
+      check(`isTouchDevice default: ${name}`, isTouchDevice() ? 1 : 0, def ? 1 : 0);
+      check(`isTouchDevice({ multiTouch }): ${name}`, isTouchDevice({ multiTouch: true }) ? 1 : 0, multi ? 1 : 0);
+    }
+  } finally {
+    if (had) globalThis.window = saved; else delete globalThis.window;
+  }
+  check('isTouchDevice in Node: false', isTouchDevice({ multiTouch: true }) ? 1 : 0, 0);
 }
 
 console.log(results.join('\n'));

@@ -70,6 +70,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:pages": "BASE_PATH=/web-engine/ vite build",
+    "deploy": "npm run build:pages && node tools/deploy-pages.mjs",
     "preview": "vite preview --port 5191",
     "test": "node test/all.mjs",
     "pack:check": "npm pack --dry-run",
