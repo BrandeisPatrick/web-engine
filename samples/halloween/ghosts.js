@@ -30,7 +30,7 @@ const CALM_CAUGHT = 5, CALM_NEAR = 5, CALM_R = 14, CALM_FAR = 4.5, CALM_BOO = 3,
 // a ghost fades out when it comes this close to the camera (m): a sheet over the lens hides the whole view. It keeps
 // CAM_FLOOR of its opacity, so one chasing in from behind the camera still shows as a veil (it used to keep 0.08)
 const CAM_FADE0 = 1.4, CAM_FADE1 = 3.6, CAM_FLOOR = 0.25;
-const _q = new THREE.Quaternion(), _e = new THREE.Euler();
+const _q = new THREE.Quaternion(), _e = new THREE.Euler(), _sph = new THREE.Sphere(new THREE.Vector3(), 2.4); // a sheet's reach round its head
 const wrapPi = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
 
 // The sheet's texture is drawn in a WARPED uv space: radially, the middle of the sheet (the head and the face, uv
@@ -375,14 +375,19 @@ export class Ghosts {
   /**
    * Per frame: draw the sheets interpolated, scared tint, auras into `glows` from slot `base`; returns slots used.
    * cam (optional, a Vector3): ghosts close to it fade out, so a sheet drifting over the lens never fills the view.
+   * frustum (optional, the view's THREE.Frustum): a sheet whose ghost is well out of view is hidden and not rebuilt
+   * this frame (the subdivided sheets cost a little CPU each; the cloth itself keeps simulating).
    */
-  update(dt, alpha, glows, base, cam = null) {
+  update(dt, alpha, glows, base, cam = null, frustum = null) {
     let n = 0, lit = null, ld = 22;
     const w = this._wk += ((this.witch ? 1 : 0) - this._wk) * (1 - Math.exp(-2.5 * dt));
     for (const g of this.list) {
       if (g.state === 'dormant') continue;
       if (cam) { const d = Math.hypot(g.x - cam.x, g.z - cam.z); if (d < ld && g.alpha > 0.3) { ld = d; lit = g; } }
-      g.mesh.update(alpha);
+      _sph.center.set(g.x, g.y - 0.5, g.z);
+      const seen = !frustum || frustum.intersectsSphere(_sph);
+      g.mesh.mesh.visible = seen;
+      if (seen) g.mesh.update(alpha);
       const s = g.scared, m = g.mat;
       m.emissive.setRGB(0.62 - 0.2 * s + 0.3 * w, 0.7 - 0.35 * s - 0.12 * w, 1.0 - 0.55 * w);
       m.color.setRGB(0.95 - 0.35 * s, 0.96 - 0.4 * s, 1.0);

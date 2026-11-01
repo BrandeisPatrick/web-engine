@@ -928,7 +928,7 @@ async function boot() {
       lanterns.update(dt, lightView, t, (i) => { fx.motes(lanterns.x[i], lanterns.y[i] + 0.3, lanterns.z[i], 10, 2, 1, 0.3); });
       let n = lanterns.glow(glows, 0, t);
       n += candy.glow(glows, n, t, camera.position);
-      n += ghosts.update(dt, engine.alpha, glows, n, camera.position);
+      n += ghosts.update(dt, engine.alpha, glows, n, camera.position, _frustum);
       for (let k = 0; k < WISPS; k++) { // will-o'-wisps drifting over the graveyard
         const a = t * (0.13 + k * 0.011) + k * 2.4;
         const x = 27 + Math.sin(a) * 15 + Math.sin(a * 2.3 + k) * 3, z = -28 + Math.cos(a * 0.8 + k) * 14;
