@@ -13,7 +13,9 @@
 // Every ghost exists (and is simulated) for the whole round; waking one teleports its head and its whole cloth
 // (positions and previous positions, so no velocity) to a grave. The face (eyes, mouth) is painted in the cloth
 // texture where the dome's front lands in UV. Ghosts pass through everything (head layer 0) and cast no shadow.
-// Look: a cold inner glow, a cyan moonlit rim (looks.js patchRim) and a shared alpha map whose hem fades into tatters.
+// Look: a cold inner glow, a cyan moonlit rim (looks.js patchRim), a cute face (big glossy eyes, blush, one of five
+// mouths) painted at twice the texel density of the rest through a radial uv warp, a round sheet with a scalloped hem
+// (shared alpha map), pinned on a dome a little taller than the head sphere, drawn as a smooth 2x subdivided surface.
 import * as THREE from 'three';
 import { Cloth, Shapes } from '@vibe/engine/physics';
 import { ClothMesh, makeCanvas } from '@vibe/engine/render';
@@ -21,7 +23,8 @@ import { PLAY } from './world.js';
 import { patchRim } from './looks.js';
 
 const FLAT = [-Math.SQRT1_2, 0, 0, Math.SQRT1_2]; // grid normal (local +Z) -> world +Y; grid +Y -> world -Z (the face)
-const HEAD_R = 0.32, PIN_THETA = 1.3, SHEET = 2.15, HOVER = 1.55;
+const HEAD_R = 0.32, PIN_THETA = 1.62, SHEET = 2.15, HOVER = 1.55;
+const FACE_ARC = 0.41; // m along the sheet from the crown to the middle of the face (eyes ~0.34, mouth ~0.49)
 // pacing (s): calm after a catch / a BOO / a chase given up; how long a chase lasts before the ghost gives up
 const CALM_CAUGHT = 5, CALM_NEAR = 5, CALM_R = 14, CALM_FAR = 4.5, CALM_BOO = 3, CALM_GIVEUP = 3.5, CHASE_MAX = 8, TAME_SPEED = 2.4, HOLD_R = 9;
 // a ghost fades out when it comes this close to the camera (m): a sheet over the lens hides the whole view. It keeps
@@ -30,20 +33,52 @@ const CAM_FADE0 = 1.4, CAM_FADE1 = 3.6, CAM_FLOOR = 0.25;
 const _q = new THREE.Quaternion(), _e = new THREE.Euler();
 const wrapPi = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
 
+// The sheet's texture is drawn in a WARPED uv space: radially, the middle of the sheet (the head and the face, uv
+// radius < W_R0) gets W_M times the texels of the rest, so a 512 px texture draws a crisp face (the shader samples the
+// map and emissive map through the same warp, hwWarp; the hem's alpha map is radial and stays unwarped).
+const W_R0 = 0.25, W_M = 1.8, W_OUT = (Math.SQRT1_2 - W_R0 * W_M) / (Math.SQRT1_2 - W_R0);
+const DOME_Y = 1.2; // the pins sit on a dome this much taller than the head sphere: a rounder, taller ghost head
+
 function ghostTexture(n) {
-  const S = 256, c = makeCanvas(S), g = c.getContext('2d');
-  const bg = g.createLinearGradient(0, 0, 0, S);
-  bg.addColorStop(0, '#dfe4ff'); bg.addColorStop(0.5, '#ffffff'); bg.addColorStop(1, '#dfe4ff');
+  const S = 512, c = makeCanvas(S), g = c.getContext('2d'), C = S / 2;
+  // a soft moonlit sheet: bright on the head, a cool blue toward the hem
+  const bg = g.createRadialGradient(C, C, 0, C, C, S * 0.72);
+  bg.addColorStop(0, '#ffffff'); bg.addColorStop(0.45, '#f4f6ff'); bg.addColorStop(0.75, '#dfe5ff'); bg.addColorStop(1, '#c9d2ff');
   g.fillStyle = bg; g.fillRect(0, 0, S, S);
-  // faint folds radiating from the top of the head (the canvas centre)
-  g.strokeStyle = 'rgba(150,160,210,0.18)'; g.lineWidth = 3;
-  for (let k = 0; k < 16; k++) { const a = (k / 16) * Math.PI * 2; g.beginPath(); g.moveTo(128 + Math.cos(a) * 30, 128 + Math.sin(a) * 30); g.lineTo(128 + Math.cos(a) * 180, 128 + Math.sin(a) * 180); g.stroke(); }
-  // face on the front of the dome: v = 0.5 + arc / SHEET (canvas y = (1 - v) * S, flipY), arc = theta * HEAD_R
-  const v = (theta) => (1 - (0.5 + (theta * HEAD_R) / SHEET)) * S, u = (m) => (0.5 + m / SHEET) * S;
-  const ey = v(1.02), my = v(1.42), ew = 0.05 / SHEET * S, eh = 0.085 / SHEET * S;
-  g.fillStyle = '#120a1c';
-  for (const s of [-1, 1]) { g.beginPath(); g.ellipse(u(s * 0.105), ey, ew, eh, 0, 0, Math.PI * 2); g.fill(); }
-  g.beginPath(); g.ellipse(u(0), my, 0.055 / SHEET * S * (n % 2 ? 1.3 : 0.9), 0.07 / SHEET * S, 0, 0, Math.PI * 2); g.fill();
+  // folds radiating from the crown (texture space: radial lines stay radial under the warp)
+  for (let k = 0; k < 22; k++) {
+    const a = (k / 22) * Math.PI * 2 + Math.sin(k * 3.7) * 0.08, w = 2 + (k % 3);
+    g.strokeStyle = `rgba(140,152,215,${0.1 + 0.08 * (k % 2)})`; g.lineWidth = w;
+    g.beginPath(); g.moveTo(C + Math.cos(a) * S * 0.24, C + Math.sin(a) * S * 0.24); g.lineTo(C + Math.cos(a) * S * 0.7, C + Math.sin(a) * S * 0.7); g.stroke();
+  }
+  // the face, drawn in viewer metres (x right, y up as seen from the front, origin between the eyes and the mouth):
+  // on the sheet the face's front lands at v > 0.5, mirrored and upside down, hence the transform
+  const k = (W_M * S) / SHEET, fy = C - (W_M * S * FACE_ARC) / SHEET;
+  g.setTransform(-k, 0, 0, k, C, fy);
+  const ell = (x, y, rx, ry, rot, fill) => { g.fillStyle = fill; g.beginPath(); g.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2); g.fill(); };
+  const INK = '#160c26', TONGUE = '#ff7d9b';
+  for (const s of [-1, 1]) {
+    ell(s * 0.175, -0.025, 0.042, 0.022, 0, 'rgba(255,128,165,0.6)');              // blush
+    ell(s * 0.115, 0.06, 0.044, 0.064, s * 0.12, INK);                            // big oval eyes
+    ell(s * 0.115 + s * 0.015, 0.082, 0.016, 0.018, 0, '#ffffff');                // catchlights
+    ell(s * 0.115 - s * 0.012, 0.036, 0.007, 0.007, 0, '#ffffff');
+  }
+  g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = INK; g.lineWidth = 0.011;
+  const mouth = n % 5;
+  if (mouth === 0) { // a little open 'o', tongue at the bottom
+    ell(0, -0.065, 0.026, 0.032, 0, INK); ell(0, -0.08, 0.016, 0.012, 0, TONGUE);
+  } else if (mouth === 1) { // a wide happy open smile with a tongue
+    g.fillStyle = INK; g.beginPath(); g.moveTo(-0.05, -0.045); g.quadraticCurveTo(0, -0.055, 0.05, -0.045); g.quadraticCurveTo(0.045, -0.105, 0, -0.108); g.quadraticCurveTo(-0.045, -0.105, -0.05, -0.045); g.fill();
+    ell(0, -0.09, 0.024, 0.014, 0, TONGUE);
+  } else if (mouth === 2) { // a cat 'w'
+    g.beginPath(); g.moveTo(-0.045, -0.05); g.quadraticCurveTo(-0.022, -0.085, 0, -0.055); g.quadraticCurveTo(0.022, -0.085, 0.045, -0.05); g.stroke();
+  } else if (mouth === 3) { // a wobbly nervous mouth
+    g.beginPath(); for (let i = 0; i <= 12; i++) { const x = -0.045 + (i / 12) * 0.09, y = -0.065 + Math.sin(i * 1.6) * 0.008; if (i) g.lineTo(x, y); else g.moveTo(x, y); } g.stroke();
+  } else { // a cheeky smile, tongue out
+    g.beginPath(); g.moveTo(-0.045, -0.052); g.quadraticCurveTo(0, -0.09, 0.045, -0.052); g.stroke();
+    g.fillStyle = TONGUE; g.beginPath(); g.moveTo(0.004, -0.07); g.quadraticCurveTo(0.008, -0.11, 0.026, -0.1); g.quadraticCurveTo(0.034, -0.08, 0.03, -0.062); g.fill();
+  }
+  g.setTransform(1, 0, 0, 1, 0, 0);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;
@@ -51,25 +86,40 @@ function ghostTexture(n) {
 }
 
 let _hem = null;
-/** Shared alpha map: the head and the body solid, the hem (the sheet's outer ring) fading out into wisps. */
+/** Shared alpha map (unwarped uv): a round sheet with a scalloped hem (soft edged), nothing beyond it. */
 function hemTexture() {
   if (_hem) return _hem;
-  const S = 128, c = makeCanvas(S), g = c.getContext('2d');
-  const gr = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S * 0.5);
-  gr.addColorStop(0, '#fff'); gr.addColorStop(0.5, '#fff'); gr.addColorStop(0.78, '#9a9a9a'); gr.addColorStop(1, '#262626');
-  g.fillStyle = '#262626'; g.fillRect(0, 0, S, S);
-  g.fillStyle = gr; g.fillRect(0, 0, S, S);
-  // ragged tatters: darker wedges reaching in from the rim
-  g.globalCompositeOperation = 'multiply';
-  for (let k = 0; k < 26; k++) {
-    const a = (k / 26) * Math.PI * 2 + Math.sin(k * 7.3) * 0.1, w = 0.07 + 0.04 * Math.sin(k * 3.1), r0 = S * (0.36 + 0.06 * Math.sin(k * 5.7));
-    g.fillStyle = 'rgba(70,70,70,0.55)';
-    g.beginPath(); g.moveTo(S / 2 + Math.cos(a) * r0, S / 2 + Math.sin(a) * r0);
-    g.lineTo(S / 2 + Math.cos(a - w) * S * 0.72, S / 2 + Math.sin(a - w) * S * 0.72); g.lineTo(S / 2 + Math.cos(a + w) * S * 0.72, S / 2 + Math.sin(a + w) * S * 0.72); g.fill();
+  const S = 256, c = makeCanvas(S), g = c.getContext('2d'), C = S / 2;
+  g.fillStyle = '#000'; g.fillRect(0, 0, S, S);
+  const rim = (a) => S * (0.455 + 0.028 * Math.cos(a * 7) + 0.008 * Math.sin(a * 13 + 1));
+  for (const [grow, col] of [[0, '#5a5a5a'], [-4, '#b0b0b0'], [-8, '#ffffff']]) {
+    g.fillStyle = col; g.beginPath();
+    for (let i = 0; i <= 140; i++) { const a = (i / 140) * Math.PI * 2, r = rim(a) + grow; if (i) g.lineTo(C + Math.cos(a) * r, C + Math.sin(a) * r); else g.moveTo(C + Math.cos(a) * r, C + Math.sin(a) * r); }
+    g.closePath(); g.fill();
   }
   _hem = new THREE.CanvasTexture(c);
   _hem.colorSpace = THREE.NoColorSpace;
   return _hem;
+}
+
+/** Map + emissive map sampled through the sheet's uv warp (see ghostTexture). */
+function patchWarp(mat) {
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (sh, r) => {
+    if (prev && prev !== THREE.Material.prototype.onBeforeCompile) prev(sh, r);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>
+vec2 hwWarp( vec2 uv ) {
+  vec2 d = uv - 0.5; float r = length( d );
+  float t = r < ${W_R0.toFixed(3)} ? r * ${W_M.toFixed(3)} : ${(W_R0 * W_M).toFixed(4)} + ( r - ${W_R0.toFixed(3)} ) * ${W_OUT.toFixed(4)};
+  return 0.5 + d * ( t / max( r, 1e-5 ) );
+}`)
+      .replace('#include <map_fragment>', THREE.ShaderChunk.map_fragment.replace('texture2D( map, vMapUv )', 'texture2D( map, hwWarp( vMapUv ) )'))
+      .replace('#include <emissivemap_fragment>', THREE.ShaderChunk.emissivemap_fragment.replace('texture2D( emissiveMap, vEmissiveMapUv )', 'texture2D( emissiveMap, hwWarp( vEmissiveMapUv ) )'));
+  };
+  const prevKey = mat.customProgramCacheKey.bind(mat);
+  mat.customProgramCacheKey = () => `${prevKey()}|hwWarp`;
+  return mat;
 }
 
 export class Ghosts {
@@ -103,20 +153,21 @@ export class Ghosts {
           const u = (i - half) * sp, w = (j - half) * sp, d = Math.hypot(u, w), th = d / HEAD_R;
           if (th > PIN_THETA) continue;
           const s = d > 1e-9 ? Math.sin(th) * HEAD_R / d : 0;
-          pins.push({ i, j, body: head, anchor: [u * s, Math.cos(th) * HEAD_R, -w * s] });
+          pins.push({ i, j, body: head, anchor: [u * s, Math.cos(th) * HEAD_R * DOME_Y, -w * s] });
         }
       }
       const cloth = Cloth.grid(dyn, {
         nx: grid, ny: grid, spacing: sp, position: [px, py + HEAD_R, pz], quaternion: FLAT, mass: co.mass ?? 0.8,
-        stretch: 0, shear: co.shear ?? 0.02, bend: co.bend ?? 0.5, radius: sp * 0.3, pins,
+        stretch: 0, shear: co.shear ?? 0.02, bend: co.bend ?? 0.25, radius: sp * 0.3, pins,
       });
       const tex = ghostTexture(k);
       // a moonlit sheet: soft shading in the folds, a cold glow from within, a cyan rim, the hem fading into wisps
-      const mat = patchRim(new THREE.MeshStandardMaterial({
+      const mat = patchRim(patchWarp(new THREE.MeshStandardMaterial({
         map: tex, emissiveMap: tex, alphaMap: hemTexture(), color: '#f2f4ff', emissive: '#9fb2ff', emissiveIntensity: 0.42, roughness: 0.8, metalness: 0,
-        side: THREE.DoubleSide, transparent: true, opacity: 0.86, depthWrite: true,
-      }), { color: new THREE.Color(0.35, 0.6, 1.1), power: 2.2, share: 0.6, key: 'ghostRim' });
-      const cm = new ClothMesh(dyn.particles, cloth, mat);
+        side: THREE.DoubleSide, transparent: true, opacity: 0.86, depthWrite: true, alphaTest: 0.04,
+      })), { color: new THREE.Color(0.35, 0.6, 1.1), power: 2.2, share: 0.6, key: 'ghostRim' });
+      // drawn as a 2x finer Catmull-Rom surface through the particles (render/SoftMeshes.js `subdivide`): soft folds, no facets
+      const cm = new ClothMesh(dyn.particles, cloth, mat, { subdivide: 2 });
       cm.mesh.castShadow = false; cm.mesh.receiveShadow = false; cm.mesh.renderOrder = 3; cm.mesh.visible = false;
       scene.add(cm.mesh);
       this.list.push({
