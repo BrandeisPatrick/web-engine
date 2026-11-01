@@ -1,4 +1,4 @@
-import{W as i}from"./HelpOverlay-CUfSRWue.js";import{i as s}from"./LoadingScreen-BfRRBmvZ.js";import{e as r}from"./index-DsKWFNaq.js";const o=`
+import{W as i}from"./HelpOverlay-CBsNF-Fo.js";import{i as s}from"./LoadingScreen-wdLNAcgC.js";import{e as r}from"./index-BrizFVYF.js";const o=`
 .ui-badge{position:relative;padding:5px 12px;border-radius:999px;font-size:11px;font-weight:600;letter-spacing:.28em;
   border:1px solid rgba(255,255,255,.22);color:#fff;overflow:hidden}
 .ui-badge.on{border-color:var(--ui-accent);background:rgba(var(--ui-accent-rgb),.18);box-shadow:0 0 18px rgba(var(--ui-accent-rgb),.35)}
