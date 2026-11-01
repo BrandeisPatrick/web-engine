@@ -28,7 +28,8 @@
 // Hooks for the living night (environment.js drives them per frame): the dead trees, the oak and the reeds sway (a
 // per-vertex sway weight on the merged props, WIND uniforms; their shadow caster carries the same patch), every lamp,
 // candle and window of the glow mesh belongs to a light group whose level the game sets (glowLevels; halos() draws
-// their halos at that level: GLOW.LAMP groups, the porch lamps, railings and the oak's glint, are the game's alone),
+// their halos at that level; GLOW.LAMP groups, the porch lamps, railings and the oak's glint, burn steady for the game
+// to scale),
 // the gate's two iron leaves swing, and perches lists where the crows sit.
 import * as THREE from 'three';
 import { makeCanvas, mulberry32, applyPatches, makeDepthMaterial } from '@vibe/engine/render';
@@ -118,10 +119,14 @@ export const THIEF_DEN = { x: -42, z: -3, door: [-42, -1.7] };
 const WELL = [9, 1.5], SIGNPOST = [0, -1], OAK = [-44, -44];
 /** Standing stones round the cauldron [x, z, height]: the lane passes inside the ring's east side. */
 const STONES = [[31, 10, 2.3], [36, 5, 2.0], [42.2, 10, 2.5], [33, 14.2, 1.9], [37.9, 14.7, 2.2]];
-/** The Bale Yard's stair: three tiers 0.7 / 1.4 / 2.2 m (the last is the platform with the pop). */
-const BALE_TIERS = [{ x0: 36.4, x1: 39.0, z0: 36.4, z1: 39.0, h: 0.7 }, { x0: 39.0, x1: 41.0, z0: 37.6, z1: 41.0, h: 1.4 }, { x0: 41.0, x1: 44.6, z0: 39.0, z1: 44.6, h: 2.2 }];
+/**
+ * The Bale Yard's stair: three tiers 0.7 / 1.4 / 2.2 m, stacked into the yard's far corner (each tier a box that holds
+ * the next: from outside the stack is one convex block, no inside corner for the kid to be pushed into), the last the
+ * platform with the pop. A jump climbs each tier from the north-west.
+ */
+const BALE_TIERS = [{ x0: 36.5, x1: 44.5, z0: 36.5, z1: 44.5, h: 0.7 }, { x0: 38.9, x1: 44.5, z0: 38.9, z1: 44.5, h: 1.4 }, { x0: 41.0, x1: 44.5, z0: 41.0, z1: 44.5, h: 2.2 }];
 /** Fixed big-pop spots: the knoll's plateau and the Bale Yard's platform (y: the ground or the platform). */
-export const POP_SPOTS = [[-14.6, -21], [42.8, 42.8]];
+export const POP_SPOTS = [[-14.6, -21], [42.75, 42.75]];
 /** Grave hands: the graveyard's aisle and two rows off it, the three bridges' north ends (nudged off colliders at build). */
 export const HAND_SPOTS = [[16, -14], [16, -20], [16, -26], [16, -32], [16, -38], [28, -20], [38, -30], [-36, 17], [0, 17], [40, 17]];
 /** The secrets' places (their rules come later): BOO at the well, BOO at the crypt's door, the hollow oak's inside. */
@@ -182,7 +187,8 @@ const COTTAGE = { w: 7, d: 6, doorX: -0.9, deckW: 4.2, deckD: 1.9 };
  * A porch (the shape the porch logic builds against): id, x / z the house's centre, yaw (three.js rotation.y: the door
  * faces (sin yaw, cos yaw)), mat { x, z, w (along the wall), d (out from it), y (the deck's top) }, chimney [x, y, z]
  * (where a resident ghost drops from), haunted (P6: trick only); lamp / railing: light groups of the glow mesh (the
- * porch lamp with its glowing mat; the railing's jack-o'-lantern, dark until lit), door { hinge, yaw, w, h }, halos
+ * porch lamp with its glowing mat; the railing's jack-o'-lantern: the porch logic scales their levels in glowLevels after
+ * environment.js has written them each frame), door { hinge, yaw, w, h }, halos
  * (indices into glowSpots), floor (the ground at its steps) and build (the cottage's dimensions): filled by buildWorld.
  */
 function porch(id, x, z, yaw, build, haunted = false) {
@@ -216,7 +222,8 @@ let glowSpots = []; // filled by buildWorld (the props register their halos whil
 // frame (world.glowLevels -> the glow material's uGlowLv[]; the halos over them read the same level), so a flame
 // flickers and gutters in a gust and a window can blink out, all in the one draw. [kind, flicker amount]; group 0 is
 // steady (level 1) and holds every untagged glow part. LAMP groups (the porch lamps with their mats, the railings'
-// jack-o'-lanterns, the oak's glint) are the game's: environment.js leaves their level alone.
+// jack-o'-lanterns, the oak's glint) burn steady; the game scales their levels after environment.js has written them
+// each frame (the porch logic: a lamp dark on its cooldown, a railing lit once its porch is visited).
 export const GLOW = { STEADY: 0, FLAME: 1, WINDOW: 2, BREW: 3, EMBER: 4, LAMP: 5, MAX: 48 };
 let glowGroups = [];
 /** The next glow parts added to G belong to a new light group (kind, flicker amount); returns its index. */
@@ -457,7 +464,7 @@ const LANTERNS = [
   [-10, -2], [6, -6], [9, 13], [-6, 14], [22, 8],                                                            // green, spokes
   [-15.4, -13], [-30, -12], [-10, -30],                                                                       // knoll
   [-14, 26], [4, 26], [30, 24], [-36, 36], [-6, 44], [20, 44],                                               // lane, row
-  [30, 16], [44, 36], [39.6, 44.2],                                                                          // hollow, Bale Yard
+  [30, 16], [44.5, 35.2], [35.2, 44.5],                                                                      // hollow, Bale Yard
 ];
 /** Extra ghost spawn points out in the open (the graves are far from the south half of the map). */
 const OPEN_SPAWNS = [[-15, -26], [-30, -30], [-40, 2], [-22, 10], [-28, 42], [6, 42], [28, 44], [44, 14], [26, -2], [-12, -40], [-44, -30], [12, 26], [-20, 26]];
@@ -655,7 +662,6 @@ export function buildWorld({ scene, physics, low }) {
   props.customDepthMaterial = makeDepthMaterial(propMat);
   scene.add(props);
   const glowLevels = new Float32Array(GLOW.MAX).fill(1);
-  for (const p of PORCHES) glowLevels[p.railing] = 0; // the railings' jack-o'-lanterns light when their porch is visited
   const glowMat = patchGlowGroups(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }), glowLevels);
   const glow = G.build(glowMat, 'glow');
   scene.add(glow);

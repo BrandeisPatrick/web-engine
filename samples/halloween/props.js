@@ -1108,7 +1108,7 @@ export function candleLantern(B, G, x, y, z, ry = 0) {
 
 /**
  * A small carved jack-o'-lantern sitting at (x, y, z), its face toward yaw: the body in B (unlit), the carved face in
- * G in a light group of its own (ctx `kind`, default 'lamp': the game lights it), with a small orange halo. Returns
+ * G in a light group of its own (ctx `kind`, default 'lamp': the game sets its level), with a small orange halo. Returns
  * { group, halo }.
  */
 export function jackOLantern(B, G, ctx, { x, y, z, yaw = 0, r = 0.17, kind = 'lamp' }) {
@@ -1152,10 +1152,10 @@ const COTTAGE_PAL = [
  * (glow panes: one ctx 'window' light group per cottage), a framed dark doorway at local x doorX (the door leaf is the
  * caller's: doorGeometry, so it can open), and a porch: a deck deckW x deckD whose top is 0.3 m up, a step round it, two
  * posts under a little roof, a railing either side of the steps with a small jack-o'-lantern on its end post (its own
- * light group, dark until the game lights it), a hanging lamp (ctx 'lamp': the porch light the game drives) and a
- * doormat 2.2 x 1.6 whose border glows with the lamp. Returns world anchors: { lamp, lampHalo, matHalo, railing,
- * railingHalo, window, windowHalo, deckTop, mat: { x, z, w, d, y }, door: { hinge: [x, y, z], yaw, w, h }, chimney:
- * [x, y, z], deck (local extents, for colliders), at(lx, ly, lz) }.
+ * light group: the porch logic lights it once the porch is visited), a hanging lamp (ctx 'lamp': the porch light the
+ * game drives) and a doormat 2.2 x 1.6 whose border glows with the lamp. Returns world anchors: { lamp, lampHalo,
+ * matHalo, railing, railingHalo, window, windowHalo, deckTop, mat: { x, z, w, d, y }, door: { hinge: [x, y, z], yaw, w,
+ * h }, chimney: [x, y, z], deck (local extents, for colliders), at(lx, ly, lz) }.
  */
 export function cottage(B, G, ctx, { x, y, z, w = 7, d = 6, yaw = 0, foot = 0.6, doorX = -0.9, deckW = 4.2, deckD = 1.9, palette = 0, stone = false }) {
   const r = rngAt(x, z, 81), L = new Parts(), P = COTTAGE_PAL[palette % COTTAGE_PAL.length];
@@ -1486,7 +1486,7 @@ export function signpost(B, { x, y, z, arms }) {
  * perches: [[x, y, z, yaw], ...] }. The trunk's wall is ~0.3 m thick round a 2 m hollow.
  */
 export function hollowOak(B, G, ctx, { x, y, z, open = Math.PI / 4 }) {
-  const r = rngAt(x, z, 171), L = new Parts(), BARK = '#3f3431', gap = 0.78;
+  const r = rngAt(x, z, 171), L = new Parts(), BARK = '#54463f', gap = 0.78;
   const bark = (th, t) => 1 + 0.08 * Math.sin(th * 5 + t * 3) + 0.04 * Math.sin(th * 13 + t * 9);
   const OUT = [[1.75, -0.3], [1.5, 0.15], [1.36, 0.6], [1.3, 1.2], [1.25, 2.15]], IN = [[1.02, 2.1], [1.02, 1.2], [1.04, 0.4], [1.08, -0.05]];
   vgrad(L.add(lathe(OUT, 16, { phi0: open + gap, phiLen: Math.PI * 2 - 2 * gap, mod: bark }), BARK), 0.55, 1.0, 0.06, 3);

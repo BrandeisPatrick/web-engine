@@ -253,7 +253,7 @@ export function creekWater(C, groundAt, uT) {
 }
 
 // ------------------------------------------------------------------ the rest of the village
-/** The Bale Yard's three tiers (each { x0, x1, z0, z1, h }: a block of stacked bales; one collider each). */
+/** The Bale Yard's tiers (each { x0, x1, z0, z1, h }: a block of stacked bales; one collider each; fills t.top). */
 export function baleYard(B, physics, groundAt, tiers) {
   for (const t of tiers) {
     const x = (t.x0 + t.x1) / 2, z = (t.z0 + t.z1) / 2, lo = Math.min(groundAt(t.x0, t.z0), groundAt(t.x1, t.z0), groundAt(t.x0, t.z1), groundAt(t.x1, t.z1));

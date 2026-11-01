@@ -305,7 +305,7 @@ async function mapChecks(page, name) {
     const g = window.__game, w = g.world;
     return {
       porches: w.porches.map((p) => [p.id, p.haunted, Number.isFinite(p.x) && Number.isFinite(p.z) && Number.isFinite(p.yaw) && ['x', 'z', 'w', 'd', 'y'].every((k) => Number.isFinite(p.mat[k]))
-        && p.lamp > 0 && p.railing > 0 && p.chimney.length === 3 && p.chimney.every(Number.isFinite) && w.glowLevels[p.railing] === 0 && w.glowGroups[p.lamp][0] === 5]),
+        && p.lamp > 0 && p.railing > 0 && p.chimney.length === 3 && p.chimney.every(Number.isFinite) && w.glowGroups[p.lamp][0] === 5 && w.glowGroups[p.railing][0] === 5]),
       hands: w.handSpots.length, bridges: w.bridges.map((b) => b.id + (Number.isFinite(b.y) ? '' : '?')).join(''), creek: w.creek, pops: w.popSpots.filter((p) => p.length === 3 && p.every(Number.isFinite)).length,
       secrets: ['well', 'crypt', 'oak'].every((k) => w.secrets[k]) && w.secrets.crypt.group > 0 && w.secrets.oak.group > 0, cauldron: w.cauldron.brew > 0 && w.cauldron.brewHalo >= 0,
       vantage: w.vantage.length === 2, den: Number.isFinite(w.thiefDen.x), colliders: g.physics.staticBoxes.length, lanterns: g.lanterns.n, doors: w.doors.mesh.count,
@@ -343,6 +343,18 @@ async function mapChecks(page, name) {
   const inBed = leap.trace.filter((s) => s.z > C.z0 + C.lip && s.z < C.z1 - C.lip && s.g && s.y < bed0 + 0.6).length;
   const land = leap.trace.find((s, k) => k > 0 && s.g && leap.trace[k - 1].z > 17 && s.z > C.z0);
   check(name, 'creek: a running JUMP at z 17 clears it (lands past z 23)', inBed === 0 && !!land && land.z > 23, `landed at z ${land ? f2(land.z) : '?'}, ${inBed} samples in the bed`);
+  // ---- candy spilled on a bridge lands on its deck (not in the creek under it)
+  await put(-10, 10, 0); await sleep(200);
+  const spill = await G(page, () => new Promise((done) => {
+    const g = window.__game, b = g.world.bridges.find((q) => q.id === 'C'), C = g.candy;
+    C.spill(b.x, b.y + 1.2, b.z, 6, 0.6, 0.1, 30);
+    setTimeout(() => {
+      const ys = [];
+      for (let i = 0; i < C.state.length; i++) if (C.state[i] === 2 && Math.hypot(C.p[i * 3] - b.x, C.p[i * 3 + 2] - b.z) < 1.25) ys.push(+(C.p[i * 3 + 1] - b.y).toFixed(2));
+      done(ys);
+    }, 1800);
+  }));
+  check(name, 'candy spilled on a footbridge lands on its deck', spill.length >= 3 && spill.every((dy) => Math.abs(dy) < 0.06), JSON.stringify(spill));
   // ---- each bridge, end to end (south from the green side), never down in the bed
   const br = [];
   for (const id of ['W', 'C', 'E']) {
@@ -367,7 +379,7 @@ async function mapChecks(page, name) {
   enc.oak = oakIn.done && oakOut.done;
   await put(37.7, 34.6, Math.PI); await sleep(250);
   const top = await G(page, () => window.__game.world.popSpots[1][2]);
-  const climb = await walk([[37.7, 37.7], [40, 38.4], [42.8, 40.3], [42.8, 42.8]], { timeout: 9000, autoJump: true, near: 0.7 });
+  const climb = await walk([[38.3, 38.3], [40.2, 40.2], [42.75, 42.75]], { timeout: 9000, autoJump: true, near: 0.7 });
   const off = await walk([[46.5, 46.5]], { timeout: 3500 });
   enc.baleYard = climb.done && climb.maxY > top - 0.15 && off.done;
   await put(-4, 43, 0); await sleep(250);

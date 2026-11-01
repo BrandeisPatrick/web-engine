@@ -218,7 +218,8 @@ async function boot() {
       W.ghosts = new Ghosts({ scene, dyn: W.dyn, heightAt, spawns: W.world.ghostSpawns, count: GHOSTS, grid: LOW ? 11 : 13, light: !LOW });
       W.ghosts.settle(LOW ? 120 : 150);
       progress(0.85, 'Unwrapping candy…'); await nextFrame();
-      W.candy = new Candy({ scene, heightAt, candySpot: W.world.candySpot });
+      // spilled candy lands on what is under it: the ground, or a porch deck, a footbridge, a bale (not through them)
+      W.candy = new Candy({ scene, heightAt, candySpot: W.world.candySpot, floorAt: (x, z, y) => physics.supportAt(x, z, y, 0.05) });
       W.porches = new Porches({ scene, physics, heightAt, candy: W.candy, ghosts: W.ghosts, world: W.world });
       W.fx = new Effects({ scene, heightAt, low: LOW });
       W.glows = new Glows(384); // (the porches' doorways, the village's lamps, mats, windows and candles: ~40 halos)
@@ -588,16 +589,23 @@ async function boot() {
   };
   // a free spot for a candy in a ring around (px, pz): r in [r0, r1], within ±half of the bearing `yaw` (rig yaw
   // convention: forward = (-sin, -cos)); inside the fence, clear of colliders. Fills out [x, y, z]; false when none.
-  // clear: also no collider on the straight run from the kid to it (no fence or grave between: it can be run to)
+  // clear: also nothing on the straight run from the kid to it that a jump does not clear (a house, a tree, a tall
+  // stone: it can be run to; a fence, a creek bank, a low stone can be hopped)
   const _cols = [], _spot = [0, 0, 0];
   const blocked = (x, z, r) => { _cols.length = 0; return physics.queryColliders(x, z, r, _cols).length > 0; };
+  const walled = (x, z, r) => {
+    _cols.length = 0; physics.queryColliders(x, z, r, _cols);
+    const top = heightAt(x, z) + 1.3;
+    for (let i = 0; i < _cols.length; i++) if (_cols[i].maxY > top) return true;
+    return false;
+  };
   const ringSpot = (out, px, pz, r0, r1, yaw, half, clear = false) => {
     for (let t = 0; t < 12; t++) {
       const a = yaw + (Math.random() * 2 - 1) * half, r = r0 + Math.random() * (r1 - r0), sx = -Math.sin(a), sz = -Math.cos(a);
       const x = px + sx * r, z = pz + sz * r;
       if (Math.abs(x) > PLAY - 2 || Math.abs(z) > PLAY - 2 || blocked(x, z, 0.6)) continue;
       let ok = true;
-      if (clear) for (let k = 1.5; k < r - 0.5 && ok; k += 1) ok = !blocked(px + sx * k, pz + sz * k, 0.35);
+      if (clear) for (let k = 1.5; k < r - 0.5 && ok; k += 1) ok = !walled(px + sx * k, pz + sz * k, 0.35);
       if (!ok) continue;
       out[0] = x; out[1] = heightAt(x, z); out[2] = z;
       return true;
