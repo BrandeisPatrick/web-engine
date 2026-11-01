@@ -47,6 +47,15 @@ in 1.0.0), driven by the new Halloween game sample (`samples/halloween/`, "Midni
   while a ghost is in reach; candy respawns ahead of the camera, a wider pull on phones, an edge marker for an
   off-screen big pop, ghost chevrons for chasers behind the kid, a directional moan, a steeper portrait camera, a
   first-session BOO lesson, and three more graveyard exits with a fence a jump clears (it was a 6 m wall, one gate).
+- Midnight Candy Run gameplay round 2 (phones first, no engine change): ranks retuned from the bots for the new economy
+  (0 / 40 / 90 / 160 / 260 / 420; the first is now "Little Pumpkin"), the next rank's threshold on the candy pill,
+  rank-up and "NEW BEST!" call-outs, the pace against the best run in the clock line every 20 s and a rank ladder on
+  the results; the Witching Hour finale (the last 30 s: candy x2, every lantern relit, a candy rain, catches capped at
+  6, orange ghost auras, the countdown under the clock); a small camera shake, an FOV punch on BOO and a hitstop
+  (gentler on phones, no motion with prefers-reduced-motion) and outlined call-outs; sweet streaks (a meter on the
+  candy pill, +3 every 10th quick pickup); sharing a score (Web Share on phones, else the clipboard); a faint ring
+  showing BOO's reach while a ghost is inside it; ghosts stay a veil at the lens; on touchscreens a push straight into
+  a gravestone, tree or fence slides round it.
 
 ## 1.0.0 — 2026-10-30
 The release of the 1.0 roadmap (phases 0.5.0 - 0.9.0, ENGINE.md): a general engine with its graphics and physics pushed as
