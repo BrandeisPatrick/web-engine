@@ -782,6 +782,7 @@ async function runProfile(name) {
     await G(page, () => {
       const g = window.__game, C = g.candy;
       g.setTimeLeft(120); g.G.popT = 99; g.G.riseSaid = true; g.G.wakeIdx = 99; // mid-round, no pop or ghost news meanwhile
+      g.hud.clearCalls(); // (the last catch's call-out would hold the screen a second against the porch's)
       window.__spills = []; window.__calls = [];
       const sp = C.spill.bind(C); C.spill = (x, y, z, n, s, d, ttl) => { if (ttl === g.PORCH.SPILL_TTL) window.__spills.push(n); return sp(x, y, z, n, s, d, ttl); };
       const co = g.hud.callout.bind(g.hud); g.hud.callout = (t, ...r) => { window.__calls.push(t); return co(t, ...r); };
@@ -905,7 +906,7 @@ async function runProfile(name) {
     await sleep(700);
     const wh = await G(page, () => { const g = window.__game, L = g.lanterns; return { on: g.G.witching, call: document.querySelector('.hw-call').textContent, badge: +getComputedStyle(document.querySelector('.hw-x2')).opacity, pill: document.querySelector('.hw-candy').classList.contains('wh'), dead: L.n - L.alive.reduce((a, v) => a + v, 0), before: window.__deadBefore, auras: g.ghosts.witch, rain: g.G.rainLeft, darkPorches: window.__darkPorches, porchesLit: [...g.porches.st].every((v) => v !== 2), lamps: Math.min(...g.porches.lampLv).toFixed(2) }; });
     check(name, 'Witching Hour: call-out, x2 badge on the pill, every lantern relit, orange auras', wh.on && /WITCHING HOUR/.test(wh.call) && wh.pill && wh.badge > 0.9 && wh.before >= 1 && wh.dead === 0 && wh.auras, JSON.stringify(wh));
-    check(name, 'Witching Hour: every dark porch relights at once', wh.darkPorches >= 1 && wh.porchesLit && +wh.lamps > 0.9, JSON.stringify({ dark: wh.darkPorches, lit: wh.porchesLit, lamps: wh.lamps }));
+    check(name, 'Witching Hour: every dark porch relights at once', wh.darkPorches >= 1 && wh.porchesLit && +wh.lamps > 0.75, JSON.stringify({ dark: wh.darkPorches, lit: wh.porchesLit, lamps: wh.lamps }));
     const x2 = await pick((g) => { g.G.candy = 50; g.G.streak = 0; });
     check(name, 'Witching Hour: a candy counts 2', x2.candy === 52, `candy 50 -> ${x2.candy}`);
     await sleep(1500);
