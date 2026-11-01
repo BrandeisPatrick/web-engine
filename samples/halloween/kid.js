@@ -136,7 +136,7 @@ function faceParts(P) {
   const t = new THREE.Shape(); t.moveTo(-0.016, 1.062); t.quadraticCurveTo(0, 1.074, 0.016, 1.062); t.quadraticCurveTo(0, 1.052, -0.016, 1.062);
   P.push(seg(faceDecal(t, 0.0028), 'head', C.tongue, 0.1));
   // a button nose
-  { const [p, n] = onHead(0, 1.112, -0.004); P.push(seg(ball(0.016, p.x, p.y, p.z + 0.004, 1.15, 0.9, 0.8, 10, 8), 'head', '#f2b18f')); void n; }
+  { const [p] = onHead(0, 1.112, -0.004); P.push(seg(ball(0.016, p.x, p.y, p.z + 0.004, 1.15, 0.9, 0.8, 10, 8), 'head', '#f2b18f')); }
   // ears peeking out under the hair
   for (const s of [1, -1]) P.push(seg(ball(0.03, s * 0.168, 1.118, -0.005, 0.55, 1, 0.9, 10, 8), 'head', '#f1bf9d'));
 }

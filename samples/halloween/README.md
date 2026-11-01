@@ -63,6 +63,12 @@ Esc to pause, M for sound. A gamepad works too.
 Built with Claude (AI agents) on this repository's engine, [`@vibe/engine`](../../README.md), and three.js. There are
 no model, texture or sound files: the kid, the graveyard and the music are all made in code.
 
+- **Hand-made look, in code:** every model is modelled procedurally (sweeps, lathes, extrusions) and hand-painted in
+  vertex colours: the chibi witch kid with her bent hat, braids and starry cape; ribbed jack-o'-lanterns whose carved
+  faces have depth (a mask texture and a parallax march into the cut); round-headed ghosts with cute faces; candy
+  with three distinct silhouettes; gravestones with engravings, cracks and moss, wrought iron, gnarled trees, the
+  crooked haunted house, the crypt, the scarecrow and the cauldron (`props.js`, reusable builders).
+
 - **Cloth ghosts:** each ghost is a cloth sheet on the engine's XPBD physics, pinned to a moving head.
 - **Fracture:** jack-o'-lanterns break into real physics pieces.
 - **Synth audio:** music, ambience and effects are synthesized live. The music speeds up toward midnight.
@@ -83,11 +89,12 @@ The engine changes this game needed are opt-in and listed in the [CHANGELOG](../
 | File | What it does |
 |---|---|
 | `main.js` | Wires everything up: Engine (120 Hz fixed step, render interpolation, adaptive resolution), PhysicsWorld, CharacterController, AnimationController, camera rigs, CharacterInput with the phone touch layout, the night Atmosphere, PostFX and the round flow. |
-| `kid.js` | The procedural skinned kid (hat, cape, striped stockings, a glowing pumpkin pail), using the character sample's procedural clips. |
-| `world.js` | The terrain, merged meshes for the static props and the glowing windows and candles, instanced pumpkins and grass, the moon, the horizon and the colliders. |
-| `pumpkins.js` | The jack-o'-lanterns: lights from the `NearestLights` pool; smashing uses `fracturePieces` + `pieceGeometry`, real dynamic bodies on the `DynamicsWorld`. |
-| `ghosts.js` | Each ghost is a `Cloth.grid` sheet pinned to a kinematic head sphere, drawn with `ClothMesh`, moved by a small state machine (rise, wander, chase, flee, retreat). |
-| `candy.js` | The candy pool: instanced meshes, the magnet and spilled candy. |
+| `kid.js` | The procedural skinned kid in one skinned mesh (chibi head with a toon face, braids, a bent witch hat, a pleated starry cape, striped stockings, curly boots, the glowing pumpkin pail), its own clips (idle, walk, run, jump) and a landing pose. |
+| `props.js` | The modelling kit (sweep, lathe, slab, crack, star, chamfered boxes, Batch) and reusable prop builders: gravestones, iron fences and the gate, gnarled trees, the haunted house, the crypt, the scarecrow, the cauldron, hay bales, pumpkins and their leaves. |
+| `world.js` | The level's layout: the terrain, the props (built by `props.js`, merged into one mesh) and the glowing windows and candles, instanced pumpkins and grass, the moon, the horizon and the colliders. |
+| `pumpkins.js` | The jack-o'-lanterns (ribbed, a carved face with depth): lights from the `NearestLights` pool; smashing uses `fracturePieces` + `pieceGeometry`, real dynamic bodies on the `DynamicsWorld`, shaded with ribs, fibres and seeds. |
+| `ghosts.js` | Each ghost is a `Cloth.grid` sheet pinned to a kinematic head sphere, drawn with `ClothMesh` (2x subdivided), a cute face painted through a uv warp, moved by a small state machine (rise, wander, chase, flee, retreat). |
+| `candy.js` | The candy pool: instanced meshes (wrapped sweets, candy corn, swirl lollipops, hand-shaded), the magnet and spilled candy. |
 | `effects.js` | Glow billboards, the engine `ParticleSystem` sparks and the BOO ring. |
 | `reach.js` | The faint ring on the ground that shows BOO's reach while a ghost is inside it. |
 | `environment.js` | The living night, driven by the round clock: wind gusts, blowing and kicked-up leaves, clouds over the moon and the blood moon, creeping mist, lightning and thunder, crows, flickering lights, the swinging gate and their sounds. Animated on the GPU from a few uniforms (`setFinale(on)` pushes it to its peak). |

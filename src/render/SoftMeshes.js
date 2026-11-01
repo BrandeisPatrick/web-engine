@@ -17,9 +17,9 @@
 //   call). Meant for a double-sided material (three flips the normal on back faces). Opt-in `subdivide: k` (k >= 2)
 //   draws a k times finer grid ((nx - 1) k + 1 per side, uv over it the same way) through the particles: a
 //   Catmull-Rom surface (tensor product, the border extrapolated linearly) whose vertices at every k-th row and column
-//   are the particles themselves, so a coarse cloth folds smoothly instead of in facets. It is linear in the
-//   particle positions (refined once per capture(); interpolating the refined grids is exact), allocation-free;
-//   default 1 = exactly the plain grid.
+//   are the particles themselves, so a coarse cloth folds smoothly instead of in facets. capture() keeps the coarse
+//   poses, update() interpolates them and refines once per frame (the refinement is linear, so that equals
+//   interpolating refined grids); allocation-free; default 1 = exactly the plain grid.
 // - SoftBodyMesh(store, soft, material, { inflate, geometry }): an indexed mesh over soft.surface (boundary
 //   triangles as particle ids, counter-clockwise seen from outside) whose vertices are the surface particles
 //   (soft.surfaceVertices, or the distinct ids of the surface), smooth normals recomputed in place; `inflate` (m,
@@ -212,13 +212,12 @@ export class ClothMesh extends SurfaceMesh {
         index[t++] = a; index[t++] = d; index[t++] = c;
       }
     }
-    let read;
-    if (k === 1) read = (out) => readParticles(store.pos, ids, n, out);
-    else {
+    const read = (out) => readParticles(store.pos, ids, n, out);
+    let refine = null;
+    if (k > 1) {
       // coarse positions -> rows refined along i -> the fine grid refined along j (scratch allocated once)
-      const coarse = new Float32Array(n * 3), rows = new Float32Array(NX * ny * 3), ti = crTaps(nx, k), tj = crTaps(ny, k);
-      read = (out) => {
-        readParticles(store.pos, ids, n, coarse);
+      const rows = new Float32Array(NX * ny * 3), ti = crTaps(nx, k), tj = crTaps(ny, k);
+      refine = (coarse, out) => {
         const Ii = ti.idx, Wi = ti.w, Ij = tj.idx, Wj = tj.w;
         for (let j = 0; j < ny; j++) {
           for (let I = 0; I < NX; I++) {
@@ -241,6 +240,29 @@ export class ClothMesh extends SurfaceMesh {
     this.nx = nx; this.ny = ny;
     /** Subdivision factor and the drawn grid's size (= nx, ny when subdivide is 1). */
     this.subdivide = k; this.gridX = NX; this.gridY = NY;
+    this._refine = refine; this._coarse = refine ? new Float32Array(n * 3) : null;
+    if (refine) this.update(1); // (the base constructor drew before the refinement existed)
+  }
+  /** After each fixed step (subdivided: the captured poses stay coarse, the particles only). */
+  capture() {
+    if (!this._refine) { super.capture(); return; }
+    const n = this.nx * this.ny;
+    if (this.cur === null) { this.cur = new Float32Array(n * 3); this._read(this.cur); this.prev = this.cur.slice(); return; }
+    const t = this.prev; this.prev = this.cur; this.cur = t;
+    this._read(this.cur);
+  }
+  /** Per frame (subdivided: interpolate the coarse poses, then refine once). */
+  update(alpha = 1) {
+    if (!this._refine) { super.update(alpha); return; }
+    const c = this._coarse, p = this.positions, nrm = this.normals;
+    if (this.cur === null) this._read(c); else lerp(this.prev, this.cur, alpha, c);
+    this._refine(c, p);
+    vertexNormals(p, this.index, nrm, this.weld);
+    const f = this.inflate;
+    if (f !== 0) for (let i = 0, n = p.length; i < n; i++) p[i] += nrm[i] * f;
+    this.positionAttr.needsUpdate = true;
+    this.normalAttr.needsUpdate = true;
+    applyBounds(this.geometry, p, 0);
   }
 }
 

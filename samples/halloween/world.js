@@ -3,8 +3,8 @@
 // playable square and low hills beyond it. Built once at load:
 //   - terrain: one displaced plane (vertex colours: grass / paths / graveyard soil) on the PhysicsWorld heightfield
 //   - static props, built by props.js's reusable builders (stones, iron fences and gate, gnarled trees, the house,
-//     crypt, scarecrow, bales, cauldron): merged vertex-coloured geometry in FOUR tiles (the quadrants round the
-//     spawn: a view or a shadow pass draws the ones it sees) + ONE merged unlit glow mesh (windows, candles, brew)
+//     crypt, scarecrow, bales, cauldron): ONE merged vertex-coloured mesh + ONE merged unlit glow mesh (windows,
+//     candles, cauldron brew), so the whole level is a handful of draw calls
 //   - instanced decor pumpkins + leaves (1 draw each), grass tufts (1 draw; fewer on phones)
 //   - sky dressing: a big moon billboard + halo and a ring of tree-line silhouettes, both depth-less (the post fog reads
 //     them as sky) and following the camera
@@ -475,10 +475,11 @@ export function buildWorld({ scene, physics, low }) {
   // stone / bark / wood grain in world space (looks.js), contact shading + moss baked into the colours at the ground;
   // the trees sway in the wind (swayPatch), and their shadows with them (the shadow caster carries the same patch)
   const propMat = applyPatches(patchDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0.02 }), { scale: 1.7, amount: 0.62, broad: 0.32, streak: 0.55 }), [swayPatch]);
-  // four tiles (the quadrants round the spawn): a view or a shadow pass draws only the quadrants it sees
-  const props = B.build(propMat, 'props', heightAt, true, (px, pz) => (px < 0 ? 0 : 1) + (pz < 0 ? 0 : 2));
-  const propDepth = makeDepthMaterial(propMat);
-  for (const m of props.children) { m.castShadow = true; m.receiveShadow = true; m.customDepthMaterial = propDepth; }
+  // one mesh (main pass + shadow pass: two draws). Measured: four tiles (quadrants) drew 6 more calls at the spawn,
+  // where they all meet, than they saved elsewhere; Batch.build's `split` is there for a larger map
+  const props = B.build(propMat, 'props', heightAt, true);
+  props.castShadow = true; props.receiveShadow = true;
+  props.customDepthMaterial = makeDepthMaterial(propMat);
   scene.add(props);
   const glowLevels = new Float32Array(GLOW.MAX).fill(1);
   const glowMat = patchGlowGroups(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }), glowLevels);

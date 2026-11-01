@@ -382,9 +382,10 @@ path without `maxParticles` steps bit-identically to 0.8.0 (pinned), `npm test` 
   `activate` from the current bone transforms, `update` drives the bones from the bodies, `deactivate` hands them
   back; `AnimationController.resync()` after writing bones by hand.
 - **Samples**: sandbox scenes `cloth`, `rope`, `soft`, `buoyancy` (a pool with the world's Gerstner surface),
-  `destructible` (`render/SoftMeshes.js`: `ClothMesh`, `RopeMesh`, `SoftBodyMesh`, `ParticleMesh`); the character
-  pushes crates, rides an elevator, ragdolls on a hard fall (or K) and mantles ledges with planted hands (poses
-  `push`, `ragdoll`); `npm run smoke` adds the five sandbox pages.
+  `destructible` (`render/SoftMeshes.js`: `ClothMesh`, `RopeMesh`, `SoftBodyMesh`, `ParticleMesh`; `ClothMesh`'s
+  opt-in `subdivide: k` draws a k x finer Catmull-Rom grid through the particles: smooth folds from a coarse cloth);
+  the character pushes crates, rides an elevator, ragdolls on a hard fall (or K) and mantles ledges with planted
+  hands (poses `push`, `ragdoll`); `npm run smoke` adds the five sandbox pages.
 Known / deferred: no particle-particle contacts or self-collision, no CCD (fast thin bodies tunnel; a ragdoll
 dropped from 3 m first contacts 5 cm deep), particles in-thread only, one Gauss-Seidel pass (stiff edges fight
 rigid tets: use `pressure`; cloth corners pinched by static friction at 4 substeps), rolling spheres / capsules

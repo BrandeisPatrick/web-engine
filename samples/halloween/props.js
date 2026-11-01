@@ -984,14 +984,13 @@ export function scarecrow(B, G, ctx, { x, y, z }) {
   L.add(new THREE.CylinderGeometry(0.225, 0.22, 0.06, 14, 1, true), '#7a2a3a', 0, 2.48, 0);
   L.into(B, x, y, z);
   // the carved face glows (a flame group)
-  const gp = ctx.glow('flame', 0.6);
+  ctx.glow('flame', 0.6); // the face's light group
   const face = new THREE.BufferGeometry(), v = [], R = 0.29;
   const tri = (pts) => { for (const [px, py] of pts) { const zz = Math.sqrt(Math.max(0.01, R * R * 0.94 - px * px - (py * 1.2) ** 2)) * 1.0 + 0.012; v.push(px, py, zz); } };
   tri([[-0.15, 0.04], [-0.04, 0.04], [-0.095, 0.13]]); tri([[0.04, 0.04], [0.15, 0.04], [0.095, 0.13]]);
   for (let i = 0; i < 6; i++) { const a0 = -0.9 + i * 0.3, a1 = a0 + 0.3; tri([[Math.sin(a0) * 0.15, -0.05 - Math.cos(a0) * 0.05], [Math.sin(a0) * 0.12, -0.07 - Math.cos(a0) * 0.015 - (i === 2 ? 0.02 : 0)], [Math.sin(a1) * 0.15, -0.05 - Math.cos(a1) * 0.05]]); tri([[Math.sin(a0) * 0.12, -0.07 - Math.cos(a0) * 0.015 - (i === 2 ? 0.02 : 0)], [Math.sin(a1) * 0.12, -0.07 - Math.cos(a1) * 0.015], [Math.sin(a1) * 0.15, -0.05 - Math.cos(a1) * 0.05]]); }
   face.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
   G.add(face, '#ffd27a', x, y + 2.02 + 0.76 * R * 0.9, z, 0, 0, 0, 1, 1, 1, 3);
-  void gp;
   ctx.glow('steady', 0);
 }
 
