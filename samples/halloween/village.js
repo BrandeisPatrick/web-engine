@@ -54,19 +54,20 @@ export function porchCottage(B, G, ctx, physics, groundAt, p) {
 
 /**
  * The haunted house as porch p (P6, trick only) on the knoll: house {w, d}; p.floor its porch's ground. A stone plinth
- * under it down to the slope, its colliders (the house, the tower's front, the porch deck, a step round it, the two
+ * under it down to the slope, its colliders (the house with its tower, the porch deck, a step round it, the two
  * railings), the doormat (its border glows with the porch lamp: a warm white lamp the game drives) and the railing's
  * jack-o'-lantern.
  */
 export function hauntedPorch(B, G, ctx, physics, groundAt, p, house) {
   const { w, d } = house, y = p.floor - 0.2, lo = lowest(groundAt, p.x, p.z, p.yaw, w / 2 + 0.7, d / 2, 2.4);
-  const h = P.hauntedHouse(B, G, ctx, { x: p.x, y, z: p.z, w, d, yaw: p.yaw, door: false, lamp: 'lamp' });
+  // (its tower flush with the front: a tower standing out made a corner by the porch that pinned a kid pushing at the
+  // facade, 28 s in a bot round)
+  const h = P.hauntedHouse(B, G, ctx, { x: p.x, y, z: p.z, w, d, yaw: p.yaw, door: false, lamp: 'lamp', tower: 0 });
   // the plinth: the house stands on the plateau's rim, its back corners over the slope
   P.vgrad(B.add(P.chamferBox(w + 0.6, y - lo + 0.5, d + 0.5, 0.06), '#433e4c', p.x, (lo + y + 0.4) / 2 - 0.15, p.z, p.yaw), 0.5, 0.9);
   const box = (lx0, lx1, lz0, lz1, y1) => localBox(physics, p.x, p.z, p.yaw, lx0, lx1, lz0, lz1, lo - 1, y1);
   const deckTop = y + 0.5, pz = d / 2 + 1.85;
-  box(-w / 2 - 0.15, w / 2 + 0.15, -d / 2 - 0.15, d / 2 + 0.02, y + 9);
-  box(-w / 2 + 1 - 1.75, -w / 2 + 1 + 1.75, d / 2 - 1, d / 2 + 0.72, y + 9); // the tower stands out in front
+  box(-w / 2 - 0.75, w / 2 + 0.15, -d / 2 - 0.15, d / 2 + 0.02, y + 9); // (the tower reaches 0.6 m past the west wall)
   box(-1.1, 3.5, d / 2, d / 2 + 2.0, deckTop);
   box(-1.45, 3.85, d / 2, d / 2 + 2.75, y + 0.35);
   for (const [a, b] of [[-0.95, 0.35], [2.05, 3.35]]) box(a - 0.08, b + 0.08, pz - 0.08, pz + 0.08, deckTop + 0.95);

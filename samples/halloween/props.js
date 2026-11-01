@@ -717,11 +717,12 @@ function windowDressing(L, r, lx, ly, z0, ww, hh, { trim = '#4e3f58', shutter = 
  * arched door and a porch with turned posts, a railing, steps and a lantern. The glowing window panes, the lantern
  * flame and their halos go through ctx (light groups the game flickers). o.door false: no door leaf, a doorway
  * (HOLE_W x HOLE_H from the porch deck up, a dark vestibule behind it: the porch logic's door swings into it); o.lamp:
- * the porch lantern's light kind ('flame', or 'lamp': a warm white porch lamp the game drives). Returns { lamp (its
+ * the porch lantern's light kind ('flame', or 'lamp': a warm white porch lamp the game drives); o.tower: how far the
+ * tower stands out of the front (0.6 m; 0: flush, no corner beside the porch). Returns { lamp (its
  * light group), lampHalo, chimney: [x, y, z] (the cowl's top), at(lx, ly, lz) -> [x, y, z] (a point of the house's
  * frame, the lean ignored) }.
  */
-export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp = 'flame' }) {
+export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp = 'flame', tower = 0.6 }) {
   const r = rngAt(x, z, 21), L = new Parts();
   const WALL = '#33293d', WALL2 = '#3d3148', ROOF = '#241c2b', TRIM = '#6b5a78', STONE = '#454050';
   const c = Math.cos(yaw), s = Math.sin(yaw);
@@ -801,7 +802,7 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp 
     chim = [ox - 0.05 + 0.03 * (cy - 0.6), cy, oz]; // its top (local, after the house's lean)
   }
   // ---- the tower (front left): walls, siding, bands, and a witch-hat roof with a bent tip and a weathervane
-  const tx = -w / 2 + 1, tz = d / 2 - 1, TW = 3.2;
+  const TW = 3.2, tx = -w / 2 + 1, tz = d / 2 + tower - TW / 2; // (o.tower: how far it stands out of the front)
   const towerFrom = L.list.length;
   vgrad(L.add(chamferBox(TW + 0.2, 0.8, TW + 0.2, 0.05), STONE, tx, 0.2, tz), 0.6, 0.95);
   vgrad(L.add(new THREE.BoxGeometry(TW, 8.9, TW), WALL2, tx, 4.85, tz), 0.75, 1.1);
@@ -835,8 +836,8 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp 
   // ---- windows (front: two floors; the tower), the glow panes in G (light groups)
   const winF = [[-2.2, 2.2], [3.6, 2.2], [-2.2, 4.6], [1.2, 4.6], [3.6, 4.6]];
   winF.forEach(([lx, ly], i) => windowDressing(L, r, lx, ly, d / 2, 1, 1.3, { crooked: i === 1 || i === 4, boarded: i === 2 }));
-  windowDressing(L, r, tx, 7.6, d / 2 + 0.6, 0.9, 1.2, { crooked: true });
-  windowDressing(L, r, tx, 4.2, d / 2 + 0.6, 0.8, 1.1, {});
+  windowDressing(L, r, tx, 7.6, tz + TW / 2, 0.9, 1.2, { crooked: true });
+  windowDressing(L, r, tx, 4.2, tz + TW / 2, 0.8, 1.1, {});
   // ---- the door (arched, panelled, a brass knob) in a trimmed frame (or a dark doorway: the caller's door opens)
   if (door) {
     vgrad(L.add(slab(1.3, 2.35, 0.1, 'round', 0.02), '#3b1d2b', 1.2, 0.3, d / 2 + 0.02), 0.75, 1.1);
@@ -890,8 +891,8 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp 
     const [px, pz2] = W(lean(lx, ly), d / 2 + 0.5); // a soft halo in the air just outside each lit window
     ctx.spot(px, y + ly, pz2, 2.6, ...(green ? [0.08, 0.26, 0.06] : [0.32, 0.15, 0.04]), 0.2, gw);
   }
-  ctx.glow('window', 0.2); win(lean(tx, 7.6) - 0.018 * 7, 7.6, d / 2 + 0.62 + 0.008 * 7, 0.9, 1.2, '#ffcf6a', 4);
-  ctx.glow('window', 0.2); win(lean(tx, 4.2) - 0.018 * 3.6, 4.2, d / 2 + 0.62 + 0.008 * 3.6, 0.8, 1.1, '#ff9a3a', 3);
+  ctx.glow('window', 0.2); win(lean(tx, 7.6) - 0.018 * 7, 7.6, tz + TW / 2 + 0.02 + 0.008 * 7, 0.9, 1.2, '#ffcf6a', 4);
+  ctx.glow('window', 0.2); win(lean(tx, 4.2) - 0.018 * 3.6, 4.2, tz + TW / 2 + 0.02 + 0.008 * 3.6, 0.8, 1.1, '#ff9a3a', 3);
   ctx.glow('steady', 0);
   const at = (lx, ly, lz) => { const [px, pz2] = W(lx, lz); return [px, y + ly, pz2]; };
   return { lamp: lampG, lampHalo, chimney: at(chim[0], chim[1] + 0.2, chim[2]), at };
