@@ -20,11 +20,12 @@
 // The creek's banks are walls of the bed's depth: falling in is allowed, a JUMP gets out (walking does not); Porch Row's
 // picket fences are 1 m high (a jump clears them) with a gate gap between each pair of cottages.
 // Exposes the map to the game (the passes build against these names): PORCHES (the six trick-or-treat porches: mats,
-// lamps and railings as light groups, chimneys, doors), HAND_SPOTS, BRIDGES, CREEK, POP_SPOTS, SECRETS (the well, the
-// crypt door, the hollow oak), CAULDRON, VANTAGE, THIEF_DEN, the lantern spots, ghost spawn points, a candy spawn
-// sampler with the design's shares per zone (candySpot), zoneOf(x, z), and glowSpots (halos over the static glowing
-// props). Materials: world-space grain on the props and the terrain (looks.js patchDetail; the terrain with a faint dew
-// sheen), contact shading + moss baked into the prop colours near the ground, grass tufts (Lambert) swaying in the wind.
+// lamps and railings as light groups, chimneys; each house leaves a doorway for the porch logic's door), HAND_SPOTS,
+// BRIDGES, CREEK, POP_SPOTS, SECRETS (the well, the crypt door, the hollow oak), CAULDRON, VANTAGE, THIEF_DEN, the
+// lantern spots, ghost spawn points, a candy spawn sampler with the design's shares per zone (candySpot), zoneOf(x, z),
+// and glowSpots (halos over the static glowing props). Materials: world-space grain on the props and the terrain
+// (looks.js patchDetail; the terrain with a faint dew sheen), contact shading + moss baked into the prop colours near
+// the ground, grass tufts (Lambert) swaying in the wind.
 // Hooks for the living night (environment.js drives them per frame): the dead trees, the oak and the reeds sway (a
 // per-vertex sway weight on the merged props, WIND uniforms; their shadow caster carries the same patch), every lamp,
 // candle and window of the glow mesh belongs to a light group whose level the game sets (glowLevels; halos() draws
