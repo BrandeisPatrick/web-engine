@@ -12,6 +12,11 @@ in 1.0.0), driven by the new Halloween game sample (`samples/halloween/`, "Midni
 - `CharacterInput`: `touchOptions` (passed to TouchControls, e.g. `{ safeArea: true }`); touchpad entries take the
   safe-area insets and `portrait` overrides too; `touchReveal: { hideOnKey, onChange }` shows hidden touch controls on
   the first real touch (a laptop with a touchscreen) and hides them on a key press; `touchShown`.
+- `TouchControls` button entries take `hitSlop: px` (opt-in): an invisible ring that far around the button presses it
+  too, so a thumb that lands a little off still hits; the drawn button and its bounding box keep their size (portrait
+  overrides apply; `setLabel` keeps the ring).
+- `CharacterInput` touchpad entries take `slop: px` (opt-in, default 0): a drag only turns the view once the finger has
+  moved that far from where it landed (the travel up to there is dropped), so a tap that slides does not look around.
 - `isTouchDevice({ multiTouch: true })` also counts a coarse multi-touch device with a fine pointer attached (an iPad
   with a keyboard / trackpad: iPadOS Safari reports a Mac user agent; a phone with a stylus). Without the option the
   rule is unchanged.
@@ -36,6 +41,12 @@ in 1.0.0), driven by the new Halloween game sample (`samples/halloween/`, "Midni
   emulation (iPhone / Pixel / small / tall, portrait, landscape, rotation, safe-area insets, two-thumb input,
   backgrounding, five rounds with flat resource counts, `--perf` under 4x CPU throttling) and saves screenshots to the
   gitignored `test/browser/out/halloween/`.
+- Midnight Candy Run gameplay pass from a bot playtest (phones first): desktop START captures the mouse (Esc frees it),
+  the arrow keys turn; catches cost 10 % (2..12) and say "GRAB IT BACK!", the pack backs off, at most two chasers on
+  phones; a stick dead zone with full speed at 3/4 deflection, BOO / JUMP hit rings, BOO lowest in portrait and glowing
+  while a ghost is in reach; candy respawns ahead of the camera, a wider pull on phones, an edge marker for an
+  off-screen big pop, ghost chevrons for chasers behind the kid, a directional moan, a steeper portrait camera, a
+  first-session BOO lesson, and three more graveyard exits with a fence a jump clears (it was a 6 m wall, one gate).
 
 ## 1.0.0 — 2026-10-30
 The release of the 1.0 roadmap (phases 0.5.0 - 0.9.0, ENGINE.md): a general engine with its graphics and physics pushed as

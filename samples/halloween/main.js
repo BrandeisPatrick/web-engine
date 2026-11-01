@@ -14,6 +14,13 @@
 // Touch: on for phones and tablets (isTouchDevice multiTouch: an iPad with a keyboard too); anywhere else (a laptop with
 // a touchscreen) the first touch reveals the controls and a key press hides them again (CharacterInput touchReveal).
 // Haptics (navigator.vibrate: Android; iOS has none) on candy, smashes, BOO and catches while the touch UI is on.
+// Desktop: START / RESUME / PLAY AGAIN (and Enter / Space) capture the mouse (pointer lock), so plain movement looks;
+// Esc frees it (and pauses); a refused lock falls back to click-the-view / right-drag; the arrow keys turn.
+// Thumbs: the stick has a dead zone and reaches full speed at 3/4 deflection; BOO / JUMP have a forgiving hit ring;
+// BOO glows while a chaser is in reach. Catches cost 10 % (2..12) and spill it back as candy to grab again; after a
+// catch the pack backs off, and on phones at most two ghosts chase at once. Until a player's first BOO lands (kept in
+// localStorage), the first ghost is a lesson: it rises in view ahead, drifts in slowly and cannot catch for 12 s.
+// Edge markers point at an off-screen big pop and at ghosts coming from off screen or from behind.
 // window.__game exposes the state for tests (test/browser/halloween.mjs).
 import * as THREE from 'three';
 import { Engine } from '@vibe/engine/core';
@@ -41,10 +48,26 @@ const LOW = params.has('quality') ? params.get('quality') === 'low' : TOUCH;
 const NOFX = flag('nofx');
 const SHADOWS = !(params.has('shadows') && params.get('shadows') === '0');
 const ROUND = Math.max(10, +params.get('round') || 180);
-const BEST_KEY = 'midnight-candy-run.best';
+const BEST_KEY = 'midnight-candy-run.best', TAUGHT_KEY = 'midnight-candy-run.taught';
 const SPAWN = [0, 6];
-const BOO_CD = 5, BOO_R = 7.5, SAFE_T = 2.2;
-const RECENTRE_TOUCH = 0.7, RECENTRE_DESK = 1.3; // s without look input before the camera eases behind a running kid
+const BOO_CD = 5, BOO_R = 7.5, SAFE_T = 3.0;
+const RECENTRE_TOUCH = 0.7, RECENTRE_DESK = 0.8; // s without look input before the camera eases behind a running kid
+// touch stick response: nothing below STICK_DEAD (a resting thumb's wobble), full speed at STICK_FULL deflection
+const STICK_DEAD = 0.12, STICK_FULL = 0.75;
+// a catch costs 10 % of the candy (2..12); 3 catches within MERCY_WINDOW s calm the ghosts (difficulty -MERCY) for MERCY_T s
+const CATCH_SHARE = 0.10, CATCH_MIN = 2, CATCH_MAX = 12, MERCY = 0.35, MERCY_WINDOW = 30, MERCY_T = 20;
+const MAX_CHASERS_TOUCH = 2, MAX_CHASERS_DESK = 3;
+const MAGNET_TOUCH = 3.2, MAGNET_DESK = 2.4; // candy pull radius (m)
+// candy where the player looks: while the view is "dry" (fewer than DRY_NEED candies on screen within DRY_R m),
+// AHEAD_SHARE of the respawns land in a ring ahead of the camera (inside the view: at most ±50°, less in portrait, with
+// a clear straight run to it); after DRY_T s of a dry view, a far resting candy (off screen, > FAR m away) moves into
+// the nearer DRY_RING every respawn tick (a narrow portrait view used to show no candy at all for two thirds of a
+// round). A view with candy in it keeps the uniform respawns: good players get no extra help. Big pops rise POP_R m
+// away (inside the view while it is dry).
+const AHEAD_SHARE = 0.6, AHEAD_R = [9, 22], AHEAD_HALF = 50 * Math.PI / 180, POP_R = [14, 26];
+const DRY_R = 15, DRY_NEED = 2, DRY_T = 3, FAR = 30, DRY_RING = [8, 15];
+// the first desktop round shows how the mouse looks for LOOK_HINT_T s or until LOOK_HINT_RAD of look input
+const LOOK_HINT_T = 4, LOOK_HINT_RAD = 0.3;
 // haptic pulses (ms); a candy streak buzzes at most every CANDY_BUZZ_GAP s
 const BUZZ = { candy: 8, pop: 30, smash: 35, stomp: [30, 40, 50], boo: 22, caught: [70, 50, 90] }, CANDY_BUZZ_GAP = 0.09;
 const canVibrate = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
@@ -52,6 +75,8 @@ const CANDY_TARGET = LOW ? 55 : 65;
 const GHOSTS = LOW ? 5 : 6;
 // round seconds (of 180) at which the next ghost rises: one early (it teaches BOO), then one about every 30 s
 const WAKE_AT = [5, 24, 50, 80, 110, 140];
+// the BOO lesson (until the first BOO that scares a ghost): the first ghost rises TUTOR_R m ahead, tame for TUTOR_T s
+const TUTOR_R = [9, 11], TUTOR_T = 12, LANTERN_HINT = { until: 20, r: 6 };
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const wrapPi = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
 
@@ -66,25 +91,32 @@ const LOOKS = DEFAULT_LOOKS.map((l) => (l.el > -12 ? l : { ...l, cover: 0.34, co
 
 // input: the character preset with BOO on interact (E / F / B / Q, pad X / B, touch 'boo'), pause (Esc / P / pad Start),
 // start (Enter / Space / pad A), mute (M / pad Back): a Bluetooth gamepad paired to a phone plays the whole game too
+// The arrow keys turn the camera (left / right) instead of strafing; up / down still run, so up + left curves like a car.
 const ACTIONS = {
   ...CHARACTER_ACTIONS,
+  moveX: { ...CHARACTER_ACTIONS.moveX, bindings: CHARACTER_ACTIONS.moveX.bindings.filter((b) => !(b.key === 'ArrowLeft' || b.key === 'ArrowRight')) },
+  lookX: { ...CHARACTER_ACTIONS.lookX, bindings: [...CHARACTER_ACTIONS.lookX.bindings, { key: 'ArrowLeft', value: -1 }, { key: 'ArrowRight', value: 1 }] },
   interact: { type: 'button', bindings: ['KeyE', 'KeyF', 'KeyB', 'KeyQ', { padButton: PB.X }, { padButton: PB.B }, { virtual: 'boo' }] },
   menu: { type: 'button', alwaysOn: true, bindings: ['Escape', 'KeyP', { padButton: PB.START }] },
   start: { type: 'button', alwaysOn: true, bindings: ['Enter', 'NumpadEnter', 'Space', { padButton: PB.A }] },
   mute: { type: 'button', alwaysOn: true, bindings: ['KeyM', { padButton: PB.BACK }] },
 };
-// touch: floating move stick (left part of the screen), drag-to-look pad (right), JUMP + BOO by the right thumb.
-// Portrait overrides keep the buttons stacked inside a narrow screen's thumb reach.
+// touch: floating move stick (left part of the screen), drag-to-look pad (right; a drag counts after 8 px, so a tap
+// that slides does not turn the view), JUMP + BOO by the right thumb, each with a 16 px forgiving hit ring.
+// Portrait overrides keep the buttons stacked inside a narrow screen's thumb reach, BOO (the key action) lowest, where
+// the thumb rests.
 const TOUCH_LAYOUT = [
-  { type: 'touchpad', id: 'look', side: 'right', width: 0.56, top: 70, bottom: 0, portrait: { width: 0.5, top: 120 } },
+  { type: 'touchpad', id: 'look', side: 'right', width: 0.56, top: 70, bottom: 0, slop: 8, portrait: { width: 0.5, top: 120 } },
   { type: 'stick', id: 'stick', side: 'left', x: 112, y: 112, radius: 60, floating: true, zone: { width: 0.44, top: 70 },
     portrait: { x: 96, y: 150, radius: 58, zone: { width: 0.5, top: 170 } } },
-  { type: 'button', id: 'jump', label: 'JUMP', side: 'right', x: 84, y: 92, size: 98, fontSize: 15, portrait: { x: 76, y: 128, size: 92 } },
-  { type: 'button', id: 'boo', label: 'BOO!', side: 'right', x: 200, y: 66, size: 82, fontSize: 16, portrait: { x: 84, y: 250, size: 84 } },
+  { type: 'button', id: 'jump', label: 'JUMP', side: 'right', x: 84, y: 92, size: 98, fontSize: 15, hitSlop: 16, portrait: { x: 84, y: 250, size: 80 } },
+  { type: 'button', id: 'boo', label: 'BOO!', side: 'right', x: 200, y: 66, size: 82, fontSize: 16, hitSlop: 16, portrait: { x: 76, y: 128, size: 96 } },
 ];
 
 function loadBest() { try { return Math.max(0, parseInt(localStorage.getItem(BEST_KEY), 10) || 0); } catch { return 0; } }
 function saveBest(n) { try { localStorage.setItem(BEST_KEY, String(n)); } catch { /* private mode / blocked storage */ } }
+function loadTaught() { try { return localStorage.getItem(TAUGHT_KEY) === '1'; } catch { return false; } }
+function saveTaught() { try { localStorage.setItem(TAUGHT_KEY, '1'); } catch { /* private mode / blocked storage */ } }
 
 const nextFrame = () => new Promise((r) => setTimeout(r, 0));
 
@@ -181,27 +213,33 @@ async function boot() {
     state: 'title', time: 0, left: ROUND, candy: 0, best: best0, smashed: 0, booed: 0, caught: 0, pops: 0,
     booT: BOO_CD, safeT: 0, streak: 0, lastPick: -9, wakeIdx: 0, spawnT: 0, popT: 12, endT: 0, lastCount: 99, music: true,
     pickups: 0, hintBoo: false, hintT: 0, newBest: false,
+    catch1: -99, catch2: -99, mercyT: 0, lookHintT: 0, lookHintRad: 0, dryT: 0,
   };
-  let booedEver = false;
+  let booedEver = loadTaught(), lookHinted = false, smashedEver = false;
+  // START / RESUME / PLAY AGAIN run inside the click (a user gesture): the same call captures the mouse on desktop
   const hud = new HUD({
     touch: TOUCH,
-    onStart: () => startRound(),
+    onStart: () => { startRound(); captureMouse(); },
     onPause: () => setPaused(true),
-    onResume: () => setPaused(false),
-    onRestart: () => startRound(),
+    onResume: () => { setPaused(false); captureMouse(); },
+    onRestart: () => { startRound(); captureMouse(); },
     onTitle: () => toTitle(),
     onMute: () => { hud.setMuted(audio.toggleMute()); },
     onMusic: () => { G.music = !G.music; audio.setMusic(G.music); hud.setMusicLabel(G.music); },
   });
   const canvas = renderer.domElement;
   let touchUI = TOUCH; // the touch presentation is on (controls, HUD texts, camera recentre, haptics)
+  let booBtn = null, stickCtl = null, booHot = false;
   const setTouchUI = (on) => {
     touchUI = on;
     hud.setTouch(on);
-    if (on && input.touch) { const b = input.touch.get('boo'); if (b) b.el.classList.add('hw-boo-btn'); }
+    if (on && input.touch) { booBtn = input.touch.get('boo'); stickCtl = input.touch.get('stick'); if (booBtn) booBtn.el.classList.add('hw-boo-btn'); }
+    // phones: a wider candy pull, and fewer ghosts on the kid at once (the thumbs are busier than a mouse hand)
+    ghosts.maxChasers = on ? MAX_CHASERS_TOUCH : MAX_CHASERS_DESK;
+    candy.magnet = on ? MAGNET_TOUCH : MAGNET_DESK;
   };
   const input = new CharacterInput({
-    element: canvas, actions: ACTIONS, touch: TOUCH, touchLayout: TOUCH_LAYOUT, touchOptions: { safeArea: true }, touchSpeed: 0.0055, holdButton: 2,
+    element: canvas, actions: ACTIONS, touch: TOUCH, touchLayout: TOUCH_LAYOUT, touchOptions: { safeArea: true }, touchSpeed: 0.0055, holdButton: 2, stickSpeed: 2.4,
     touchReveal: FORCED === null ? { hideOnKey: true, onChange: setTouchUI } : null,
   });
   setTouchUI(TOUCH);
@@ -214,13 +252,31 @@ async function boot() {
   let rigOn = null;
   const setRig = (r) => { for (const q of [rig, orbit]) if (q !== r) q.deactivate(); rigOn = r; r.activate(); r.snap(); };
   const lock = new PointerLock({ element: canvas, onChange(locked) { if (!locked && lock.releasedByUser && G.state === 'play') setPaused(true); } });
-  canvas.addEventListener('click', () => { if (!touchUI && G.state === 'play' && !lock.locked) lock.request(); });
+  // desktop: capture the mouse (call inside a click / key gesture) so plain movement looks around. The look hint shows
+  // in the first round (what the mouse does now) and again whenever a capture is refused (iframes, a re-lock within ~1 s
+  // of Esc): then clicking the view, the right button or the arrow keys look
+  const lookHint = (ok) => {
+    if (G.state !== 'play') return;
+    if (ok && lookHinted) { if (G.lookHintT > 0) { G.lookHintT = 0; hud.lookHint(null); } return; } // captured: no hint needed
+    lookHinted = true; G.lookHintT = LOOK_HINT_T; G.lookHintRad = LOOK_HINT_RAD; hud.lookHint(ok);
+  };
+  const captureMouse = () => {
+    if (touchUI || lock.locked) return;
+    if (!lock.supported) { lookHint(false); return; }
+    lock.request().then(lookHint);
+  };
+  canvas.addEventListener('click', () => { if (!touchUI && G.state === 'play') captureMouse(); });
 
-  // portrait phones: a wider view and the camera a bit further back
+  // portrait phones: a wider view, the camera higher, further back and pitched down more (more ground ahead, less of
+  // the sky behind the HUD: a narrow portrait view used to show no candy at all for most of a round)
+  const PITCH = { landscape: -0.3, portrait: -0.42 };
+  let portraitCam = null;
   const fitCamera = (w, h) => {
     const portrait = h > w;
     camera.fov = portrait ? 74 : 58; camera.updateProjectionMatrix();
-    rig.distance = portrait ? 6.4 : 5.4; rig.height = portrait ? 1.35 : 1.2;
+    rig.distance = portrait ? 7.0 : 5.4; rig.height = portrait ? 1.6 : 1.2;
+    if (portraitCam !== null && portraitCam !== portrait) rig.pitch += portrait ? PITCH.portrait - PITCH.landscape : PITCH.landscape - PITCH.portrait;
+    portraitCam = portrait;
   };
 
   // ---------------------------------------------------------------- post-processing
@@ -241,8 +297,9 @@ async function boot() {
   }
   if (!postfx) atmo.setFogMode('scene');
   engine.renderFn = (sc, cam, dt) => { if (postfx) postfx.render(dt); else renderer.render(sc, cam); };
-  engine.onResize = (w, h, pr) => { fitCamera(w, h); if (postfx) postfx.setSize(w, h, pr); };
-  fitCamera(engine.size.width, engine.size.height);
+  let viewW = engine.size.width, viewH = engine.size.height; // CSS px (the HUD's edge markers; no layout read per frame)
+  engine.onResize = (w, h, pr) => { viewW = w; viewH = h; fitCamera(w, h); if (postfx) postfx.setSize(w, h, pr); };
+  fitCamera(viewW, viewH);
   const relayout = () => engine.resize();
   window.addEventListener('orientationchange', () => { setTimeout(relayout, 120); setTimeout(relayout, 500); });
   if (window.visualViewport) window.visualViewport.addEventListener('resize', relayout);
@@ -272,14 +329,15 @@ async function boot() {
   };
   function startRound() {
     audioHeld = false; audio.start(); audio.ui();
-    Object.assign(G, { state: 'play', time: 0, left: ROUND, candy: 0, smashed: 0, booed: 0, caught: 0, pops: 0, booT: BOO_CD, safeT: 0, streak: 0, lastPick: -9, wakeIdx: 0, spawnT: 0, popT: 12, endT: 0, lastCount: 99, pickups: 0 });
+    Object.assign(G, { state: 'play', time: 0, left: ROUND, candy: 0, smashed: 0, booed: 0, caught: 0, pops: 0, booT: BOO_CD, safeT: 0, streak: 0, lastPick: -9, wakeIdx: 0, spawnT: 0, popT: 12, endT: 0, lastCount: 99, pickups: 0, catch1: -99, catch2: -99, mercyT: 0, lookHintT: 0, dryT: 0 });
     if (engine.clock.paused) engine.clock.resume();
     lanterns.reset(); ghosts.reset(); fx.clear(); fillCandy(); placeKid();
     hud.setCandy(0, false); hud.setClock(ROUND, ROUND); hud.showPlay(); hud.setDanger(0);
     input.map.enabled = true;
-    rig.yaw = 0; rig.pitch = -0.3; setRig(rig); rig.recentre();
+    rig.yaw = 0; rig.pitch = portraitCam ? PITCH.portrait : PITCH.landscape; setRig(rig); rig.recentre();
     G.skipJump = true;
     G.hintBoo = !booedEver; G.hintT = 0.6; buzzT = -1; // "GRAB THE CANDY!" just after the start; the BOO hint until a first BOO hits
+    G.tutor = !booedEver; G.tutorWake = null; G.lanternHint = !smashedEver; G.lanternHintT = 0; G.hintBooT = 0;
   }
   function toTitle() {
     if (lock.locked) lock.exit();
@@ -326,7 +384,7 @@ async function boot() {
   });
 
   // ---------------------------------------------------------------- gameplay helpers
-  const _f = new THREE.Vector3(), _r = new THREE.Vector3();
+  const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _v = new THREE.Vector3();
   const kidInfo = { x: 0, y: 0, z: 0, vx: 0, vz: 0, safe: false };
   const OFFSTAGE = { x: 1e6, y: 0, z: 1e6 }; // the magnet's "kid" while no round runs
   const doBoo = () => {
@@ -336,7 +394,8 @@ async function boot() {
     fx.boo(p.x, p.y, p.z, BOO_R); audio.boo(); buzz(BUZZ.boo);
     const scared = ghosts.boo(p.x, p.z, BOO_R);
     if (scared.length) {
-      G.booed += scared.length; audio.scared(scared.length); booedEver = true; G.hintBoo = false;
+      G.booed += scared.length; audio.scared(scared.length); G.hintBoo = false;
+      if (!booedEver) { booedEver = true; saveTaught(); } // the lesson is learnt: from now on the normal ghost schedule
       for (const g of scared) { candy.spill(g.x, g.y - 0.3, g.z, 2, 2.5, 0.25, 10); fx.burst(g.x, g.y, g.z, 18, 0.7, 0.6, 1.6, 3, 1.5); fx.flash(g.x, g.y, g.z, 3.4, 0.35, 0.55, 1.1, 0.4); }
       hud.callout(scared.length > 1 ? `BOO! ×${scared.length}` : 'BOO!', 'boo');
     } else hud.callout('BOO!', 'boo');
@@ -353,7 +412,7 @@ async function boot() {
     const v = cc.velocity, sp = Math.hypot(v.x, v.z);
     const kx = sp > 0.3 ? v.x / sp : 0, kz = sp > 0.3 ? v.z / sp : 0;
     const c = lanterns.smash(i, kx, kz, stomp ? 1.5 : 1);
-    G.smashed++;
+    G.smashed++; smashedEver = true; G.lanternHint = false;
     candy.spill(c.x, c.y + 0.2, c.z, stomp ? 7 : 4, stomp ? 3.4 : 2.6, 0.3, 14);
     fx.flash(c.x, c.y + 0.3, c.z, stomp ? 5 : 4, 1.4, 0.55, 0.1, 0.4);
     fx.burst(c.x, c.y, c.z, 34, 2.2, 0.9, 0.2, 3.5, 2.5, 0.9, 0.14);
@@ -361,16 +420,106 @@ async function boot() {
     audio.smash(stomp); buzz(stomp ? BUZZ.stomp : BUZZ.smash);
     if (stomp) { v.y = 6.4; hud.callout('STOMP!', ''); }
   };
+  // a catch costs 10 % (2..12): it used to be 3 + 12 % uncapped (-36 at 0:10). The loss spills around the kid, quick to
+  // grab back (collectable after 0.45 s, gone after 10 s); three catches within 30 s calm the ghosts for a while
   const caught = (g) => {
     G.caught++; G.safeT = SAFE_T;
-    const lose = Math.min(G.candy, 3 + Math.floor(G.candy * 0.12));
+    const lose = Math.min(G.candy, clamp(Math.round(G.candy * CATCH_SHARE), CATCH_MIN, CATCH_MAX));
     G.candy -= lose; hud.setCandy(G.candy);
     const p = cc.position, dx = p.x - g.x, dz = p.z - g.z, d = Math.hypot(dx, dz) || 1;
     cc.velocity.set(dx / d * 6.5, 4.6, dz / d * 6.5);
-    if (lose > 0) { candy.spill(p.x, p.y + 0.8, p.z, lose, 4.5, 0.9, 7); hud.plusText(`−${lose}`, true); }
+    if (lose > 0) { candy.spill(p.x, p.y + 0.8, p.z, lose, 4.5, 0.45, 10); hud.plusText(`−${lose}`, true); }
     fx.burst(p.x, p.y + 0.8, p.z, 24, 0.8, 0.6, 1.8, 3, 2);
-    hud.callout(lose > 0 ? `CAUGHT! −${lose}` : 'CAUGHT!', 'bad');
+    if (lose > 0) hud.callout(`CAUGHT! −${lose}`, 'bad', 'GRAB IT BACK!'); else hud.callout('CAUGHT!', 'bad');
     audio.caught(); buzz(BUZZ.caught);
+    if (G.time - G.catch2 < MERCY_WINDOW) G.mercyT = MERCY_T;
+    G.catch2 = G.catch1; G.catch1 = G.time;
+  };
+  // a free spot for a candy in a ring around (px, pz): r in [r0, r1], within ±half of the bearing `yaw` (rig yaw
+  // convention: forward = (-sin, -cos)); inside the fence, clear of colliders. Fills out [x, y, z]; false when none.
+  // clear: also no collider on the straight run from the kid to it (no fence or grave between: it can be run to)
+  const _cols = [], _spot = [0, 0, 0];
+  const blocked = (x, z, r) => { _cols.length = 0; return physics.queryColliders(x, z, r, _cols).length > 0; };
+  const ringSpot = (out, px, pz, r0, r1, yaw, half, clear = false) => {
+    for (let t = 0; t < 12; t++) {
+      const a = yaw + (Math.random() * 2 - 1) * half, r = r0 + Math.random() * (r1 - r0), sx = -Math.sin(a), sz = -Math.cos(a);
+      const x = px + sx * r, z = pz + sz * r;
+      if (Math.abs(x) > PLAY - 2 || Math.abs(z) > PLAY - 2 || blocked(x, z, 0.6)) continue;
+      let ok = true;
+      if (clear) for (let k = 1.5; k < r - 0.5 && ok; k += 1) ok = !blocked(px + sx * k, pz + sz * k, 0.35);
+      if (!ok) continue;
+      out[0] = x; out[1] = heightAt(x, z); out[2] = z;
+      return true;
+    }
+    return false;
+  };
+  // the half-angle of the view a candy should land in: the horizontal half-FOV less a margin, at most AHEAD_HALF
+  const viewHalf = () => Math.min(AHEAD_HALF, Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect) - 0.1);
+  const randomKind = () => (Math.random() < 0.35 ? CANDY_KIND.CORN : CANDY_KIND.WRAP);
+  /** Respawn one resting candy: while the view is dry, AHEAD_SHARE of them ahead of the camera; else anywhere. */
+  const respawnCandy = (p, dry) => {
+    if (dry && Math.random() < AHEAD_SHARE && ringSpot(_spot, p.x, p.z, AHEAD_R[0], AHEAD_R[1], rig.yaw, viewHalf(), true)) return candy.place(_spot[0], _spot[1], _spot[2], randomKind());
+    return candy.spawnRandom(p.x, p.z);
+  };
+  // is (x, y, z) on screen (last frame's camera)? margin: NDC limit
+  const onScreen = (x, y, z, margin = 0.95) => {
+    _v.set(x, y, z).applyMatrix4(camera.matrixWorldInverse);
+    if (_v.z > -0.3) return false;
+    _v.applyMatrix4(camera.projectionMatrix);
+    return Math.abs(_v.x) < margin && Math.abs(_v.y) < margin;
+  };
+  /** At least `need` resting candies on screen within r m of the kid. */
+  const candyInView = (p, r, need) => {
+    const C = candy, P = C.p;
+    let n = 0;
+    for (let i = 0; i < C.state.length; i++) {
+      if (C.state[i] !== 1) continue;
+      const dx = P[i * 3] - p.x, dz = P[i * 3 + 2] - p.z;
+      if (dx * dx + dz * dz < r * r && onScreen(P[i * 3], P[i * 3 + 1] + 0.3, P[i * 3 + 2]) && ++n >= need) return true;
+    }
+    return false;
+  };
+  /** A dry spell: the farthest off-screen resting candy (> FAR m away) moves into the ring ahead. Returns its slot or -1. */
+  const relocateFar = (p) => {
+    const C = candy, P = C.p;
+    let best = -1, bd = FAR * FAR;
+    for (let i = 0; i < C.state.length; i++) {
+      if (C.state[i] !== 1 || C.kind[i] === CANDY_KIND.POP) continue;
+      const dx = P[i * 3] - p.x, dz = P[i * 3 + 2] - p.z, d2 = dx * dx + dz * dz;
+      if (d2 > bd && !onScreen(P[i * 3], P[i * 3 + 1] + 0.3, P[i * 3 + 2], 1.1)) { bd = d2; best = i; }
+    }
+    if (best < 0 || !ringSpot(_spot, p.x, p.z, DRY_RING[0], DRY_RING[1], rig.yaw, viewHalf(), true)) return -1;
+    P[best * 3] = _spot[0]; P[best * 3 + 1] = _spot[1]; P[best * 3 + 2] = _spot[2];
+    return best;
+  };
+  // the arrow toward a world point, from the camera's view: ahead / behind / left / right
+  const arrowTo = (x, z) => {
+    const p = cc.position, dx = x - p.x, dz = z - p.z, d = Math.hypot(dx, dz) || 1;
+    rig.getForward(_f); rig.getRight(_r);
+    const ahead = (dx * _f.x + dz * _f.z) / d, side = (dx * _r.x + dz * _r.z) / d;
+    return ahead > 0.82 ? '↑' : ahead < -0.7 ? '↓' : side > 0 ? '→' : '←';
+  };
+  // the BOO lesson: the first ghost rises 9..11 m ahead of the camera (in view), drifts in slowly and cannot catch
+  const _tspot = [0, 0];
+  const wakeTutor = (p) => {
+    let g = null;
+    if (ringSpot(_spot, p.x, p.z, TUTOR_R[0], TUTOR_R[1], rig.yaw, 0.25)) { _tspot[0] = _spot[0]; _tspot[1] = _spot[2]; g = ghosts.wake(p.x, p.z, Math.random, _tspot); }
+    if (!g) g = ghosts.wake(p.x, p.z);
+    if (!g) return;
+    g.tame = TUTOR_T;
+    rig.getForward(_f);
+    const dx = g.x - p.x, dz = g.z - p.z, d = Math.hypot(dx, dz) || 1;
+    G.tutorWake = { d: +d.toFixed(2), ahead: +((dx * _f.x + dz * _f.z) / d).toFixed(2) }; // (read by the browser test)
+  };
+  const lanternInView = (p) => {
+    const L = lanterns;
+    for (let i = 0; i < L.n; i++) {
+      if (!L.alive[i] || L.grow[i] < 1) continue;
+      const dx = L.x[i] - p.x, dz = L.z[i] - p.z;
+      if (dx * dx + dz * dz > LANTERN_HINT.r * LANTERN_HINT.r) continue;
+      if (onScreen(L.x[i], L.y[i] + 0.3, L.z[i], 0.85)) return true;
+    }
+    return false;
   };
 
   // ---------------------------------------------------------------- systems (registration order = run order)
@@ -379,18 +528,29 @@ async function boot() {
       input.update(dt);
       const c = input.controls, m = input.map;
       if (m.justPressed('mute')) hud.setMuted(audio.toggleMute());
-      if (G.state === 'title' || G.state === 'over') { if (m.justPressed('start') && (G.state === 'title' || G.endT > 1.5)) startRound(); return; }
-      if (c.menu) { if (G.state === 'play') setPaused(true); else if (G.state === 'paused') setPaused(false); return; }
+      // Enter / Space start (a key press is a user gesture too: the mouse is captured from here, within its activation)
+      if (G.state === 'title' || G.state === 'over') { if (m.justPressed('start') && (G.state === 'title' || G.endT > 1.5)) { startRound(); captureMouse(); } return; }
+      if (c.menu) { if (G.state === 'play') setPaused(true); else if (G.state === 'paused') { setPaused(false); captureMouse(); } return; }
       if (G.state !== 'play') { intent.moveX = intent.moveZ = intent.fwd = 0; intent.jump = false; return; }
-      if (c.lookX || c.lookY) rig.turn(-c.lookX, -c.lookY);
+      if (c.lookX || c.lookY) {
+        rig.turn(-c.lookX, -c.lookY);
+        if (G.lookHintT > 0 && (G.lookHintRad -= Math.abs(c.lookX) + Math.abs(c.lookY)) <= 0) { G.lookHintT = 0; hud.lookHint(null); }
+      }
       rig.getForward(_f); rig.getRight(_r);
-      let mx = _r.x * c.moveX + _f.x * c.moveY, mz = _r.z * c.moveX + _f.z * c.moveY;
+      let sx = c.moveX, sy = c.moveY;
+      if (stickCtl && stickCtl.pointer != null) {
+        // touch stick: a dead zone (a resting thumb's wobble neither moves nor turns the kid), then full speed at 3/4
+        // deflection (a comfortable push runs; the stick used to be linear, so most thumbs ran at 55-80 %)
+        const sm = Math.hypot(sx, sy), k = sm < STICK_DEAD ? 0 : Math.min(1, (sm - STICK_DEAD) / (STICK_FULL - STICK_DEAD)) / sm;
+        sx *= k; sy *= k;
+      }
+      let mx = _r.x * sx + _f.x * sy, mz = _r.z * sx + _f.z * sy;
       const l2 = mx * mx + mz * mz;
       if (l2 > 1) { const k = 1 / Math.sqrt(l2); mx *= k; mz *= k; }
       intent.moveX = mx; intent.moveZ = mz;
       // how much the stick / keys point "into the screen" (1 straight ahead, 0 sideways, < 0 toward the camera)
-      const ml = Math.hypot(c.moveX, c.moveY);
-      intent.fwd = ml > 0.2 ? c.moveY / ml : 0;
+      const ml = Math.hypot(sx, sy);
+      intent.fwd = ml > 0.2 ? sy / ml : 0;
       if (c.jump && !G.skipJump) intent.jump = true;
       G.skipJump = false;
       if (c.interact) doBoo();
@@ -419,8 +579,10 @@ async function boot() {
       ghosts.fixedUpdate(dt, kidInfo, playing);
       if (ghosts.events.caught >= 0 && playing) caught(ghosts.list[ghosts.events.caught]);
       if (ghosts.events.chaseStart >= 0 && playing) {
-        if (Math.random() < 0.7) audio.moan();
-        if (G.hintBoo) { G.hintBoo = false; hud.callout(touchUI ? 'GHOST! TAP BOO!' : 'GHOST! PRESS E', 'boo'); }
+        // the moan comes from the ghost's side of the view (every chase that starts close; 70 % of the far ones)
+        const q = ghosts.list[ghosts.events.chaseStart], gx = q.x - p.x, gz = q.z - p.z, gd = Math.hypot(gx, gz) || 1;
+        rig.getRight(_r);
+        if (gd < 12 || Math.random() < 0.7) audio.moan(clamp((gx * _r.x + gz * _r.z) / gd, -1, 1));
       }
       lanterns.fixedUpdate(dt);
       dyn.step(dt);
@@ -433,7 +595,7 @@ async function boot() {
       // the kid: interpolated pose, facing toward the move intent, animation, blink while safe
       yOff *= Math.exp(-20 * dt);
       player.position.lerpVectors(prev, cur, alpha); player.position.y += yOff;
-      if (intent.moveX * intent.moveX + intent.moveZ * intent.moveZ > 0.01) {
+      if (intent.moveX * intent.moveX + intent.moveZ * intent.moveZ > 1e-4) { // any real push (the stick dead zone is upstream)
         const goal = Math.atan2(-intent.moveX, -intent.moveZ);
         camState.facing = wrapPi(camState.facing + wrapPi(goal - camState.facing) * (1 - Math.exp(-12 * dt)));
       }
@@ -474,17 +636,47 @@ async function boot() {
         G.left -= dt;
         G.booT = Math.min(BOO_CD, G.booT + dt);
         if (G.hintT > 0 && (G.hintT -= dt) <= 0) hud.callout('GRAB THE CANDY!', 'good');
+        // until a first BOO lands: say it when a chaser is in reach and BOO is ready (the button glows then too)
+        if (G.hintBoo && (G.hintBooT -= dt) <= 0 && G.booT >= BOO_CD && ghosts.nearestChaser(p.x, p.z) < BOO_R) {
+          G.hintBooT = 6; hud.callout(touchUI ? 'GHOST! TAP BOO!' : 'GHOST! PRESS E', 'boo');
+        }
         G.safeT = Math.max(0, G.safeT - dt);
         const prog = 1 - G.left / ROUND;
-        ghosts.difficulty = prog; audio.intensity(prog);
+        if (G.mercyT > 0) G.mercyT -= dt;
+        ghosts.difficulty = Math.max(0, prog - (G.mercyT > 0 ? MERCY : 0)); audio.intensity(prog);
+        if (G.lookHintT > 0 && (G.lookHintT -= dt) <= 0) hud.lookHint(null);
         // ghosts rise on schedule
         const elapsed = ROUND - G.left;
-        while (G.wakeIdx < WAKE_AT.length && elapsed >= WAKE_AT[G.wakeIdx] * ROUND / 180) { G.wakeIdx++; if (ghosts.wake(p.x, p.z) && G.wakeIdx > 3) hud.callout('A GHOST RISES…', 'bad'); }
+        while (G.wakeIdx < WAKE_AT.length && elapsed >= WAKE_AT[G.wakeIdx] * ROUND / 180) {
+          G.wakeIdx++;
+          if (G.wakeIdx === 1 && G.tutor) { wakeTutor(p); continue; }
+          if (ghosts.wake(p.x, p.z) && G.wakeIdx > 3) hud.callout('A GHOST RISES…', 'bad');
+        }
+        // the first lantern in kicking reach and in view (first 20 s, until one is smashed): say it can be kicked
+        if (G.lanternHint && (G.lanternHintT -= dt) <= 0) {
+          G.lanternHintT = 0.25;
+          if (elapsed > LANTERN_HINT.until) G.lanternHint = false;
+          else if (elapsed > 2.4 && lanternInView(p)) { G.lanternHint = false; hud.callout('KICK THE LANTERN!', 'good'); }
+        }
         // candy trickles back; big pops now and then
         G.spawnT -= dt;
-        if (G.spawnT <= 0) { G.spawnT = 1.2; if (candy.restingCount < CANDY_TARGET) { const i = candy.spawnRandom(p.x, p.z); if (i >= 0) fx.motes(candy.p[i * 3], candy.p[i * 3 + 1], candy.p[i * 3 + 2], 6, 1.2, 0.8, 1.6); } }
+        if (G.spawnT <= 0) {
+          G.spawnT = 1.2;
+          const dry = !candyInView(p, DRY_R, DRY_NEED);
+          G.dryT = dry ? G.dryT + 1.2 : 0;
+          const i = candy.restingCount < CANDY_TARGET ? respawnCandy(p, dry) : G.dryT >= DRY_T ? relocateFar(p) : -1;
+          if (i >= 0) fx.motes(candy.p[i * 3], candy.p[i * 3 + 1], candy.p[i * 3 + 2], 6, 1.2, 0.8, 1.6);
+        }
         G.popT -= dt;
-        if (G.popT <= 0) { G.popT = 20 + Math.random() * 8; if (candy.countKind(CANDY_KIND.POP) < 2 && candy.spawnRandom(p.x, p.z, CANDY_KIND.POP, 16) >= 0) hud.callout('BIG POP SPOTTED!', 'good'); }
+        if (G.popT <= 0) {
+          // a big pop 14..26 m away, in view while the view is dry (it used to land anywhere 16+ m off: no novice or
+          // casual bot ever got one); the call-out points at it, an edge marker shows it while it is off screen
+          G.popT = 20 + Math.random() * 8;
+          if (candy.countKind(CANDY_KIND.POP) < 2) {
+            const dry = G.dryT > 0, i = ringSpot(_spot, p.x, p.z, POP_R[0], POP_R[1], rig.yaw, dry ? viewHalf() : Math.PI) ? candy.place(_spot[0], _spot[1], _spot[2], CANDY_KIND.POP) : candy.spawnRandom(p.x, p.z, CANDY_KIND.POP, 16);
+            if (i >= 0) hud.callout(`BIG POP SPOTTED ${arrowTo(candy.p[i * 3], candy.p[i * 3 + 2])}`, 'good');
+          }
+        }
         // the clock: warnings and the last ten seconds
         const s = Math.ceil(G.left);
         if (s !== G.lastCount) {
@@ -544,6 +736,21 @@ async function boot() {
     },
   }, 'world');
 
+  // edge markers: where on screen a world point is, or (off screen) a spot on an ellipse inside the HUD / thumb-free
+  // band toward it, by its bearing from the kid in the camera's frame (0 = ahead / up, + = right; behind = bottom)
+  const edge = { x: 0, y: 0, ang: 0, off: false };
+  const placeEdge = (x, y, z) => {
+    const p = cc.position, dx = x - p.x, dz = z - p.z;
+    edge.ang = Math.atan2(dx * _r.x + dz * _r.z, dx * _f.x + dz * _f.z);
+    _v.set(x, y, z).applyMatrix4(camera.matrixWorldInverse); // camera space: in front when z < 0
+    edge.off = true;
+    if (_v.z < -0.2) { _v.applyMatrix4(camera.projectionMatrix); edge.off = Math.abs(_v.x) > 0.92 || Math.abs(_v.y) > 0.9; }
+    const W = viewW, H = viewH, portrait = H > W;
+    const rx = W / 2 - (portrait ? 40 : 92), ry = H * (portrait ? 0.13 : 0.16), cy = H * (portrait ? 0.4 : 0.42);
+    edge.x = W / 2 + Math.sin(edge.ang) * rx; edge.y = cy - Math.cos(edge.ang) * ry;
+    return edge;
+  };
+  const GHOST_WARN = 12, GHOST_WARN_FULL = 4;
   let hudT = 0;
   engine.addSystem({
     lateUpdate(dt) {
@@ -552,9 +759,42 @@ async function boot() {
         if (hudT <= 0) { hudT = 0.1; hud.setClock(G.left, ROUND); }
         hud.setBoo(G.booT / BOO_CD);
         if (input.touch) input.touch.setProgress('boo', G.booT / BOO_CD);
-        const d = ghosts.nearestChaser(cc.position.x, cc.position.z);
-        hud.setDanger(G.state === 'play' ? clamp((7 - d) / 5, 0, 1) * 0.9 : 0);
-      }
+        const p = cc.position, playing = G.state === 'play';
+        rig.getForward(_f); rig.getRight(_r);
+        // the nearest chaser: the frost (thickest on its side), BOO's glow
+        let d = Infinity, ang = 0;
+        for (const g of ghosts.list) {
+          if (g.state !== 'chase') continue;
+          const gx = g.x - p.x, gz = g.z - p.z, gd = Math.hypot(gx, gz);
+          if (gd < d) { d = gd; ang = Math.atan2(gx * _r.x + gz * _r.z, gx * _f.x + gz * _f.z); }
+        }
+        hud.setDanger(playing ? clamp((7 - d) / 5, 0, 1) * 0.9 : 0, ang);
+        // BOO glows while it is ready and a chaser is in reach (novices had BOO ready at 25 of 28 catches)
+        const hot = playing && G.booT >= BOO_CD && d < BOO_R;
+        if (hot !== booHot) { booHot = hot; if (booBtn) booBtn.el.classList.toggle('hw-boo-hot', hot); hud.setBooHot(hot); }
+        // the nearest big pop, while it is off screen
+        let pi = -1, pd = Infinity;
+        const C = candy;
+        for (let i = 0; i < C.state.length; i++) {
+          if (C.state[i] === 0 || C.kind[i] !== CANDY_KIND.POP) continue;
+          const q = Math.hypot(C.p[i * 3] - p.x, C.p[i * 3 + 2] - p.z); if (q < pd) { pd = q; pi = i; }
+        }
+        if (playing && pi >= 0 && placeEdge(C.p[pi * 3], C.p[pi * 3 + 1] + 0.6, C.p[pi * 3 + 2]).off) hud.setEdge(hud.popEdge, true, edge.x, edge.y, edge.ang, 1, pd);
+        else hud.setEdge(hud.popEdge, false);
+        // ghosts closing in from off screen or from behind the kid (the camera side): a chevron, stronger as they near
+        let k = 0;
+        if (playing) {
+          for (const g of ghosts.list) {
+            if (g.state !== 'chase' || k >= hud.ghostEdges.length) continue;
+            const gd = Math.hypot(g.x - p.x, g.z - p.z);
+            if (gd > GHOST_WARN) continue;
+            const e = placeEdge(g.x, g.y - 0.4, g.z), behind = (g.x - p.x) * _f.x + (g.z - p.z) * _f.z < 0;
+            if (!e.off && !behind) continue;
+            hud.setEdge(hud.ghostEdges[k++], true, e.x, e.y, e.ang, clamp((GHOST_WARN - gd) / (GHOST_WARN - GHOST_WARN_FULL), 0, 1));
+          }
+        }
+        for (; k < hud.ghostEdges.length; k++) hud.setEdge(hud.ghostEdges[k], false);
+      } else if (booHot) { booHot = false; if (booBtn) booBtn.el.classList.remove('hw-boo-hot'); hud.setBooHot(false); }
     },
   }, 'hud');
   engine.addSystem({ lateUpdate: (dt) => audio.update(dt, G.state === 'play') }, 'audio');

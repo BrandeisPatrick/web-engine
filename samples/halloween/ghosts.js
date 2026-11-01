@@ -4,9 +4,12 @@
 //   dormant (under its grave, hidden) -> rise (out of the ground) -> wander <-> chase -> (caught the kid) retreat,
 //   any awake state -> flee (BOO!) -> wander.
 // A ghost that just caught the kid, was booed, or chased for CHASE_MAX s without catching stays calm (wanders, no chase)
-// for a few seconds, and after a catch the other ghosts close by calm down too (CALM_NEAR), so the round has breathing
-// room between attacks instead of one long pile-on (a pack used to catch a cornered kid again every time its 2 s of
-// safety ran out).
+// for a few seconds, and after a catch the other ghosts within CALM_R calm down too (CALM_NEAR, backing off; the
+// farther ones for CALM_FAR, a little longer than the kid's safety), so the round has breathing room between attacks
+// instead of one long pile-on (a pack used to catch a cornered kid again every time its 2 s of safety ran out).
+// At most `maxChasers` ghosts chase at once (the game sets 2 on phones); the others wait their turn HOLD_R m from the
+// kid (closer, a freed chase slot would start a chase from point-blank range). A "tame" ghost (g.tame > 0 s, the
+// game's BOO lesson) chases from any distance but slowly (TAME_SPEED) and cannot catch; a BOO or its time ends it.
 // Every ghost exists (and is simulated) for the whole round; waking one teleports its head and its whole cloth
 // (positions and previous positions, so no velocity) to a grave. The face (eyes, mouth) is painted in the cloth
 // texture where the dome's front lands in UV. Ghosts pass through everything (head layer 0) and cast no shadow.
@@ -20,7 +23,7 @@ import { patchRim } from './looks.js';
 const FLAT = [-Math.SQRT1_2, 0, 0, Math.SQRT1_2]; // grid normal (local +Z) -> world +Y; grid +Y -> world -Z (the face)
 const HEAD_R = 0.32, PIN_THETA = 1.3, SHEET = 2.15, HOVER = 1.55;
 // pacing (s): calm after a catch / a BOO / a chase given up; how long a chase lasts before the ghost gives up
-const CALM_CAUGHT = 5, CALM_NEAR = 3.5, CALM_BOO = 3, CALM_GIVEUP = 3.5, CHASE_MAX = 8;
+const CALM_CAUGHT = 5, CALM_NEAR = 5, CALM_R = 14, CALM_FAR = 4.5, CALM_BOO = 3, CALM_GIVEUP = 3.5, CHASE_MAX = 8, TAME_SPEED = 2.4, HOLD_R = 9;
 // a ghost fades out when it comes this close to the camera (m): a sheet over the lens hides the whole view
 const CAM_FADE0 = 1.4, CAM_FADE1 = 3.6;
 const _q = new THREE.Quaternion(), _e = new THREE.Euler();
@@ -87,6 +90,7 @@ export class Ghosts {
     this.list = [];
     this.time = 0;
     this.difficulty = 0; // 0..1 over the round: chase speed and aggro radius
+    this.maxChasers = Infinity; // how many may chase at once
     const sp = SHEET / (grid - 1), half = (grid - 1) / 2;
     for (let k = 0; k < count; k++) {
       const px = -200 - k * 8, py = -30, pz = -200;  // parked far below the level until woken
@@ -115,7 +119,7 @@ export class Ghosts {
       scene.add(cm.mesh);
       this.list.push({
         k, head, cloth, mesh: cm, mat, state: 'dormant', t: 0, x: px, y: py, z: pz, vx: 0, vz: 0, yaw: 0, lean: 0,
-        tx: 0, tz: 0, retarget: 0, lunge: 0, lungeCd: 0, phase: k * 1.7, scared: 0, alpha: 0, spawnI: 0, calm: 0,
+        tx: 0, tz: 0, retarget: 0, lunge: 0, lungeCd: 0, phase: k * 1.7, scared: 0, alpha: 0, spawnI: 0, calm: 0, tame: 0,
         restX: px, restY: py, restZ: pz,
       });
     }
@@ -148,7 +152,7 @@ export class Ghosts {
     this.difficulty = 0;
     this._lk = 0; if (this.light) this.light.intensity = 0;
     for (const g of this.list) {
-      g.state = 'dormant'; g.t = 0; g.scared = 0; g.alpha = 0; g.lunge = 0; g.lungeCd = 0; g.yaw = 0; g.lean = 0; g.calm = 0;
+      g.state = 'dormant'; g.t = 0; g.scared = 0; g.alpha = 0; g.lunge = 0; g.lungeCd = 0; g.yaw = 0; g.lean = 0; g.calm = 0; g.tame = 0;
       this._teleport(g, g.restX, g.restY, g.restZ);
       g.mesh.mesh.visible = false;
     }
@@ -156,13 +160,13 @@ export class Ghosts {
 
   get awake() { let n = 0; for (const g of this.list) if (g.state !== 'dormant') n++; return n; }
 
-  /** Wake the next dormant ghost at a grave away from the kid (px, pz). */
-  wake(px, pz, rnd = Math.random) {
+  /** Wake the next dormant ghost at a grave away from the kid (px, pz), or out of the ground at `spot` ([x, z]). */
+  wake(px, pz, rnd = Math.random, spot = null) {
     const g = this.list.find((q) => q.state === 'dormant');
     if (!g) return null;
     // a grave 14..35 m from the kid; none in reach (the kid is across the map): out of the ground 18..24 m away
-    let best = null, bd = Infinity;
-    for (let t = 0; t < 16; t++) {
+    let best = spot, bd = Infinity;
+    for (let t = 0; t < 16 && !best; t++) {
       const sp = this.spawns[Math.floor(rnd() * this.spawns.length)], d = Math.hypot(sp[0] - px, sp[1] - pz);
       if (d >= 14 && d <= 35 && Math.abs(d - 22) < bd) { bd = Math.abs(d - 22); best = sp; }
     }
@@ -174,7 +178,7 @@ export class Ghosts {
     const x = best[0], z = best[1] + 0.9, y = this.heightAt(x, z) - 1.2;
     g.yaw = Math.atan2(-(px - x), -(pz - z));
     this._teleport(g, x, y, z);
-    g.state = 'rise'; g.t = 0; g.alpha = 0; g.calm = 0; g.mesh.mesh.visible = true;
+    g.state = 'rise'; g.t = 0; g.alpha = 0; g.calm = 0; g.tame = 0; g.mesh.mesh.visible = true;
     g.tx = x; g.tz = z;
     return g;
   }
@@ -187,7 +191,7 @@ export class Ghosts {
       if (g.state === 'dormant' || g.state === 'rise') continue;
       const d = Math.hypot(g.x - x, g.z - z);
       if (d > r) continue;
-      g.state = 'flee'; g.t = 0; g.scared = 1;
+      g.state = 'flee'; g.t = 0; g.scared = 1; g.tame = 0;
       const k = 1 / Math.max(d, 0.1), dx = (g.x - x) * k, dz = (g.z - z) * k;
       g.vx = dx * 9; g.vz = dz * 9;
       out.push(g);
@@ -209,6 +213,8 @@ export class Ghosts {
     const E = this.events; E.caught = -1; E.chaseStart = -1;
     const L = this.list, D = this.difficulty;
     const chaseSpeed = 3.2 + 1.5 * D, aggro = 10 + 5 * D;
+    let chasing = 0;
+    for (let n = 0; n < L.length; n++) if (L[n].state === 'chase') chasing++;
     for (let n = 0; n < L.length; n++) {
       const g = L[n];
       if (g.state === 'dormant') continue;
@@ -218,6 +224,7 @@ export class Ghosts {
       g.scared = Math.max(0, g.scared - dt * 0.5);
       if (g.lungeCd > 0) g.lungeCd -= dt;
       if (g.calm > 0) g.calm -= dt;
+      if (g.tame > 0) g.tame -= dt;
       switch (g.state) {
         case 'rise': {
           const ground = this.heightAt(g.x, g.z), u = Math.min(1, g.t / 1.5);
@@ -232,25 +239,28 @@ export class Ghosts {
             const a = Math.random() * Math.PI * 2, r = 4 + Math.random() * 9;
             g.tx = Math.max(-PLAY + 4, Math.min(PLAY - 4, g.x + Math.cos(a) * r));
             g.tz = Math.max(-PLAY + 4, Math.min(PLAY - 4, g.z + Math.sin(a) * r));
-            // drift toward the kid a little, so the round stays lively
-            if (active) { g.tx += (kid.x - g.tx) * 0.45; g.tz += (kid.z - g.tz) * 0.45; }
+            // drift toward the kid a little, so the round stays lively (a calm ghost backs off instead)
+            if (active) { const w = g.calm > 0 ? -0.35 : 0.45; g.tx += (kid.x - g.tx) * w; g.tz += (kid.z - g.tz) * w; }
             g.retarget = 4 + Math.random() * 4;
           }
           const ex = g.tx - g.x, ez = g.tz - g.z, el = Math.hypot(ex, ez) || 1;
           wantX = ex / el; wantZ = ez / el; speed = 1.8 + 0.8 * D;
-          if (active && !kid.safe && g.calm <= 0 && dist < aggro) { g.state = 'chase'; g.t = 0; E.chaseStart = n; }
+          if (active && !kid.safe && g.calm <= 0 && (dist < aggro || g.tame > 0)) {
+            if (chasing < this.maxChasers) { g.state = 'chase'; g.t = 0; E.chaseStart = n; chasing++; }
+            else if (dist < HOLD_R) { const k = HOLD_R / Math.max(dist, 0.1); g.tx = kid.x - dx * k; g.tz = kid.z - dz * k; g.retarget = 1; }
+          }
           break;
         }
         case 'chase': {
           const lead = Math.min(0.6, dist / 8);
           const cx = kid.x + kid.vx * lead - g.x, cz = kid.z + kid.vz * lead - g.z, cl = Math.hypot(cx, cz) || 1;
-          wantX = cx / cl; wantZ = cz / cl; speed = chaseSpeed; accel = 4;
+          wantX = cx / cl; wantZ = cz / cl; speed = g.tame > 0 ? TAME_SPEED : chaseSpeed; accel = 4;
           // the lunge: a short burst once close (late and mild enough that a BOO at ~3 m still lands in time)
           if (dist < 2.8 && g.lungeCd <= 0) { g.lunge = 0.7; g.lungeCd = 2.4; }
           if (g.lunge > 0) { g.lunge -= dt; speed *= 1.3; accel = 6; }
           if (!active || kid.safe || dist > aggro + 9) { g.state = 'wander'; g.t = 0; g.retarget = 0; }
           else if (g.t > CHASE_MAX && g.lunge <= 0) { g.state = 'wander'; g.t = 0; g.retarget = 0; g.calm = CALM_GIVEUP; } // gives up
-          if (active && !kid.safe && dist < 0.85 && Math.abs(kid.y + 0.6 - (g.y - 0.5)) < 1.3) {
+          if (active && !kid.safe && g.tame <= 0 && dist < 0.85 && Math.abs(kid.y + 0.6 - (g.y - 0.5)) < 1.3) {
             E.caught = n; g.state = 'retreat'; g.t = 0;
           }
           break;
@@ -300,7 +310,8 @@ export class Ghosts {
     if (E.caught >= 0) { // the rest of the pack backs off for a moment too
       for (let n = 0; n < L.length; n++) {
         const o = L[n];
-        if (n !== E.caught && o.state !== 'dormant' && Math.hypot(o.x - kid.x, o.z - kid.z) < 9) o.calm = Math.max(o.calm, CALM_NEAR);
+        if (n === E.caught || o.state === 'dormant') continue;
+        if (Math.hypot(o.x - kid.x, o.z - kid.z) < CALM_R) { o.calm = Math.max(o.calm, CALM_NEAR); o.retarget = 0; } else o.calm = Math.max(o.calm, CALM_FAR);
       }
     }
   }

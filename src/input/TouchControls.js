@@ -20,6 +20,9 @@
 //                                  (zone: { width: 0.5 = fraction of the screen width from the stick's side, top: 0,
 //                                  bottom: 0 = px insets }) and returns to its rest spot (x, y) on release; the zone is
 //                                  a transparent element under the stick (a touch on the base re-centres it too).
+//   hitSlop: px (button entry)     an invisible ring that far around the button also presses it (a thumb that lands
+//                                  a little off still hits); the drawn button and its bounding box keep their size.
+//                                  Takes a portrait override like the other fields.
 // Methods: get(id) -> control | null, setLabel(id, text), setProgress(id, p) (a button's cooldown ring: p in [0, 1)
 //   draws the ring filled to p and dims the button, p >= 1 removes it; the DOM is only touched when the percentage
 //   changes, and no string is built per call), relayout() (re-place for the current orientation; also clears active
@@ -40,6 +43,7 @@ const CSS = `
   -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
 .ui-touch-btn.on{background:rgba(var(--ui-accent-rgb,232,33,39),.45);border-color:var(--ui-accent,#e82127);transform:scale(.94)}
 .ui-touch-zone{position:absolute;pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent}
+.ui-touch-slop{position:absolute;border-radius:50%;pointer-events:auto;touch-action:none}
 .ui-touch-stick.floating{opacity:.6;transition:opacity .15s}
 .ui-touch-stick.floating.on{opacity:1}
 .ui-touch-btn.cooling{opacity:.72}
@@ -148,7 +152,7 @@ export class TouchControls {
     const c = this.get(id);
     if (!c || c.type !== 'button') return;
     const t = String(text);
-    if (c.el.textContent !== t) c.el.textContent = t;
+    if (c.el.textContent !== t) { c.el.textContent = t; if (c.slop) c.el.appendChild(c.slop); }
   }
 
   /** Cooldown ring of a button: p in [0, 1) shows it filled to p (and dims the button), p >= 1 removes it. */
@@ -253,11 +257,13 @@ export class TouchControls {
     b.className = 'ui-touch-btn';
     b.textContent = c0.label ?? c0.id;
     this.root.appendChild(b);
-    const ctl = { type: 'button', id: c0.id, el: b, pointers: new Set(), progress: 100 };
+    const ctl = { type: 'button', id: c0.id, el: b, pointers: new Set(), progress: 100, slop: null };
     ctl.place = () => {
-      const c = resolveTouchEntry(c0, this.portrait), size = c.size ?? 64;
+      const c = resolveTouchEntry(c0, this.portrait), size = c.size ?? 64, h = c.hitSlop || 0;
       this._place(b, c, size, size);
       if (c.fontSize) b.style.fontSize = `${c.fontSize}px`;
+      if (h > 0 && !ctl.slop) { ctl.slop = document.createElement('span'); ctl.slop.className = 'ui-touch-slop'; b.appendChild(ctl.slop); }
+      if (ctl.slop) { const q = ctl.slop.style, v = `${-h}px`; q.top = q.right = q.bottom = q.left = v; q.display = h > 0 ? '' : 'none'; }
     };
     ctl.place();
     const sync = () => {
