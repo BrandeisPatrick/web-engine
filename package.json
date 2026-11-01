@@ -4,11 +4,11 @@
   "description": "Browser game engine on Three.js/WebGL2: fixed-step core with services and a CPU/GPU profiler, deterministic pure-JS physics (query hub, vehicle and character controllers, unified XPBD rigid bodies / joints / cloth / ropes / soft bodies / buoyancy / fracture), a measured render pipeline (forward MSAA or G-buffer + TAA, clustered lights, cascaded shadows, SSR, volumetrics, water, motion blur, depth of field, LUTs, GPU particles), animation with IK and ragdolls, input, camera rigs, synth audio, DOM UI widgets and data-driven city worlds (OpenStreetMap + terrain, traffic AI)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/BrandeisPatrick/inbrowser-game-engine.git"
+    "url": "git+https://github.com/BrandeisPatrick/web-engine.git"
   },
-  "homepage": "https://github.com/BrandeisPatrick/inbrowser-game-engine#readme",
+  "homepage": "https://github.com/BrandeisPatrick/web-engine#readme",
   "bugs": {
-    "url": "https://github.com/BrandeisPatrick/inbrowser-game-engine/issues"
+    "url": "https://github.com/BrandeisPatrick/web-engine/issues"
   },
   "type": "module",
   "main": "./src/index.js",
