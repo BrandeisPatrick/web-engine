@@ -8,10 +8,14 @@
 //   - sky dressing: a big moon billboard + halo and a ring of tree-line silhouettes, both depth-less (the post fog reads
 //     them as sky) and following the camera
 // Colliders go to the PhysicsWorld as static boxes (gravestones, fences, trunks, buildings). Exposes the spots the
-// game needs: lantern positions, ghost spawn points, a candy spawn sampler.
+// game needs: lantern positions, ghost spawn points, a candy spawn sampler, and glowSpots (halos the game draws over
+// the static glowing props: gate and porch lanterns, lit windows, crypt candles, the cauldron).
+// Materials: world-space grain on the props and the terrain (looks.js patchDetail; the terrain with a faint dew sheen),
+// contact shading + moss baked into the prop colours near the ground, grass tufts (Lambert) swaying in the wind.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { makeCanvas, finishTexture, mulberry32 } from '@vibe/engine/render';
+import { makeCanvas, mulberry32 } from '@vibe/engine/render';
+import { patchDetail, patchGrass } from './looks.js';
 
 export const PLAY = 50;     // fence half size (m): the playable square
 export const HALF = 64;     // terrain half size
@@ -85,11 +89,20 @@ class Batch {
   add(g, color, x = 0, y = 0, z = 0, ry = 0, rx = 0, rz = 0, sx = 1, sy = sx, sz = sx, glow = 1) {
     this.parts.push(place(paint(g, color, glow), x, y, z, ry, rx, rz, sx, sy, sz));
   }
-  build(material, name) {
+  /** ground (optional, heightAt): darken and moss-tint vertex colours near the ground (baked contact shading). */
+  build(material, name, ground = null) {
     if (!this.parts.length) return null;
     const g = mergeGeometries(this.parts);
     for (const p of this.parts) p.dispose();
     this.parts.length = 0;
+    if (ground) {
+      const P = g.attributes.position.array, C = g.attributes.color.array;
+      for (let i = 0; i < P.length; i += 3) {
+        const h = P[i + 1] - ground(P[i], P[i + 2]), k = smooth(h / 1.1), m = (1 - smooth(h / 0.45)) * 0.35;
+        const f = 0.52 + 0.48 * k;
+        C[i] = (C[i] + (MOSS.r - C[i]) * m) * f; C[i + 1] = (C[i + 1] + (MOSS.g - C[i + 1]) * m) * f; C[i + 2] = (C[i + 2] + (MOSS.b - C[i + 2]) * m) * f;
+      }
+    }
     g.computeBoundingSphere();
     const mesh = new THREE.Mesh(g, material);
     mesh.name = name;
@@ -98,22 +111,8 @@ class Batch {
 }
 
 // ------------------------------------------------------------------ textures
-function groundDetailTexture(renderer) {
-  const S = 256, c = makeCanvas(S), g = c.getContext('2d');
-  const img = g.createImageData(S, S), d = img.data, rnd = mulberry32(7);
-  for (let i = 0; i < S * S; i++) { const v = 200 + rnd() * 55; d[i * 4] = v; d[i * 4 + 1] = v; d[i * 4 + 2] = v; d[i * 4 + 3] = 255; }
-  g.putImageData(img, 0, 0);
-  // soft blotches (clumps and bare patches)
-  for (let k = 0; k < 90; k++) {
-    const x = rnd() * S, y = rnd() * S, r = 6 + rnd() * 26, a = 0.05 + rnd() * 0.12, dark = rnd() < 0.6;
-    for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) {
-      const gr = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
-      gr.addColorStop(0, dark ? `rgba(0,0,0,${a})` : `rgba(255,255,255,${a})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
-      g.fillStyle = gr; g.fillRect(x + ox - r, y + oy - r, r * 2, r * 2);
-    }
-  }
-  return finishTexture(new THREE.CanvasTexture(c), renderer, false); // a linear albedo multiplier (0.78..1), repeating
-}
+const MOSS = new THREE.Color('#26331f');
+let glowSpots = []; // filled by buildWorld (the props register their halos while it builds them)
 
 /** Moon disc with maria and a soft limb, plus a separate glow texture. */
 function moonTextures() {
@@ -275,9 +274,21 @@ function house(B, G, physics) {
   for (const sx of [-1.6, 4]) box(0.2, 2.8, 0.2, sx, 1.6, d / 2 + 1.5, TRIM);
   box(4.2, 0.2, 1.9, 1.2, 3, d / 2 + 0.8, ROOF);
   box(1.3, 2.3, 0.1, 1.2, 1.4, d / 2 + 0.03, '#120c10');
+  { // a porch lantern hanging by the door
+    const [px, pz] = L(2.3, d / 2 + 1.2);
+    B.add(new THREE.CylinderGeometry(0.012, 0.012, 0.3, 4), '#141016', px, y + 2.72, pz);
+    B.add(new THREE.ConeGeometry(0.16, 0.12, 4).rotateY(Math.PI / 4), '#141016', px, y + 2.52, pz, yaw);
+    G.add(new THREE.BoxGeometry(0.16, 0.24, 0.16), '#ffb253', px, y + 2.34, pz, yaw, 0, 0, 1, 1, 1, 2.4);
+    glowSpots.push([px, y + 2.34, pz, 2.2, 0.55, 0.26, 0.07, 1]);
+  }
   // glowing windows (front, side, tower): warm and one sickly green
   const win = (lx, ly, lz, ww, hh, col, k = 3) => { const [px, pz] = L(lx, lz); G.add(new THREE.PlaneGeometry(ww, hh), col, px, y + ly, pz, yaw, 0, 0, 1, 1, 1, k); };
-  for (const [lx, ly] of [[-2.2, 2.2], [3.6, 2.2], [-2.2, 4.6], [1.2, 4.6], [3.6, 4.6]]) win(lx, ly, d / 2 + 0.06, 1, 1.3, ly > 4 && lx > 3 ? '#9dff7a' : '#ffb347', 3.2);
+  for (const [lx, ly] of [[-2.2, 2.2], [3.6, 2.2], [-2.2, 4.6], [1.2, 4.6], [3.6, 4.6]]) {
+    const green = ly > 4 && lx > 3;
+    win(lx, ly, d / 2 + 0.06, 1, 1.3, green ? '#9dff7a' : '#ffb347', 3.2);
+    const [px, pz] = L(lx, d / 2 + 0.5); // a soft halo in the air just outside each lit window
+    glowSpots.push(green ? [px, y + ly, pz, 2.6, 0.08, 0.26, 0.06, 0.2] : [px, y + ly, pz, 2.6, 0.32, 0.15, 0.04, 0.2]);
+  }
   win(-w / 2 + 1, 7.6, d / 2 + 0.56, 0.9, 1.2, '#ffcf6a', 4);
   win(-w / 2 + 1, 4.2, d / 2 + 0.56, 0.8, 1.1, '#ff9a3a', 3);
   // window frames (crosses) in front of the glow
@@ -296,8 +307,12 @@ function crypt(B, G, physics) {
   B.add(new THREE.BoxGeometry(1.6, 2.4, 0.1), '#0c0a0e', x, y + 1.2, z + 2.22);
   B.add(new THREE.BoxGeometry(3.6, 0.3, 1.2), DARK, x, y + 0.1, z + 2.9);
   // candles by the door (glow) + an eerie green crack of light under the door
-  for (const sx of [-0.9, 0.9]) { B.add(new THREE.CylinderGeometry(0.05, 0.05, 0.25, 6), '#d8d0c0', x + sx, y + 0.37, z + 2.75); G.add(new THREE.SphereGeometry(0.06, 6, 4).scale(1, 1.6, 1), '#ffcc66', x + sx, y + 0.57, z + 2.75, 0, 0, 0, 1, 1, 1, 5); }
+  for (const sx of [-0.9, 0.9]) {
+    B.add(new THREE.CylinderGeometry(0.05, 0.05, 0.25, 6), '#d8d0c0', x + sx, y + 0.37, z + 2.75); G.add(new THREE.SphereGeometry(0.06, 6, 4).scale(1, 1.6, 1), '#ffcc66', x + sx, y + 0.57, z + 2.75, 0, 0, 0, 1, 1, 1, 5);
+    glowSpots.push([x + sx, y + 0.6, z + 2.75, 0.9, 0.45, 0.24, 0.06, 1]);
+  }
   G.add(new THREE.PlaneGeometry(1.4, 0.08), '#7dff9a', x, y + 0.06, z + 2.28, 0, 0, 0, 1, 1, 1, 4);
+  glowSpots.push([x, y + 0.25, z + 2.6, 2.2, 0.05, 0.22, 0.09, 0]);
   physics.addStaticBox(x - 2.6, y - 1, x + 2.6, y + 4.5, z - 2.3, z + 2.5);
 }
 
@@ -311,6 +326,7 @@ function cauldron(B, G, physics) {
   for (let k = 0; k < 3; k++) B.add(new THREE.CylinderGeometry(0.08, 0.08, 1.1, 6).rotateZ(Math.PI / 2), '#2c1d14', x, y + 0.1, z, k * 1.05);
   G.add(new THREE.SphereGeometry(0.3, 8, 4).scale(1.6, 0.25, 1.6), '#ff6a1a', x, y + 0.12, z, 0, 0, 0, 1, 1, 1, 3);
   G.add(new THREE.CircleGeometry(0.62, 18).rotateX(-Math.PI / 2), '#5dff6e', x, y + 1.18, z, 0, 0, 0, 1, 1, 1, 2.6);
+  glowSpots.push([x, y + 1.45, z, 3.2, 0.1, 0.42, 0.12, 0.4], [x, y + 0.2, z, 2.2, 0.5, 0.18, 0.03, 1]);
   physics.addStaticBox(x - 0.95, y - 1, x + 0.95, y + 1.25, z - 0.95, z + 0.95);
 }
 
@@ -327,6 +343,19 @@ function scarecrow(B, G, physics) {
   B.add(new THREE.ConeGeometry(0.22, 0.5, 10), '#2a2030', x, y + 2.78, z, 0, -0.25, 0.1);
   G.add(new THREE.PlaneGeometry(0.28, 0.12), '#ffd27a', x, y + 2.32, z + 0.29, 0, 0, 0, 1, 1, 1, 3);
   physics.addStaticBox(x - 0.3, y - 1, x + 0.3, y + 2.6, z - 0.3, z + 0.3);
+}
+
+/** A small iron candle lantern standing on the ground at (x, y, z): frame, glowing glass, a pyramid roof, a ring. */
+function candleLantern(B, G, x, y, z, ry = 0) {
+  const IRON = '#17141c';
+  B.add(new THREE.BoxGeometry(0.24, 0.04, 0.24), IRON, x, y + 0.02, z, ry);
+  for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+    const c = Math.cos(ry), sn = Math.sin(ry), lx = dx * 0.105, lz = dz * 0.105;
+    B.add(new THREE.BoxGeometry(0.022, 0.3, 0.022), IRON, x + lx * c + lz * sn, y + 0.19, z - lx * sn + lz * c, ry);
+  }
+  B.add(new THREE.ConeGeometry(0.19, 0.13, 4).rotateY(Math.PI / 4), IRON, x, y + 0.405, z, ry);
+  B.add(new THREE.TorusGeometry(0.035, 0.008, 4, 10), IRON, x, y + 0.49, z, ry);
+  G.add(new THREE.BoxGeometry(0.18, 0.27, 0.18), '#ffb253', x, y + 0.19, z, ry, 0, 0, 1, 1, 1, 2.2);
 }
 
 function hayBale(B, x, z, ry, physics) {
@@ -356,10 +385,12 @@ export function pumpkinGeometry(r = 0.4, ws = 16, hs = 11, bodyColor = '#ffffff'
 }
 
 // ------------------------------------------------------------------ build
-export function buildWorld({ scene, renderer, physics, low }) {
+export function buildWorld({ scene, physics, low }) {
   const rnd = mulberry32(2026);
   physics.setHeightfield(heightAt);
   const B = new Batch(), G = new Batch();
+  // halos the game draws every frame over static glowing props: [x, y, z, size, r, g, b, flicker 0..1]
+  glowSpots = [];
 
   // ---- terrain
   const N = low ? 96 : 140;
@@ -383,11 +414,11 @@ export function buildWorld({ scene, renderer, physics, low }) {
     }
     tg.setAttribute('color', new THREE.BufferAttribute(c, 3));
     tg.computeVertexNormals();
-    const uv = tg.attributes.uv;
-    for (let i = 0; i < uv.count; i++) uv.setXY(i, p.getX(i) / 3.2, p.getZ(i) / 3.2);
+    tg.deleteAttribute('uv');
   }
-  const detail = groundDetailTexture(renderer);
-  const terrain = new THREE.Mesh(tg, new THREE.MeshStandardMaterial({ vertexColors: true, map: detail, roughness: 0.96, metalness: 0 }));
+  // world-space grain + broad clumps (looks.js), and dew: damp patches catch the low moon as a soft sheen
+  const terrainMat = patchDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }), { scale: 0.9, amount: 0.5, broad: 0.6, dew: 1, spec: 0.15 });
+  const terrain = new THREE.Mesh(tg, terrainMat);
   terrain.name = 'terrain'; terrain.receiveShadow = true;
   scene.add(terrain);
 
@@ -415,8 +446,25 @@ export function buildWorld({ scene, renderer, physics, low }) {
   physics.addStaticBox(G0.x0 - 0.1, -5, G0.x0 + 0.1, 6, G0.z0, G0.z1);
   physics.addStaticBox(G0.x1 - 0.1, -5, G0.x1 + 0.1, 6, G0.z0, G0.z1);
   // gate posts with stone caps + an arch sign
-  for (const gx of G0.gate) { const y = heightAt(gx, G0.z1); B.add(new THREE.BoxGeometry(0.5, 2.4, 0.5), '#5a5563', gx, y + 1.2, G0.z1); B.add(new THREE.SphereGeometry(0.28, 10, 8), '#6b6675', gx, y + 2.6, G0.z1); }
+  for (const gx of G0.gate) {
+    const y = heightAt(gx, G0.z1), z = G0.z1;
+    B.add(new THREE.BoxGeometry(0.66, 0.36, 0.66), '#4f4a58', gx, y + 0.1, z);             // plinth
+    B.add(new THREE.BoxGeometry(0.58, 0.08, 0.58), '#5d5866', gx, y + 0.31, z);
+    B.add(new THREE.BoxGeometry(0.5, 2.0, 0.5), '#5a5563', gx, y + 1.3, z);               // shaft
+    B.add(new THREE.BoxGeometry(0.54, 0.07, 0.54), '#514c5a', gx, y + 1.62, z);           // a stone band
+    B.add(new THREE.BoxGeometry(0.62, 0.1, 0.62), '#66616f', gx, y + 2.33, z);            // cap slab
+    B.add(new THREE.BoxGeometry(0.5, 0.06, 0.5), '#5d5866', gx, y + 2.41, z);
+    B.add(new THREE.CylinderGeometry(0.09, 0.14, 0.08, 10), '#5d5866', gx, y + 2.47, z);  // finial neck
+    B.add(new THREE.SphereGeometry(0.28, 14, 10), '#6b6675', gx, y + 2.68, z);
+  }
   { const y = heightAt(16, G0.z1); B.add(new THREE.TorusGeometry(2.5, 0.06, 4, 20, Math.PI), '#1a1720', 16, y + 2.3, G0.z1); }
+  // candle lanterns at the foot of the gate posts, on their outer sides (the path between them stays clear): warm points
+  // framing the way in (glow geometry + a halo each)
+  for (const gx of G0.gate) {
+    const x = gx + (gx < 16 ? -0.62 : 0.62), z = G0.z1 + 0.42, y = heightAt(x, z);
+    candleLantern(B, G, x, y, z, gx < 16 ? 0.3 : -0.4);
+    glowSpots.push([x, y + 0.2, z, 1.7, 0.55, 0.26, 0.07, 1]);
+  }
   crypt(B, G, physics);
 
   // ---- haunted house, cauldron, scarecrow, hay bales
@@ -452,8 +500,9 @@ export function buildWorld({ scene, renderer, physics, low }) {
   physics.addStaticBox(F - 0.2, -5, F + 2, 8, -F, F);
 
   // ---- merged static meshes
-  const propMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0.02 });
-  const props = B.build(propMat, 'props');
+  // stone / bark / wood grain in world space (looks.js), contact shading + moss baked into the colours at the ground
+  const propMat = patchDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0.02 }), { scale: 1.7, amount: 0.62, broad: 0.32, streak: 0.55 });
+  const props = B.build(propMat, 'props', heightAt);
   props.castShadow = true; props.receiveShadow = true;
   scene.add(props);
   const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
@@ -502,28 +551,38 @@ export function buildWorld({ scene, renderer, physics, low }) {
   // ---- grass tufts (crossed blades, instanced)
   let tufts = null;
   {
-    const count = low ? 1100 : 2800;
-    const blade = [];
+    const count = low ? 2400 : 7000;
+    const blade = [], shade = [];
     for (let k = 0; k < 5; k++) { // five thin blades leaning out from the centre
       const a = k * 1.2566 + 0.3, ca = Math.cos(a), sa = Math.sin(a), w = 0.022, lean = 0.1 + (k % 2) * 0.06, h = 0.26 + (k % 3) * 0.07;
       blade.push(-sa * w + ca * 0.03, 0, ca * w + sa * 0.03, sa * w + ca * 0.03, 0, -ca * w + sa * 0.03, ca * lean, h, sa * lean);
+      shade.push(0.32, 0.36, 0.42, 0.32, 0.36, 0.42, 1.25, 1.3, 1.15); // dark roots, tips catching the moon
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(blade, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(shade, 3));
     g.computeVertexNormals();
     const n = g.attributes.normal; for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0); // lit like the ground
-    tufts = new THREE.InstancedMesh(g, new THREE.MeshStandardMaterial({ color: '#3d5a2c', roughness: 0.9, side: THREE.DoubleSide }), count);
+    // swaying in the wind (looks.js: the tips move, the roots stay)
+    // Lambert: no specular (up-facing blade normals caught the low moon as white glints), and cheaper per fragment
+    tufts = new THREE.InstancedMesh(g, patchGrass(new THREE.MeshLambertMaterial({ color: '#3d5a2c', vertexColors: true, side: THREE.DoubleSide })), count);
     tufts.name = 'grass';
     let n2 = 0;
-    for (let tries = 0; n2 < count && tries < count * 4; tries++) {
-      const x = (rnd() * 2 - 1) * (PLAY + 6), z = (rnd() * 2 - 1) * (PLAY + 6);
-      if (pathDist(x, z) < 1.6 || inPatch(x, z, -1)) continue;
-      const s = 0.6 + rnd() * 0.9;
-      _q.setFromEuler(_e.set((rnd() - 0.5) * 0.3, rnd() * 6.28, 0));
-      tufts.setMatrixAt(n2, _m.compose(_p.set(x, heightAt(x, z) - 0.02, z), _q, _s.set(s, s * (0.8 + rnd() * 0.9), s)));
-      tint.setHSL(0.22 + rnd() * 0.1, 0.45, 0.2 + rnd() * 0.12); tufts.setColorAt(n2, tint);
-      n2++;
-    }
+    const scatter = (R, upTo) => {
+      for (let tries = 0; n2 < upTo && tries < upTo * 4; tries++) {
+        const x = (R() * 2 - 1) * (PLAY + 6), z = (R() * 2 - 1) * (PLAY + 6);
+        if (pathDist(x, z) < 1.6 || inPatch(x, z, -1)) continue;
+        const s = 0.6 + R() * 0.9;
+        _q.setFromEuler(_e.set((R() - 0.5) * 0.3, R() * 6.28, 0));
+        tufts.setMatrixAt(n2, _m.compose(_p.set(x, heightAt(x, z) - 0.02, z), _q, _s.set(s, s * (0.8 + R() * 0.9), s)));
+        tint.setHSL(0.22 + R() * 0.1, 0.45, 0.2 + R() * 0.12); tufts.setColorAt(n2, tint);
+        n2++;
+      }
+    };
+    // the first tufts draw exactly the level's seeded numbers they always did (so the candy spots sampled after them
+    // stay where they were); the extra ones come from their own stream
+    scatter(rnd, low ? 1100 : 2800);
+    scatter(mulberry32(1031), count);
     tufts.count = n2;
     tufts.instanceMatrix.needsUpdate = true; tufts.instanceColor.needsUpdate = true;
     tufts.computeBoundingSphere();
@@ -541,7 +600,8 @@ export function buildWorld({ scene, renderer, physics, low }) {
   halo.renderOrder = 0; halo.frustumCulled = false;
   scene.add(halo, moon);
   const sky = new THREE.Mesh(new THREE.CylinderGeometry(300, 300, 56, 48, 1, true).translate(0, 12, 0),
-    new THREE.MeshBasicMaterial({ color: '#07040d', alphaMap: skylineTexture(), transparent: true, depthWrite: false, side: THREE.BackSide, fog: false }));
+    // a touch lighter than black: the far tree line sits in the night haze, behind the fogged hills
+    new THREE.MeshBasicMaterial({ color: '#0e0919', alphaMap: skylineTexture(), transparent: true, depthWrite: false, side: THREE.BackSide, fog: false }));
   sky.name = 'skyline'; sky.renderOrder = 2; sky.frustumCulled = false;
   scene.add(sky);
   const _moonDir = new THREE.Vector3();
@@ -575,7 +635,7 @@ export function buildWorld({ scene, renderer, physics, low }) {
   };
 
   return {
-    terrain, props, glow, pumpkins, leaves, tufts, moon, halo, sky, lanternSpots, ghostSpawns, graves, candySpot, heightAt,
+    terrain, props, glow, pumpkins, leaves, tufts, moon, halo, sky, lanternSpots, ghostSpawns, graves, candySpot, heightAt, glowSpots,
     /** Per frame: the sky dressing follows the camera (moon along the atmosphere's moon direction). */
     update(camera, moonDir) {
       const cp = camera.position;

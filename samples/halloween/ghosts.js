@@ -10,10 +10,12 @@
 // Every ghost exists (and is simulated) for the whole round; waking one teleports its head and its whole cloth
 // (positions and previous positions, so no velocity) to a grave. The face (eyes, mouth) is painted in the cloth
 // texture where the dome's front lands in UV. Ghosts pass through everything (head layer 0) and cast no shadow.
+// Look: a cold inner glow, a cyan moonlit rim (looks.js patchRim) and a shared alpha map whose hem fades into tatters.
 import * as THREE from 'three';
 import { Cloth, Shapes } from '@vibe/engine/physics';
 import { ClothMesh, makeCanvas } from '@vibe/engine/render';
 import { PLAY } from './world.js';
+import { patchRim } from './looks.js';
 
 const FLAT = [-Math.SQRT1_2, 0, 0, Math.SQRT1_2]; // grid normal (local +Z) -> world +Y; grid +Y -> world -Z (the face)
 const HEAD_R = 0.32, PIN_THETA = 1.3, SHEET = 2.15, HOVER = 1.55;
@@ -44,13 +46,44 @@ function ghostTexture(n) {
   return t;
 }
 
+let _hem = null;
+/** Shared alpha map: the head and the body solid, the hem (the sheet's outer ring) fading out into wisps. */
+function hemTexture() {
+  if (_hem) return _hem;
+  const S = 128, c = makeCanvas(S), g = c.getContext('2d');
+  const gr = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S * 0.5);
+  gr.addColorStop(0, '#fff'); gr.addColorStop(0.5, '#fff'); gr.addColorStop(0.78, '#9a9a9a'); gr.addColorStop(1, '#262626');
+  g.fillStyle = '#262626'; g.fillRect(0, 0, S, S);
+  g.fillStyle = gr; g.fillRect(0, 0, S, S);
+  // ragged tatters: darker wedges reaching in from the rim
+  g.globalCompositeOperation = 'multiply';
+  for (let k = 0; k < 26; k++) {
+    const a = (k / 26) * Math.PI * 2 + Math.sin(k * 7.3) * 0.1, w = 0.07 + 0.04 * Math.sin(k * 3.1), r0 = S * (0.36 + 0.06 * Math.sin(k * 5.7));
+    g.fillStyle = 'rgba(70,70,70,0.55)';
+    g.beginPath(); g.moveTo(S / 2 + Math.cos(a) * r0, S / 2 + Math.sin(a) * r0);
+    g.lineTo(S / 2 + Math.cos(a - w) * S * 0.72, S / 2 + Math.sin(a - w) * S * 0.72); g.lineTo(S / 2 + Math.cos(a + w) * S * 0.72, S / 2 + Math.sin(a + w) * S * 0.72); g.fill();
+  }
+  _hem = new THREE.CanvasTexture(c);
+  _hem.colorSpace = THREE.NoColorSpace;
+  return _hem;
+}
+
 export class Ghosts {
   /**
    * @param {object} o  scene, dyn (DynamicsWorld with particles), heightAt, spawns ([x, z][]), count, grid (particles per
-   *   side), glows (Glows), glowBase (first glow slot)
+   *   side), cloth (mass / shear / bend), light (false: true adds the one point light that follows the ghost nearest the
+   *   camera)
    */
-  constructor({ scene, dyn, heightAt, spawns, count = 6, grid = 13, cloth: co = {} }) {
+  constructor({ scene, dyn, heightAt, spawns, count = 6, grid = 13, cloth: co = {}, light = false }) {
     this.dyn = dyn; this.heightAt = heightAt; this.spawns = spawns;
+    // light: one real point light (cold blue) that follows the awake ghost nearest the camera, so a ghost casts its
+    // glow on the grass, the stones and the kid (always in the scene: a light count change would recompile shaders)
+    this.light = null; this._lk = 0;
+    if (light) {
+      this.light = new THREE.PointLight(0x9fb8ff, 0, 7.5, 1.6);
+      this.light.name = 'ghostLight'; this.light.position.set(0, -50, 0);
+      scene.add(this.light);
+    }
     this.list = [];
     this.time = 0;
     this.difficulty = 0; // 0..1 over the round: chase speed and aggro radius
@@ -72,10 +105,11 @@ export class Ghosts {
         stretch: 0, shear: co.shear ?? 0.02, bend: co.bend ?? 0.5, radius: sp * 0.3, pins,
       });
       const tex = ghostTexture(k);
-      const mat = new THREE.MeshStandardMaterial({
-        map: tex, emissiveMap: tex, color: '#f2f4ff', emissive: '#9fb2ff', emissiveIntensity: 0.55, roughness: 0.85, metalness: 0,
+      // a moonlit sheet: soft shading in the folds, a cold glow from within, a cyan rim, the hem fading into wisps
+      const mat = patchRim(new THREE.MeshStandardMaterial({
+        map: tex, emissiveMap: tex, alphaMap: hemTexture(), color: '#f2f4ff', emissive: '#9fb2ff', emissiveIntensity: 0.42, roughness: 0.8, metalness: 0,
         side: THREE.DoubleSide, transparent: true, opacity: 0.86, depthWrite: true,
-      });
+      }), { color: new THREE.Color(0.35, 0.6, 1.1), power: 2.2, share: 0.6, key: 'ghostRim' });
       const cm = new ClothMesh(dyn.particles, cloth, mat);
       cm.mesh.castShadow = false; cm.mesh.receiveShadow = false; cm.mesh.renderOrder = 3; cm.mesh.visible = false;
       scene.add(cm.mesh);
@@ -112,6 +146,7 @@ export class Ghosts {
   /** Every ghost back under the level (round reset). */
   reset() {
     this.difficulty = 0;
+    this._lk = 0; if (this.light) this.light.intensity = 0;
     for (const g of this.list) {
       g.state = 'dormant'; g.t = 0; g.scared = 0; g.alpha = 0; g.lunge = 0; g.lungeCd = 0; g.yaw = 0; g.lean = 0; g.calm = 0;
       this._teleport(g, g.restX, g.restY, g.restZ);
@@ -278,9 +313,10 @@ export class Ghosts {
    * cam (optional, a Vector3): ghosts close to it fade out, so a sheet drifting over the lens never fills the view.
    */
   update(dt, alpha, glows, base, cam = null) {
-    let n = 0;
+    let n = 0, lit = null, ld = 22;
     for (const g of this.list) {
       if (g.state === 'dormant') continue;
+      if (cam) { const d = Math.hypot(g.x - cam.x, g.z - cam.z); if (d < ld && g.alpha > 0.3) { ld = d; lit = g; } }
       g.mesh.update(alpha);
       const s = g.scared, m = g.mat;
       m.emissive.setRGB(0.62 - 0.2 * s, 0.7 - 0.35 * s, 1.0);
@@ -294,6 +330,17 @@ export class Ghosts {
       m.depthWrite = near > 0.95; // a faded sheet must not hide what is behind it
       const a = 0.22 * g.alpha * near;
       glows.set(base + n++, g.x, g.y - 0.15, g.z, 3.2, a * (0.7 - 0.3 * s), a * (0.8 - 0.4 * s), a * 1.2);
+    }
+    const L = this.light;
+    if (L) {
+      const k = 1 - Math.exp(-6 * dt);
+      if (lit) {
+        if (this._lk < 0.02) L.position.set(lit.x, lit.y - 0.2, lit.z); // was off: appear at the ghost, no slide
+        else { L.position.x += (lit.x - L.position.x) * k; L.position.y += (lit.y - 0.2 - L.position.y) * k; L.position.z += (lit.z - L.position.z) * k; }
+      }
+      const want = lit ? Math.min(1, lit.alpha) * (1 - Math.max(0, (ld - 14) / 8)) : 0;
+      this._lk += (want - this._lk) * k;
+      L.intensity = 2.4 * this._lk;
     }
     return n;
   }

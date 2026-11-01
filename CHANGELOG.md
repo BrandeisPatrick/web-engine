@@ -15,6 +15,21 @@ in 1.0.0), driven by the new Halloween game sample (`samples/halloween/`, "Midni
 - `isTouchDevice({ multiTouch: true })` also counts a coarse multi-touch device with a fine pointer attached (an iPad
   with a keyboard / trackpad: iPadOS Safari reports a Mac user agent; a phone with a stylus). Without the option the
   rule is unchanged.
+- `Atmosphere({ moonScatter })` (default 0 = off): at night the post fog glows toward the moon with that amount, and
+  the new `scatterDir` / `scatterColor` fields (the `sunDir` / `sunColor` objects themselves without the option)
+  follow the moon, so PostFX's fog glow and its volumetric pass light the night mist with moonlight shafts instead of
+  going dark. PostFX and VolumetricPass read the new fields (falling back to `sunDir` / `sunColor`); without the
+  option the output is unchanged, and by day nothing differs with it (`test/volumetric.mjs`).
+- Halloween visuals pass (`samples/halloween/`): a deep indigo sky with moon-lit cloud edges and bats crossing the
+  moon; less flat ambient and a stronger moon key; ground mist that glows toward the moon (desktop: volumetric moon
+  shafts); world-space stone / bark / grass detail on the props and terrain (`looks.js`), contact shading and moss
+  baked at the ground; stone gate pillars with candle lanterns, a porch lantern, halos over the lit windows, the crypt
+  and the cauldron; denser grass that sways in the wind; the kid with a moonlit rim, a self fill that keeps its colours
+  readable, a cape and hat tip that swing with the run, a lean and a landing squash; translucent ghosts with a cyan rim
+  and a wispy hem, and (desktop) the nearest ghost casting a cold light; a two-ripple BOO shockwave and glow flashes on
+  smashes, scares and big pops; a warmer, more contrasted night grade. Phones keep the same budget: no G-buffer, TAA,
+  SSR or volumetrics, the 1.5 pixel-ratio cap and adaptive resolution; the hidden meshes (ghost sheets, shards, BOO
+  rings) are drawn once at load so their GPU resources upload before play.
 - Samples: `samples/halloween/` (third-person candy hunt: CharacterController + AnimationController, XPBD cloth ghosts on
   kinematic heads, fracturePieces pumpkin shards on the DynamicsWorld, NearestLights lantern lights, night Atmosphere +
   PostFX, synth music / SFX, phone-first touch HUD); `test/browser/halloween.mjs` drives it on desktop and in phone
