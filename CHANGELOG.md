@@ -103,6 +103,23 @@ in 1.0.0), driven by the new Halloween game sample (`samples/halloween/`, "Midni
   (localStorage `midnight-candy-run.taught.*`; "BOO AT THE DOOR / = TRICK!" with BOO glowing at an opening door until
   the first trick), "A GHOST RISES..." once a round; ranks v2 (0 / 60 / 140 / 230 / 360 / 520, retuned on the phone
   bots); the results show porches n/5, tricks, BOOs, catches and the best streak.
+- Midnight Candy Run map v2 (`samples/halloween/world.js` + the new `village.js`, design pass 1, no engine change):
+  the same 100 x 100 m square as a village. A lane ring with four spokes from the spawn's green (3 m of dirt) replaces
+  the five radial paths; a 4.5 m knoll (a term of `heightAt`) carries the haunted house on its plateau; a creek crosses
+  the south third (z 19..22.5, its bed 1.2 m down, bank walls in 4 m pieces: falling in is allowed, a JUMP gets out,
+  "JUMP OUT!" once) with three plank footbridges and candle lanterns; five cottages (the gatekeeper's by the green,
+  Porch Row along the lane behind picket fences with gate gaps, the east cottage) and the haunted house are the porch
+  houses (`PORCHES`, which `porch-spots.js` now exports: each house leaves a 1.12 x 2.14 m doorway with a vestibule for
+  the porch logic's door, its lamp and railing are light groups of the merged glow mesh); the witch's hollow (the
+  cauldron in a ring of standing stones), the Bale Yard's stacked stair to a 2.2 m platform, the hollow oak, the well,
+  a signpost; the graveyard as it was. New `props.js` builders (cottages, footbridges, bank walls and reeds, standing
+  stones, bale blocks, the well, the signpost, the hollow oak, a bench, picket fences, path stones, small
+  jack-o'-lanterns, doormats); everything static is still the one props mesh and the one glow mesh, plus the creek's
+  water (one additive mesh with the moon's glint and low mist). 34 lanterns; candy spawns by zone share (the lane 30 %,
+  the graveyard 22, the patch 13, porch approaches 10, the creek's bed 8, the knoll 7, anywhere 10); `world.js` exports
+  `HAND_SPOTS`, `BRIDGES`, `CREEK`, `POP_SPOTS`, `SECRETS`, `CAULDRON`, `VANTAGE`, `THIEF_DEN` for the later passes.
+  Every collider is an axis-aligned box (every house faces along an axis). Spilled candy lands on a deck, a bridge or a
+  bale (`Candy` `floorAt`); the dry-view candy's clear run ignores what a jump clears; lit windows dim near the camera.
 
 ## 1.0.0 — 2026-10-30
 The release of the 1.0 roadmap (phases 0.5.0 - 0.9.0, ENGINE.md): a general engine with its graphics and physics pushed as

@@ -388,14 +388,21 @@ async function mapChecks(page, name) {
   enc.rowHop = (await walk([[-10.5, 29]], { timeout: 3000, jump: (s) => s.z < 33.1 })).done;
   await put(49.15, -2, Math.PI); await sleep(250);
   enc.p5Back = (await walk([[49.15, 3], [44, 4]], { timeout: 5000 })).done;
+  // every porch: up its steps onto the mat from 6 m out, off again to the side round its railing, and straight out
   const decks = [];
   for (let i = 0; i < 6; i++) {
     const p = await G(page, (k) => { const q = window.__game.world.porches[k]; return { x: q.mat.x, z: q.mat.z, y: q.mat.y, yaw: q.yaw }; }, i);
+    const fx = Math.sin(p.yaw), fz = Math.cos(p.yaw), sx = fz, sz = -fx; // out from the door; along the wall
+    await put(p.x + fx * 6, p.z + fz * 6, p.yaw); await sleep(250);
+    const onto = await walk([[p.x, p.z]], { timeout: 3500, near: 0.5 });
+    const side = await walk([[p.x + fx * 1.2 + sx * 4, p.z + fz * 1.2 + sz * 4], [p.x + fx * 4 + sx * 4, p.z + fz * 4 + sz * 4]], { timeout: 4000, autoJump: true, near: 0.7 });
     await put(p.x, p.z, p.yaw + Math.PI, p.y + 0.3); await sleep(250);
-    decks.push((await walk([[p.x + Math.sin(p.yaw) * 5, p.z + Math.cos(p.yaw) * 5]], { timeout: 3000 })).done);
+    const out = await walk([[p.x + fx * 5, p.z + fz * 5]], { timeout: 3000 });
+    decks.push(`${onto.done ? 1 : 0}${side.done ? 1 : 0}${out.done ? 1 : 0}`);
   }
-  enc.decks = decks.every(Boolean);
-  check(name, 'enclosures: the hollow oak in and out, up the Bale Yard\'s stair to the pop and off, Porch Row\'s yard through a gate gap and over the fence, behind the east cottage, off every porch', Object.values(enc).every(Boolean), JSON.stringify({ ...enc, decks }));
+  await G(page, () => window.__game.porches.reset(false));
+  enc.decks = decks.every((d) => d === '111');
+  check(name, 'enclosures: the hollow oak in and out, up the Bale Yard\'s stair to the pop and off, Porch Row\'s yard through a gate gap and over the fence, behind the east cottage; every porch onto its mat, off round the side, out the front', Object.values(enc).every(Boolean), JSON.stringify({ ...enc, decks }));
   // ---- the whole map: from the spawn, every free spot (0.5 m grid) is reachable and the kid can get back
   const flood = await G(page, () => {
     const g = window.__game, w = g.world, P = g.physics, S = 0.5, N = Math.round(99 / S) + 1, o = -49.5;
