@@ -67,6 +67,12 @@ no model, texture or sound files: the kid, the graveyard and the music are all m
 - **Fracture:** jack-o'-lanterns break into real physics pieces.
 - **Synth audio:** music, ambience and effects are synthesized live. The music speeds up toward midnight.
 - **Phone touch controls:** a floating stick, a cooldown ring on BOO, safe-area layout, portrait and landscape.
+- **A night that builds to midnight:** the wind rises in gusts that bend the grass and the dead trees and blow autumn
+  leaves past you (and kick them up as you run); clouds thicken and race across the moon, which dims the graveyard as
+  they pass; the mist creeps in and pours out of graves when a ghost rises; soft lightning and thunder arrive in the
+  last minutes, the lanterns gutter, the house lights blink, the gate creaks, and the moon turns blood red in the
+  last seconds. Crows on the gate, the scarecrow and the stones take off when you run near. With "reduce motion" set
+  on the device, it all moves slower and the lightning is a gentle glow.
 
 The engine changes this game needed are opt-in and listed in the [CHANGELOG](../../CHANGELOG.md) under
 "Unreleased".
@@ -84,6 +90,7 @@ The engine changes this game needed are opt-in and listed in the [CHANGELOG](../
 | `candy.js` | The candy pool: instanced meshes, the magnet and spilled candy. |
 | `effects.js` | Glow billboards, the engine `ParticleSystem` sparks and the BOO ring. |
 | `reach.js` | The faint ring on the ground that shows BOO's reach while a ghost is inside it. |
+| `environment.js` | The living night, driven by the round clock: wind gusts, blowing and kicked-up leaves, clouds over the moon and the blood moon, creeping mist, lightning and thunder, crows, flickering lights, the swinging gate and their sounds. Animated on the GPU from a few uniforms (`setFinale(on)` pushes it to its peak). |
 | `audio.js` | All synth sound on `AudioBus`: a D-minor music loop, ambience, effects and the midnight bells. |
 | `hud.js` | The DOM title, HUD (candy and the next rank, the streak meter, the clock and the pace against your best, call-outs), pause, how-to-play and results screens (rank ladder, share), and the full-screen toggle. |
 

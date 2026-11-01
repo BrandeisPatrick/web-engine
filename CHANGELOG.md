@@ -56,6 +56,20 @@ in 1.0.0), driven by the new Halloween game sample (`samples/halloween/`, "Midni
   candy pill, +3 every 10th quick pickup); sharing a score (Web Share on phones, else the clipboard); a faint ring
   showing BOO's reach while a ghost is inside it; ghosts stay a veil at the lens; on touchscreens a push straight into
   a gravestone, tree or fence slides round it.
+- Midnight Candy Run environment pass (`samples/halloween/environment.js`, phones first): the night escalates with the
+  round clock from a breezy 11:57 to a storm at midnight. Wind gusts bend the grass and the dead trees (and their
+  shadows) and blow autumn leaves through the view; the kid kicks leaves up as it runs; clouds thicken and race across
+  the moon, which dims the graveyard while one covers it, and turns blood red in the last seconds; the ground mist
+  thickens, mist banks drift, a grave breathes out mist as a ghost rises; soft sheet lightning with thunder in the
+  last minutes; crows on the gate, the scarecrow, the crypt and the stones lift off when the kid runs near (or a BOO /
+  thunder) and glide back later; flames gutter in the gusts, the house windows blink near midnight; the gate's leaves
+  swing and creak; wind, thunder, caws and the creak are synthesized on the game's AudioBus. All GPU-animated from a
+  few uniforms: three new draws (leaves and crows in one, the mist, the clouds over the moon), the trees and the gate
+  through the props mesh, the lamps through light groups of the existing glow mesh, and the moon and its halo merged
+  into one quad (one draw fewer); no per-frame allocation, its own seeded random stream; `heightAt` measures only the
+  path segments near the point (same values, less work per spark). `prefers-reduced-motion` slows it and keeps the
+  lightning a dim, slow swell. The Witching Hour calls `env.setFinale(true)`: the storm, the lightning and the blood
+  moon at their peak (until Play Again or the title). No engine changes.
 
 ## 1.0.0 — 2026-10-30
 The release of the 1.0 roadmap (phases 0.5.0 - 0.9.0, ENGINE.md): a general engine with its graphics and physics pushed as
