@@ -6,8 +6,8 @@
 // A ghost that just caught the kid, was booed, or chased for CHASE_MAX s without catching stays calm (wanders, no chase)
 // for a few seconds, and after a catch the other ghosts within CALM_R calm down too (CALM_NEAR; the farther ones for
 // CALM_FAR, a little longer than the kid's safety), so the round has breathing room between attacks instead of one long pile-on (a pack used to catch a cornered kid again every time its
-// 2 s of safety ran out). At most `maxChasers` ghosts chase at once (the game sets 2 on phones); the others keep
-// wandering and drifting toward the kid. A "tame" ghost (g.tame > 0 s, the game's BOO lesson) chases from any distance
+// 2 s of safety ran out). At most `maxChasers` ghosts chase at once (the game sets 2 on phones); the others wait
+// their turn at HOLD_R from the kid (closer, a free chase slot would start a chase from point-blank range). A "tame" ghost (g.tame > 0 s, the game's BOO lesson) chases from any distance
 // but slowly (TAME_SPEED) and cannot catch; a BOO or the time running out ends it.
 // Every ghost exists (and is simulated) for the whole round; waking one teleports its head and its whole cloth
 // (positions and previous positions, so no velocity) to a grave. The face (eyes, mouth) is painted in the cloth
@@ -22,7 +22,7 @@ import { patchRim } from './looks.js';
 const FLAT = [-Math.SQRT1_2, 0, 0, Math.SQRT1_2]; // grid normal (local +Z) -> world +Y; grid +Y -> world -Z (the face)
 const HEAD_R = 0.32, PIN_THETA = 1.3, SHEET = 2.15, HOVER = 1.55;
 // pacing (s): calm after a catch / a BOO / a chase given up; how long a chase lasts before the ghost gives up
-const CALM_CAUGHT = 5, CALM_NEAR = 5, CALM_R = 14, CALM_FAR = 4.5, CALM_BOO = 3, CALM_GIVEUP = 3.5, CHASE_MAX = 8, TAME_SPEED = 2.4;
+const CALM_CAUGHT = 5, CALM_NEAR = 5, CALM_R = 14, CALM_FAR = 4.5, CALM_BOO = 3, CALM_GIVEUP = 3.5, CHASE_MAX = 8, TAME_SPEED = 2.4, HOLD_R = 9;
 // a ghost fades out when it comes this close to the camera (m): a sheet over the lens hides the whole view
 const CAM_FADE0 = 1.4, CAM_FADE1 = 3.6;
 const _q = new THREE.Quaternion(), _e = new THREE.Euler();
@@ -244,7 +244,10 @@ export class Ghosts {
           }
           const ex = g.tx - g.x, ez = g.tz - g.z, el = Math.hypot(ex, ez) || 1;
           wantX = ex / el; wantZ = ez / el; speed = 1.8 + 0.8 * D;
-          if (active && !kid.safe && g.calm <= 0 && (dist < aggro || g.tame > 0) && chasing < this.maxChasers) { g.state = 'chase'; g.t = 0; E.chaseStart = n; chasing++; }
+          if (active && !kid.safe && g.calm <= 0 && (dist < aggro || g.tame > 0)) {
+            if (chasing < this.maxChasers) { g.state = 'chase'; g.t = 0; E.chaseStart = n; chasing++; }
+            else if (dist < HOLD_R) { const k = HOLD_R / Math.max(dist, 0.1); g.tx = kid.x - dx * k; g.tz = kid.z - dz * k; g.retarget = 1; }
+          }
           break;
         }
         case 'chase': {

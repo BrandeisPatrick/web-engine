@@ -63,7 +63,7 @@ const MAGNET_TOUCH = 3.2, MAGNET_DESK = 2.4; // candy pull radius (m)
 // a clear straight run to it); after DRY_T s of a dry view, a far resting candy (off screen, > FAR m away) moves into
 // the nearer DRY_RING every respawn tick (a narrow portrait view used to show no candy at all for two thirds of a
 // round). A view with candy in it keeps the uniform respawns: good players get no extra help. Big pops rise POP_R m
-// away inside the view.
+// away (inside the view while it is dry).
 const AHEAD_SHARE = 0.6, AHEAD_R = [9, 22], AHEAD_HALF = 50 * Math.PI / 180, POP_R = [14, 26];
 const DRY_R = 15, DRY_NEED = 2, DRY_T = 3, FAR = 30, DRY_RING = [8, 15];
 // the first desktop round shows how the mouse looks for LOOK_HINT_T s or until LOOK_HINT_RAD of look input
@@ -669,11 +669,11 @@ async function boot() {
         }
         G.popT -= dt;
         if (G.popT <= 0) {
-          // a big pop 14..26 m away in view (it used to land anywhere 16+ m off, rarely seen: no novice or casual bot
-          // ever got one); the call-out points at it, an edge marker shows it while it is off screen
+          // a big pop 14..26 m away, in view while the view is dry (it used to land anywhere 16+ m off: no novice or
+          // casual bot ever got one); the call-out points at it, an edge marker shows it while it is off screen
           G.popT = 20 + Math.random() * 8;
           if (candy.countKind(CANDY_KIND.POP) < 2) {
-            const i = ringSpot(_spot, p.x, p.z, POP_R[0], POP_R[1], rig.yaw, viewHalf()) ? candy.place(_spot[0], _spot[1], _spot[2], CANDY_KIND.POP) : candy.spawnRandom(p.x, p.z, CANDY_KIND.POP, 16);
+            const dry = G.dryT > 0, i = ringSpot(_spot, p.x, p.z, POP_R[0], POP_R[1], rig.yaw, dry ? viewHalf() : Math.PI) ? candy.place(_spot[0], _spot[1], _spot[2], CANDY_KIND.POP) : candy.spawnRandom(p.x, p.z, CANDY_KIND.POP, 16);
             if (i >= 0) hud.callout(`BIG POP SPOTTED ${arrowTo(candy.p[i * 3], candy.p[i * 3 + 2])}`, 'good');
           }
         }
