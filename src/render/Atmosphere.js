@@ -15,11 +15,17 @@
 //   atmo.setTimeOfDay(hoursOrPreset) / atmo.setTime(hours)
 //   atmo.darkness (0 day .. 1 night), atmo.windowGlow (night emissive factor), atmo.sunDir, atmo.sunColor,
 //   atmo.fogColor, atmo.fogParams (post fog), atmo.skyCube, atmo.version (bumps on every time change)
+//   atmo.scatterDir / atmo.scatterColor: the light the post fog's forward-scatter glow and the volumetric pass use;
+//   the sunDir / sunColor objects themselves unless moonScatter is on (then the moon's at night, see below)
 //   atmo.setFogMode('scene' | 'post'), atmo.renderFlare(renderer, camera), atmo.setFlareScale(bufferHeight)
 //   atmo.setShadowKernel('pcf' | 'fast' | 'pcss', root?)  sun shadow filter, switchable at runtime; atmo.shadowKernel
 //   atmo.shadowCascadeInfo(out)    cascade lights, cameras, shadow matrices, half sizes and maps (sampling passes)
 // Tunings (constructor options; defaults are the Roadster values): sun (solar model), looks (keyframes),
 // skyGain, sunIntensity, moon, cloudWind, fog, maxCasterHeight, flare, timePresets.
+// moonScatter (opt-in, default 0 = off): at night (the moon is the shadow-casting light: lightDir = moonDir) the post
+// fog glows toward the moon with this forward-scatter amount (fogParams.sunScatter, otherwise 0 at night), and
+// scatterDir / scatterColor follow the moon (moonDir, moonColor), so the fog glow and PostFX's volumetric pass march
+// and colour the moon's light, shadowed by the cascades that follow it. By day nothing changes.
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { Lensflare, LensflareElement } from 'three/addons/objects/Lensflare.js';
@@ -315,6 +321,7 @@ export class Atmosphere {
     this.skyRadius = opts.skyRadius ?? 4000;
     this.sunIntensity = opts.sunIntensity ?? 3.9;
     this.moonIntensity = opts.moonIntensity ?? 0.3;
+    this.moonScatter = Math.max(0, +opts.moonScatter || 0); // opt-in moonlit fog glow / volumetrics at night (header)
     this.moonColor = new THREE.Color(...(opts.moonColor || [0.62, 0.72, 1.0]));
     this.fogDensity = opts.fogDensity ?? [0.00030, 0.00015]; // scene fog: day density, extra at night
     this.flareSpec = opts.flare === false ? null : opts.flare || DEFAULT_FLARE;
@@ -333,6 +340,9 @@ export class Atmosphere {
     this.fogMode = 'scene';
     this.camera = opts.camera || null;  // optional THREE.Camera: shadow cascades lead the view direction, lens flare
     this.sunColor = new THREE.Color(1, 1, 1);
+    // the scattering light (PostFX fog glow, volumetric pass): the sun's own objects unless moonScatter is on
+    this.scatterDir = this.moonScatter > 0 ? new THREE.Vector3(0, 1, 0) : this.sunDir;
+    this.scatterColor = this.moonScatter > 0 ? new THREE.Color(1, 1, 1) : this.sunColor;
     this.fogParams = { haze: 0.0002, hazeK: 1 / 700, hazeBase: 0, mist: 0.0001, mistK: 1 / 40, sunScatter: 0.0 };
     this.look = lookAt(this.looks, 10);
     this.cloudWind = new THREE.Vector2(...(opts.cloudWind || [6.5, 2.2])); // m/s at cloud height
@@ -700,6 +710,8 @@ export class Atmosphere {
     this.lightDir.copy(day > 0.02 ? d : this.moonDir);
     this.sun.color.copy(day > 0.02 ? sl.color : moonCol);
     this.sun.intensity = day > 0.02 ? this.sunIntensity * day * Math.pow(sl.trans, 0.8) * L.sun : this.moonIntensity;
+    const moonLit = this.moonScatter > 0 && !(day > 0.02); // moonScatter: the fog glow / volumetrics follow the moon
+    if (this.moonScatter > 0) { this.scatterDir.copy(moonLit ? this.moonDir : d); this.scatterColor.copy(moonLit ? moonCol : sl.color); }
     this._farDirty = true;
 
     // sky uniforms (both skies)
@@ -752,7 +764,7 @@ export class Atmosphere {
     // post fog parameters
     const fp = this.fogParams;
     fp.haze = L.haze; fp.mist = L.mist;
-    fp.sunScatter = 0.05 * day * (1 - smoothstep(25 * DEG, 45 * DEG, el));
+    fp.sunScatter = moonLit ? this.moonScatter : 0.05 * day * (1 - smoothstep(25 * DEG, 45 * DEG, el));
 
     // hemisphere: sky dome colour from the horizon, ground = warm bounce of the sun (city lights at night)
     const hn = hor.clone().multiplyScalar(1 / Math.max(0.03, Math.max(hor.r, hor.g, hor.b)));

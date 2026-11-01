@@ -72,6 +72,14 @@ engine.start();
   over the G-buffer path (0.7.0), filmic grade, vignette, height fog pass. Everything resolution-aware.
 - Local lights: `NearestLights` pool of 8 real point lights + emissive pools for the rest, or (0.7.0) every lamp in
   range through `ClusteredLights` (`lights: { clustered: true }`); headlight cones stay additive sprites.
+- Moonlit scattering (opt-in, `new Atmosphere({ moonScatter: amount })`, default 0 = off): at night, while the moon
+  is the shadow-casting light (`lightDir = moonDir`), the post fog's forward-scatter glow (`fogParams.sunScatter`,
+  otherwise 0 at night) is `amount`, and `atmo.scatterDir` / `atmo.scatterColor` follow the moon (`moonDir`,
+  `moonColor`). PostFX's fog glow and the volumetric pass read those fields (falling back to `sunDir` / `sunColor`),
+  so with `volumetric` on the pass marches moonlight shafts through the cascades that follow the moon, coloured
+  `moonColor * moonIntensity`. Without the option both fields ARE the `sunDir` / `sunColor` objects: output
+  unchanged, and by day nothing differs with it either (`test/volumetric.mjs`). The Halloween sample uses it (phones:
+  the analytic glow only; desktop: the volumetric pass at `intensity` 0.07, 50 m).
 
 ## Render pipeline (0.7.0): G-buffer, TAA, clustered lights, cascades, GPU particles
 Two paths, chosen per `PostFX` instance; the forward path is the default and renders bit-identically to 0.6.0.
@@ -189,7 +197,8 @@ every default pose equal to the 0.7.0 gate. All knobs are live through `postfx.s
   adds `sunColor * sun.intensity * intensity * upsample(r)` after the fog and drops the analytic sun-glow term. The
   units are physical: in Canyon Run's thin desert haze (optical depth ~0.08 over 400 m) and inside a canyon whose
   air is in the walls' shadow, the shafts are faint by construction; `density` and `intensity` are the look knobs.
-  Past the far cascade box (260 m by default) the air counts as lit.
+  Past the far cascade box (260 m by default) the air counts as lit. At night the pass is dark unless the
+  Atmosphere's `moonScatter` is on: then it marches the moon (see "Lighting").
 - **Water refraction** (`world/Water.js` `createWaterMaterial({ refraction })`, `MapWorld({ water: { refraction:
   false } })`, `world.setWaterRefraction`, `render/SceneCopy.js`): `SceneCopy` copies the bound scene target's
   colour + depth into a half-resolution RGBA16F + R32F pair right before the water draws (its `onBeforeRender`, one

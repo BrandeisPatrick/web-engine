@@ -1240,12 +1240,15 @@ export class PostFX {
       const fp = a.fogParams;
       u.uFogA.value.set(fp.haze, fp.hazeK, fp.hazeBase || 0, this.fogFarFade);
       u.uFogB.value.set(fp.mist, fp.mistK, 0, this.fogMinSkyEl);
-      u.uSunDir.value.copy(a.sunDir);
-      u.uSunCol.value.copy(a.sunColor);
+      // the scattering light: the sun (scatterDir / scatterColor are the sun's own objects), or the moon at night
+      // with the Atmosphere's opt-in moonScatter
+      const sc = a.scatterColor || a.sunColor;
+      u.uSunDir.value.copy(a.scatterDir || a.sunDir);
+      u.uSunCol.value.copy(sc);
       const vol = this.volumetricPass;
       u.uSunScatter.value = vol !== null && vol.enabled ? 0 : fp.sunScatter; // the volume pass draws the sun's in-scatter
       // the pass's r is per unit of sun irradiance: sunColor * sun.intensity (the light) * the intensity knob
-      if (vol !== null) u.uVolColor.value.copy(a.sunColor).multiplyScalar((a.sun ? a.sun.intensity : 1) * this.volumetricOptions.intensity);
+      if (vol !== null) u.uVolColor.value.copy(sc).multiplyScalar((a.sun ? a.sun.intensity : 1) * this.volumetricOptions.intensity);
     } else {
       const fp = this.fogParams;
       u.uFogA.value.set(fp.haze, fp.hazeK, fp.hazeBase || 0, this.fogFarFade);

@@ -39,6 +39,9 @@
 // gate: a sun / moon switch, 1 while Atmosphere's day factor smoothstep(-2, 3 deg, sun elevation) is > 0.02 (the
 // cascades are the sun's), else 0 (they follow the moon: Atmosphere.lightDir), so the pass is dark at night. It
 // carries neither the sun's colour nor its intensity (atmosphere.sun.intensity already includes the day factor).
+// The direction is atmosphere.scatterDir when it has one (else sunDir): the sun's own sunDir by default; with the
+// Atmosphere's opt-in moonScatter it is the moon at night, so the gate (from its elevation) opens and the pass marches
+// the moonlight through the cascades that follow the moon.
 // Zero output (one clear to (0, 60000), then nothing until it changes; the history restarts): no depth texture, no
 // shadow-casting cascade, a cascade map not rendered yet (null), gate 0, or an empty medium (density * fog 0). The
 // frame's scalar uniforms (uMarch with the gate, uPhase, uMedium, uClip, uSunDir, uSteps) are written first; the
@@ -512,7 +515,10 @@ export class VolumetricPass extends Pass {
     // does not inline boxes them, which allocates every frame).
     // gate: the sun / moon switch of Atmosphere.setTime (day = smoothstep(-2, 3 deg, elevation) > 0.02: the sun's
     // cascades). No smoothstep weight here: atmosphere.sun.intensity, which the final pass applies, carries it.
-    const sy = atmo.sunDir.y, el = Math.asin(sy < -1 ? -1 : sy > 1 ? 1 : sy);
+    // the scattering light: atmosphere.scatterDir (the sun's own sunDir, or the moon at night with the Atmosphere's
+    // moonScatter, whose cascades then follow the moon), else sunDir
+    const sd = atmo.scatterDir || atmo.sunDir;
+    const sy = sd.y, el = Math.asin(sy < -1 ? -1 : sy > 1 ? 1 : sy);
     let day = (el + 2 * DEG) / (5 * DEG);
     day = day < 0 ? 0 : day > 1 ? 1 : day;
     day = day * day * (3 - 2 * day);
@@ -525,7 +531,7 @@ export class VolumetricPass extends Pass {
     // the frame's scalars first (read back consistently on zero frames too)
     const clip = u.uClip.value, mr = u.uMarch.value, tp = u.uTemporal.value;
     clip.x = cam.near; clip.y = cam.far;
-    u.uSunDir.value.copy(atmo.sunDir);
+    u.uSunDir.value.copy(sd);
     const g = o.g, ph = u.uPhase.value, md = u.uMedium.value;
     ph.x = (1 - g * g) / (4 * Math.PI); ph.y = 1 + g * g; ph.z = 2 * g;
     md.x = sH; md.y = fp.hazeK; md.z = sM; md.w = fp.mistK;
