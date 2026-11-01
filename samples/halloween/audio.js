@@ -4,7 +4,9 @@
 //             up and adds a second arpeggio voice as midnight nears.
 //   ambience  wind gusts, crickets, an owl now and then, a distant wolf.
 //   sfx       candy chimes (rising with the pickup streak), the pumpkin smash, the jump / land, the BOO shout, a ghost's
-//             moan and squeal, caught, bells (the midnight tolls), the final ticks, UI blips.
+//             moan and squeal, caught, bells (the midnight tolls), the final ticks, UI blips; porches: a knock (a deep
+//             one and a chuckle at the haunted house), the door's creak, a treat, a trick, a resident's wail, the Full
+//             Round fanfare.
 // The context starts on the first gesture (bus.unlockOnGesture + the start button), so iOS / Chrome allow it.
 import { AudioBus, OscStack, NoiseVoice, LFO, noiseBuffer, playTone, playNoiseBurst } from '@vibe/engine/audio';
 

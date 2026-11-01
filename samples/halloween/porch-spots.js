@@ -24,12 +24,15 @@ function porch(id, x, z, yaw, out, chimney, haunted = false, matAt = null) {
 }
 
 // cottages 7 x 6 m (the mat 3.7 m out from the centre: just in front of the front wall); the haunted house 11 x 9 m on
-// the knoll with its porch mat at (-18.5, -18.5)
+// the knoll with its porch mat at (-18.5, -18.5). The stub turns P1 and P6 (south-east in the design) to face south:
+// the stand-in walls collide as axis-aligned boxes, and a 45-degree wall built of box steps trapped the kid. P1's mat
+// sits where the design wants it for the first seconds (16 m from the spawn, 21 degrees left of forward), its door
+// toward the player.
 export const PORCHES = [
-  porch('P1', -8, -13, Math.PI / 4, 3.7, [-8, 6.5, -15]),              // the gatekeeper's cottage, door south-east
+  porch('P1', -5.7, -12.6, 0, 3.7, [-4.2, 6.5, -14.6]),               // the gatekeeper's cottage
   porch('P2', -26, 34, Math.PI, 3.7, [-24.5, 6.5, 35.5]),              // Porch Row, doors north
   porch('P3', -4, 34, Math.PI, 3.7, [-2.5, 6.5, 35.5]),
   porch('P4', 18, 34, Math.PI, 3.7, [19.5, 6.5, 35.5]),
   porch('P5', 44, -2, -Math.PI / 2, 3.7, [45.5, 6.5, -3.5]),           // the east cottage, door west
-  porch('P6', -24, -24, Math.PI / 4, 0, [-25.5, 9.5, -25.5], true, [-18.5, -18.5]), // the haunted house
+  porch('P6', -24, -24, 0, 0, [-20, 9.5, -22.5], true, [-18.5, -18.5]), // the haunted house (its porch)
 ];

@@ -391,7 +391,8 @@ export class HUD {
     // ---- how to play (over the title or the pause screen)
     const help = this.help = el('div', 'hw-screen hw-help off', root);
     help.innerHTML = `<div class="hw-h1">HOW TO PLAY</div><div class="hw-cards">${CARDS}</div><div class="hw-ctrl"></div>
-      <div class="hw-tips">Swirl lollipops under a light beam are worth 5. Jump onto a lantern to stomp it for extra candy.
+      <div class="hw-tips">Lit porches: step on the glowing doormat for a treat, or BOO there for a trick (more candy, but a ghost
+      comes down the chimney). Swirl lollipops under a light beam are worth 5. Jump onto a lantern to stomp it for extra candy.
       When the screen edges frost over, a ghost is close: let it come near, then BOO! Caught? Grab the candy you drop.
       Jump over the graveyard fence! Grab candy fast for a streak bonus. The last 30 seconds are the Witching Hour:
       candy counts double!</div>

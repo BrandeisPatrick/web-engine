@@ -195,7 +195,8 @@ export class Porches {
       G(new THREE.PlaneGeometry(0.15, 0.04), '#ffb347', 2.4, -1.3, 1.02, M.d / 2 - 0.1 + 0.205, 1, 0.04, 0, -0.25);
       // the doorway behind the door: warm light (violet in the haunted house) when the door opens
       G(new THREE.PlaneGeometry(HOLE_W, HOLE_H), H ? '#9a62ff' : '#ffb766', H ? 1.3 : 1.6, 0, HOLE_H / 2, vz - VEST / 2 + 0.05, 2, 0);
-      // colliders: the wall (axis-aligned: one box; a diagonal one in short pieces, so no box reaches onto the mat)
+      // colliders: the wall (axis-aligned: one box; a diagonal one in short pieces so no box reaches onto the mat, but
+      // their steps trap a kid pushing into them: porch-spots.js keeps the stand-ins axis-aligned)
       const c = this.cs[k], sn = this.sn[k], wx = (lx2) => M.x + lx2 * c + wz * sn, wzz = (lx2) => M.z - lx2 * sn + wz * c, half = WALL_T / 2;
       const y0 = M.y - 1, y1 = M.y + WALL_H;
       if (Math.abs(Math.sin(2 * S.yaw)) < 0.01) {
@@ -414,9 +415,10 @@ export class Porches {
         }
         if (this.railLv[k] > 0.01) { const r = this.railLv[k]; glows.set(base + n++, this.rx[k], this.ry[k], this.rz[k], 1.1, 0.5 * r, 0.22 * r, 0.04 * r); }
       }
-      if (this.doorLv[k] > 0.01) {
-        const v = this.doorLv[k], hv = S.haunted;
-        glows.set(base + n++, this.dx[k], this.dy[k] + 0.1, this.dz[k], 2.4, (hv ? 0.3 : 0.5) * v, (hv ? 0.16 : 0.32) * v, (hv ? 0.6 : 0.14) * v);
+      if (this.doorLv[k] > 0.01) { // the doorway's light, set back inside it (a halo is drawn pulled toward the eye: in
+        // front of the door it washed over the kid on the mat)
+        const v = this.doorLv[k], hv = S.haunted, x = this.dx[k] - this.sn[k] * 0.75, z = this.dz[k] - this.cs[k] * 0.75;
+        glows.set(base + n++, x, this.dy[k] + 0.1, z, 1.6, (hv ? 0.3 : 0.5) * v, (hv ? 0.16 : 0.32) * v, (hv ? 0.6 : 0.14) * v);
       }
     }
     if (moved) this.doors.instanceMatrix.needsUpdate = true;

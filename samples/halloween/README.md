@@ -20,12 +20,17 @@ A round lasts 3 minutes, from 11:57 to 12:00.
 Esc to pause, M for sound. A gamepad works too.
 
 - **Candy** glows on the grass; run past it to collect it. Big swirl lollipops are worth 5.
+- **Trick or treat:** a lit porch lamp means somebody is home. Step onto the glowing doormat and the door opens and
+  candy pours out. Shout **BOO!** on the mat instead for a trick: more candy, but a ghost drops out of the chimney after
+  you. A porch's lamp goes dark for a while after a visit and lights up again later. The haunted house only answers a
+  trick. Visit all five cottages in one round for a **Full Round** bonus: each porch you have visited keeps a lit
+  jack-o'-lantern on its post.
 - **Jack-o'-lanterns:** run into one to kick it apart, or jump on it for more candy.
 - **Ghosts** chase you and steal candy when they touch you. Press **BOO!** when one gets close: it scares every ghost
   nearby, and each one drops 2 candies. BOO recharges in 5 s.
 - **Streaks:** grab candy quickly, one after another. Every 10th in a row adds 3 bonus candy.
-- **The Witching Hour:** in the last 30 seconds candy counts double, every lantern lights up again and candy rains
-  down around you.
+- **The Witching Hour:** in the last 30 seconds candy counts double, every lantern and porch lights up again and candy
+  rains down around you.
 - **Ranks:** the number after your candy count is the next rank. Your best score is saved on your device; once you have
   one, the clock shows now and then how far ahead of it (or behind) you are. Share your score from the results.
 
@@ -93,13 +98,15 @@ The engine changes this game needed are opt-in and listed in the [CHANGELOG](../
 | `props.js` | The modelling kit (sweep, lathe, slab, crack, star, chamfered boxes, Batch) and reusable prop builders: gravestones, iron fences and the gate, gnarled trees, the haunted house, the crypt, the scarecrow, the cauldron, hay bales, pumpkins and their leaves. |
 | `world.js` | The level's layout: the terrain, the props (built by `props.js`, merged into one mesh) and the glowing windows and candles, instanced pumpkins and grass, the moon, the horizon and the colliders. |
 | `pumpkins.js` | The jack-o'-lanterns (ribbed, a carved face with depth): lights from the `NearestLights` pool; smashing uses `fracturePieces` + `pieceGeometry`, real dynamic bodies on the `DynamicsWorld`, shaded with ribs, fibres and seeds. |
-| `ghosts.js` | Each ghost is a `Cloth.grid` sheet pinned to a kinematic head sphere, drawn with `ClothMesh` (2x subdivided), a cute face painted through a uv warp, moved by a small state machine (rise, wander, chase, flee, retreat). |
+| `ghosts.js` | Each ghost is a `Cloth.grid` sheet pinned to a kinematic head sphere, drawn with `ClothMesh` (2x subdivided), a cute face painted through a uv warp, moved by a small state machine (rise, wander, chase, flee, retreat); `summon` sends one after the kid (a porch's resident). |
+| `porches.js` | Trick-or-treat: the porch lamps and their cooldowns, treats and tricks (BOO on a lit doormat), the haunted porch, resident ghosts, candy trails to a porch that relights, the Full Round and its railing jack-o'-lanterns; the hinged doors (one instanced mesh). |
+| `porch-spots.js` | Where the six porches are. A stand-in until the map's cottages land: `porches.js` then builds a simple porch front at each spot. |
 | `candy.js` | The candy pool: instanced meshes (wrapped sweets, candy corn, swirl lollipops, hand-shaded), the magnet and spilled candy. |
 | `effects.js` | Glow billboards, the engine `ParticleSystem` sparks and the BOO ring. |
 | `reach.js` | The faint ring on the ground that shows BOO's reach while a ghost is inside it. |
 | `environment.js` | The living night, driven by the round clock: wind gusts, blowing and kicked-up leaves, clouds over the moon and the blood moon, creeping mist, lightning and thunder, crows, flickering lights, the swinging gate and their sounds. Animated on the GPU from a few uniforms (`setFinale(on)` pushes it to its peak). |
 | `audio.js` | All synth sound on `AudioBus`: a D-minor music loop, ambience, effects and the midnight bells. |
-| `hud.js` | The DOM title, HUD (candy and the next rank, the streak meter, the clock and the pace against your best, call-outs), pause, how-to-play and results screens (rank ladder, share), and the full-screen toggle. |
+| `hud.js` | The DOM title, HUD (candy and the next rank, the streak meter, the clock and the pace against your best, call-outs: hints at most one per 2.5 s), pause, how-to-play and results screens (rank ladder, porches and tricks, share), and the full-screen toggle. |
 
 </details>
 

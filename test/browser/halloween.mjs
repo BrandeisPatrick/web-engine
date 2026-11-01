@@ -42,6 +42,13 @@
 // capped at 6, orange auras), the last-ten countdown under the clock pill, the results' rank ladder and next-rank line,
 // sharing (phones: Web Share, stubbed; desktop: the clipboard, stubbed, and a toast); phones: pushing straight into a
 // gravestone slides round it. --perf also measures a finale storm (the Witching Hour on top of the storm).
+// Porches (porches.js): a lit doormat is a treat (8 candies, the lamp dark for 40 s, "TRICK OR TREAT!"), a dark one pays
+// nothing, BOO on a lit one is a trick (14, 60 s) whose resident ghost drops from the chimney and chases within a
+// second, the haunted porch only knocks and its trick pays 22 with two residents (70 s), a visited porch lights its
+// railing jack-o'-lantern, a relight fades the lamp up and lays a trail of 5, all five lane porches pay the Full Round
+// once, a wandering ghost is the resident when none is dormant, the Witching Hour relights every porch, the results
+// show porches n/5 and tricks, the ranks are v2; hints are paced (one call-out per 2.5 s, duplicates dropped). The
+// --perf storm also tricks every porch at once.
 // Mobile controls: every button (title, HUD, pause, how-to-play, results) is at least 44 x 44 px inside the safe area,
 // HOW TO PLAY opens and closes by touch, the sound and pause buttons work, the full-screen button exists exactly where
 // the Fullscreen API does and toggles, haptics fire on candy / smash / BOO / catch (navigator.vibrate stubbed; none on
