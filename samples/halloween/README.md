@@ -25,9 +25,10 @@ Esc to pause, M for sound. A gamepad works too.
   nearby, and each one drops 2 candies. BOO recharges in 5 s.
 - Your best score is saved on your device.
 
-| Portrait | Landscape | Results |
-|---|---|---|
-| <img src="screenshots/phone-portrait.jpg" width="200" alt="Portrait gameplay with ghosts"> | <img src="screenshots/phone-landscape.jpg" width="360" alt="Landscape gameplay"><br><img src="screenshots/phone-boo.jpg" width="360" alt="A BOO scattering ghosts"> | <img src="screenshots/phone-results.jpg" width="200" alt="Results screen"> |
+<p>
+<img src="screenshots/phone-portrait.jpg" width="200" alt="Portrait gameplay with ghosts and the touch controls">
+<img src="screenshots/phone-boo.jpg" width="440" alt="Landscape gameplay: a BOO scattering a ghost">
+</p>
 
 <details>
 <summary>All controls</summary>
@@ -84,7 +85,7 @@ The engine changes this game needed are opt-in and listed in the [CHANGELOG](../
 
 ```sh
 npm install
-npm run dev                 # http://localhost:5190/halloween/
+npm run dev     # http://localhost:5190/halloween/
 ```
 
 To play on a phone on the same Wi-Fi, run `npx vite --host` and open `http://<computer-ip>:5190/halloween/` on the
