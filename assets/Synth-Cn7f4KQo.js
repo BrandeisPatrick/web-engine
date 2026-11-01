@@ -1,4 +1,4 @@
-import{I as q,c as k,a2 as _,k as M,S as R,A as B,d as L,U,e as F,g as z,s as G,u as I}from"./three.module-BGZvNxFX.js";import{n as S,t as V}from"./index-DlQzhPCu.js";function O(n){if(!n)return 1;const t=n.darkness||0;if(t>.5)return 0;const e=n.sun&&n.sunIntensity>0?n.sun.intensity/n.sunIntensity:1-t;return(e<0?0:e>1?1:e)*(1-t)}const E=`
+import{I as q,c as k,a2 as _,k as M,S as R,A as B,d as L,U,e as F,g as z,s as G,u as I}from"./three.module-C8-88sYI.js";import{n as S,t as V}from"./index-DdVyjZko.js";function O(n){if(!n)return 1;const t=n.darkness||0;if(t>.5)return 0;const e=n.sun&&n.sunIntensity>0?n.sun.intensity/n.sunIntensity:1-t;return(e<0?0:e>1?1:e)*(1-t)}const E=`
 attribute vec3 iPos;
 attribute vec3 iVel;
 attribute vec4 iData;   // size, alpha, rotation, -
