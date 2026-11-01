@@ -56,19 +56,20 @@ const LAYOUTS = {
   reel: { ...devices['iPhone 8 Plus'], viewport: { width: 414, height: 736 }, screen: { width: 414, height: 736 }, deviceScaleFactor: 3 },
 };
 
-// Routes (world metres, x east / z south). VIDEO: from the south field, a JUMP onto the jack-o'-lantern at (-4, 28)
-// (a stomp), up the path past the spawn, straight through the lantern at (4.5, -3.5) (a kick; heading NNE, toward the
-// moon), east along the graveyard fence where two ghosts rise from the first row of graves, come over the fence and get
-// BOOed in the open, then north through the gate and up the aisle to a big lollipop. HERO: the shorter route the
-// approved desktop hero was shot on (its ghosts close in at the gate).
+// Routes (world metres, x east / z south; the v2 map). VIDEO: from the lane by Porch Row, a JUMP onto the
+// jack-o'-lantern at (4, 26) (a stomp), over the centre footbridge and up the spoke past the spawn, straight through the
+// lantern on the lane at (6, -6) (a kick; heading NE, toward the moon), along to the graveyard gate where two ghosts rise
+// from the first row of graves, come over the fence and get BOOed in the open, then north through the gate and up the
+// aisle to a big lollipop. HERO: the shorter route the approved desktop hero was shot on (the green to the moonlit gate:
+// its ghosts close in at the gate); the gate and its graves are where they always were.
 const ROUTES = {
   video: {
-    pts: [[-5.5, 41.5], [-4.8, 35], [-4, 28], [-2.6, 22], [-0.6, 15.5], [0.9, 9], [2.4, 3], [4.5, -3.5], [9, -4.4], [13.4, -4.2], [16, -5.4], [16, -10.8], [16, -16], [16, -21]],
-    stomp: [-4, 28], kick: [4.5, -3.5], riseAt: 8, graves: [[13.2, -14.8], [19.6, -14.3]], pop: [16, -15.2], skipR: 2.6, to: 90,
+    pts: [[10.5, 29.4], [6.5, 28.2], [4, 26], [1.6, 24.4], [0.3, 23.4], [0, 19.5], [0.2, 15.5], [0.6, 9], [2.6, 1.0], [6, -6], [9.8, -7.5], [13.4, -8.8], [16, -10.8], [16, -16], [16, -21]],
+    stomp: [4, 26], kick: [6, -6], riseAt: 10, graves: [[13.2, -14.8], [19.6, -14.3]], pop: [16, -15.2], skipR: 2.6, to: 90,
   },
   hero: {
-    pts: [[-1.2, 29], [0.3, 23.5], [1.8, 17], [1.0, 10.5], [0.6, 6], [2.6, 1.0], [4.5, -3.5], [8.4, -6.3], [12.6, -8.6], [16.0, -10.8], [16.0, -17], [16.0, -24]],
-    stomp: null, kick: [4.5, -3.5], riseAt: 5, graves: [[12.5, -18], [20, -18]], pop: [16.0, -15.5], skipR: 2.2, to: 75,
+    pts: [[0.2, 22], [0.2, 17], [0.6, 13], [1.0, 10.5], [0.6, 6], [2.6, 1.0], [6, -6], [9.8, -7.5], [12.6, -8.9], [16.0, -10.8], [16.0, -17], [16.0, -24]],
+    stomp: null, kick: [6, -6], riseAt: 5, graves: [[12.5, -18], [20, -18]], pop: [16.0, -15.5], skipR: 2.2, to: 75,
   },
 };
 const GHOST_GRAVES = ROUTES.hero.graves;

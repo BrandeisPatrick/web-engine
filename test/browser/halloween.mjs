@@ -55,6 +55,13 @@
 // desktop), the stick stays held while the other thumb drags to look, the manifest + icons load (pixel-portrait), a
 // stubbed Bluetooth gamepad plays (pixel-landscape: stick moves, A jumps, X BOOs), and the 'hybrid' profile (a laptop
 // with a touchscreen: no touch reported) shows the touch controls on its first touch and hides them on a key press.
+// Map v2 (desktop): the exports the rules build on (PORCHES, HAND_SPOTS, BRIDGES, CREEK, POP_SPOTS, SECRETS, CAULDRON),
+// colliders <= 280 and 34 lanterns, every porch mat on its deck, the cottages' walls, the creek (walking out of its bed
+// is blocked, a JUMP at the bank clears it, a running JUMP clears the creek, "JUMP OUT!" after 2 s in the bed), each
+// footbridge end to end, the knoll path up to the haunted porch and down, every enclosure left on foot (the hollow oak,
+// the Bale Yard's stair, Porch Row's yard, behind the east cottage, each porch), a flood fill of the whole map (no spot
+// the kid can reach but not leave), the candy shares per zone, and a beacon within 30 m of anywhere on the lane. --perf
+// also holds the map v2 budgets: the 4x storm's p95 <= 9.5 ms CPU and at most 166 draw calls a frame.
 // Screenshots: <out>/<profile>-{title,play,end,...}.png. The few committed in samples/halloween/screenshots/ are
 // picked from these by hand (downscaled JPEGs). Uses the system Google Chrome like the other browser scripts.
 import fs from 'node:fs';
@@ -1222,11 +1229,13 @@ async function runProfile(name) {
       const c2 = cdp || await ctx.newCDPSession(page);
       await c2.send('Emulation.setCPUThrottlingRate', { rate: 4 });
       await sleep(1500);
+      let maxCalls = 0;
       const sample = (ms) => G(page, (dur) => new Promise((done) => {
         const g = window.__game, out = [], t0 = performance.now();
-        const tick = () => { out.push(g.engine.profiler.frame.ms); if (performance.now() - t0 < dur) requestAnimationFrame(tick); else done(out); };
+        let calls = 0;
+        const tick = () => { out.push(g.engine.profiler.frame.ms); calls = Math.max(calls, g.engine.profiler.frame.calls); if (performance.now() - t0 < dur) requestAnimationFrame(tick); else done({ out, calls }); };
         requestAnimationFrame(tick);
-      }), ms);
+      }), ms).then((r) => { maxCalls = Math.max(maxCalls, r.calls); return r.out; });
       const calm = await sample(2000);
       const storm = sample(3000);
       await G(page, () => {
@@ -1245,6 +1254,7 @@ async function runProfile(name) {
       const q = (a, f) => { const b = [...a].sort((x, y) => x - y); return b[Math.min(b.length - 1, Math.floor(b.length * f))]; };
       const msg = `CPU ms per frame at 4x: calm p50 ${q(calm, 0.5).toFixed(1)} p95 ${q(calm, 0.95).toFixed(1)}; storm p50 ${q(hot, 0.5).toFixed(1)} p95 ${q(hot, 0.95).toFixed(1)} max ${Math.max(...hot).toFixed(1)}`;
       check(name, 'perf: 4x throttled storm stays under 16 ms CPU at p95', q(hot, 0.95) < 16, msg);
+      check(name, 'perf (map v2 budget): 4x throttled storm p95 <= 9.5 ms CPU', q(hot, 0.95) <= 9.5, msg);
       // the finale on top: the Witching Hour (candy rain, every lantern relit, orange auras), a storm again
       await c2.send('Emulation.setCPUThrottlingRate', { rate: 4 });
       await G(page, () => { const g = window.__game; g.setTimeLeft(30.4); });
@@ -1261,6 +1271,7 @@ async function runProfile(name) {
       await c2.send('Emulation.setCPUThrottlingRate', { rate: 1 });
       const fmsg = `finale storm at 4x: p50 ${q(fh, 0.5).toFixed(1)} p95 ${q(fh, 0.95).toFixed(1)} max ${Math.max(...fh).toFixed(1)} (witching ${await G(page, () => window.__game.G.witching)})`;
       check(name, 'perf: 4x throttled finale storm (Witching Hour) under 16 ms CPU at p95', q(fh, 0.95) < 16, fmsg);
+      check(name, 'perf (map v2 budget): at most 166 draw calls a frame through both storms', maxCalls <= 166, `max ${maxCalls} calls`);
     }
     // page sanity: no scroll, no text selection
     const sane = await G(page, () => ({ sx: scrollX, sy: scrollY, sel: String(getSelection()), bodyScroll: document.scrollingElement.scrollHeight <= innerHeight + 1 }));

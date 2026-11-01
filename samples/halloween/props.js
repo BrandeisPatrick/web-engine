@@ -1581,8 +1581,8 @@ export function pathStones(B, pts, groundAt, { step = 0.85, spread = 0.7 } = {})
     for (let t = r() * step; t < len; t += step * (0.8 + r() * 0.4)) {
       const o = (r() - 0.5) * spread, px = ax + ux * t - uz * o, pz = az + uz * t + ux * o, py = groundAt(px, pz);
       const sx = groundAt(px + 0.3, pz) - groundAt(px - 0.3, pz), sz = groundAt(px, pz + 0.3) - groundAt(px, pz - 0.3);
-      const g = L.add(new THREE.CylinderGeometry(0.28 + r() * 0.12, 0.32 + r() * 0.12, 0.08, 7), r() < 0.5 ? '#5d5866' : '#686371', px, py + 0.015, pz, 0, -Math.atan2(sz, 0.6), Math.atan2(sx, 0.6), 1, 1, 0.75 + r() * 0.3);
-      vgrad(g, 0.75, 1.1, 0.06, (r() * 1e6) | 0);
+      const g = L.add(new THREE.CylinderGeometry(0.22 + r() * 0.1, 0.26 + r() * 0.1, 0.07, 7), r() < 0.5 ? '#9a94a6' : '#aaa4b4', px, py + 0.02, pz, 0, -Math.atan2(sz, 0.6), Math.atan2(sx, 0.6), 1, 1, 0.75 + r() * 0.3);
+      vgrad(g, 1.9, 2.4, 0.06, (r() * 1e6) | 0); // (bright: the ground's contact shading takes half of anything this low)
     }
   }
   L.into(B);

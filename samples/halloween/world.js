@@ -121,7 +121,7 @@ const STONES = [[31, 10, 2.3], [36, 5, 2.0], [42.2, 10, 2.5], [33, 14.2, 1.9], [
 /** The Bale Yard's stair: three tiers 0.7 / 1.4 / 2.2 m (the last is the platform with the pop). */
 const BALE_TIERS = [{ x0: 36.4, x1: 39.0, z0: 36.4, z1: 39.0, h: 0.7 }, { x0: 39.0, x1: 41.0, z0: 37.6, z1: 41.0, h: 1.4 }, { x0: 41.0, x1: 44.6, z0: 39.0, z1: 44.6, h: 2.2 }];
 /** Fixed big-pop spots: the knoll's plateau and the Bale Yard's platform (y: the ground or the platform). */
-export const POP_SPOTS = [[-15.5, -18.5], [42.8, 42.8]];
+export const POP_SPOTS = [[-14.6, -21], [42.8, 42.8]];
 /** Grave hands: the graveyard's aisle and two rows off it, the three bridges' north ends (nudged off colliders at build). */
 export const HAND_SPOTS = [[16, -14], [16, -20], [16, -26], [16, -32], [16, -38], [28, -20], [38, -30], [-36, 17], [0, 17], [40, 17]];
 /** The secrets' places (their rules come later): BOO at the well, BOO at the crypt's door, the hollow oak's inside. */
@@ -455,7 +455,7 @@ const LANTERNS = [
   [-22, 0], [-20, 3], [-24, 3.5], [-38, 8], [-40, 11], [-36, 12], [-30, 14], [-32, 11], [-28, 11], [-18, 12], // patch
   [12.5, -14], [24, -19], [41, -17], [21, -33], [37, -28], [12, -41], [28, -43],                             // graveyard
   [-10, -2], [6, -6], [9, 13], [-6, 14], [22, 8],                                                            // green, spokes
-  [-18.4, -15.2], [-30, -12], [-10, -30],                                                                    // knoll
+  [-15.4, -13], [-30, -12], [-10, -30],                                                                       // knoll
   [-14, 26], [4, 26], [30, 24], [-36, 36], [-6, 44], [20, 44],                                               // lane, row
   [30, 16], [44, 36], [39.6, 44.2],                                                                          // hollow, Bale Yard
 ];
@@ -598,7 +598,7 @@ export function buildWorld({ scene, physics, low }) {
   V.wellAt(B, physics, heightAt, WELL[0], WELL[1]);
   const toward = (x, z) => Math.atan2(x - SIGNPOST[0], z - SIGNPOST[1]);
   V.signpostAt(B, physics, heightAt, SIGNPOST[0], SIGNPOST[1], [[toward(16, -10), '#d9d2bf'], [toward(-20, -16), '#8a5aa8'], [toward(36, 10), '#5aa84e'], [toward(0, 29), '#d0913c']]);
-  V.benchAt(B, physics, heightAt, VANTAGE[0] + 0.8, VANTAGE[1] + 0.6, 0);
+  V.benchAt(B, physics, heightAt, -17.6, -17.6, 0); // on the rim by the vantage, off the path, facing the village
   V.rowFences(B, physics, heightAt, ROW_FENCE.z, ROW_FENCE.stretches);
   P.pathStones(B, [[-12.6, -9.6], [-17, -15], [-20.8, -16.0]], heightAt);
   // the grave hands' spots: nudged to the nearest spot with no collider within 1 m (a hand never comes up in a stone)
@@ -870,7 +870,8 @@ export function buildWorld({ scene, physics, low }) {
   { const [x, z, h] = STONES[2]; perches.push([x, heightAt(x, z) + h - 0.42, z, -1.2]); }
   graves.filter((g) => g.kind < 3).map((g) => [Math.hypot(g.x - 16, g.z + 16) - (g.top - g.y) * 2, g]).sort((a, b) => a[0] - b[0]).slice(0, 7)
     .forEach(([, g], i) => perches.push([g.x, g.top, g.z, g.yaw + (i % 2 ? Math.PI : 0) + 0.6 * Math.sin(i * 3.1)]));
-  const groups = glowGroups.map((q) => q.slice());
+  const groups = glowGroups.map((q) => q.slice()), kinds = new Uint8Array(GLOW.MAX), _camP = new THREE.Vector3(0, 1e4, 0);
+  groups.forEach(([kind], k) => { kinds[k] = kind; });
   const bankAt = (x) => Math.max(heightAt(x, C.z0 - 0.05), heightAt(x, C.z1 + 0.05));
 
   self = {
@@ -886,11 +887,20 @@ export function buildWorld({ scene, physics, low }) {
       for (let i = 0; i < BRIDGES.length; i++) if (Math.abs(x - BRIDGES[i].x) < BRIDGES[i].w / 2 + 0.1) return false;
       return y < bankAt(x) - C.depth * 0.5;
     },
-    /** The halos over the static glowing props into `glows` from slot `base`, each at its light group's level. */
+    /**
+     * The halos over the static glowing props into `glows` from slot `base`, each at its light group's level. A window's
+     * halo dims as the camera comes within 14 m (up close the lit panes show; five window halos overlapping washed the
+     * haunted house's front out when the kid stood on its porch).
+     */
     halos(glows, base) {
-      const GS = glowSpots, L = glowLevels;
+      const GS = glowSpots, L = glowLevels, c = _camP;
       for (let k = 0; k < GS.length; k++) {
-        const q = GS[k], f = L[q[8]];
+        const q = GS[k];
+        let f = L[q[8]];
+        if (kinds[q[8]] === GLOW.WINDOW) {
+          const dx = q[0] - c.x, dy = q[1] - c.y, dz = q[2] - c.z, d2 = dx * dx + dy * dy + dz * dz;
+          if (d2 < 196) f *= 0.3 + 0.7 * smooth((Math.sqrt(d2) - 3) / 11);
+        }
         glows.set(base + k, q[0], q[1], q[2], q[3], q[4] * f, q[5] * f, q[6] * f);
       }
       return GS.length;
@@ -898,6 +908,7 @@ export function buildWorld({ scene, physics, low }) {
     /** Per frame: the sky dressing follows the camera (moon along the atmosphere's moon direction), the water's glint. */
     update(camera, moonDir) {
       const cp = camera.position;
+      _camP.copy(cp);
       _moonDir.copy(moonDir).normalize();
       const D = 420, R = 30;
       moon.position.copy(cp).addScaledVector(_moonDir, D);
