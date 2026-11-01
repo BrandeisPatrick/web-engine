@@ -91,6 +91,7 @@ export class Ghosts {
     this.time = 0;
     this.difficulty = 0; // 0..1 over the round: chase speed and aggro radius
     this.maxChasers = Infinity; // how many may chase at once
+    this.witch = false; this._wk = 0; // the Witching Hour: auras (and a little of the inner glow) ease to orange
     const sp = SHEET / (grid - 1), half = (grid - 1) / 2;
     for (let k = 0; k < count; k++) {
       const px = -200 - k * 8, py = -30, pz = -200;  // parked far below the level until woken
@@ -149,7 +150,7 @@ export class Ghosts {
 
   /** Every ghost back under the level (round reset). */
   reset() {
-    this.difficulty = 0;
+    this.difficulty = 0; this.witch = false; this._wk = 0;
     this._lk = 0; if (this.light) this.light.intensity = 0;
     for (const g of this.list) {
       g.state = 'dormant'; g.t = 0; g.scared = 0; g.alpha = 0; g.lunge = 0; g.lungeCd = 0; g.yaw = 0; g.lean = 0; g.calm = 0; g.tame = 0;
@@ -325,12 +326,13 @@ export class Ghosts {
    */
   update(dt, alpha, glows, base, cam = null) {
     let n = 0, lit = null, ld = 22;
+    const w = this._wk += ((this.witch ? 1 : 0) - this._wk) * (1 - Math.exp(-2.5 * dt));
     for (const g of this.list) {
       if (g.state === 'dormant') continue;
       if (cam) { const d = Math.hypot(g.x - cam.x, g.z - cam.z); if (d < ld && g.alpha > 0.3) { ld = d; lit = g; } }
       g.mesh.update(alpha);
       const s = g.scared, m = g.mat;
-      m.emissive.setRGB(0.62 - 0.2 * s, 0.7 - 0.35 * s, 1.0);
+      m.emissive.setRGB(0.62 - 0.2 * s + 0.3 * w, 0.7 - 0.35 * s - 0.12 * w, 1.0 - 0.55 * w);
       m.color.setRGB(0.95 - 0.35 * s, 0.96 - 0.4 * s, 1.0);
       let near = 1;
       if (cam) {
@@ -340,7 +342,8 @@ export class Ghosts {
       m.opacity = 0.86 * Math.min(1, g.alpha * 1.4) * near;
       m.depthWrite = near > 0.95; // a faded sheet must not hide what is behind it
       const a = 0.22 * g.alpha * near;
-      glows.set(base + n++, g.x, g.y - 0.15, g.z, 3.2, a * (0.7 - 0.3 * s), a * (0.8 - 0.4 * s), a * 1.2);
+      const r = a * (0.7 - 0.3 * s), gg = a * (0.8 - 0.4 * s), b = a * 1.2;
+      glows.set(base + n++, g.x, g.y - 0.15, g.z, 3.2 + 0.6 * w, r + (a * 1.5 - r) * w, gg + (a * 0.55 - gg) * w, b + (a * 0.1 - b) * w);
     }
     const L = this.light;
     if (L) {
