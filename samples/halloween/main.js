@@ -38,7 +38,7 @@ import { CharacterInput, CHARACTER_ACTIONS, PointerLock, isTouchDevice, PAD_BUTT
 import { ThirdPersonRig, OrbitRig } from '@vibe/engine/camera';
 import { LoadingScreen } from '@vibe/engine/ui';
 import { buildWorld, heightAt, PLAY } from './world.js';
-import { buildKid } from './kid.js';
+import { buildKid, landPose } from './kid.js';
 import { Lanterns } from './pumpkins.js';
 import { Candy, CANDY_KIND } from './candy.js';
 import { Ghosts } from './ghosts.js';
@@ -233,7 +233,7 @@ async function boot() {
   const player = new THREE.Group(); player.name = 'player'; player.add(view);
   scene.add(player);
   const pailLight = new THREE.PointLight(0xffa040, 2.6, 7.5, 1.5);
-  pailLight.position.set(0.25, 0.75, -0.35); player.add(pailLight);
+  pailLight.position.set(0.22, 0.55, -0.5); player.add(pailLight); // ahead of the pail, below the face
   const ctl = new AnimationController(kid.root, kid.clips, {
     states: { idle: { clip: 'Idle' }, walk: { clip: 'Walking', speed: 1.3 }, run: { clip: 'Running', speed: 1.45 }, jump: { clip: 'Jump', loop: false, clamp: true, speed: 1.15 } },
     trees: { locomotion: { type: '1d', param: 'speed', sync: true, points: [{ at: 0, state: 'idle' }, { at: 2.2, state: 'walk' }, { at: 5.2, state: 'run' }] } },
@@ -820,6 +820,7 @@ async function boot() {
       kid.hatTip.rotation.z = Math.sin(M.t * 6.1 + 1) * (0.05 + 0.08 * sp);
       view.rotation.x = -M.lean;
       view.scale.set(1 + M.squash * 0.6, 1 - M.squash, 1 + M.squash * 0.6);
+      landPose(kid, M.squash / 0.14); // knees and hips give with the squash (after the clips)
     },
   }, 'player');
 

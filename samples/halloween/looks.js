@@ -7,6 +7,9 @@
 //   patchRim(mat, o)               a moonlit rim: view-facing edges toward the moon glow in a cool colour (+ an even
 //                                  share all round), the kid's and the ghosts' silhouettes against the dark
 //   patchGrass(mat)                wind sway of the grass tufts (instanced; tips move, roots stay)
+//   patchRibs(mat, lobes)          crisp pumpkin ribs: normals bent by the lobes' slope, creases darkened per pixel
+//   patchGlow(mat, key)            emissive += albedo x a per-vertex `glow` attribute (the kid's pail face and
+//                                  catchlights, a lantern's rind round its carving: self-lit details in one draw)
 //   LOOK.update(dt, camera, moonDir)  per frame: time, the moon direction in view space
 import * as THREE from 'three';
 import { pfbm } from '@vibe/engine/render';
@@ -151,5 +154,63 @@ export function patchGrass(mat) {
   }`);
   };
   mat.customProgramCacheKey = () => 'hwGrass';
+  return mat;
+}
+
+/**
+ * Emissive += albedo x the vertex attribute `glow` (0 = none; > 1 blooms): details that light themselves (a carved
+ * face, catchlights, the rind round a lantern's carving) in the same draw as the rest of the mesh. Chains with
+ * patchRim (apply this one first).
+ */
+export function patchGlow(mat, key = 'hwGlow') {
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (sh, r) => {
+    if (prev && prev !== THREE.Material.prototype.onBeforeCompile) prev(sh, r);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float glow;\nvarying float vGlowHw;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvGlowHw = glow;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vGlowHw;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * vGlowHw;');
+  };
+  const prevKey = mat.customProgramCacheKey.bind(mat);
+  mat.customProgramCacheKey = () => `${prevKey()}|${key}`;
+  return mat;
+}
+
+/**
+ * Crisp pumpkin ribs on a lathe-built pumpkin (instanced or not): where the vertex attribute `rib` is 1 the normal is
+ * bent round the object's y axis by the slope of the lobes (|cos(lobes * angle / 2)|^0.6, the shape props.js models)
+ * and the creases are darkened per pixel, so the creases read sharp at a low vertex count. strength: the bend.
+ */
+export function patchRibs(mat, lobes, strength = 0.5, key = 'hwRibs') {
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (sh, r) => {
+    if (prev && prev !== THREE.Material.prototype.onBeforeCompile) prev(sh, r);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float rib;\nvarying vec4 vRibHw;\nvarying vec3 vRibTHw;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+  {
+    vec3 t = vec3( position.z, 0.0, - position.x ) + vec3( 1e-5, 0.0, 0.0 );
+  #ifdef USE_INSTANCING
+    t = mat3( instanceMatrix ) * t;
+  #endif
+    vRibTHw = normalize( normalMatrix * t );
+    vRibHw = vec4( position, rib );
+  }`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec4 vRibHw;\nvarying vec3 vRibTHw;')
+      .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
+  float hwRibL = 1.0;
+  if ( vRibHw.w > 0.5 ) {
+    float a = atan( vRibHw.x, vRibHw.z ) * ${(lobes / 2).toFixed(2)}, c = cos( a ), s = sin( a );
+    hwRibL = pow( abs( c ), 0.6 );
+    float slope = - 0.6 * pow( max( abs( c ), 0.04 ), - 0.4 ) * sign( c ) * s; // d lobe / d phase
+    normal = normalize( normal - normalize( vRibTHw ) * clamp( slope, - 2.5, 2.5 ) * ${strength.toFixed(3)} );
+  }`)
+      .replace('#include <lights_fragment_begin>', '\tdiffuseColor.rgb *= 0.72 + 0.28 * hwRibL;\n#include <lights_fragment_begin>');
+  };
+  const prevKey = mat.customProgramCacheKey.bind(mat);
+  mat.customProgramCacheKey = () => `${prevKey()}|${key}${lobes}`;
   return mat;
 }
