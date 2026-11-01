@@ -12,6 +12,11 @@ in 1.0.0), driven by the new Halloween game sample (`samples/halloween/`, "Midni
 - `CharacterInput`: `touchOptions` (passed to TouchControls, e.g. `{ safeArea: true }`); touchpad entries take the
   safe-area insets and `portrait` overrides too; `touchReveal: { hideOnKey, onChange }` shows hidden touch controls on
   the first real touch (a laptop with a touchscreen) and hides them on a key press; `touchShown`.
+- `TouchControls` button entries take `hitSlop: px` (opt-in): an invisible ring that far around the button presses it
+  too, so a thumb that lands a little off still hits; the drawn button and its bounding box keep their size (portrait
+  overrides apply; `setLabel` keeps the ring).
+- `CharacterInput` touchpad entries take `slop: px` (opt-in, default 0): a drag only turns the view once the finger has
+  moved that far from where it landed (the travel up to there is dropped), so a tap that slides does not look around.
 - `isTouchDevice({ multiTouch: true })` also counts a coarse multi-touch device with a fine pointer attached (an iPad
   with a keyboard / trackpad: iPadOS Safari reports a Mac user agent; a phone with a stylus). Without the option the
   rule is unchanged.

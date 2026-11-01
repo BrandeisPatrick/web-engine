@@ -1037,7 +1037,8 @@ unchanged).
   right-button hold; `PointerLock` wraps the DOM API (`request() -> Promise<boolean>`, `releasedByUser`). Phone
   options (opt-in, the default layout is unchanged): `touchOptions: { safeArea: true }` (offsets from
   `env(safe-area-inset-*)`), per-entry `portrait` overrides re-applied on rotation, `floating` sticks (the base follows
-  the thumb inside a zone), `TouchControls.setProgress(id, p)` cooldown rings, `touchReveal` (controls on the first
+  the thumb inside a zone), `TouchControls.setProgress(id, p)` cooldown rings, button `hitSlop` (an invisible hit
+  ring around a button), touchpad `slop` (a drag counts from that many px), `touchReveal` (controls on the first
   touch, hidden on a key press) and `isTouchDevice({ multiTouch: true })` (iPads with a keyboard); `samples/halloween/`
   uses them all.
 - `anim` layer: `AnimationController` (states, 1D blend trees, transition table, markers, root motion with the

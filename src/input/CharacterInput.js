@@ -36,6 +36,8 @@
 //   `touchOptions` (opt-in) is passed to TouchControls (e.g. { safeArea: true }: offsets clear the notch / home
 //   indicator, and a touchpad's top / bottom insets are measured from the safe-area insets too). Touchpad entries take
 //   a `portrait` override like the other entries ({ width, top, bottom, side }), re-applied on resize.
+//   A touchpad entry's `slop` (px, opt-in, default 0) ignores a drag until the finger has moved that far from where it
+//   landed (the travel up to there is dropped), so a tap that slides a little does not turn the view.
 // Virtual sources bound to lookX / lookY are pixel deltas, consumed like mouse movement: update() reads them and
 //   zeroes them, so scripted look writes map.setVirtual('look.x', px) once per frame (a level would turn forever).
 // toggleCamera and menu are alwaysOn (they still fire while `enabled` is false). A custom `actions` map may leave
@@ -211,7 +213,7 @@ export class CharacterInput {
     el.className = 'ui-touch-pad';
     s.position = 'absolute'; s.pointerEvents = 'auto'; s.touchAction = 'none'; s.webkitTapHighlightColor = 'transparent';
     root.insertBefore(el, root.firstChild);   // earlier sibling = painted under the sticks / buttons
-    const pad = { id: c.id, entry: c, sx: `${c.id}.x`, sy: `${c.id}.y`, el, pointer: null, lx: 0, ly: 0, dx: 0, dy: 0 };
+    const pad = { id: c.id, entry: c, sx: `${c.id}.x`, sy: `${c.id}.y`, el, pointer: null, lx: 0, ly: 0, dx: 0, dy: 0, armed: true };
     pad.place = () => {
       const e = resolveTouchEntry(c, c.portrait ? isPortrait() : false);
       s.top = touchEdge(e.top ?? 0, 'top', sa); s.bottom = touchEdge(e.bottom ?? 0, 'bottom', sa); s.width = `${(e.width ?? 0.5) * 100}%`;
@@ -222,11 +224,18 @@ export class CharacterInput {
     el.addEventListener('pointerdown', (e) => {
       if (pad.pointer != null || e.pointerType === 'mouse') return;   // the mouse already looks (right-drag / lock)
       pad.pointer = e.pointerId; pad.lx = e.clientX; pad.ly = e.clientY;
+      pad.armed = !(c.slop > 0);
       try { el.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
       e.preventDefault();
     });
     el.addEventListener('pointermove', (e) => {
       if (e.pointerId !== pad.pointer) return;
+      if (!pad.armed) { // slop: still inside the dead ring around the touch-down point
+        const sx = e.clientX - pad.lx, sy = e.clientY - pad.ly;
+        if (sx * sx + sy * sy < c.slop * c.slop) return;
+        pad.armed = true; pad.lx = e.clientX; pad.ly = e.clientY;
+        return;
+      }
       pad.dx += e.clientX - pad.lx; pad.dy += e.clientY - pad.ly;
       pad.lx = e.clientX; pad.ly = e.clientY;
     });
