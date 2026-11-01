@@ -20,6 +20,11 @@
 // five rounds back to back with flat renderer / physics / DOM / listener counts. Console errors and warnings and WebGL
 // errors fail the run. --perf: under 4x CPU throttling, the frame time with every ghost up, lanterns breaking all at
 // once and a candy shower stays within budget.
+// Environment (environment.js): the night escalates with the clock (storm level, cloud cover, the post fog's ground
+// mist, the leaves in the air, the blood moon), a lightning strike flashes (softly) and makes the house windows
+// stutter, every round starts calm again with nothing left in flight and no pooled effect or sound piling up (in the
+// five-round run), and on pixel-portrait a second page with prefers-reduced-motion: reduce calms it (a slower,
+// dimmer flash, slower leaves and clouds, less sway, no blinking windows) against the same probe on the normal page.
 // Gameplay: desktop START captures the mouse (pointer lock, stubbed: headless Chrome refuses a real one) so plain
 // movement looks, Esc (a lock lost) pauses and RESUME captures again, a refused capture shows the click / arrows hint,
 // the arrow keys turn the camera (up still runs), the controls line names mouse look and the arrows; phones never ask
@@ -171,6 +176,45 @@ const buttons = (page, sel = '.hw-screen:not(.off) button, .hw-hud:not(.off) but
   .filter((e) => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden')
   .map((e) => { const r = e.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height, t: (e.textContent || e.getAttribute('aria-label') || '').trim() }; }), sel);
 const audioState = (page) => G(page, () => window.__game.audio.bus.ctx ? window.__game.audio.bus.ctx.state : 'none');
+/** The environment at `left` s to midnight after `ms` (its own easing), with the applied fog / sky values. */
+const envAt = (page, left, ms = 3200) => G(page, ([L, ms]) => new Promise((done) => {
+  const g = window.__game; g.setTimeLeft(L); g.G.safeT = 9;
+  setTimeout(() => done({ ...g.env.stats(), fogMist: g.atmo.fogParams.mist, skyCover: g.atmo.sky.material.uniforms.uCover.value }), ms);
+}), [left, ms]);
+/**
+ * The environment's motion 10 s before midnight with the gusts and the scheduled lightning held (so two pages compare
+ * like for like): mean tree sway, leaf drift (m/s), cloud drift over the moon (m/s), then a strike(1): its flash 0.1 s
+ * in, its peak, and the dimmest house window over the next 1.5 s.
+ */
+const envMotion = (page) => G(page, () => new Promise((done) => {
+  const g = window.__game, e = g.env;
+  g.setTimeLeft(10); g.G.safeT = 9;
+  const hold = () => { e._gustT = 1e9; e._gustAge = 99; e._boltT = 1e9; e.setFinale(false); }; // (the clock alone)
+  hold();
+  const out = { sway: 0, n: 0, drift: 0, clouds: 0, flash01: -1, flashMax: 0, windowMin: 1 };
+  let t0 = 0, s0 = null, tS = 0;
+  const tick = (now) => {
+    hold();
+    const s = e.stats();
+    if (!t0) t0 = now;
+    const el = (now - t0) / 1000;
+    if (el > 1.8 && !s0) s0 = { ...s, now };
+    if (s0 && el < 3.3) { out.sway += s.sway; out.n++; }
+    if (el >= 3.3 && !tS) {
+      out.drift = (s.leafDrift - s0.leafDrift) / ((now - s0.now) / 1000); out.clouds = (s.cloudPhase - s0.cloudPhase) / ((now - s0.now) / 1000);
+      out.sway /= Math.max(1, out.n); out.storm = s.storm; e.strike(1); tS = now;
+    }
+    if (tS) {
+      const k = (now - tS) / 1000;
+      if (out.flash01 < 0 && k >= 0.1) out.flash01 = s.flash;
+      out.flashMax = Math.max(out.flashMax, s.flash); out.windowMin = Math.min(out.windowMin, s.windowMin);
+      if (k > 1.5) { out.flashEnd = s.flash; e._gustT = 1; e._boltT = 12; done(out); return; }
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}));
+const envNormal = {}; // profile -> envMotion on the normal page (the reduced-motion run compares with it)
 
 async function rect(page, sel) { return G(page, (s) => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height, cx: r.left + r.width / 2, cy: r.top + r.height / 2 }; }, sel); }
 const overlaps = (a, b) => a && b && a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
@@ -777,6 +821,21 @@ async function runProfile(name) {
       await page.setViewportSize(vp);
       await sleep(500);
     }
+    // ---- the night escalates with the clock (the finale held off: the clock alone): 11:57 vs 10 s to midnight; the
+    // Witching Hour's hook drives it to its peak even at 11:57; then lightning (soft) and the motion probe
+    await G(page, () => window.__game.env.setFinale(false));
+    const early = await envAt(page, 176, 7000), late = await envAt(page, 10); // (7 s: the finale before this eases out)
+    check(name, 'environment escalates with the clock (storm, cloud cover, ground mist, leaves, blood moon)',
+      early.storm < 0.2 && late.storm > 0.8 && late.cover > early.cover + 0.15 && Math.abs(late.skyCover - late.cover) < 1e-3
+      && late.mist > early.mist * 1.5 && Math.abs(late.fogMist - late.mist) < 1e-3 && late.leavesActive > early.leavesActive + 0.3 && early.blood < 0.05 && late.blood > 0.5,
+      `storm ${early.storm} -> ${late.storm}, cover ${early.cover} -> ${late.cover}, mist ${early.mist} -> ${late.mist}, leaves ${early.leavesActive} -> ${late.leavesActive}, blood ${early.blood} -> ${late.blood}`);
+    await G(page, () => window.__game.env.setFinale(true));
+    const fin = await envAt(page, 176, 6000);
+    await G(page, () => window.__game.env.setFinale(false));
+    check(name, 'the Witching Hour hook (env.setFinale) drives the night to its peak (storm, blood moon) at any clock', fin.storm > 0.8 && fin.finale > 0.9 && fin.blood > 0.9, JSON.stringify({ storm: fin.storm, finale: fin.finale, blood: fin.blood }));
+    const mo = envNormal[name] = await envMotion(page);
+    check(name, 'lightning: a flash that stays soft (peak under 1.1, gone within 1.5 s), the house windows stutter', mo.flashMax > 0.75 && mo.flashMax < 1.1 && mo.flash01 > 0.2 && mo.flashEnd < 0.05 && mo.windowMin < 0.5, JSON.stringify(mo));
+    await G(page, () => { const g = window.__game; g.env.setFinale(g.G.witching); });
     // ---- the last ten seconds count down just under the clock pill (not over the action at the centre)
     await G(page, () => window.__game.setTimeLeft(8.95));
     await sleep(450);
@@ -816,7 +875,7 @@ async function runProfile(name) {
     if (name === 'iphone-portrait' || args.rounds) {
       // ---- five rounds back to back (lanterns smashed, every ghost up, candy spilled, then midnight, PLAY AGAIN):
       // geometries, textures, programs, physics bodies, scene objects, DOM nodes and listeners stay flat
-      const seen = [];
+      const seen = [], calm = [];
       for (let r = 0; r < 5; r++) {
         await G(page, () => {
           const g = window.__game, p = g.cc.position;
@@ -833,10 +892,14 @@ async function runProfile(name) {
         if (phone) await T.tap(ag.cx, ag.cy); else await page.mouse.click(ag.cx, ag.cy);
         await waitFor(page, () => window.__game.G.state === 'play', null, 3000);
         await sleep(300);
+        calm.push(await G(page, () => window.__game.env.stats()));
       }
       const keys = Object.keys(seen[0]);
       const grew = keys.filter((k) => seen[4][k] > seen[1][k] + (k === 'dom' ? 2 : 0));
       check(name, '5 rounds back to back: resources and listeners flat', grew.length === 0, (grew.length ? grew : keys).map((k) => `${k} ${seen.map((c) => c[k]).join('>')}`).join(', '));
+      check(name, '5 rounds: every round starts calm (no storm, flash, blood moon or crows in flight), pools and sounds bounded',
+        calm.every((e) => e.storm < 0.15 && e.flash < 0.01 && e.blood === 0 && e.crowsAway === 0 && e.kicked <= 20 && e.puffs <= 20 && e.sounds < 40),
+        calm.map((e) => `${e.storm}/${e.flash}/${e.blood}/${e.crowsAway}/${e.kicked}/${e.puffs}/${e.sounds}`).join(' '));
     }
     if (args.perf) {
       // ---- stress under 4x CPU throttling: every ghost chasing close by, 8 lanterns breaking at once, 80 candy flying
@@ -895,6 +958,28 @@ async function runProfile(name) {
   await ctx.close();
 }
 
+/** prefers-reduced-motion: reduce: the environment probe on a second page against the normal one (same profile). */
+async function runReduced(name) {
+  const ctx = await browser.newContext({ ...PROFILES[name], reducedMotion: 'reduce' });
+  const page = await ctx.newPage();
+  const errors = watchErrors(page), tag = `${name}-rm`;
+  try {
+    await page.goto(url, { waitUntil: 'load', timeout: 90000 });
+    check(tag, 'loads', await waitFor(page, () => !!(window.__game && document.querySelector('.ui-loading') === null), null, 90000));
+    await G(page, () => window.__game.startRound());
+    await sleep(500);
+    const rm = await envMotion(page), mo = envNormal[name];
+    check(tag, 'reduced motion is honoured (prefers-reduced-motion)', await G(page, () => window.__game.env.reduced === true));
+    check(tag, 'reduced motion: a slow, dim flash and no window blinking', rm.flashMax < 0.4 && rm.flash01 < 0.15 && rm.flashEnd < 0.2 && rm.windowMin > 0.9, JSON.stringify(rm));
+    check(tag, 'reduced motion: slower leaves and clouds, less sway than the normal page', !!mo && rm.drift < 0.6 * mo.drift && rm.clouds < 0.6 * mo.clouds && rm.sway < 0.6 * mo.sway,
+      mo ? `drift ${mo.drift.toFixed(2)} -> ${rm.drift.toFixed(2)}, clouds ${mo.clouds.toFixed(1)} -> ${rm.clouds.toFixed(1)}, sway ${mo.sway.toFixed(3)} -> ${rm.sway.toFixed(3)}` : 'no normal probe');
+  } catch (e) {
+    check(tag, 'run', false, e.message.split('\n')[0]);
+  }
+  check(tag, 'no console errors', errors.length === 0, errors.slice(0, 3).join(' || '));
+  await ctx.close();
+}
+
 /** A laptop with a touchscreen (reports no touch): the first touch reveals the controls, a key press hides them. */
 async function runHybrid(name) {
   const ctx = await browser.newContext({ ...PROFILES[name] });
@@ -937,7 +1022,10 @@ let url = args.url || null;
 try {
   if (!url) { vite = await startVite(); url = `${vite.base}/halloween/`; }
   browser = await launchChrome({ headless: !args.headed, args: args.headed ? headedArgs : headlessArgs });
-  for (const name of only) { if (name === 'hybrid') await runHybrid(name); else if (PROFILES[name]) await runProfile(name); else console.log(`unknown profile ${name}`); }
+  for (const name of only) {
+    if (name === 'hybrid') await runHybrid(name); else if (PROFILES[name]) await runProfile(name); else console.log(`unknown profile ${name}`);
+    if (name === 'pixel-portrait') await runReduced(name);
+  }
 } catch (e) {
   console.error(e); failures++;
 } finally {

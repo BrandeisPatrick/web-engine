@@ -47,6 +47,7 @@ import { BooReach } from './reach.js';
 import { GameAudio } from './audio.js';
 import { HUD, ACCENT, applyTheme, RANKS, rankIndex, rankFor, nextRankAt } from './hud.js';
 import { LOOK } from './looks.js';
+import { Environment } from './environment.js';
 
 const params = new URLSearchParams(location.search);
 const flag = (k) => params.has(k) && params.get(k) !== '0';
@@ -217,11 +218,13 @@ async function boot() {
       W.glows = new Glows(320);
       scene.add(W.glows.mesh);
       W.bats = new Bats({ scene, count: LOW ? 6 : 9 });
+      // the living night: wind, leaves, clouds over the moon, mist, lightning, crows; escalates toward midnight
+      W.env = new Environment({ scene, camera, atmo, world: W.world, ghosts: W.ghosts, heightAt, low: LOW });
       progress(1, 'Ready');
     },
   }, 'world-load');
   await engine.load((p, label) => loading.setProgress(p, label));
-  const { world, dyn, lanterns, ghosts, candy, fx, glows, bats } = W;
+  const { world, dyn, lanterns, ghosts, candy, fx, glows, bats, env } = W;
   const booReach = new BooReach(scene); // BOO's reach on the ground while BOO glows
 
   // ---------------------------------------------------------------- the kid
@@ -251,6 +254,7 @@ async function boot() {
   // ---------------------------------------------------------------- audio, HUD, input, camera
   const audio = new GameAudio();
   audio.unlock();
+  env.attachAudio(audio.bus);
   const best0 = loadBest();
   const G = { // round state (also what window.__game shows)
     state: 'title', time: 0, left: ROUND, candy: 0, best: best0, smashed: 0, booed: 0, caught: 0, pops: 0,
@@ -382,7 +386,7 @@ async function boot() {
     paceRec.fill(0);
     if (engine.clock.paused) engine.clock.resume();
     endJuice();
-    lanterns.reset(); ghosts.reset(); fx.clear(); fillCandy(); placeKid();
+    lanterns.reset(); ghosts.reset(); fx.clear(); env.reset(); fillCandy(); placeKid();
     hud.setCandy(0, false); hud.setGoal(nextRankAt(0)); hud.setClock(ROUND, ROUND); hud.showPlay(); hud.setDanger(0);
     input.map.enabled = true;
     rig.yaw = 0; rig.pitch = portraitCam ? PITCH.portrait : PITCH.landscape; setRig(rig); rig.recentre();
@@ -395,7 +399,7 @@ async function boot() {
     if (engine.clock.paused) setClockPaused(false);
     holdAudio(false);
     G.state = 'title'; endJuice();
-    lanterns.reset(); ghosts.reset(); fx.clear(); fillCandy(); placeKid();
+    lanterns.reset(); ghosts.reset(); fx.clear(); env.reset(); fillCandy(); placeKid();
     orbitTarget.position.set(-2, 0, -4); orbit.distance = 30; orbit.elevation = 0.3; orbit.azimuth = 0.4; // title framing
     hud.showTitle(G.best); setRig(orbit);
     for (let i = 0; i < 3; i++) ghosts.wake(SPAWN[0], SPAWN[1]); // a few ghosts drift around behind the title
@@ -487,7 +491,7 @@ async function boot() {
     if (G.booT < BOO_CD) { audio.tick(); return; }
     G.booT = 0;
     const p = cc.position;
-    fx.boo(p.x, p.y, p.z, BOO_R); audio.boo(); buzz(BUZZ.boo); fovPunch();
+    fx.boo(p.x, p.y, p.z, BOO_R); audio.boo(); buzz(BUZZ.boo); fovPunch(); env.scare(p.x, p.z, BOO_R * 2);
     const scared = ghosts.boo(p.x, p.z, BOO_R);
     if (scared.length) {
       G.booed += scared.length; audio.scared(scared.length); G.hintBoo = false;
@@ -663,7 +667,7 @@ async function boot() {
     audio.bell(2, 0.8); audio.witching();
     lanterns.relightAll(relit);
     ghosts.witch = true;
-    // env.setFinale(true); // ENVIRONMENT HOOK (feat/halloween-environment): the environment's finale starts here
+    env.setFinale(true); // the night at its peak: storm, lightning, the blood moon (env.reset() ends it: Play Again, title)
   };
   /** One candy of the rain: falls from high up into the ring around the kid (most of them inside the view). */
   const rainCandy = (p) => {
@@ -916,6 +920,7 @@ async function boot() {
       atmo.update(camera.position, dt);
       LOOK.update(dt, camera, atmo.moonDir);
       world.update(camera, atmo.moonDir);
+      env.update(dt, G.state === 'title' ? 0 : 1 - G.left / ROUND, cc.position);
       _frustum.setFromProjectionMatrix(_pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
       camera.getWorldDirection(_dir);
       const t = G.time;
@@ -930,11 +935,7 @@ async function boot() {
         glows.set(n++, x, y, z, 0.7, 0.25 * f, 0.9 * f, 0.4 * f);
       }
       n += fx.glow(glows, n);
-      const GS = world.glowSpots;
-      for (let k = 0; k < GS.length; k++) { // halos over the static glowing props (gate lanterns, windows, crypt, cauldron)
-        const q = GS[k], f = 1 - q[7] * (0.12 + 0.1 * Math.sin(t * 9.3 + k * 2.1) + 0.06 * Math.sin(t * 23.1 + k));
-        glows.set(n++, q[0], q[1], q[2], q[3], q[4] * f, q[5] * f, q[6] * f);
-      }
+      n += world.halos(glows, n); // halos over the static glowing props, at their light's level (env: flicker, gusts)
       glows.commit(n);
       bats.update(dt);
       fx.update(dt);
@@ -1025,7 +1026,7 @@ async function boot() {
   }
   const loadMs = Math.round(performance.now() - t0);
   window.__game = {
-    THREE, engine, G, cc, ctl, camState, rig, orbit, input, hud, audio, world, dyn, lanterns, ghosts, candy, fx, postfx, atmo, physics, player,
+    THREE, engine, G, cc, ctl, camState, rig, orbit, input, hud, audio, world, dyn, lanterns, ghosts, candy, fx, postfx, atmo, physics, player, env,
     loadMs, TOUCH, LOW, startRound, toTitle, setPaused, endRound, juice, paceRec, shareScore, RANKS, around,
     get pace() { return pace; }, get baseFov() { return baseFov; },
     get touchUI() { return touchUI; },

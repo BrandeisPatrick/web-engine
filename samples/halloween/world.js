@@ -14,12 +14,17 @@
 // the static glowing props: gate and porch lanterns, lit windows, crypt candles, the cauldron).
 // Materials: world-space grain on the props and the terrain (looks.js patchDetail; the terrain with a faint dew sheen),
 // contact shading + moss baked into the prop colours near the ground, grass tufts (Lambert) swaying in the wind.
+// Hooks for the living night (environment.js drives them per frame): the dead trees sway (a per-vertex sway weight
+// on the merged props, WIND uniforms; their shadow caster carries the same patch), every lamp, candle and window of the
+// glow mesh belongs to a light group whose level the game sets (glowLevels; halos() draws their halos at that level),
+// the gate's two iron leaves (folded back inside the fence) swing, and perches lists where the crows sit.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { makeCanvas, mulberry32 } from '@vibe/engine/render';
+import { makeCanvas, mulberry32, applyPatches, makeDepthMaterial } from '@vibe/engine/render';
 import { patchDetail, patchGrass } from './looks.js';
 
 export const PLAY = 50;     // fence half size (m): the playable square
+const MOON_HALO = 4.2;      // the moon's halo radius in moon radii
 export const HALF = 64;     // terrain half size
 const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
@@ -40,6 +45,26 @@ function segDist(px, pz, ax, az, bx, bz) {
 export function pathDist(x, z) {
   let d = Infinity;
   for (const P of PATHS) for (let i = 0; i < P.length - 1; i++) d = Math.min(d, segDist(x, z, P[i][0], P[i][1], P[i + 1][0], P[i + 1][1]));
+  return d;
+}
+// heightAt runs per spark, per ghost step, per candy...: its path-bed test only measures the segments whose box
+// (grown by the bed's width) holds the point: the same value wherever the bed dips the ground, a fraction of the work
+const BED = 1.6;
+const SEGS = new Float64Array(PATHS.reduce((n, P) => n + P.length - 1, 0) * 8);
+{
+  let k = 0;
+  for (const P of PATHS) for (let i = 0; i < P.length - 1; i++, k += 8) {
+    const [ax, az] = P[i], [bx, bz] = P[i + 1];
+    SEGS.set([ax, az, bx, bz, Math.min(ax, bx) - BED, Math.max(ax, bx) + BED, Math.min(az, bz) - BED, Math.max(az, bz) + BED], k);
+  }
+}
+/** pathDist(x, z) where it is under BED (exactly), else BED. */
+function bedDist(x, z) {
+  let d = BED;
+  for (let k = 0; k < SEGS.length; k += 8) {
+    if (x < SEGS[k + 4] || x > SEGS[k + 5] || z < SEGS[k + 6] || z > SEGS[k + 7]) continue;
+    d = Math.min(d, segDist(x, z, SEGS[k], SEGS[k + 1], SEGS[k + 2], SEGS[k + 3]));
+  }
   return d;
 }
 
@@ -63,8 +88,8 @@ export function heightAt(x, z) {
   const r = Math.max(Math.abs(x), Math.abs(z));
   const e = smooth((r - PLAY + 1) / 12);
   h += e * (5 + 2.5 * Math.sin(x * 0.11 + z * 0.07));
-  const pd = pathDist(x, z);
-  if (pd < 1.6) h -= 0.06 * (1 - pd / 1.6);
+  const pd = bedDist(x, z);
+  if (pd < BED) h -= 0.06 * (1 - pd / BED);
   return h;
 }
 
@@ -90,13 +115,26 @@ function place(g, x, y, z, ry = 0, rx = 0, rz = 0, sx = 1, sy = sx, sz = sx) {
 }
 
 class Batch {
-  constructor() { this.parts = []; }
+  constructor() { this.parts = []; this.group = -1; }
   add(g, color, x = 0, y = 0, z = 0, ry = 0, rx = 0, rz = 0, sx = 1, sy = sx, sz = sx, glow = 1) {
-    this.parts.push(place(paint(g, color, glow), x, y, z, ry, rx, rz, sx, sy, sz));
+    this.push(place(paint(g, color, glow), x, y, z, ry, rx, rz, sx, sy, sz));
   }
-  /** ground (optional, heightAt): darken and moss-tint vertex colours near the ground (baked contact shading). */
-  build(material, name, ground = null) {
+  /** A painted, placed part; a glow batch tags it with its light group (this.group: the flicker the game drives). */
+  push(g) {
+    if (this.group >= 0) g.setAttribute('grp', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count).fill(this.group), 1));
+    this.parts.push(g);
+  }
+  /**
+   * ground (optional, heightAt): darken and moss-tint vertex colours near the ground (baked contact shading).
+   * sway: every part gets the tree-sway attribute (vec2 weight, phase; zeros where a part has none), so one material
+   * serves trees and everything else.
+   */
+  build(material, name, ground = null, sway = false) {
     if (!this.parts.length) return null;
+    for (const p of this.parts) {
+      if (sway && !p.attributes.sway) p.setAttribute('sway', new THREE.BufferAttribute(new Float32Array(p.attributes.position.count * 2), 2));
+      if (this.group >= 0 && !p.attributes.grp) p.setAttribute('grp', new THREE.BufferAttribute(new Float32Array(p.attributes.position.count), 1));
+    }
     const g = mergeGeometries(this.parts);
     for (const p of this.parts) p.dispose();
     this.parts.length = 0;
@@ -118,6 +156,18 @@ class Batch {
 // ------------------------------------------------------------------ textures
 const MOSS = new THREE.Color('#26331f');
 let glowSpots = []; // filled by buildWorld (the props register their halos while it builds them)
+// Light groups of the merged glow mesh: each lamp, candle and window is one group whose brightness the game sets per
+// frame (world.glowLevels -> the glow material's uGlowLv[]; the halos over them read the same level), so a flame
+// flickers and gutters in a gust and a window can blink out, all in the one draw. [kind, flicker amount]; group 0 is
+// steady (level 1) and holds every untagged glow part.
+export const GLOW = { STEADY: 0, FLAME: 1, WINDOW: 2, BREW: 3, EMBER: 4, MAX: 24 };
+let glowGroups = [];
+/** The next glow parts added to G belong to a new light group (kind, flicker amount); returns its index. */
+function glowGroup(G, kind, amt = 1) {
+  if (glowGroups.length >= GLOW.MAX) { G.group = 0; return 0; }
+  glowGroups.push([kind, amt]); G.group = glowGroups.length - 1;
+  return G.group;
+}
 
 /** Moon disc with maria and a soft limb, plus a separate glow texture. */
 function moonTextures() {
@@ -172,17 +222,100 @@ function skylineTexture() {
   return t;
 }
 
+// ------------------------------------------------------------------ wind + light groups (the game drives them)
+/**
+ * Shared uniforms the game writes per frame (environment.js): WIND.time (s), WIND.sway = (wind dir x, dir z, lean
+ * (m at the crown), gust rocking (m)), WIND.gate = per gate leaf (hinge x, z, swing past its built pose (rad), -).
+ * Trees bend and the gate swings through the props material and its shadow-caster copy.
+ */
+export const WIND = { time: { value: 0 }, sway: { value: new THREE.Vector4(0.99, 0.11, 0, 0) }, gate: { value: [new THREE.Vector4(), new THREE.Vector4()] } };
+const GATE_OPEN = 2.75; // rad: how far the gate leaves stand open as built (from closed, folded back inside the fence)
+// tree sway on the props material (MaterialPatches patch object): attribute sway = (weight, phase). The crown leans
+// with the wind and rocks with the gusts, the twigs shiver; everything else has weight 0 and stays put. The gate's
+// leaves (sway.x = -1, -2) turn about their hinges instead
+const swayPatch = {
+  key: 'hwSway', depth: true,
+  uniforms: { uSwayT: WIND.time, uSway: WIND.sway, uGate: WIND.gate },
+  vertexPars: 'attribute vec2 sway;\nuniform float uSwayT;\nuniform vec4 uSway;\nuniform vec4 uGate[ 2 ];\n',
+  vertexBegin: /* glsl */`
+	if ( sway.x < - 0.5 ) {
+		vec4 gh = sway.x < - 1.5 ? uGate[ 1 ] : uGate[ 0 ];
+		vec2 r = position.xz - gh.xy;
+		float c = cos( gh.z ), s = sin( gh.z );
+		mpOffset.xz += vec2( c * r.x + s * r.y, - s * r.x + c * r.y ) - r;
+	} else if ( sway.x > 0.0 ) {
+		float t = uSwayT, ph = sway.y;
+		float s1 = sin( t * 1.13 + ph ) * 0.6 + sin( t * 2.37 + ph * 1.7 ) * 0.25;
+		float s2 = cos( t * 0.91 + ph * 2.1 ) * 0.3;
+		vec2 d = uSway.xy;
+		mpOffset.xz += ( d * ( uSway.z + uSway.w * ( 0.45 + s1 ) ) + vec2( - d.y, d.x ) * s2 * uSway.w ) * sway.x;
+		mpOffset.y -= abs( s1 ) * sway.x * 0.1 * uSway.w;
+		mpOffset += vec3( 0.6, 0.8, - 0.5 ) * sin( t * 7.3 + dot( position, vec3( 13.0, 29.0, 17.0 ) ) ) * 0.03 * uSway.w * sway.x;
+	}
+`,
+};
+/** The glow material reads its light group's level (uGlowLv[grp], default 1) into the vertex colour. */
+function patchGlowGroups(mat, levels) {
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uGlowLv = { value: levels };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', `#include <common>\nattribute float grp;\nuniform float uGlowLv[ ${GLOW.MAX} ];`)
+      .replace('#include <color_vertex>', '#include <color_vertex>\n\tvColor.rgb *= uGlowLv[ int( grp + 0.5 ) ];');
+  };
+  mat.customProgramCacheKey = () => 'hwGlowGroups';
+  return mat;
+}
+
+/**
+ * The graveyard's south gate: two iron leaves (bars between two stiles), hinged at [x, y, z] (the posts' inner back
+ * corners) and folded back GATE_OPEN inside the fence, so they never stand in the gap or between the camera and the
+ * kid; merged into the props batch B. Each part carries sway = (-1 - k, 0): the props material turns it about its
+ * hinge by WIND.gate[k].z, so the gate swings in the gusts (and its shadow with it) at no draw call.
+ */
+function gateLeaves(B, hinges, width) {
+  const IRON = '#1a1720';
+  hinges.forEach(([hx, hy, hz], k) => {
+    const L = new Batch();
+    L.add(new THREE.BoxGeometry(0.07, 1.78, 0.07), IRON, 0.04, 0.95, 0);
+    L.add(new THREE.BoxGeometry(0.05, 1.62, 0.05), IRON, width - 0.03, 0.87, 0);
+    for (const y of [0.22, 1.02, 1.62]) L.add(new THREE.BoxGeometry(width, 0.05, 0.04), IRON, width / 2, y, 0);
+    for (let x = 0.2; x < width - 0.1; x += 0.19) {
+      L.add(new THREE.BoxGeometry(0.024, 1.5, 0.024), IRON, x, 0.93, 0);
+      L.add(new THREE.ConeGeometry(0.034, 0.12, 4), IRON, x, 1.74, 0);
+    }
+    L.add(new THREE.TorusGeometry(0.16, 0.014, 4, 12), IRON, width / 2, 1.32, 0); // a curl between the upper rails
+    // closed, the west leaf (k 0) reaches +x and the east one -x; open = turned toward -z (into the graveyard)
+    _q.setFromEuler(_e.set(0, k === 0 ? GATE_OPEN : Math.PI - GATE_OPEN, 0));
+    _m.compose(_p.set(hx, hy, hz), _q, _s.set(1, 1, 1));
+    for (const g of L.parts) {
+      g.applyMatrix4(_m);
+      const w = new Float32Array(g.attributes.position.count * 2);
+      for (let i = 0; i < w.length; i += 2) w[i] = -1 - k;
+      g.setAttribute('sway', new THREE.BufferAttribute(w, 2));
+      B.parts.push(g);
+    }
+  });
+}
+
 // ------------------------------------------------------------------ props
 function deadTree(B, x, z, s, rnd, physics) {
   const y = heightAt(x, z) - 0.15;
   const bark = rnd() < 0.5 ? '#2e2530' : '#3a2e33';
+  const h = (2.4 + rnd() * 1.6) * s;
+  // wind sway (the props material, swayPatch): weight 0 at the root rising to 1 at the crown (squared: the trunk
+  // stays put, the twigs move most), one phase per tree so the trees rock out of step
+  const phase = (x * 0.37 + z * 0.21) % (Math.PI * 2), crown = h * 1.7;
   const limb = (x0, y0, z0, len, r, yaw, pitch, depth) => {
     const g = new THREE.CylinderGeometry(r * 0.62, r, len, depth >= 2 ? 6 : 4, 1, true).translate(0, len / 2, 0);
     // orientation: tilt `pitch` from vertical toward `yaw`
     _q.setFromEuler(_e.set(pitch, yaw, 0, 'YXZ'));
     _m.compose(_p.set(x0, y0, z0), _q, _s.set(1, 1, 1));
     g.applyMatrix4(_m);
-    B.parts.push(paint(g, bark));
+    paint(g, bark);
+    const P = g.attributes.position.array, W = new Float32Array((P.length / 3) * 2);
+    for (let i = 0; i < P.length / 3; i++) { const k = Math.min(1, Math.max(0, (P[i * 3 + 1] - y) / crown)); W[i * 2] = k * k; W[i * 2 + 1] = phase; }
+    g.setAttribute('sway', new THREE.BufferAttribute(W, 2));
+    B.parts.push(g);
     const tip = new THREE.Vector3(0, len, 0).applyQuaternion(_q).add(new THREE.Vector3(x0, y0, z0));
     if (depth <= 0) return;
     const n = depth >= 2 ? 3 : 2;
@@ -191,7 +324,6 @@ function deadTree(B, x, z, s, rnd, physics) {
       limb(tip.x, tip.y, tip.z, len * (0.5 + rnd() * 0.25), r * 0.6, yw, pitch * 0.5 + 0.45 + rnd() * 0.5, depth - 1);
     }
   };
-  const h = (2.4 + rnd() * 1.6) * s;
   limb(x, y, z, h, 0.22 * s, rnd() * 6.28, (rnd() - 0.5) * 0.15, 3);
   // roots
   for (let k = 0; k < 4; k++) B.add(new THREE.ConeGeometry(0.12 * s, 0.7 * s, 5).rotateZ(Math.PI / 2 - 0.25).translate(0.3 * s, 0.05, 0), bark, x, y + 0.1, z, k * 1.57 + rnd());
@@ -223,7 +355,7 @@ function gravestone(B, x, z, kind, rnd, physics) {
   B.add(new THREE.SphereGeometry(0.5, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2).scale(0.9, 0.22, 1.8), '#2b2026', x + Math.sin(yaw) * 1.1, y - 0.03, z + Math.cos(yaw) * 1.1, yaw);
   const hw = Math.max(w, d) / 2 + 0.05;
   physics.addStaticBox(x - hw, y - 1, x + hw, y + h, z - 0.18, z + 0.18);
-  return { x, z, y };
+  return { x, z, y, top: y + (kind === 2 ? h + 0.28 : h - 0.05), yaw, kind };
 }
 
 function ironFence(B, ax, az, bx, bz, physics, gap = null) {
@@ -283,19 +415,21 @@ function house(B, G, physics) {
     const [px, pz] = L(2.3, d / 2 + 1.2);
     B.add(new THREE.CylinderGeometry(0.012, 0.012, 0.3, 4), '#141016', px, y + 2.72, pz);
     B.add(new THREE.ConeGeometry(0.16, 0.12, 4).rotateY(Math.PI / 4), '#141016', px, y + 2.52, pz, yaw);
+    const gp = glowGroup(G, GLOW.FLAME, 1);
     G.add(new THREE.BoxGeometry(0.16, 0.24, 0.16), '#ffb253', px, y + 2.34, pz, yaw, 0, 0, 1, 1, 1, 2.4);
-    glowSpots.push([px, y + 2.34, pz, 2.2, 0.55, 0.26, 0.07, 1]);
+    glowSpots.push([px, y + 2.34, pz, 2.2, 0.55, 0.26, 0.07, 1, gp]);
   }
   // glowing windows (front, side, tower): warm and one sickly green
   const win = (lx, ly, lz, ww, hh, col, k = 3) => { const [px, pz] = L(lx, lz); G.add(new THREE.PlaneGeometry(ww, hh), col, px, y + ly, pz, yaw, 0, 0, 1, 1, 1, k); };
   for (const [lx, ly] of [[-2.2, 2.2], [3.6, 2.2], [-2.2, 4.6], [1.2, 4.6], [3.6, 4.6]]) {
-    const green = ly > 4 && lx > 3;
+    const green = ly > 4 && lx > 3, gw = glowGroup(G, GLOW.WINDOW, 0.2);
     win(lx, ly, d / 2 + 0.06, 1, 1.3, green ? '#9dff7a' : '#ffb347', 3.2);
     const [px, pz] = L(lx, d / 2 + 0.5); // a soft halo in the air just outside each lit window
-    glowSpots.push(green ? [px, y + ly, pz, 2.6, 0.08, 0.26, 0.06, 0.2] : [px, y + ly, pz, 2.6, 0.32, 0.15, 0.04, 0.2]);
+    glowSpots.push(green ? [px, y + ly, pz, 2.6, 0.08, 0.26, 0.06, 0.2, gw] : [px, y + ly, pz, 2.6, 0.32, 0.15, 0.04, 0.2, gw]);
   }
-  win(-w / 2 + 1, 7.6, d / 2 + 0.56, 0.9, 1.2, '#ffcf6a', 4);
-  win(-w / 2 + 1, 4.2, d / 2 + 0.56, 0.8, 1.1, '#ff9a3a', 3);
+  glowGroup(G, GLOW.WINDOW, 0.2); win(-w / 2 + 1, 7.6, d / 2 + 0.56, 0.9, 1.2, '#ffcf6a', 4);
+  glowGroup(G, GLOW.WINDOW, 0.2); win(-w / 2 + 1, 4.2, d / 2 + 0.56, 0.8, 1.1, '#ff9a3a', 3);
+  G.group = 0;
   // window frames (crosses) in front of the glow
   for (const [lx, ly] of [[-2.2, 2.2], [3.6, 2.2], [-2.2, 4.6], [1.2, 4.6], [3.6, 4.6]]) { box(1.1, 0.08, 0.06, lx, ly, d / 2 + 0.1, '#140f15'); box(0.08, 1.4, 0.06, lx, ly, d / 2 + 0.1, '#140f15'); }
   // collider: the rotated footprint's bounding box (house + tower + porch)
@@ -313,11 +447,14 @@ function crypt(B, G, physics) {
   B.add(new THREE.BoxGeometry(3.6, 0.3, 1.2), DARK, x, y + 0.1, z + 2.9);
   // candles by the door (glow) + an eerie green crack of light under the door
   for (const sx of [-0.9, 0.9]) {
+    const gc = glowGroup(G, GLOW.FLAME, 1);
     B.add(new THREE.CylinderGeometry(0.05, 0.05, 0.25, 6), '#d8d0c0', x + sx, y + 0.37, z + 2.75); G.add(new THREE.SphereGeometry(0.06, 6, 4).scale(1, 1.6, 1), '#ffcc66', x + sx, y + 0.57, z + 2.75, 0, 0, 0, 1, 1, 1, 5);
-    glowSpots.push([x + sx, y + 0.6, z + 2.75, 0.9, 0.45, 0.24, 0.06, 1]);
+    glowSpots.push([x + sx, y + 0.6, z + 2.75, 0.9, 0.45, 0.24, 0.06, 1, gc]);
   }
+  const gd = glowGroup(G, GLOW.BREW, 0.5);
   G.add(new THREE.PlaneGeometry(1.4, 0.08), '#7dff9a', x, y + 0.06, z + 2.28, 0, 0, 0, 1, 1, 1, 4);
-  glowSpots.push([x, y + 0.25, z + 2.6, 2.2, 0.05, 0.22, 0.09, 0]);
+  glowSpots.push([x, y + 0.25, z + 2.6, 2.2, 0.05, 0.22, 0.09, 0, gd]);
+  G.group = 0;
   physics.addStaticBox(x - 2.6, y - 1, x + 2.6, y + 4.5, z - 2.3, z + 2.5);
 }
 
@@ -329,9 +466,12 @@ function cauldron(B, G, physics) {
   for (let k = 0; k < 9; k++) { const a = k * 0.698; B.add(new THREE.DodecahedronGeometry(0.22, 0), '#4a4550', x + Math.cos(a) * 1.25, y + 0.05, z + Math.sin(a) * 1.25, a, 0.3, 0.2, 1, 0.6, 1); }
   // logs and embers under it
   for (let k = 0; k < 3; k++) B.add(new THREE.CylinderGeometry(0.08, 0.08, 1.1, 6).rotateZ(Math.PI / 2), '#2c1d14', x, y + 0.1, z, k * 1.05);
+  const ge = glowGroup(G, GLOW.EMBER, 1);
   G.add(new THREE.SphereGeometry(0.3, 8, 4).scale(1.6, 0.25, 1.6), '#ff6a1a', x, y + 0.12, z, 0, 0, 0, 1, 1, 1, 3);
+  const gb = glowGroup(G, GLOW.BREW, 0.4);
   G.add(new THREE.CircleGeometry(0.62, 18).rotateX(-Math.PI / 2), '#5dff6e', x, y + 1.18, z, 0, 0, 0, 1, 1, 1, 2.6);
-  glowSpots.push([x, y + 1.45, z, 3.2, 0.1, 0.42, 0.12, 0.4], [x, y + 0.2, z, 2.2, 0.5, 0.18, 0.03, 1]);
+  glowSpots.push([x, y + 1.45, z, 3.2, 0.1, 0.42, 0.12, 0.4, gb], [x, y + 0.2, z, 2.2, 0.5, 0.18, 0.03, 1, ge]);
+  G.group = 0;
   physics.addStaticBox(x - 0.95, y - 1, x + 0.95, y + 1.25, z - 0.95, z + 0.95);
 }
 
@@ -346,7 +486,9 @@ function scarecrow(B, G, physics) {
   B.add(new THREE.SphereGeometry(0.3, 12, 8).scale(1, 0.85, 1), '#ff7a1a', x, y + 2.3, z);           // pumpkin head
   B.add(new THREE.CylinderGeometry(0.42, 0.42, 0.03, 12), '#2a2030', x, y + 2.52, z);
   B.add(new THREE.ConeGeometry(0.22, 0.5, 10), '#2a2030', x, y + 2.78, z, 0, -0.25, 0.1);
+  glowGroup(G, GLOW.FLAME, 0.6);
   G.add(new THREE.PlaneGeometry(0.28, 0.12), '#ffd27a', x, y + 2.32, z + 0.29, 0, 0, 0, 1, 1, 1, 3);
+  G.group = 0;
   physics.addStaticBox(x - 0.3, y - 1, x + 0.3, y + 2.6, z - 0.3, z + 0.3);
 }
 
@@ -394,8 +536,9 @@ export function buildWorld({ scene, physics, low }) {
   const rnd = mulberry32(2026);
   physics.setHeightfield(heightAt);
   const B = new Batch(), G = new Batch();
-  // halos the game draws every frame over static glowing props: [x, y, z, size, r, g, b, flicker 0..1]
+  // halos the game draws every frame over static glowing props: [x, y, z, size, r, g, b, flicker 0..1, light group]
   glowSpots = [];
+  glowGroups = [[GLOW.STEADY, 0]]; G.group = 0;
 
   // ---- terrain
   const N = low ? 96 : 140;
@@ -483,10 +626,11 @@ export function buildWorld({ scene, physics, low }) {
   // candle lanterns at the foot of the gate posts, on their outer sides (the path between them stays clear): warm points
   // framing the way in (glow geometry + a halo each)
   for (const gx of G0.gate) {
-    const x = gx + (gx < 16 ? -0.62 : 0.62), z = G0.z1 + 0.42, y = heightAt(x, z);
+    const x = gx + (gx < 16 ? -0.62 : 0.62), z = G0.z1 + 0.42, y = heightAt(x, z), gl = glowGroup(G, GLOW.FLAME, 1);
     candleLantern(B, G, x, y, z, gx < 16 ? 0.3 : -0.4);
-    glowSpots.push([x, y + 0.2, z, 1.7, 0.55, 0.26, 0.07, 1]);
+    glowSpots.push([x, y + 0.2, z, 1.7, 0.55, 0.26, 0.07, 1, gl]);
   }
+  G.group = 0;
   crypt(B, G, physics);
 
   // ---- haunted house, cauldron, scarecrow, hay bales
@@ -521,15 +665,29 @@ export function buildWorld({ scene, physics, low }) {
   physics.addStaticBox(-F - 2, -5, -F + 0.2, 8, -F, F);
   physics.addStaticBox(F - 0.2, -5, F + 2, 8, -F, F);
 
+  // ---- the south gate's two leaves, folded back inside (no colliders: they never close across the path)
+  const hinges = [G0.gate[0] + 0.27, G0.gate[1] - 0.27].map((hx) => [hx, heightAt(hx, G0.z1 - 0.27) + 0.04, G0.z1 - 0.27]);
+  gateLeaves(B, hinges, (G0.gate[1] - G0.gate[0]) / 2 - 0.3);
+
   // ---- merged static meshes
-  // stone / bark / wood grain in world space (looks.js), contact shading + moss baked into the colours at the ground
-  const propMat = patchDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0.02 }), { scale: 1.7, amount: 0.62, broad: 0.32, streak: 0.55 });
-  const props = B.build(propMat, 'props', heightAt);
+  // stone / bark / wood grain in world space (looks.js), contact shading + moss baked into the colours at the ground;
+  // the trees sway in the wind (swayPatch), and their shadows with them (the shadow caster carries the same patch)
+  const propMat = applyPatches(patchDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0.02 }), { scale: 1.7, amount: 0.62, broad: 0.32, streak: 0.55 }), [swayPatch]);
+  const props = B.build(propMat, 'props', heightAt, true);
   props.castShadow = true; props.receiveShadow = true;
+  props.customDepthMaterial = makeDepthMaterial(propMat);
   scene.add(props);
-  const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  const glowLevels = new Float32Array(GLOW.MAX).fill(1);
+  const glowMat = patchGlowGroups(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }), glowLevels);
   const glow = G.build(glowMat, 'glow');
   scene.add(glow);
+  // the gate: its leaves stand open a0 / a1 (rad from closed, folded inward; built at `open`), through the props material
+  const G2 = WIND.gate.value;
+  const gate = {
+    hinges, open: GATE_OPEN,
+    set(a0, a1) { G2[0].set(hinges[0][0], hinges[0][2], a0 - GATE_OPEN, 0); G2[1].set(hinges[1][0], hinges[1][2], -(a1 - GATE_OPEN), 0); },
+  };
+  gate.set(GATE_OPEN, GATE_OPEN);
 
   // ---- pumpkin patch: rows of decor pumpkins (instanced) + leaves
   const decor = [];
@@ -613,14 +771,34 @@ export function buildWorld({ scene, physics, low }) {
   }
 
   // ---- sky dressing: moon billboard + halo, horizon silhouettes (depth-less: the post fog sees sky there)
+  // the moon: its disc over its additive halo in one quad (premultiplied: out = disc + halo * (1 - a) + sky * (1 - a),
+  // what the halo drawn additively and the disc alpha-blended over it gave); moonColor.disc / .halo tint them
   const moonTex = moonTextures();
-  const moonMat = new THREE.MeshBasicMaterial({ map: moonTex.disc, transparent: true, depthWrite: false, fog: false, color: new THREE.Color(1.6, 1.5, 1.3) });
-  const moon = new THREE.Mesh(new THREE.CircleGeometry(1, 48), moonMat);
+  const moonColor = { disc: new THREE.Color(1.6, 1.5, 1.3), halo: new THREE.Color(1.2, 1.1, 1.3) };
+  const moonMat = new THREE.ShaderMaterial({
+    uniforms: { tDisc: { value: moonTex.disc }, tHalo: { value: moonTex.halo }, uDisc: { value: moonColor.disc }, uHalo: { value: moonColor.halo }, uK: { value: MOON_HALO } },
+    vertexShader: /* glsl */`
+      varying vec2 vUv;
+      void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 ); }`,
+    fragmentShader: /* glsl */`
+      uniform sampler2D tDisc, tHalo;
+      uniform vec3 uDisc, uHalo;
+      uniform float uK;
+      varying vec2 vUv;
+      void main() {
+        vec4 h = texture2D( tHalo, vUv );
+        vec2 du = ( vUv - 0.5 ) * uK + 0.5;
+        vec4 d = texture2D( tDisc, du ); // clamped: outside the disc's square its transparent border repeats
+        gl_FragColor = vec4( uDisc * d.rgb * d.a + uHalo * h.rgb * h.a * ( 1.0 - d.a ), d.a );
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+    transparent: true, depthWrite: false,
+    blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor,
+  });
+  const moon = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), moonMat);
   moon.name = 'moon'; moon.renderOrder = 1; moon.frustumCulled = false;
-  const haloMat = new THREE.MeshBasicMaterial({ map: moonTex.halo, transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending, color: new THREE.Color(1.2, 1.1, 1.3) });
-  const halo = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), haloMat);
-  halo.renderOrder = 0; halo.frustumCulled = false;
-  scene.add(halo, moon);
+  scene.add(moon);
   const sky = new THREE.Mesh(new THREE.CylinderGeometry(300, 300, 56, 48, 1, true).translate(0, 12, 0),
     // a touch lighter than black: the far tree line sits in the night haze, behind the fogged hills
     new THREE.MeshBasicMaterial({ color: '#0e0919', alphaMap: skylineTexture(), transparent: true, depthWrite: false, side: THREE.BackSide, fog: false }));
@@ -656,17 +834,36 @@ export function buildWorld({ scene, physics, low }) {
     return false;
   };
 
+  // crow perches [x, y (the feet), z, yaw]: the gate finials, the scarecrow's arms, the crypt's ridge, and the tall
+  // stones near the aisle
+  const perches = [];
+  for (const gx of X.s) perches.push([gx, heightAt(gx, G0.z1) + 2.95, G0.z1, 2.8 + gx * 0.1]);
+  { const y = heightAt(SCARECROW.x, SCARECROW.z); perches.push([SCARECROW.x - 0.72, y + 2.0, SCARECROW.z, 0.4], [SCARECROW.x + 0.66, y + 2.0, SCARECROW.z, -2.6]); }
+  { const y = heightAt(CRYPT.x, CRYPT.z) - 0.15 + 5.06; perches.push([CRYPT.x - 1.4, y, CRYPT.z, 1.2], [CRYPT.x + 1.1, y, CRYPT.z, -0.5]); }
+  graves.filter((g) => g.kind < 3).map((g) => [Math.hypot(g.x - 16, g.z + 16) - (g.top - g.y) * 2, g]).sort((a, b) => a[0] - b[0]).slice(0, 7)
+    .forEach(([, g], i) => perches.push([g.x, g.top, g.z, g.yaw + (i % 2 ? Math.PI : 0) + 0.6 * Math.sin(i * 3.1)]));
+  const groups = glowGroups.map((q) => q.slice());
+
   return {
-    terrain, props, glow, pumpkins, leaves, tufts, moon, halo, sky, lanternSpots, ghostSpawns, graves, candySpot, heightAt, glowSpots,
+    terrain, props, glow, pumpkins, leaves, tufts, moon, moonColor, sky, lanternSpots, ghostSpawns, graves, candySpot, heightAt, glowSpots,
+    /** Light groups ([kind, flicker amount], see GLOW) and their levels (glowLevels: set per frame by the game; 1). */
+    glowGroups: groups, glowLevels, gate, perches,
+    /** The halos over the static glowing props into `glows` from slot `base`, each at its light group's level. */
+    halos(glows, base) {
+      const GS = glowSpots, L = glowLevels;
+      for (let k = 0; k < GS.length; k++) {
+        const q = GS[k], f = L[q[8]];
+        glows.set(base + k, q[0], q[1], q[2], q[3], q[4] * f, q[5] * f, q[6] * f);
+      }
+      return GS.length;
+    },
     /** Per frame: the sky dressing follows the camera (moon along the atmosphere's moon direction). */
     update(camera, moonDir) {
       const cp = camera.position;
       _moonDir.copy(moonDir).normalize();
       const D = 420, R = 30;
       moon.position.copy(cp).addScaledVector(_moonDir, D);
-      moon.lookAt(cp); moon.scale.setScalar(R);
-      halo.position.copy(cp).addScaledVector(_moonDir, D + 5);
-      halo.lookAt(cp); halo.scale.setScalar(R * 4.2);
+      moon.lookAt(cp); moon.scale.setScalar(R * MOON_HALO); // the quad holds the halo; the disc is 1 / MOON_HALO of it
       sky.position.set(cp.x, 0, cp.z);
     },
   };
