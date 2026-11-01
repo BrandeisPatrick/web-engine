@@ -164,7 +164,7 @@ function patchRind(mat) {
       .replace('#include <color_fragment>', `#include <color_fragment>
   {
     float c = cos( atan( vOrigHw.x, vOrigHw.z ) * LOBES_HW * 0.5 );
-    diffuseColor.rgb *= ( 0.5 + 0.5 * pow( abs( c ), 0.6 ) ) * ( 0.75 + 0.35 * smoothstep( 0.0, ${R.toFixed(3)}, vOrigHw.y ) );
+    diffuseColor.rgb *= ( 0.62 + 0.38 * pow( abs( c ), 0.6 ) ) * ( 0.8 + 0.3 * smoothstep( 0.0, ${R.toFixed(3)}, vOrigHw.y ) );
   }`)
       .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
   {
@@ -250,8 +250,8 @@ export class Lanterns {
       return pieces.map((pc) => ({ piece: pc, geometry: withOrig(pieceGeometry(pc, true), pc, this.hullC) }));
     });
     // the rind's ribs and the flesh's fibres and seeds come from each piece's `orig` (its vertices in the lantern frame)
-    this.rindMat = patchRind(new THREE.MeshStandardMaterial({ color: '#ff8222', roughness: 0.5, emissive: '#ff5a10', emissiveIntensity: 0.22 }));
-    this.fleshMat = patchFlesh(new THREE.MeshStandardMaterial({ color: '#ffd59a', roughness: 0.85, emissive: '#ff8a20', emissiveIntensity: 0.22 }));
+    this.rindMat = patchRind(new THREE.MeshStandardMaterial({ color: '#ff8a26', roughness: 0.5, emissive: '#ff6a10', emissiveIntensity: 0.4 }));
+    this.fleshMat = patchFlesh(new THREE.MeshStandardMaterial({ color: '#ffd77a', roughness: 0.85, emissive: '#ffa830', emissiveIntensity: 0.45 }));
     this.slots = [];
     for (let s = 0; s < SLOTS; s++) {
       const v = this.variants[s % this.variants.length], meshes = [];

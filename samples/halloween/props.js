@@ -1013,7 +1013,7 @@ export function cauldron(B, G, ctx, { x, y, z }) {
   }
   for (const s of [1, -1]) L.add(new THREE.TorusGeometry(0.13, 0.025, 4, 12), '#2a2631', s * 0.86, 0.95, 0, Math.PI / 2);
   // the ladle: a handle leaning out of the brew, its bowl under the surface
-  L.add(sweep(curve([[0.2, 1.0, 0.1], [0.42, 1.55, 0.25], [0.55, 1.95, 0.32]], 5), 0.03, 5, { caps: [false, 0.01] }), '#6b4a2e');
+  L.add(sweep(curve([[0.2, 1.0, 0.1], [0.42, 1.5, 0.25], [0.52, 1.8, 0.32]], 5), 0.04, 5, { caps: [false, 0.012] }), '#3a2618');
   // logs (bark brown, pale cut ends) and a ring of rounded stones
   for (let k = 0; k < 3; k++) {
     const a = k * 1.05 + 0.3;
@@ -1029,9 +1029,9 @@ export function cauldron(B, G, ctx, { x, y, z }) {
   const gb = ctx.glow('brew', 0.4);
   G.add(new THREE.CircleGeometry(0.62, 22).rotateX(-Math.PI / 2), '#5dff6e', x, y + 1.18, z, 0, 0, 0, 1, 1, 1, 2.6);
   for (let k = 0; k < 7; k++) { const a = r() * 6.28, d = r() * 0.45, s2 = 0.04 + r() * 0.06; G.add(new THREE.SphereGeometry(s2, 6, 4, 0, Math.PI * 2, 0, Math.PI / 2), '#8dff8a', x + Math.cos(a) * d, y + 1.18, z + Math.sin(a) * d, 0, 0, 0, 1, 1, 1, 2.8); }
-  for (let k = 0; k < 4; k++) { // goo dripping down the outside
-    const a = (k / 4) * Math.PI * 2 + r(), ca = Math.cos(a), sa = Math.sin(a), len = 0.15 + r() * 0.25;
-    G.add(sweep(curve([[ca * 0.72, 1.27, sa * 0.72], [ca * 0.82, 1.12, sa * 0.82], [ca * 0.87, 1.12 - len, sa * 0.87]], 5), (t) => 0.035 * (1 - 0.4 * t) + (t > 0.9 ? 0.015 : 0), 4, { caps: [false, 0.03] }), '#5dff6e', x, y, z, 0, 0, 0, 1, 1, 1, 2.2);
+  for (let k = 0; k < 2; k++) { // goo dripping down the outside
+    const a = (k / 3) * Math.PI * 2 + r(), ca = Math.cos(a), sa = Math.sin(a), len = 0.08 + r() * 0.14;
+    G.add(sweep(curve([[ca * 0.72, 1.27, sa * 0.72], [ca * 0.82, 1.12, sa * 0.82], [ca * 0.87, 1.12 - len, sa * 0.87]], 5), (t) => 0.022 * (1 - 0.3 * t) + (t > 0.85 ? 0.01 : 0), 4, { caps: [false, 0.02] }), '#4ad85a', x, y, z, 0, 0, 0, 1, 1, 1, 0.9);
   }
   ctx.spot(x, y + 1.45, z, 3.2, 0.1, 0.42, 0.12, 0.4, gb);
   ctx.spot(x, y + 0.2, z, 2.2, 0.5, 0.18, 0.03, 1, ge);
@@ -1047,7 +1047,7 @@ export function hayBale(B, { x, y, z, ry = 0 }) {
   const r = rngAt(x, z, 61), L = new Parts(), R = 0.6, H = 0.55;
   const prof = [[0, -H], [0.25, -H], [0.45, -H + 0.005], [R - 0.06, -H + 0.03], [R, -H + 0.16], [R, H - 0.16], [R - 0.06, H - 0.03], [0.45, H - 0.005], [0.25, H], [0, H]];
   const g = lathe(prof, 18, { mod: (th, t) => 1 + 0.02 * Math.sin(th * 9 + t * 7) });
-  paint(g, '#b38a42');
+  paint(g, '#c9a04c');
   const ph = r() * 10;
   shade(g, (px, py, pz) => {
     const rr = Math.hypot(px, pz), a = Math.atan2(px, pz);

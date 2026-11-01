@@ -2,8 +2,9 @@
 // house (north-west), a witch's cauldron (south-east), dead trees, dirt paths from the spawn, a picket fence around the
 // playable square and low hills beyond it. Built once at load:
 //   - terrain: one displaced plane (vertex colours: grass / paths / graveyard soil) on the PhysicsWorld heightfield
-//   - static props: ONE merged vertex-coloured mesh (stones, fences, trees, house, crypt, scarecrow, bales, cauldron)
-//     + ONE merged unlit glow mesh (windows, candles, cauldron brew), so the whole level is a handful of draw calls
+//   - static props, built by props.js's reusable builders (stones, iron fences and gate, gnarled trees, the house,
+//     crypt, scarecrow, bales, cauldron): merged vertex-coloured geometry in FOUR tiles (the quadrants round the
+//     spawn: a view or a shadow pass draws the ones it sees) + ONE merged unlit glow mesh (windows, candles, brew)
 //   - instanced decor pumpkins + leaves (1 draw each), grass tufts (1 draw; fewer on phones)
 //   - sky dressing: a big moon billboard + halo and a ring of tree-line silhouettes, both depth-less (the post fog reads
 //     them as sky) and following the camera
@@ -19,14 +20,18 @@
 // glow mesh belongs to a light group whose level the game sets (glowLevels; halos() draws their halos at that level),
 // the gate's two iron leaves (folded back inside the fence) swing, and perches lists where the crows sit.
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { makeCanvas, mulberry32, applyPatches, makeDepthMaterial } from '@vibe/engine/render';
-import { patchDetail, patchGrass } from './looks.js';
+import { patchDetail, patchGrass, patchRibs } from './looks.js';
+import { Batch, pumpkinGeometry, pumpkinLeafGeometry } from './props.js';
+import * as P from './props.js';
+
+export { pumpkinGeometry };
 
 export const PLAY = 50;     // fence half size (m): the playable square
 const MOON_HALO = 4.2;      // the moon's halo radius in moon radii
 export const HALF = 64;     // terrain half size
 const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
 
 // ------------------------------------------------------------------ paths (polylines, metres)
 export const PATHS = [
@@ -93,68 +98,7 @@ export function heightAt(x, z) {
   return h;
 }
 
-// ------------------------------------------------------------------ geometry helpers
-const _col = new THREE.Color();
-/** Prepare a primitive for merging: indexed, no uv, a colour attribute (linear, may exceed 1 for glow). */
-function paint(g, color, scale = 1) {
-  if (g.index === null) { const n = g.attributes.position.count, ix = new Uint32Array(n); for (let i = 0; i < n; i++) ix[i] = i; g.setIndex(new THREE.BufferAttribute(ix, 1)); }
-  if (g.attributes.uv) g.deleteAttribute('uv');
-  if (g.attributes.uv1) g.deleteAttribute('uv1');
-  if (!g.attributes.normal) g.computeVertexNormals();
-  _col.set(color);
-  const n = g.attributes.position.count, c = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) { c[i * 3] = _col.r * scale; c[i * 3 + 1] = _col.g * scale; c[i * 3 + 2] = _col.b * scale; }
-  g.setAttribute('color', new THREE.BufferAttribute(c, 3));
-  return g;
-}
-const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
-function place(g, x, y, z, ry = 0, rx = 0, rz = 0, sx = 1, sy = sx, sz = sx) {
-  _q.setFromEuler(_e.set(rx, ry, rz, 'YXZ'));
-  _m.compose(_p.set(x, y, z), _q, _s.set(sx, sy, sz));
-  return g.applyMatrix4(_m);
-}
-
-class Batch {
-  constructor() { this.parts = []; this.group = -1; }
-  add(g, color, x = 0, y = 0, z = 0, ry = 0, rx = 0, rz = 0, sx = 1, sy = sx, sz = sx, glow = 1) {
-    this.push(place(paint(g, color, glow), x, y, z, ry, rx, rz, sx, sy, sz));
-  }
-  /** A painted, placed part; a glow batch tags it with its light group (this.group: the flicker the game drives). */
-  push(g) {
-    if (this.group >= 0) g.setAttribute('grp', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count).fill(this.group), 1));
-    this.parts.push(g);
-  }
-  /**
-   * ground (optional, heightAt): darken and moss-tint vertex colours near the ground (baked contact shading).
-   * sway: every part gets the tree-sway attribute (vec2 weight, phase; zeros where a part has none), so one material
-   * serves trees and everything else.
-   */
-  build(material, name, ground = null, sway = false) {
-    if (!this.parts.length) return null;
-    for (const p of this.parts) {
-      if (sway && !p.attributes.sway) p.setAttribute('sway', new THREE.BufferAttribute(new Float32Array(p.attributes.position.count * 2), 2));
-      if (this.group >= 0 && !p.attributes.grp) p.setAttribute('grp', new THREE.BufferAttribute(new Float32Array(p.attributes.position.count), 1));
-    }
-    const g = mergeGeometries(this.parts);
-    for (const p of this.parts) p.dispose();
-    this.parts.length = 0;
-    if (ground) {
-      const P = g.attributes.position.array, C = g.attributes.color.array;
-      for (let i = 0; i < P.length; i += 3) {
-        const h = P[i + 1] - ground(P[i], P[i + 2]), k = smooth(h / 1.1), m = (1 - smooth(h / 0.45)) * 0.35;
-        const f = 0.52 + 0.48 * k;
-        C[i] = (C[i] + (MOSS.r - C[i]) * m) * f; C[i + 1] = (C[i + 1] + (MOSS.g - C[i + 1]) * m) * f; C[i + 2] = (C[i + 2] + (MOSS.b - C[i + 2]) * m) * f;
-      }
-    }
-    g.computeBoundingSphere();
-    const mesh = new THREE.Mesh(g, material);
-    mesh.name = name;
-    return mesh;
-  }
-}
-
 // ------------------------------------------------------------------ textures
-const MOSS = new THREE.Color('#26331f');
 let glowSpots = []; // filled by buildWorld (the props register their halos while it builds them)
 // Light groups of the merged glow mesh: each lamp, candle and window is one group whose brightness the game sets per
 // frame (world.glowLevels -> the glow material's uGlowLv[]; the halos over them read the same level), so a flame
@@ -281,7 +225,7 @@ function gateLeaves(B, hinges, width) {
     for (const y of [0.22, 1.02, 1.62]) L.add(new THREE.BoxGeometry(width, 0.05, 0.04), IRON, width / 2, y, 0);
     for (let x = 0.2; x < width - 0.1; x += 0.19) {
       L.add(new THREE.BoxGeometry(0.024, 1.5, 0.024), IRON, x, 0.93, 0);
-      L.add(new THREE.ConeGeometry(0.034, 0.12, 4), IRON, x, 1.74, 0);
+      L.add(new THREE.OctahedronGeometry(1, 0), IRON, x, 1.73, 0, 0, 0, 0, 0.034, 0.085, 0.014); // a flat spear tip
     }
     L.add(new THREE.TorusGeometry(0.16, 0.014, 4, 12), IRON, width / 2, 1.32, 0); // a curl between the upper rails
     // closed, the west leaf (k 0) reaches +x and the east one -x; open = turned toward -z (into the graveyard)
@@ -298,35 +242,26 @@ function gateLeaves(B, hinges, width) {
 }
 
 // ------------------------------------------------------------------ props
-function deadTree(B, x, z, s, rnd, physics) {
+// The props themselves are built by props.js (reusable builders: any position, any level). These wrappers keep this
+// level's layout: the same draws from the level's random stream in the same order (so every tree, stone, pumpkin and
+// candy spot stays where it was), the same colliders, the same crow perches.
+const skip = (rnd, n) => { for (let i = 0; i < n; i++) rnd(); };
+/** A glow context for the builders: light groups by kind name, halos into glowSpots. */
+const glowCtx = (G) => ({
+  glow: (kind, amt) => (kind === 'steady' ? ((G.group = 0), 0) : glowGroup(G, { flame: GLOW.FLAME, window: GLOW.WINDOW, brew: GLOW.BREW, ember: GLOW.EMBER }[kind], amt)),
+  spot: (...a) => glowSpots.push(a),
+});
+
+function deadTree(B, x, z, s, rnd, physics, lod = 1) {
   const y = heightAt(x, z) - 0.15;
-  const bark = rnd() < 0.5 ? '#2e2530' : '#3a2e33';
+  const bark = rnd() < 0.5 ? '#3a2f36' : '#463a3e';
   const h = (2.4 + rnd() * 1.6) * s;
+  const yaw0 = rnd() * 6.28;
+  skip(rnd, 95); // the old limb recursion's draws (its shape is local now)
   // wind sway (the props material, swayPatch): weight 0 at the root rising to 1 at the crown (squared: the trunk
   // stays put, the twigs move most), one phase per tree so the trees rock out of step
   const phase = (x * 0.37 + z * 0.21) % (Math.PI * 2), crown = h * 1.7;
-  const limb = (x0, y0, z0, len, r, yaw, pitch, depth) => {
-    const g = new THREE.CylinderGeometry(r * 0.62, r, len, depth >= 2 ? 6 : 4, 1, true).translate(0, len / 2, 0);
-    // orientation: tilt `pitch` from vertical toward `yaw`
-    _q.setFromEuler(_e.set(pitch, yaw, 0, 'YXZ'));
-    _m.compose(_p.set(x0, y0, z0), _q, _s.set(1, 1, 1));
-    g.applyMatrix4(_m);
-    paint(g, bark);
-    const P = g.attributes.position.array, W = new Float32Array((P.length / 3) * 2);
-    for (let i = 0; i < P.length / 3; i++) { const k = Math.min(1, Math.max(0, (P[i * 3 + 1] - y) / crown)); W[i * 2] = k * k; W[i * 2 + 1] = phase; }
-    g.setAttribute('sway', new THREE.BufferAttribute(W, 2));
-    B.parts.push(g);
-    const tip = new THREE.Vector3(0, len, 0).applyQuaternion(_q).add(new THREE.Vector3(x0, y0, z0));
-    if (depth <= 0) return;
-    const n = depth >= 2 ? 3 : 2;
-    for (let k = 0; k < n; k++) {
-      const yw = yaw + (k / n) * Math.PI * 2 + rnd() * 1.2;
-      limb(tip.x, tip.y, tip.z, len * (0.5 + rnd() * 0.25), r * 0.6, yw, pitch * 0.5 + 0.45 + rnd() * 0.5, depth - 1);
-    }
-  };
-  limb(x, y, z, h, 0.22 * s, rnd() * 6.28, (rnd() - 0.5) * 0.15, 3);
-  // roots
-  for (let k = 0; k < 4; k++) B.add(new THREE.ConeGeometry(0.12 * s, 0.7 * s, 5).rotateZ(Math.PI / 2 - 0.25).translate(0.3 * s, 0.05, 0), bark, x, y + 0.1, z, k * 1.57 + rnd());
+  P.deadTree(B, { x, y, z, h, r: 0.22 * s, phase, crown, seed: P.seedOf(x, z, 3), yaw0, lod, bark });
   physics.addStaticBox(x - 0.28 * s, y - 1, x + 0.28 * s, y + h, z - 0.28 * s, z + 0.28 * s);
 }
 
@@ -334,50 +269,19 @@ function gravestone(B, x, z, kind, rnd, physics) {
   const y = heightAt(x, z), yaw = (rnd() - 0.5) * 0.25, tilt = (rnd() - 0.5) * 0.18, roll = (rnd() - 0.5) * 0.14;
   const shade = ['#6f6b78', '#5f5b69', '#7d7886', '#565264'][Math.floor(rnd() * 4)];
   let w = 0.7, h = 1, d = 0.2;
-  if (kind === 0) { // rounded slab
-    w = 0.7 + rnd() * 0.2; h = 0.85 + rnd() * 0.35;
-    B.add(new THREE.BoxGeometry(w, h - w / 2, d), shade, x, y + (h - w / 2) / 2 - 0.05, z, yaw, tilt, roll);
-    B.add(new THREE.CylinderGeometry(w / 2, w / 2, d, 12, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).rotateY(Math.PI / 2), shade, x, y + h - w / 2 - 0.05, z, yaw, tilt, roll);
-  } else if (kind === 1) { // cross
-    h = 1.3 + rnd() * 0.3; w = 0.6;
-    B.add(new THREE.BoxGeometry(0.16, h, 0.14), shade, x, y + h / 2 - 0.05, z, yaw, tilt, roll);
-    B.add(new THREE.BoxGeometry(w, 0.15, 0.14), shade, x, y + h * 0.72, z, yaw, tilt, roll);
-  } else if (kind === 2) { // obelisk
-    h = 1.6 + rnd() * 0.6; w = 0.42;
-    B.add(new THREE.CylinderGeometry(0.15, 0.24, h, 4).rotateY(Math.PI / 4), shade, x, y + h / 2, z, yaw, tilt * 0.4, 0);
-    B.add(new THREE.ConeGeometry(0.17, 0.3, 4).rotateY(Math.PI / 4), shade, x, y + h + 0.13, z, yaw, tilt * 0.4, 0);
-    B.add(new THREE.BoxGeometry(0.6, 0.18, 0.6), '#4f4b59', x, y + 0.05, z, yaw);
-  } else { // low marker + grave mound
-    h = 0.5; w = 0.6;
-    B.add(new THREE.BoxGeometry(w, h, 0.16), shade, x, y + h / 2 - 0.05, z, yaw, tilt * 2, roll);
-  }
+  if (kind === 0) { w = 0.7 + rnd() * 0.2; h = 0.85 + rnd() * 0.35; } // a slab
+  else if (kind === 1) { h = 1.3 + rnd() * 0.3; w = 0.6; }        // a cross
+  else if (kind === 2) { h = 1.6 + rnd() * 0.6; w = 0.42; }       // an obelisk
+  else { h = 0.5; w = 0.6; }                                       // a low marker
+  const top = P.gravestone(B, { x, y, z, yaw, tilt: kind === 2 ? tilt * 0.4 : kind === 3 ? tilt * 2 : tilt, roll: kind === 2 ? 0 : roll, kind, w, h, d, shade });
   // mound in front of each stone (soil)
-  B.add(new THREE.SphereGeometry(0.5, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2).scale(0.9, 0.22, 1.8), '#2b2026', x + Math.sin(yaw) * 1.1, y - 0.03, z + Math.cos(yaw) * 1.1, yaw);
+  P.vgrad(B.add(new THREE.SphereGeometry(0.5, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2).scale(0.9, 0.22, 1.8), '#2e2228', x + Math.sin(yaw) * 1.1, y - 0.03, z + Math.cos(yaw) * 1.1, yaw), 0.7, 1.1, 0.08, 7);
   const hw = Math.max(w, d) / 2 + 0.05;
   physics.addStaticBox(x - hw, y - 1, x + hw, y + h, z - 0.18, z + 0.18);
-  return { x, z, y, top: y + (kind === 2 ? h + 0.28 : h - 0.05), yaw, kind };
+  return { x, z, y, top: y + top, yaw, kind };
 }
 
-function ironFence(B, ax, az, bx, bz, physics, gap = null) {
-  const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(len / 1.2)), dx = (bx - ax) / n, dz = (bz - az) / n, yaw = Math.atan2(dx, dz);
-  const IRON = '#1a1720';
-  for (let i = 0; i <= n; i++) {
-    const x = ax + dx * i, z = az + dz * i;
-    if (gap && i > 0 && i < n && gap(x, z)) continue;
-    const y = heightAt(x, z);
-    B.add(new THREE.BoxGeometry(0.06, 1.5, 0.06), IRON, x, y + 0.72, z);
-    B.add(new THREE.ConeGeometry(0.06, 0.18, 4), IRON, x, y + 1.55, z);
-    if (i < n && !(gap && gap(x + dx / 2, z + dz / 2))) {
-      const y1 = (y + heightAt(x + dx, z + dz)) / 2, l = Math.hypot(dx, dz);
-      for (const hh of [0.35, 1.25]) B.add(new THREE.BoxGeometry(0.04, 0.05, l), IRON, x + dx / 2, y1 + hh, z + dz / 2, yaw);
-      for (let k = 1; k < 4; k++) { // thin bars between posts
-        const f = k / 4, xx = x + dx * f, zz = z + dz * f, yy = heightAt(xx, zz);
-        B.add(new THREE.BoxGeometry(0.025, 1.3, 0.025), IRON, xx, yy + 0.65, zz);
-        B.add(new THREE.ConeGeometry(0.035, 0.12, 4), IRON, xx, yy + 1.36, zz);
-      }
-    }
-  }
-}
+function ironFence(B, ax, az, bx, bz, physics, gap = null) { P.ironFence(B, ax, az, bx, bz, heightAt, gap); }
 
 function picketFence(B, ax, az, bx, bz) {
   const len = Math.hypot(bx - ax, bz - az), n = Math.round(len / 2.5), dx = (bx - ax) / n, dz = (bz - az) / n, yaw = Math.atan2(dx, dz);
@@ -395,100 +299,28 @@ function picketFence(B, ax, az, bx, bz) {
 
 function house(B, G, physics) {
   const { x, z, w, d, yaw } = HOUSE, y = heightAt(x, z) - 0.2;
-  const WALL = '#2d2534', WALL2 = '#3a2f43', ROOF = '#1c1622', TRIM = '#4b3d55';
-  const c = Math.cos(yaw), s = Math.sin(yaw);
-  const L = (lx, lz) => [x + lx * c + lz * s, z - lx * s + lz * c];
-  const box = (bw, bh, bd, lx, ly, lz, col, ry = 0) => { const [px, pz] = L(lx, lz); B.add(new THREE.BoxGeometry(bw, bh, bd), col, px, y + ly, pz, yaw + ry); };
-  box(w, 6, d, 0, 3, 0, WALL);
-  box(w + 0.3, 0.25, d + 0.3, 0, 6.1, 0, TRIM);
-  // gable roof: a triangular prism along x
-  { const g = new THREE.CylinderGeometry(1, 1, w + 0.8, 3, 1).rotateZ(Math.PI / 2).scale(1, 3.6 / 1.5, (d + 1) / 1.73); const [px, pz] = L(0, 0); B.add(g, ROOF, px, y + 6.2 + 1.2, pz, yaw); }
-  // tower with a cone roof (front-left)
-  box(3.2, 9.5, 3.2, -w / 2 + 1, 4.75, d / 2 - 1, WALL2);
-  { const [px, pz] = L(-w / 2 + 1, d / 2 - 1); B.add(new THREE.ConeGeometry(2.5, 4.2, 8), ROOF, px, y + 9.5 + 2.1, pz, yaw); B.add(new THREE.ConeGeometry(0.06, 1.2, 4), '#111', px, y + 14.3, pz); }
-  // porch + door
-  box(3.6, 0.3, 1.6, 1.2, 0.15, d / 2 + 0.8, TRIM);
-  for (const sx of [-1.6, 4]) box(0.2, 2.8, 0.2, sx, 1.6, d / 2 + 1.5, TRIM);
-  box(4.2, 0.2, 1.9, 1.2, 3, d / 2 + 0.8, ROOF);
-  box(1.3, 2.3, 0.1, 1.2, 1.4, d / 2 + 0.03, '#120c10');
-  { // a porch lantern hanging by the door
-    const [px, pz] = L(2.3, d / 2 + 1.2);
-    B.add(new THREE.CylinderGeometry(0.012, 0.012, 0.3, 4), '#141016', px, y + 2.72, pz);
-    B.add(new THREE.ConeGeometry(0.16, 0.12, 4).rotateY(Math.PI / 4), '#141016', px, y + 2.52, pz, yaw);
-    const gp = glowGroup(G, GLOW.FLAME, 1);
-    G.add(new THREE.BoxGeometry(0.16, 0.24, 0.16), '#ffb253', px, y + 2.34, pz, yaw, 0, 0, 1, 1, 1, 2.4);
-    glowSpots.push([px, y + 2.34, pz, 2.2, 0.55, 0.26, 0.07, 1, gp]);
-  }
-  // glowing windows (front, side, tower): warm and one sickly green
-  const win = (lx, ly, lz, ww, hh, col, k = 3) => { const [px, pz] = L(lx, lz); G.add(new THREE.PlaneGeometry(ww, hh), col, px, y + ly, pz, yaw, 0, 0, 1, 1, 1, k); };
-  for (const [lx, ly] of [[-2.2, 2.2], [3.6, 2.2], [-2.2, 4.6], [1.2, 4.6], [3.6, 4.6]]) {
-    const green = ly > 4 && lx > 3, gw = glowGroup(G, GLOW.WINDOW, 0.2);
-    win(lx, ly, d / 2 + 0.06, 1, 1.3, green ? '#9dff7a' : '#ffb347', 3.2);
-    const [px, pz] = L(lx, d / 2 + 0.5); // a soft halo in the air just outside each lit window
-    glowSpots.push(green ? [px, y + ly, pz, 2.6, 0.08, 0.26, 0.06, 0.2, gw] : [px, y + ly, pz, 2.6, 0.32, 0.15, 0.04, 0.2, gw]);
-  }
-  glowGroup(G, GLOW.WINDOW, 0.2); win(-w / 2 + 1, 7.6, d / 2 + 0.56, 0.9, 1.2, '#ffcf6a', 4);
-  glowGroup(G, GLOW.WINDOW, 0.2); win(-w / 2 + 1, 4.2, d / 2 + 0.56, 0.8, 1.1, '#ff9a3a', 3);
-  G.group = 0;
-  // window frames (crosses) in front of the glow
-  for (const [lx, ly] of [[-2.2, 2.2], [3.6, 2.2], [-2.2, 4.6], [1.2, 4.6], [3.6, 4.6]]) { box(1.1, 0.08, 0.06, lx, ly, d / 2 + 0.1, '#140f15'); box(0.08, 1.4, 0.06, lx, ly, d / 2 + 0.1, '#140f15'); }
+  P.hauntedHouse(B, G, glowCtx(G), { x, y, z, w, d, yaw });
+  const c = Math.cos(yaw), s = Math.sin(yaw), L = (lx, lz) => [x + lx * c + lz * s, z - lx * s + lz * c];
   // collider: the rotated footprint's bounding box (house + tower + porch)
   const pts = [L(-w / 2 - 0.2, -d / 2), L(w / 2, -d / 2), L(w / 2, d / 2 + 1.6), L(-w / 2 - 0.2, d / 2 + 1.6)];
   physics.addStaticBox(Math.min(...pts.map((p) => p[0])) + 0.4, y - 1, Math.max(...pts.map((p) => p[0])) - 0.4, y + 9, Math.min(...pts.map((p) => p[1])) + 0.4, Math.max(...pts.map((p) => p[1])) - 0.4);
 }
 
 function crypt(B, G, physics) {
-  const { x, z } = CRYPT, y = heightAt(x, z) - 0.15, STONE = '#57525f', DARK = '#3b3743';
-  B.add(new THREE.BoxGeometry(5, 3.4, 4.4), STONE, x, y + 1.7, z);
-  B.add(new THREE.BoxGeometry(5.6, 0.35, 5), DARK, x, y + 3.5, z);
-  B.add(new THREE.CylinderGeometry(1, 1, 5.4, 3, 1).rotateX(Math.PI / 2).rotateY(Math.PI / 2).scale(1, 1.4 / 1.5, 1).rotateY(Math.PI / 2), DARK, x, y + 4.15, z, 0, 0, 0, 1, 1, 1);
-  for (const sx of [-1.8, 1.8]) B.add(new THREE.CylinderGeometry(0.22, 0.26, 3.2, 10), '#6a6574', x + sx, y + 1.6, z + 2.45);
-  B.add(new THREE.BoxGeometry(1.6, 2.4, 0.1), '#0c0a0e', x, y + 1.2, z + 2.22);
-  B.add(new THREE.BoxGeometry(3.6, 0.3, 1.2), DARK, x, y + 0.1, z + 2.9);
-  // candles by the door (glow) + an eerie green crack of light under the door
-  for (const sx of [-0.9, 0.9]) {
-    const gc = glowGroup(G, GLOW.FLAME, 1);
-    B.add(new THREE.CylinderGeometry(0.05, 0.05, 0.25, 6), '#d8d0c0', x + sx, y + 0.37, z + 2.75); G.add(new THREE.SphereGeometry(0.06, 6, 4).scale(1, 1.6, 1), '#ffcc66', x + sx, y + 0.57, z + 2.75, 0, 0, 0, 1, 1, 1, 5);
-    glowSpots.push([x + sx, y + 0.6, z + 2.75, 0.9, 0.45, 0.24, 0.06, 1, gc]);
-  }
-  const gd = glowGroup(G, GLOW.BREW, 0.5);
-  G.add(new THREE.PlaneGeometry(1.4, 0.08), '#7dff9a', x, y + 0.06, z + 2.28, 0, 0, 0, 1, 1, 1, 4);
-  glowSpots.push([x, y + 0.25, z + 2.6, 2.2, 0.05, 0.22, 0.09, 0, gd]);
-  G.group = 0;
+  const { x, z } = CRYPT, y = heightAt(x, z) - 0.15;
+  P.crypt(B, G, glowCtx(G), { x, y, z });
   physics.addStaticBox(x - 2.6, y - 1, x + 2.6, y + 4.5, z - 2.3, z + 2.5);
 }
 
 function cauldron(B, G, physics) {
   const { x, z } = CAULDRON, y = heightAt(x, z);
-  B.add(new THREE.SphereGeometry(0.85, 16, 10, 0, Math.PI * 2, Math.PI * 0.3, Math.PI * 0.7), '#16141a', x, y + 0.75, z);
-  B.add(new THREE.TorusGeometry(0.66, 0.07, 6, 18).rotateX(Math.PI / 2), '#26232b', x, y + 1.24, z);
-  for (let k = 0; k < 3; k++) { const a = k * 2.094; B.add(new THREE.CylinderGeometry(0.07, 0.07, 0.6, 5), '#16141a', x + Math.cos(a) * 0.55, y + 0.15, z + Math.sin(a) * 0.55, 0, Math.cos(a) * 0.3, Math.sin(a) * 0.3); }
-  for (let k = 0; k < 9; k++) { const a = k * 0.698; B.add(new THREE.DodecahedronGeometry(0.22, 0), '#4a4550', x + Math.cos(a) * 1.25, y + 0.05, z + Math.sin(a) * 1.25, a, 0.3, 0.2, 1, 0.6, 1); }
-  // logs and embers under it
-  for (let k = 0; k < 3; k++) B.add(new THREE.CylinderGeometry(0.08, 0.08, 1.1, 6).rotateZ(Math.PI / 2), '#2c1d14', x, y + 0.1, z, k * 1.05);
-  const ge = glowGroup(G, GLOW.EMBER, 1);
-  G.add(new THREE.SphereGeometry(0.3, 8, 4).scale(1.6, 0.25, 1.6), '#ff6a1a', x, y + 0.12, z, 0, 0, 0, 1, 1, 1, 3);
-  const gb = glowGroup(G, GLOW.BREW, 0.4);
-  G.add(new THREE.CircleGeometry(0.62, 18).rotateX(-Math.PI / 2), '#5dff6e', x, y + 1.18, z, 0, 0, 0, 1, 1, 1, 2.6);
-  glowSpots.push([x, y + 1.45, z, 3.2, 0.1, 0.42, 0.12, 0.4, gb], [x, y + 0.2, z, 2.2, 0.5, 0.18, 0.03, 1, ge]);
-  G.group = 0;
+  P.cauldron(B, G, glowCtx(G), { x, y, z });
   physics.addStaticBox(x - 0.95, y - 1, x + 0.95, y + 1.25, z - 0.95, z + 0.95);
 }
 
 function scarecrow(B, G, physics) {
   const { x, z } = SCARECROW, y = heightAt(x, z);
-  B.add(new THREE.CylinderGeometry(0.07, 0.08, 2.6, 6), '#3d2c1e', x, y + 1.3, z);
-  B.add(new THREE.CylinderGeometry(0.05, 0.05, 2, 6).rotateZ(Math.PI / 2), '#3d2c1e', x, y + 1.85, z);
-  B.add(new THREE.CylinderGeometry(0.3, 0.42, 0.9, 8), '#5a3d6e', x, y + 1.5, z);                   // purple coat
-  B.add(new THREE.CylinderGeometry(0.1, 0.16, 0.8, 6).rotateZ(Math.PI / 2), '#5a3d6e', x - 0.55, y + 1.85, z);
-  B.add(new THREE.CylinderGeometry(0.16, 0.1, 0.8, 6).rotateZ(Math.PI / 2), '#5a3d6e', x + 0.55, y + 1.85, z);
-  for (const sx of [-1.02, 1.02]) B.add(new THREE.ConeGeometry(0.1, 0.25, 6).rotateZ(sx > 0 ? -Math.PI / 2 : Math.PI / 2), '#c9a24a', x + sx, y + 1.85, z);
-  B.add(new THREE.SphereGeometry(0.3, 12, 8).scale(1, 0.85, 1), '#ff7a1a', x, y + 2.3, z);           // pumpkin head
-  B.add(new THREE.CylinderGeometry(0.42, 0.42, 0.03, 12), '#2a2030', x, y + 2.52, z);
-  B.add(new THREE.ConeGeometry(0.22, 0.5, 10), '#2a2030', x, y + 2.78, z, 0, -0.25, 0.1);
-  glowGroup(G, GLOW.FLAME, 0.6);
-  G.add(new THREE.PlaneGeometry(0.28, 0.12), '#ffd27a', x, y + 2.32, z + 0.29, 0, 0, 0, 1, 1, 1, 3);
-  G.group = 0;
+  P.scarecrow(B, G, glowCtx(G), { x, y, z });
   physics.addStaticBox(x - 0.3, y - 1, x + 0.3, y + 2.6, z - 0.3, z + 0.3);
 }
 
@@ -507,28 +339,8 @@ function candleLantern(B, G, x, y, z, ry = 0) {
 
 function hayBale(B, x, z, ry, physics) {
   const y = heightAt(x, z);
-  B.add(new THREE.CylinderGeometry(0.6, 0.6, 1.1, 14).rotateZ(Math.PI / 2), '#a8843f', x, y + 0.55, z, ry);
-  for (const k of [-0.3, 0.3]) B.add(new THREE.TorusGeometry(0.6, 0.02, 4, 16).rotateY(Math.PI / 2), '#6b5126', x + Math.cos(ry) * k, y + 0.55, z - Math.sin(ry) * k, ry);
+  P.hayBale(B, { x, y, z, ry });
   physics.addStaticBox(x - 0.65, y - 1, x + 0.65, y + 1.1, z - 0.65, z + 0.65);
-}
-
-/** Ribbed pumpkin sitting on y = 0 (radius r), with a stem; vertex coloured (body white-ish for instance tint). */
-export function pumpkinGeometry(r = 0.4, ws = 16, hs = 11, bodyColor = '#ffffff', stemColor = '#4d6a2a') {
-  const g = new THREE.SphereGeometry(r, ws, hs);
-  const p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) {
-    let x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-    const a = Math.atan2(z, x), rib = 1 - 0.09 * Math.pow(Math.abs(Math.sin(a * 4)), 0.7), yy = y / r;
-    x *= rib; z *= rib; y *= 0.78;
-    if (yy > 0.75) y -= (yy - 0.75) * 0.5 * r;
-    p.setXYZ(i, x, y + 0.76 * r, z);
-  }
-  g.computeVertexNormals();
-  paint(g, bodyColor);
-  const stem = paint(new THREE.CylinderGeometry(0.032 * r / 0.4, 0.05 * r / 0.4, 0.17 * r / 0.4, 6).rotateZ(0.25).translate(0.01, 1.42 * r, 0), stemColor);
-  const out = mergeGeometries([g, stem]);
-  g.dispose(); stem.dispose();
-  return out;
 }
 
 // ------------------------------------------------------------------ build
@@ -606,23 +418,13 @@ export function buildWorld({ scene, physics, low }) {
   fenceSide('x', G0.z0, G0.x0 - 0.1, G0.x1 + 0.1, X.n);
   fenceSide('z', G0.x0, G0.z0, G0.z1, X.w);
   fenceSide('z', G0.x1, G0.z0, G0.z1, X.e);
-  // gate posts with stone caps at every gap (+ an arch sign over the south gate)
-  const gatePost = (gx, gz) => {
-    const y = heightAt(gx, gz);
-    B.add(new THREE.BoxGeometry(0.66, 0.36, 0.66), '#4f4a58', gx, y + 0.1, gz);             // plinth
-    B.add(new THREE.BoxGeometry(0.58, 0.08, 0.58), '#5d5866', gx, y + 0.31, gz);
-    B.add(new THREE.BoxGeometry(0.5, 2.0, 0.5), '#5a5563', gx, y + 1.3, gz);               // shaft
-    B.add(new THREE.BoxGeometry(0.54, 0.07, 0.54), '#514c5a', gx, y + 1.62, gz);           // a stone band
-    B.add(new THREE.BoxGeometry(0.62, 0.1, 0.62), '#66616f', gx, y + 2.33, gz);            // cap slab
-    B.add(new THREE.BoxGeometry(0.5, 0.06, 0.5), '#5d5866', gx, y + 2.41, gz);
-    B.add(new THREE.CylinderGeometry(0.09, 0.14, 0.08, 10), '#5d5866', gx, y + 2.47, gz);  // finial neck
-    B.add(new THREE.SphereGeometry(0.28, 14, 10), '#6b6675', gx, y + 2.68, gz);
-  };
+  // gate posts with stone caps at every gap (+ an iron arch with scrolls and a crescent moon over the south gate)
+  const gatePost = (gx, gz) => P.gatePost(B, gx, heightAt(gx, gz), gz);
   for (const gx of X.s) gatePost(gx, G0.z1);
   for (const gx of X.n) gatePost(gx, G0.z0);
   for (const gz of X.w) gatePost(G0.x0, gz);
   for (const gz of X.e) gatePost(G0.x1, gz);
-  { const y = heightAt(16, G0.z1); B.add(new THREE.TorusGeometry(2.5, 0.06, 4, 20, Math.PI), '#1a1720', 16, y + 2.3, G0.z1); }
+  P.gateArch(B, G0.gate[0], G0.gate[1], heightAt(16, G0.z1), G0.z1);
   // candle lanterns at the foot of the gate posts, on their outer sides (the path between them stays clear): warm points
   // framing the way in (glow geometry + a halo each)
   for (const gx of G0.gate) {
@@ -654,7 +456,7 @@ export function buildWorld({ scene, physics, low }) {
   // a few trees outside the fence on the hills (no colliders needed, but harmless)
   for (let k = 0; k < (low ? 10 : 18); k++) {
     const a = rnd() * Math.PI * 2, r = PLAY + 4 + rnd() * 8;
-    deadTree(B, Math.cos(a) * r, Math.sin(a) * r, 1.1 + rnd() * 0.6, rnd, physics);
+    deadTree(B, Math.cos(a) * r, Math.sin(a) * r, 1.1 + rnd() * 0.6, rnd, physics, 0);
   }
 
   // ---- outer picket fence + its colliders
@@ -673,9 +475,10 @@ export function buildWorld({ scene, physics, low }) {
   // stone / bark / wood grain in world space (looks.js), contact shading + moss baked into the colours at the ground;
   // the trees sway in the wind (swayPatch), and their shadows with them (the shadow caster carries the same patch)
   const propMat = applyPatches(patchDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0.02 }), { scale: 1.7, amount: 0.62, broad: 0.32, streak: 0.55 }), [swayPatch]);
-  const props = B.build(propMat, 'props', heightAt, true);
-  props.castShadow = true; props.receiveShadow = true;
-  props.customDepthMaterial = makeDepthMaterial(propMat);
+  // four tiles (the quadrants round the spawn): a view or a shadow pass draws only the quadrants it sees
+  const props = B.build(propMat, 'props', heightAt, true, (px, pz) => (px < 0 ? 0 : 1) + (pz < 0 ? 0 : 2));
+  const propDepth = makeDepthMaterial(propMat);
+  for (const m of props.children) { m.castShadow = true; m.receiveShadow = true; m.customDepthMaterial = propDepth; }
   scene.add(props);
   const glowLevels = new Float32Array(GLOW.MAX).fill(1);
   const glowMat = patchGlowGroups(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }), glowLevels);
@@ -704,11 +507,11 @@ export function buildWorld({ scene, physics, low }) {
     if (pathDist(x, z) < 2.5 || inGraveyard(x, z, 1) || Math.hypot(x - HOUSE.x, z - HOUSE.z) < 9) continue;
     decor.push([x, z, 0.5 + rnd() * 0.6, rnd() * 6.28, rnd()]);
   }
-  const pg = pumpkinGeometry(0.4, low ? 10 : 12, low ? 7 : 8);
-  const pMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0 });
+  const pg = pumpkinGeometry(0.4, 15, 0, '#ffffff', '#4d6a2a', { lobes: 5, depth: 0.12, seed: 5, lite: true });
+  const pMat = patchRibs(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0 }), 5, 0.45);
   const pumpkins = new THREE.InstancedMesh(pg, pMat, decor.length);
   pumpkins.name = 'decorPumpkins'; pumpkins.castShadow = false; pumpkins.receiveShadow = true;
-  const leafGeo = new THREE.SphereGeometry(0.3, 6, 3, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.18, 0.7);
+  const leafGeo = pumpkinLeafGeometry(0.34);
   const leaves = new THREE.InstancedMesh(leafGeo, new THREE.MeshStandardMaterial({ color: '#2c4a22', roughness: 0.85 }), decor.length * 2);
   leaves.name = 'leaves'; leaves.receiveShadow = true;
   const tint = new THREE.Color();
@@ -720,7 +523,7 @@ export function buildWorld({ scene, physics, low }) {
     pumpkins.setColorAt(i, tint);
     for (let k = 0; k < 2; k++) {
       const a = yaw + k * 2.6 + 0.6, lx = x + Math.cos(a) * 0.45 * s, lz = z + Math.sin(a) * 0.45 * s;
-      _q.setFromEuler(_e.set(0.1, -a, 0));
+      _q.setFromEuler(_e.set(0.1, -a - Math.PI / 2, 0)); // the leaf points away from its pumpkin
       leaves.setMatrixAt(i * 2 + k, _m.compose(_p.set(lx, heightAt(lx, lz) + 0.02, lz), _q, _s.set(s * 1.3, s, s * 1.3)));
     }
   });
