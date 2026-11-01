@@ -652,7 +652,8 @@ async function boot() {
     return best;
   };
   // slide around: the side to turn along a wall of normal (nx, nz) for a push (mx, mz): the push's own lean along it,
-  // else the short way round the box in the way (projected on the wall's tangent)
+  // else the short way round the box in the way (projected on the wall's tangent), unless another wall closes that end
+  // (a fence's inside corner: the kid pinned there pushing at a porch beyond it), then the long way
   const around = { t: 0, s: 1, nx: 0, nz: 0 };
   const aroundSide = (nx, nz, mx, mz) => {
     const tx = -nz, tz = nx, tan = (mx * tx + mz * tz) / (Math.hypot(mx, mz) || 1);
@@ -664,7 +665,13 @@ async function boot() {
     if (!b) return tan >= 0 ? 1 : -1;
     const a0 = b.minX * tx, a1 = b.maxX * tx, c0 = b.minZ * tz, c1 = b.maxZ * tz, kp = p.x * tx + p.z * tz;
     const tmin = Math.min(a0, a1) + Math.min(c0, c1), tmax = Math.max(a0, a1) + Math.max(c0, c1);
-    return tmax - kp < kp - tmin ? 1 : -1;
+    const closed = (e) => { // a wall just past the end at tangent e, on the kid's line (one continuing this one is not)
+      _cols.length = 0; physics.queryColliders(p.x + tx * (e - kp), p.z + tz * (e - kp), 0.2, _cols);
+      for (let i = 0; i < _cols.length; i++) if (_cols[i] !== b && _cols[i].maxY > p.y + 0.35) return true;
+      return false;
+    };
+    const s = tmax - kp < kp - tmin ? 1 : -1;
+    return closed(s > 0 ? tmax + 0.25 : tmin - 0.25) && !closed(s > 0 ? tmin - 0.25 : tmax + 0.25) ? -s : s;
   };
   // the arrow toward a world point, from the camera's view: ahead / behind / left / right
   const arrowTo = (x, z) => {

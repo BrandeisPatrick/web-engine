@@ -787,6 +787,24 @@ async function runProfile(name) {
         const pe = await G(page, () => ({ x: window.__game.cc.position.x, z: window.__game.cc.position.z }));
         check(name, 'slide around: pushing straight into a gravestone slides round it (past within 1.5 s)', past && Math.abs(pe.x - grave[0]) < 3, `past ${past}, ended ${(pe.x - grave[0]).toFixed(2)} m to the side`);
       }
+      // ---- (map v2) and out of an inside corner: in the graveyard's south-west corner, the stick pushed straight at the
+      // gatekeeper's lit mat beyond the fence (bots stood there 85 s): the kid slides out along the fence
+      {
+        await calmAll();
+        const c0 = await G(page, () => {
+          const g = window.__game, x = 8.45, z = -10.45, m = g.world.porches[0].mat; // world.js GRAVEYARD x0 8, z1 -10
+          const yaw = Math.atan2(-(m.x - x), -(m.z - z));
+          g.cc.teleport(x, g.world.heightAt(x, z) + 0.05, z); g.rig.yaw = yaw; g.camState.facing = yaw; g.rig.snap();
+          return { x, z };
+        });
+        await sleep(200);
+        await T.start([{ x: hx, y: hy, id: 1 }]);
+        for (let i = 1; i <= 4; i++) { await T.move([{ x: hx, y: hy - i * 13, id: 1 }]); await sleep(16); }
+        const out = await waitFor(page, ([x, z]) => Math.hypot(window.__game.cc.position.x - x, window.__game.cc.position.z - z) > 3, [c0.x, c0.z], 2500);
+        await T.end();
+        const pe = await G(page, () => ({ x: +window.__game.cc.position.x.toFixed(2), z: +window.__game.cc.position.z.toFixed(2) }));
+        check(name, "slide around: pushed at a porch beyond the graveyard's inside corner, the kid slides out along the fence (3 m in 2.5 s)", out, JSON.stringify(pe));
+      }
     }
     // ---- the BOO lesson (a first session): the first ghost rose 9..11 m ahead of the camera, tame (slow, no catch)
     const tw = await waitFor(page, () => !!window.__game.G.tutorWake, null, 8000) && await G(page, () => ({ ...window.__game.G.tutorWake, tame: window.__game.ghosts.list.some((q) => q.tame > 0 || q.state !== 'dormant') }));
@@ -1002,6 +1020,7 @@ async function runProfile(name) {
       const g = window.__game, C = g.candy;
       g.setTimeLeft(120); g.G.popT = 99; g.G.riseSaid = true; g.G.wakeIdx = 99; // mid-round, no pop or ghost news meanwhile
       g.hud.clearCalls(); // (the last catch's call-out would hold the screen a second against the porch's)
+      g.porches.reset(false); // (a check before may have walked the kid over a mat: the gatekeeper's is 17 m from the spawn)
       window.__spills = []; window.__calls = [];
       const sp = C.spill.bind(C); C.spill = (x, y, z, n, s, d, ttl) => { if (ttl === g.PORCH.SPILL_TTL) window.__spills.push(n); return sp(x, y, z, n, s, d, ttl); };
       const co = g.hud.callout.bind(g.hud); g.hud.callout = (t, ...r) => { window.__calls.push(t); return co(t, ...r); };
