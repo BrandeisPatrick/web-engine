@@ -183,7 +183,7 @@ export class Thief {
     this.x = this.denX; this.z = this.denZ; this.y = this.heightAt(this.x, this.z); this.vx = 0; this.vz = 0; this.yaw = 0;
     this.sack = 0; this.target = -1; this.tx = this.x; this.tz = this.z; this.retarget = 0; this.eatT = 0; this.boltT = 0; this.zigT = 0; this.zig = 1;
     this.homeT = 0; this.stunT = 0; this.hop = 0; this.lastX = this.x; this.lastZ = this.z; this.progT = 0;
-    this.ph = 0; this.nibble = 0; this.bounce = 0; this.minKid = Infinity; this.provoked = false;
+    this.ph = 0; this.nibble = 0; this.bounce = 0; this.minKid = Infinity;
     this.tags = 0; this.eaten = 0; this.stuns = 0; this.steals = 0;
     const E = this.events; E.appear = false; E.eat = 0; E.steal = false; E.bolt = false; E.tag = 0; E.home = false;
     this.root.visible = false;

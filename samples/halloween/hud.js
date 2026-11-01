@@ -400,9 +400,9 @@ export class HUD {
     const help = this.help = el('div', 'hw-screen hw-help off', root);
     help.innerHTML = `<div class="hw-h1">HOW TO PLAY</div><div class="hw-cards">${CARDS}</div><div class="hw-ctrl"></div>
       <div class="hw-tips">Lit porches: step on the glowing doormat for a treat, or BOO there for a trick (more candy, but a ghost
-      comes down the chimney). Swirl lollipops under a light beam are worth 5. Jump onto a lantern to stomp it for extra candy.
-      When the screen edges frost over, a ghost is close: let it come near, then BOO! Caught? Grab the candy you drop.
-      Soil glowing red? Grave hands: jump over them. A raccoon with a pink sack eats candy: BOO it, then tag it!
+      comes down the chimney). Lollipops under a light beam are worth 5. Stomp a lantern for extra candy.
+      Frosty screen edges? A ghost is close: let it come near, then BOO! Caught? Grab the candy you drop.
+      Red soil ring? Jump the grave hands. BOO the raccoon thief, then tag it for its sack!
       Jump over the graveyard fence! Grab candy fast for a streak bonus. The last 30 seconds are the Witching Hour:
       candy counts double!</div>
       <div class="hw-small-btns"><button class="hw-start" data-a="close">GOT IT</button></div>`;

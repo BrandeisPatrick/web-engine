@@ -1,7 +1,9 @@
 // STUB (map pass 1 replaces this file): where the grave hands wait and where the candy thief lives (DESIGN.md 2.4,
-// 3.3), in the shape world.js will export them (HAND_SPOTS [[x, z]], THIEF_DEN [x, z]). When world.js exports them,
-// this file becomes `export { HAND_SPOTS, THIEF_DEN } from './world.js';` (THIEF_DEN stays here if the map does not
-// export it).
+// 3.3). When world.js exports them (the map v2 branch has HAND_SPOTS [[x, z]] and THIEF_DEN { x, z, door: [x, z] },
+// its den a hay bale with a collider), this file becomes:
+//   import { THIEF_DEN as DEN } from './world.js';
+//   export { HAND_SPOTS } from './world.js';
+//   export const THIEF_DEN = DEN.door; // the thief comes out of the bale's opening, not inside its collider
 //
 // The design's ten spots: the graveyard aisle (16, -14) .. (16, -38), two among the graves (28, -20) (38, -30), and
 // one at each of the creek's three bridges (-36, 17) (0, 17) (40, 17). Today's map has no creek, so the three bridge
@@ -13,5 +15,5 @@ export const HAND_SPOTS = [
   [28, -20], [38, -30.8],                                // among the graves
   [-31, 17], [1.8, 17], [18.5, 21.5],                    // stand-ins for the bridges W, C, E (on today's lanes)
 ];
-// the thief's den, under a bale at the pumpkin patch's north edge
+// the thief's den (where it comes out and goes home): at the pumpkin patch's north edge
 export const THIEF_DEN = [-42, -3];

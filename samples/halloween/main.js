@@ -229,7 +229,7 @@ async function boot() {
       W.fx = new Effects({ scene, heightAt, low: LOW });
       W.hands = new Hands({ scene, heightAt, fx: W.fx });
       W.thief = new Thief({ scene, heightAt, physics, candy: W.candy, fx: W.fx });
-      W.glows = new Glows(384); // (the porches' doorways, the village's lamps, mats, windows and candles: ~40 halos)
+      W.glows = new Glows(432); // (the porches' doorways, the village's lamps, mats, windows and candles: ~40 halos; the hands' rings up to 44, the thief 4)
       scene.add(W.glows.mesh);
       W.bats = new Bats({ scene, count: LOW ? 6 : 9 });
       // the living night: wind, leaves, clouds over the moon, mist, lightning, crows; escalates toward midnight
