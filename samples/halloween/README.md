@@ -35,8 +35,8 @@ Esc to pause, M for sound. A gamepad works too.
 
 | | Phone / tablet | Keyboard + mouse | Gamepad |
 |---|---|---|---|
-| Move | left thumb anywhere on the left side (floating stick) | W A S D / arrows | left stick |
-| Look | drag on the right side | click the view (pointer lock) or hold the right mouse button; wheel zooms | right stick |
+| Move | left thumb anywhere on the left side (floating stick) | W A S D (↑ ↓ run too) | left stick |
+| Look | drag on the right side | the mouse (START captures it; Esc frees it), ← → turn; if the browser won't capture it, click the view or hold the right mouse button; wheel zooms | right stick |
 | Jump | JUMP | Space | A |
 | BOO | BOO! | E (or F, B, Q) | X / B |
 | Start / Play Again | TAP TO START / PLAY AGAIN | click, Enter / Space | A |

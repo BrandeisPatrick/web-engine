@@ -41,6 +41,12 @@ in 1.0.0), driven by the new Halloween game sample (`samples/halloween/`, "Midni
   emulation (iPhone / Pixel / small / tall, portrait, landscape, rotation, safe-area insets, two-thumb input,
   backgrounding, five rounds with flat resource counts, `--perf` under 4x CPU throttling) and saves screenshots to the
   gitignored `test/browser/out/halloween/`.
+- Midnight Candy Run gameplay pass from a bot playtest (phones first): desktop START captures the mouse (Esc frees it),
+  the arrow keys turn; catches cost 10 % (2..12) and say "GRAB IT BACK!", the pack backs off, at most two chasers on
+  phones; a stick dead zone with full speed at 3/4 deflection, BOO / JUMP hit rings, BOO lowest in portrait and glowing
+  while a ghost is in reach; candy respawns ahead of the camera, a wider pull on phones, an edge marker for an
+  off-screen big pop, ghost chevrons for chasers behind the kid, a directional moan, a steeper portrait camera and a
+  first-session BOO lesson.
 
 ## 1.0.0 — 2026-10-30
 The release of the 1.0 roadmap (phases 0.5.0 - 0.9.0, ENGINE.md): a general engine with its graphics and physics pushed as

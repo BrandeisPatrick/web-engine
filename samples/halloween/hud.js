@@ -6,7 +6,10 @@
 //   hud       candy counter (+N pops), the clock to midnight with a progress bar, full-screen (where the Fullscreen API
 //             exists: not on iPhone) / sound / pause buttons, centre call-outs
 //             (STOMP!, CAUGHT -6, BOO!), the last-ten-seconds countdown, a purple danger vignette when a ghost is close,
-//             and (desktop) a BOO cooldown meter; on phones the BOO button itself shows the ring (TouchControls)
+//             and (desktop) a BOO cooldown meter; on phones the BOO button itself shows the ring (TouchControls).
+//             Edge markers: a lollipop + distance at the screen edge toward an off-screen big pop, ghost chevrons
+//             toward chasers that are off screen or behind; BOO glows ("hot") while a chaser is in reach; a look
+//             hint pill (desktop: how the mouse looks)
 //   pause     resume / restart / how to play / title / music / sound
 //   results   candy, rank title, best (NEW BEST), stats, PLAY AGAIN
 // Everything sits inside env(safe-area-inset-*) and scales with the viewport (clamp + vmin), so it works in portrait
@@ -35,7 +38,9 @@ const CARDS = `
   <div class="hw-card">${ICON.pumpkin}<div><b>Smash lanterns</b><span>Kick or stomp jack-o'-lanterns: candy spills out.</span></div></div>
   <div class="hw-card">${ICON.ghost}<div><b>BOO the ghosts</b><span>A touch steals candy. Shout BOO to scare them off.</span></div></div>`;
 const CTRL_TOUCH = 'Left thumb: move &nbsp;·&nbsp; Right thumb: drag to look &nbsp;·&nbsp; JUMP &nbsp;·&nbsp; BOO! &nbsp;·&nbsp; ❚❚ pause';
-const CTRL_KEYS = '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move &nbsp;·&nbsp; mouse look (click the view, or hold right button) &nbsp;·&nbsp; <kbd>Space</kbd> jump &nbsp;·&nbsp; <kbd>E</kbd> BOO &nbsp;·&nbsp; <kbd>Esc</kbd> pause &nbsp;·&nbsp; gamepad: stick, A, X';
+const CTRL_KEYS = '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move &nbsp;·&nbsp; mouse look &nbsp;·&nbsp; <kbd>←</kbd><kbd>→</kbd> turn &nbsp;·&nbsp; <kbd>Space</kbd> jump &nbsp;·&nbsp; <kbd>E</kbd> BOO &nbsp;·&nbsp; <kbd>Esc</kbd> pause &nbsp;·&nbsp; gamepad: stick, A, X';
+const POP_ICON = '<svg viewBox="0 0 24 32" aria-hidden="true"><path d="M11 15h2v16h-2z" fill="#f3ead8"/><circle cx="12" cy="10" r="9" fill="#fff4fa"/><path d="M12 10m-6 0a6 6 0 1 0 12 0a4 4 0 1 0-8 0a2 2 0 1 0 4 0" stroke="#ff3d8b" stroke-width="2.4" fill="none"/></svg>';
+const CHEVRON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 15l7-8 7 8" stroke="currentColor" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 // ---- full screen (Android Chrome, desktop, iPad; iPhone Safari has no element full screen: the button stays hidden)
 const fsDoc = () => /** @type {any} */ (document);
@@ -96,17 +101,19 @@ const CSS = `
   background:linear-gradient(160deg,rgba(40,18,58,.8),rgba(18,8,28,.72));border:1px solid rgba(255,170,90,.25);padding:0}
 .hw-icon svg{width:22px;height:22px}
 .hw-icon:active{transform:scale(.92)}
-.hw-call{position:absolute;left:50%;top:34%;transform:translate(-50%,-50%);font-weight:900;font-size:clamp(30px,8vmin,64px);letter-spacing:.04em;
+.hw-call{position:absolute;left:50%;top:34%;transform:translate(-50%,-50%);text-align:center;font-weight:900;font-size:clamp(30px,8vmin,64px);letter-spacing:.04em;
   white-space:nowrap;opacity:0;text-shadow:0 4px 0 rgba(0,0,0,.35),0 0 26px currentColor;color:#ffcf5a}
 .hw-call.go{animation:hwCall 1.15s cubic-bezier(.2,.9,.25,1) forwards}
 .hw-call.boo{color:#c9a2ff}.hw-call.bad{color:#b88cff}.hw-call.warn{color:#ff8a5a}.hw-call.good{color:#7dff9a}
+.hw-call small{display:block;font-size:.42em;letter-spacing:.14em;margin-top:.25em;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.45),0 0 14px rgba(255,170,90,.8)}
 @keyframes hwCall{0%{opacity:0;transform:translate(-50%,-50%) scale(1.6)}14%{opacity:1;transform:translate(-50%,-50%) scale(1)}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-62%) scale(.96)}}
 .hw-count{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-weight:900;font-size:clamp(70px,22vmin,180px);color:#fff;opacity:0;
   text-shadow:0 0 40px rgba(255,120,40,.9),0 6px 0 rgba(0,0,0,.3)}
 .hw-count.go{animation:hwCount .9s ease-out forwards}
 @keyframes hwCount{0%{opacity:0;transform:translate(-50%,-50%) scale(1.5)}20%{opacity:.95;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(.85)}}
 /* a ghost close by: a cold, pale frost on the screen edges (a purple one vanished into the purple night) */
-.hw-danger{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 48%,rgba(150,205,255,.32) 80%,rgba(225,240,255,.62) 100%);transition:opacity .2s}
+/* its clear centre moves away from the ghost, so the frost is thickest on the side it comes from */
+.hw-danger{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at var(--fx,50%) var(--fy,50%),rgba(0,0,0,0) 48%,rgba(150,205,255,.32) 80%,rgba(225,240,255,.62) 100%);transition:opacity .2s}
 .hw-flash{position:absolute;inset:0;background:#fff;opacity:0}
 .hw-flash.go{animation:hwFlash .6s ease-out}
 @keyframes hwFlash{0%{opacity:.75}100%{opacity:0}}
@@ -118,6 +125,27 @@ const CSS = `
 .hw-boo small{font-size:12px;letter-spacing:.18em;color:rgba(255,255,255,.75);font-weight:600}
 .hw-boo kbd,.hw-screen kbd{display:inline-block;padding:1px 7px;margin:0 2px;border:1px solid rgba(255,255,255,.4);border-radius:5px;font-family:inherit;font-size:.92em}
 .hw-touch .hw-boo{display:none}
+.hw-boo.hot .ring{animation:hwHotRing .5s ease-in-out infinite}
+@keyframes hwHotRing{50%{box-shadow:0 0 26px 6px rgba(190,140,255,.95)}}
+/* desktop: how the mouse looks (shown for a few seconds at the start) */
+.hw-hint{position:absolute;left:50%;bottom:calc(var(--sa-b) + 76px);transform:translateX(-50%);padding:8px 18px;font-size:13px;font-weight:800;
+  letter-spacing:.16em;white-space:nowrap;opacity:0;visibility:hidden;transition:opacity .35s,visibility 0s .35s}
+.hw-hint.on{opacity:1;visibility:visible;transition:opacity .35s}
+.hw-touch .hw-hint{display:none}
+/* edge markers: an off-screen big pop (lollipop + distance), ghosts coming from off screen / behind (chevrons) */
+.hw-edge{position:absolute;left:0;top:0;width:0;height:0;opacity:0;visibility:hidden;will-change:transform}
+.hw-edge.on{visibility:visible}
+.hw-edge .in{position:absolute;left:-26px;top:-26px;width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(circle,rgba(40,14,52,.82) 55%,rgba(40,14,52,0) 72%)}
+.hw-edge .in svg{width:22px;height:30px}
+.hw-edge .arr{position:absolute;left:-14px;top:-14px;width:28px;height:28px;color:#ff7ab8}
+.hw-edge .arr svg{width:28px;height:28px;transform:translateY(-30px)}
+.hw-edge b{position:absolute;left:-30px;top:24px;width:60px;text-align:center;font-size:12px;font-weight:800;letter-spacing:.06em;color:#ffd6ea;
+  text-shadow:0 1px 0 rgba(0,0,0,.6),0 0 8px rgba(255,80,160,.7);font-variant-numeric:tabular-nums}
+.hw-edge.pop{opacity:1}
+.hw-edge.ghost .in{background:radial-gradient(circle,rgba(200,225,255,.28) 40%,rgba(200,225,255,0) 70%)}
+.hw-edge.ghost .in svg{width:30px;height:30px;filter:drop-shadow(0 0 6px rgba(190,220,255,.9))}
+.hw-edge.ghost .arr{color:#dbe9ff}
 /* ---------------- screens (title / pause / results) */
 .hw-screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(8px,2vmin,16px);
   padding:calc(var(--sa-t) + 16px) calc(var(--sa-r) + 18px) calc(var(--sa-b) + 16px) calc(var(--sa-l) + 18px);pointer-events:auto;z-index:40;text-align:center;
@@ -195,7 +223,11 @@ const CSS = `
 .hw-touch-on .ui-touch-btn.hw-boo-btn{border-color:rgba(200,160,255,.7);background:radial-gradient(circle at 50% 35%,rgba(170,110,255,.5),rgba(50,20,90,.45))}
 .hw-touch-on .ui-touch-btn.on{transform:scale(.92);background:radial-gradient(circle at 50% 35%,rgba(255,200,120,.75),rgba(200,80,20,.55))}
 .hw-touch-on .ui-touch-btn.hw-boo-btn.on{background:radial-gradient(circle at 50% 35%,rgba(220,190,255,.8),rgba(110,50,200,.6))}
-.hw-touch-on .ui-touch-stick{border:2px solid rgba(255,190,120,.4);background:rgba(40,16,60,.25)}
+.hw-touch-on .ui-touch-btn.hw-boo-btn.hw-boo-hot{border-color:#f1e4ff;animation:hwHot .5s ease-in-out infinite}
+@keyframes hwHot{50%{scale:1.08;box-shadow:0 0 30px 8px rgba(190,140,255,.9),0 6px 18px rgba(0,0,0,.35)}}
+/* border-box: the floating base's centre lands exactly under the thumb (with the border outside the box it sat 2 px off,
+   a bias that read as a push before the thumb had moved) */
+.hw-touch-on .ui-touch-stick{box-sizing:border-box;border:2px solid rgba(255,190,120,.4);background:rgba(40,16,60,.25)}
 .hw-touch-on .ui-touch-knob{background:radial-gradient(circle at 50% 35%,rgba(255,190,110,.75),rgba(255,120,30,.5));border-color:rgba(255,220,170,.8)}
 .hw-touch-on .ui-touch-btn.cooling::after{background:conic-gradient(#c9a2ff calc(var(--ui-touch-p,0) * 1turn),rgba(255,255,255,.14) 0)}
 .hw-touch-on .ui-touch-stick.on{border-color:rgba(255,210,150,.85);background:rgba(60,24,90,.4);box-shadow:0 0 22px rgba(255,140,40,.35)}
@@ -239,6 +271,15 @@ export class HUD {
     this.count = el('div', 'hw-count', hud);
     this.boo = el('div', 'hw-pill hw-boo ready', hud, '<div class="ring"><span>BOO</span></div><small>PRESS <kbd>E</kbd></small>');
     this.booRing = this.boo.querySelector('.ring');
+    this.hint = el('div', 'hw-pill hw-hint', hud);
+    this.callSub = document.createElement('small');
+    // edge markers (placed by the game each frame through setEdge; DOM written only when a rounded value changes)
+    const edge = (cls, icon) => {
+      const e = el('div', `hw-edge ${cls}`, hud, `<div class="arr">${CHEVRON}</div><div class="in">${icon}</div><b></b>`);
+      return { el: e, arr: e.querySelector('.arr'), num: e.querySelector('b'), on: false, x: -1, y: -1, a: 999, o: -1, d: -1 };
+    };
+    this.popEdge = edge('pop', POP_ICON);
+    this.ghostEdges = [edge('ghost', ICON.ghost), edge('ghost', ICON.ghost), edge('ghost', ICON.ghost)];
     // ---- title
     const title = this.title = el('div', 'hw-screen hw-title-wrap', root);
     title.innerHTML = `
@@ -267,7 +308,7 @@ export class HUD {
     const help = this.help = el('div', 'hw-screen hw-help off', root);
     help.innerHTML = `<div class="hw-h1">HOW TO PLAY</div><div class="hw-cards">${CARDS}</div><div class="hw-ctrl"></div>
       <div class="hw-tips">Swirl lollipops under a light beam are worth 5. Jump onto a lantern to stomp it for extra candy.
-      When the screen edges frost over, a ghost is close: let it come near, then BOO!</div>
+      When the screen edges frost over, a ghost is close: let it come near, then BOO! Caught? Grab the candy you drop.</div>
       <div class="hw-small-btns"><button class="hw-start" data-a="close">GOT IT</button></div>`;
     wire(help.querySelector('[data-a=close]'), () => this.showHelp(false));
     for (const b of root.querySelectorAll('[data-a=help]')) wire(b, () => this.showHelp(true));
@@ -293,7 +334,7 @@ export class HUD {
     this.againBtn.addEventListener('click', settled(() => onRestart && onRestart()));
     over.querySelector('[data-a=title]').addEventListener('click', settled(() => onTitle && onTitle()));
     for (const s of [title, pause, over, help]) s.addEventListener('pointerdown', (e) => e.stopPropagation());
-    this._c = { candy: -1, clock: '', left: '', bar: -1, boo: -1, booReady: null, danger: -1, late: null };
+    this._c = { candy: -1, clock: '', left: '', bar: -1, boo: -1, booReady: null, danger: -1, late: null, hot: false, fx: 50, fy: 50 };
     this.setTouch(touch);
   }
 
@@ -316,12 +357,14 @@ export class HUD {
   }
   showPlay() {
     this.title.classList.add('off'); this.pause.classList.add('off'); this.over.classList.add('off'); this.hud.classList.remove('off');
+    this.hideEdges(); this.lookHint(null); this.setBooHot(false);
     this.showHelp(false);
     this.setTouchVisible(true);
   }
   showPause(on) { this.pause.classList.toggle('off', !on); if (!on) this.showHelp(false); this.setTouchVisible(!on); }
   setMusicLabel(on) { this.musicBtn.textContent = `MUSIC: ${on ? 'ON' : 'OFF'}`; }
   setTouchVisible(on) { document.body.classList.toggle('hw-hidden-touch', !on); }
+  hideEdges() { this.setEdge(this.popEdge, false); for (const g of this.ghostEdges) this.setEdge(g, false); }
   setMuted(m) {
     for (const b of this.muteBtns) {
       if (b.dataset.a === 'sound') b.textContent = `SOUND: ${m ? 'OFF' : 'ON'}`; else b.innerHTML = m ? ICON.muted : ICON.sound;
@@ -371,18 +414,46 @@ export class HUD {
     const ready = p >= 1;
     if (ready !== this._c.booReady) { this._c.booReady = ready; this.boo.classList.toggle('ready', ready); }
   }
-  callout(text, cls = '') {
+  /** A big centre call-out; `sub` (optional) is a smaller second line under it. */
+  callout(text, cls = '', sub = '') {
     const c = this.call;
     c.textContent = text; c.className = `hw-call ${cls}`;
+    if (sub) { this.callSub.textContent = sub; c.appendChild(this.callSub); }
     void c.offsetWidth; c.classList.add('go');
+  }
+  /** Desktop look hint: ok true (mouse captured), false (refused: click / arrows), null hides it. */
+  lookHint(ok) {
+    if (ok == null) { this.hint.classList.remove('on'); return; }
+    this.hint.textContent = ok ? 'MOVE THE MOUSE TO LOOK · ESC FREES IT' : 'CLICK THE VIEW TO LOOK · OR USE ← →';
+    this.hint.classList.add('on');
+  }
+  /** BOO glows while a chaser is in reach and BOO is ready (desktop pill; the touch button is toggled by the game). */
+  setBooHot(on) { if (on !== this._c.hot) { this._c.hot = on; this.boo.classList.toggle('hot', on); } }
+  /**
+   * Place an edge marker (this.popEdge / this.ghostEdges[i]): on, screen position (CSS px), arrow angle (rad, 0 = up,
+   * clockwise), opacity 0..1, distance (m; < 0 = no label). Writes the DOM only when a rounded value changes.
+   */
+  setEdge(m, on, x = 0, y = 0, ang = 0, op = 1, dist = -1) {
+    if (on !== m.on) { m.on = on; m.el.classList.toggle('on', on); }
+    if (!on) return;
+    const px = Math.round(x), py = Math.round(y), a = Math.round(ang * 30) / 30, o = Math.round(op * 20) / 20, d = dist < 0 ? -1 : Math.round(dist);
+    if (px !== m.x || py !== m.y) { m.x = px; m.y = py; m.el.style.transform = `translate3d(${px}px,${py}px,0)`; }
+    if (a !== m.a) { m.a = a; m.arr.style.transform = `rotate(${a}rad)`; }
+    if (o !== m.o) { m.o = o; m.el.style.opacity = String(o); }
+    if (d !== m.d) { m.d = d; m.num.textContent = d < 0 ? '' : `${d} m`; }
   }
   countdown(n) {
     const c = this.count;
     c.textContent = String(n); c.classList.remove('go'); void c.offsetWidth; c.classList.add('go');
   }
   flash() { const f = this.flashEl; f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
-  setDanger(v) {
+  /** Frost 0..1; ang (rad, 0 = ahead / up, + = right): the ghost's side, where the frost gathers. */
+  setDanger(v, ang = null) {
     const q = Math.round(v * 20) / 20;
     if (q !== this._c.danger) { this._c.danger = q; this.danger.style.opacity = String(q); }
+    if (q > 0 && ang != null) {
+      const fx = Math.round(50 - Math.sin(ang) * 16), fy = Math.round(50 + Math.cos(ang) * 14);
+      if (fx !== this._c.fx || fy !== this._c.fy) { this._c.fx = fx; this._c.fy = fy; this.danger.style.setProperty('--fx', `${fx}%`); this.danger.style.setProperty('--fy', `${fy}%`); }
+    }
   }
 }
