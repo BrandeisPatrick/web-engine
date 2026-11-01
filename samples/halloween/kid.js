@@ -2,12 +2,14 @@
 // jack-o'-lantern candy pail), on the same bone names and procedural clips as the character sample's rig
 // (samples/character/rig.js: Idle / Walking / Running / Jump), so the engine's AnimationController drives it.
 // Kid proportions: hips at 0.62 m, a big head, 1.3 m to the hat brim; the clips are built for that hip height.
-//   buildKid() -> { root, skinnedMesh, clips, headBone, handR, pail (Mesh on the right hand), pailGlow (Points) }
+//   buildKid() -> { root, skinnedMesh, material, clips, headBone, handR, pail (Group on the right hand), cape, hatTip
+//   (secondary-motion bones: main.js swings them with the speed) }
 // Faces +Z (glTF convention), feet at y = 0. One SkinnedMesh (vertex coloured, every segment 100 % on its bone) + the
 // pail's glowing face as a child mesh of the right hand bone (an unlit HDR colour for bloom).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { proceduralClips } from '../character/rig.js';
+import { patchRim } from './looks.js';
 
 // [name, parent, joint position at rest] (model space, faces +Z, its left is +X)
 const JOINTS = [
@@ -27,9 +29,12 @@ const JOINTS = [
   ['lowerLegR', 'upperLegR', [-0.075, 0.33, 0]],
   ['footR', 'lowerLegR', [-0.075, 0.075, 0]],
 ];
-const LEAVES = [['handL', 'lowerArmL', [0.155, 0.6, 0]], ['handR', 'lowerArmR', [-0.155, 0.6, 0]]];
+// leaves: the hands, and two secondary-motion bones the clips never key (main.js swings them): the cape from the
+// shoulders, the hat tip from the top of the cone
+const LEAVES = [['handL', 'lowerArmL', [0.155, 0.6, 0]], ['handR', 'lowerArmR', [-0.155, 0.6, 0]],
+  ['cape', 'chest', [0, 0.93, -0.1]], ['hatTip', 'head', [0, 1.42, -0.03]]];
 const SKELETON = JOINTS.concat(LEAVES);
-const BONE_INDEX = Object.fromEntries(JOINTS.map((j, i) => [j[0], i]));
+const BONE_INDEX = Object.fromEntries(SKELETON.map((j, i) => [j[0], i]));
 const JOINT_POS = Object.fromEntries(SKELETON.map((j) => [j[0], j[2]]));
 /** proceduralClips(h) puts the hips at 0.98 * h / 1.8: this h puts them at the kid's 0.62 m. */
 const CLIP_HEIGHT = 1.8 * (0.62 / 0.98);
@@ -63,11 +68,11 @@ function hatParts(P) {
   P.push(seg(cyl(0.172, 0.178, 0.06, 0, y0 + 0.04, 0, 18), 'head', KID_COLORS.band));
   const stack = [[0.17, 0.115, 0.17, 0, 0], [0.115, 0.065, 0.15, -0.025, 0.25], [0.065, 0.004, 0.16, -0.07, 0.6]];
   let y = y0 + 0.012, z = 0;
-  for (const [r0, r1, h, dz, tilt] of stack) {
+  stack.forEach(([r0, r1, h, dz, tilt], k) => {
     const g = new THREE.CylinderGeometry(r1, r0, h, 14).translate(0, h / 2, 0).rotateX(-tilt).translate(0, y, z);
-    P.push(seg(g, 'head', KID_COLORS.hat));
+    P.push(seg(g, k === 0 ? 'head' : 'hatTip', KID_COLORS.hat)); // the drooping tip wobbles (hatTip bone)
     y += h * Math.cos(tilt) * 0.96; z += dz;
-  }
+  });
   // a little star on the band (front)
   P.push(seg(new THREE.OctahedronGeometry(0.035, 0).scale(1, 1, 0.4).translate(0, y0 + 0.045, 0.176), 'head', '#ffe36b'));
 }
@@ -95,14 +100,20 @@ function bodyGeometry() {
   P.push(seg(cyl(0.118, 0.118, 0.035, 0, 0.665, 0, 16).scale(1, 1, 0.84), 'hips', C.trim));
   P.push(seg(cyl(0.12, 0.215, 0.24, 0, 0.53, 0, 18).scale(1, 1, 0.86), 'hips', C.robe));
   P.push(seg(cyl(0.216, 0.222, 0.025, 0, 0.405, 0, 18).scale(1, 1, 0.86), 'hips', C.robeDark));
-  // cape: a curved sheet behind the shoulders down to the knees (chest bone), dark outside, crimson lining inside
+  // cape: a curved sheet behind the shoulders down to the knees, dark outside, crimson lining inside, on the cape bone
+  // (it swings back as the kid runs: main.js); a scalloped hem (the lower ring's points alternate long / short)
   {
-    const g = new THREE.CylinderGeometry(0.2, 0.3, 0.56, 14, 1, true, Math.PI * 0.62, Math.PI * 0.76).translate(0, 0.66, 0).scale(1, 1, 0.8);
-    P.push(seg(g, 'chest', C.cape));
-    const gi = new THREE.CylinderGeometry(0.19, 0.29, 0.55, 14, 1, true, Math.PI * 0.62, Math.PI * 0.76).translate(0, 0.66, 0).scale(1, 1, 0.78);
+    const hem = (g) => {
+      const p = g.attributes.position;
+      for (let i = 0; i < p.count; i++) if (p.getY(i) < 0.5) { const a = Math.atan2(p.getX(i), p.getZ(i)); p.setY(i, p.getY(i) - 0.035 * (0.5 + 0.5 * Math.cos(a * 22))); }
+      return g;
+    };
+    const g = hem(new THREE.CylinderGeometry(0.2, 0.3, 0.56, 22, 3, true, Math.PI * 0.62, Math.PI * 0.76).translate(0, 0.66, 0).scale(1, 1, 0.8));
+    P.push(seg(g, 'cape', C.cape));
+    const gi = hem(new THREE.CylinderGeometry(0.19, 0.29, 0.55, 22, 3, true, Math.PI * 0.62, Math.PI * 0.76).translate(0, 0.66, 0).scale(1, 1, 0.78));
     gi.index.array.reverse(); // flip the winding and the normals: the lining faces in
     const nr = gi.attributes.normal.array; for (let i = 0; i < nr.length; i++) nr[i] = -nr[i];
-    P.push(seg(gi, 'chest', C.capeIn));
+    P.push(seg(gi, 'cape', C.capeIn));
   }
   for (const s of [1, -1]) {
     const L = s > 0 ? 'L' : 'R';
@@ -161,7 +172,9 @@ export function buildKid() {
     if (parent) byName[parent].add(b);
     bones.push(b); byName[name] = b;
   }
-  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0, emissive: '#1a0d22', emissiveIntensity: 1 });
+  // a cool moonlit rim (looks.js): the kid is mostly seen from behind, against the moon, so the silhouette reads
+  const material = patchRim(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.68, metalness: 0, emissive: '#160b1e', emissiveIntensity: 1 }),
+    { color: new THREE.Color(0.4, 0.42, 0.8), power: 2.8, share: 0.25, fill: 0.14, key: 'kidRim' });
   const skinnedMesh = new THREE.SkinnedMesh(geometry, material);
   skinnedMesh.name = 'kid';
   skinnedMesh.add(bones[0]);
@@ -173,5 +186,5 @@ export function buildKid() {
   const pail = buildPail();
   pail.position.set(0, -0.085, 0.03); // hangs under the right hand
   byName.handR.add(pail);
-  return { root, skinnedMesh, material, clips: proceduralClips(CLIP_HEIGHT), headBone: byName.head, handR: byName.handR, pail };
+  return { root, skinnedMesh, material, clips: proceduralClips(CLIP_HEIGHT), headBone: byName.head, handR: byName.handR, pail, cape: byName.cape, hatTip: byName.hatTip };
 }

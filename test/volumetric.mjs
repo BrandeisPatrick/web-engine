@@ -630,7 +630,31 @@ function historyTap(tex, w, h, huv, z, zPrev) {
   check("Atmosphere sunset sweep: gate 1 exactly while the cascades are the sun's", agree && nSun > 0 && nMoon > 0, `${nSun} sun / ${nMoon} moon`);
   atmo.setTime(15.5);
   gate(inRange, note, 'render() on a real Atmosphere (its shadowCascadeInfo)', bytesPerCall((n) => { for (let i = 0; i < n; i++) vol.render(r, null, readBuffer); }, 50000), { unit: 'frame' });
+  check('default Atmosphere: scatterDir / scatterColor are the sun\'s own objects', atmo.scatterDir === atmo.sunDir && atmo.scatterColor === atmo.sunColor && atmo.moonScatter === 0);
   check('dispose: no throw', !throws(() => vol.dispose()));
+}
+
+// ================================================================================================= Atmosphere moonScatter (opt-in)
+{
+  const cam = makeCamera(2);
+  const ref = new Atmosphere({ scene: new THREE.Scene(), renderer: null, camera: cam, timeOfDay: 23.6, moon: { azimuth: 22, elevation: 13 }, shadows: { cascades: 1 } });
+  const atmo = new Atmosphere({ scene: new THREE.Scene(), renderer: null, camera: cam, timeOfDay: 23.6, moon: { azimuth: 22, elevation: 13 }, shadows: { cascades: 1 }, moonScatter: 0.03 });
+  const vol = new VolumetricPass(cam, null, atmo);
+  vol.setSize(W, H);
+  for (const l of atmo.cascadeLights) l.shadow.map = new THREE.WebGLRenderTarget(4, 4);
+  const r = stubRenderer(), u = vol.material.uniforms;
+  vol.render(r, null, readBuffer);
+  check('moonScatter at night: scatter light = the moon (direction, colour), fog glow = moonScatter', atmo.scatterDir !== atmo.sunDir && atmo.scatterDir.equals(atmo.moonDir)
+    && atmo.scatterColor.equals(atmo.moonColor) && atmo.fogParams.sunScatter === 0.03 && atmo.lightDir.equals(atmo.moonDir) && ref.fogParams.sunScatter === 0);
+  check('moonScatter at night: the volumetric pass marches the moon (gate 1, its direction)', r.stats.draws === 1 && u.uMarch.value.y === 1 && u.uSunDir.value.equals(atmo.moonDir));
+  vol.render(r, null, readBuffer); ref.setTime(15.5); atmo.setTime(15.5);
+  check('moonScatter by day: the sun as without it (direction, colour, fog glow)', atmo.scatterDir.equals(ref.sunDir) && atmo.scatterColor.equals(ref.sunColor)
+    && atmo.fogParams.sunScatter === ref.fogParams.sunScatter && atmo.sun.intensity === ref.sun.intensity && atmo.sun.color.equals(ref.sun.color));
+  vol.render(r, null, readBuffer);
+  check('moonScatter by day: the pass marches the sun', u.uMarch.value.y === 1 && u.uSunDir.value.equals(atmo.sunDir));
+  atmo.setTime(23.6);
+  gate(inRange, note, 'render() marching the moon (moonScatter)', bytesPerCall((n) => { for (let i = 0; i < n; i++) vol.render(r, null, readBuffer); }, 50000), { unit: 'frame' });
+  vol.dispose();
 }
 
 console.log(results.join('\n'));
