@@ -280,7 +280,10 @@ export class Thief {
     switch (this.state) {
       case S_EMERGE: if (this.t >= THIEF.EMERGE) this._set(S_ROAM); break;
       case S_ROAM: case S_EAT: {
-        if (sees && dk < THIEF.NEAR) { this._bolt(); E.bolt = true; break; }
+        if (sees && dk < THIEF.NEAR) { // the kid too close: it bolts (cornered, so the kid touched it: it snatches first)
+          if (dk < THIEF.TOUCH_R && !kid.safe) { E.steal = true; this.steals++; }
+          this._bolt(); E.bolt = true; break;
+        }
         if (this.state === S_ROAM) {
           if ((this.retarget -= dt) <= 0) {
             this.retarget = 0.5;
@@ -334,14 +337,10 @@ export class Thief {
       }
       default: break;
     }
-    // the kid's touches: a stunned thief is tagged; a cornered one snatches candy and bolts (not from a safe kid)
-    if (sees) {
-      if (this.state === S_STUN && dk < THIEF.TAG_R) {
-        E.tag = this.sack + THIEF.TAG_BONUS; this.sack = 0; this.tags++;
-        this._set(S_HOME); this.homeT = THIEF.HOME_T; this.vx = this.vz = 0;
-      } else if (!kid.safe && (this.state === S_ROAM || this.state === S_EAT || this.state === S_BOLT) && dk < THIEF.TOUCH_R) {
-        E.steal = true; this.steals++; this._bolt(); E.bolt = true;
-      }
+    // a touch while it is stunned tags it (a cornered one's touch is above: it snatches; a bolting one only flees)
+    if (sees && this.state === S_STUN && dk < THIEF.TAG_R) {
+      E.tag = this.sack + THIEF.TAG_BONUS; this.sack = 0; this.tags++;
+      this._set(S_HOME); this.homeT = THIEF.HOME_T; this.vx = this.vz = 0;
     }
     // steering: one look-ahead probe; blocked, it tries turning either way, then hops whatever it is stuck at
     if (speed > 0 && this.hop <= 0) {
@@ -386,9 +385,10 @@ export class Thief {
 
   /**
    * Per frame: the pose (run cycle, nibbling, dizzy sway, the den's pop out), the sack's size and glow, its halo and
-   * the stun's stars into `glows` from slot `base`; returns slots used.
+   * the stun's stars into `glows` from slot `base`; returns slots used. cam (optional, a Vector3): the halo grows with
+   * the distance (up to 2x at 28 m), so a thief across the field still shows as a pink spark on a phone.
    */
-  update(dt, glows, base, t = 0) {
+  update(dt, glows, base, t = 0, cam = null) {
     const st = this.state, R = this.root;
     const on = st !== S_AWAY && st !== S_DEN;
     R.visible = on;
@@ -434,13 +434,13 @@ export class Thief {
     // its halo: a pink beacon over the sack (stronger with more in it)
     const c = Math.cos(this.yaw), sn = Math.sin(this.yaw), sk = SCALE * (0.4 + 0.6 * em);
     const hx = this.x - sn * 0.08 * sk, hz = this.z - c * 0.08 * sk, hy = R.position.y + (0.47 + 0.05 * s) * sk;
-    const a = 0.12 + 0.2 * fill;
-    glows.set(base + n++, hx, hy, hz, 1.0 + 0.8 * s, a * 1.0, a * 0.22, a * 0.6);
-    if (st === S_STUN) { // three stars circling its head
-      const fx = this.x + sn * 0.25 * sk, fz = this.z + c * 0.25 * sk, fy = R.position.y + 0.62 * sk;
+    const a = 0.12 + 0.2 * fill, far = cam ? 1 + clamp((len2(this.x - cam.x, this.z - cam.z) - 7) / 21, 0, 1) : 1;
+    glows.set(base + n++, hx, hy, hz, (1.0 + 0.8 * s) * far, a * 1.0, a * 0.22, a * 0.6);
+    if (st === S_STUN) { // three stars circling over its head
+      const fx = this.x + sn * 0.24 * sk, fz = this.z + c * 0.24 * sk, fy = R.position.y + 0.78 * sk;
       for (let j = 0; j < 3; j++) {
         const w = t * 6 + j * 2.094, r = 0.2;
-        glows.set(base + n++, fx + Math.cos(w) * r * sk, fy + Math.sin(w * 2) * 0.04, fz + Math.sin(w) * r * sk, 0.36, 1.0, 0.85, 0.25);
+        glows.set(base + n++, fx + Math.cos(w) * r * sk, fy + Math.sin(w * 2) * 0.04, fz + Math.sin(w) * r * sk, 0.42 * far, 1.0, 0.82, 0.2);
       }
     }
     return n;
