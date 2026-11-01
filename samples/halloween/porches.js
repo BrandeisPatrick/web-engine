@@ -14,10 +14,10 @@
 // Residents come from the ghost pool (ghosts.summon): a dormant ghost drops from the porch's chimney, else the nearest
 // wandering one turns to chase; the ghost count stays the same.
 // Geometry: the doors are one instanced mesh (6, hinged); until the map pass builds the cottages (porch-spots.js is a
-// stub then: no `lamp` glow groups), each porch also gets a stand-in front (a wall panel with a gable, a doorway, the
-// lamp's bracket, two newel posts, a pumpkin on the left one: one merged lit mesh, colliders on the wall) and its glowing
-// parts (the doormat, the lamp glass, the pumpkin's face, the warm doorway) in one merged unlit mesh whose per-porch
-// levels come from a uniform array (one draw). With the map pass's PORCHES (spot.lamp / spot.railing set), the stand-ins
+// stub then: no `lamp` glow groups), each porch also gets a stand-in front from the props.js kit (a clapboard wall with
+// a gable and a doorway, the lamp's cage, two turned posts, a ribbed pumpkin on the left one: one merged lit mesh,
+// colliders on the wall) and its glowing parts (the doormat, the lamp glass, the pumpkin's carved face, the warm
+// doorway) in one merged unlit mesh whose per-porch levels come from a uniform array (one draw). With the map pass's PORCHES (spot.lamp / spot.railing set), the stand-ins
 // are not built and the lamp / railing levels go into world.glowLevels on top of the environment's flicker.
 // Module shape (the game's convention): reset(), fixedUpdate(dt, kid, playing) -> events, update(dt, glows, base) ->
 // glow slots used, plus boo() (the trick, called from the game's BOO) and relightAll(). Typed arrays, no per-frame
