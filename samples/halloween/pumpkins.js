@@ -1,8 +1,9 @@
 // Jack-o'-lanterns: carved pumpkins with a flickering HDR face (bloom) and a halo, lit by the engine's NearestLights
 // pool (a few real point lights on the lanterns nearest the view; the rest glow emissively). Running into one kicks it
 // to pieces, landing on one stomps it (more candy, a bounce). Smashing uses the engine's fracture module: the pumpkin's
-// hull is cut ahead of time by fracturePieces (seeded planes, two variants), each piece drawn with pieceGeometry
-// (orange rind outside, pale flesh on the cut faces) and thrown as a real dynamic body on the shared DynamicsWorld,
+// hull is cut ahead of time by fracturePieces (seeded planes, two variants), each piece drawn with pieceGeometry in one
+// draw (ribbed orange rind outside, pale flesh with seeds on the cut faces: one material, a per-vertex `flesh` flag)
+// and thrown as a real dynamic body on the shared DynamicsWorld,
 // so the shards tumble and bounce over the terrain heightfield and gravestones; they sink away after a few seconds.
 // A smashed lantern regrows after REGROW seconds.
 import * as THREE from 'three';
@@ -148,66 +149,69 @@ float hwMask( vec2 p ) {
 }
 
 /**
- * Fracture shading: each piece geometry gets `orig` (its vertices in the lantern's frame), so the rind shader paints the
- * ribs back in (crease shading + a normal bent round the lantern's axis) and the flesh shader draws fibres and seeds.
+ * Fracture shading in ONE material (one draw per shard instead of two; a storm of smashes is ~56 shards): each piece
+ * geometry carries `orig` (its vertices in the lantern's frame) and `flesh` (1 on the cut faces), so the rind is
+ * shaded round with the ribs painted back in (crease shading + a normal bent round the lantern's axis) and the flesh
+ * gets fibres and seeds, each with its own colour, glow and roughness.
  */
-function patchRind(mat) {
+function patchShard(mat) {
   mat.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec3 orig;\nvarying vec3 vOrigHw;\nvarying vec3 vTanHw;\nvarying vec3 vRoundHw;')
+      .replace('#include <common>', '#include <common>\nattribute vec3 orig;\nattribute float flesh;\nvarying vec3 vOrigHw;\nvarying vec3 vTanHw;\nvarying vec3 vRoundHw;\nvarying float vFleshHw;')
       .replace('#include <begin_vertex>', `#include <begin_vertex>
-  vOrigHw = orig;
+  vOrigHw = orig; vFleshHw = flesh;
   vTanHw = normalize( normalMatrix * normalize( vec3( orig.z, 0.0, - orig.x ) + 1e-5 ) );
   vRoundHw = normalize( normalMatrix * vec3( orig.x, ( orig.y - ${(0.76 * R).toFixed(4)} ) / 0.61, orig.z ) );`);
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', `#include <common>\nvarying vec3 vOrigHw;\nvarying vec3 vTanHw;\nvarying vec3 vRoundHw;\nconst float LOBES_HW = ${LOBES.toFixed(1)};`)
-      .replace('#include <color_fragment>', `#include <color_fragment>
-  {
-    float c = cos( atan( vOrigHw.x, vOrigHw.z ) * LOBES_HW * 0.5 );
-    diffuseColor.rgb *= ( 0.62 + 0.38 * pow( abs( c ), 0.6 ) ) * ( 0.8 + 0.3 * smoothstep( 0.0, ${R.toFixed(3)}, vOrigHw.y ) );
-  }`)
-      .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
-  {
-    float a = atan( vOrigHw.x, vOrigHw.z ) * LOBES_HW * 0.5, c = cos( a ), s = sin( a );
-    float slope = - 0.6 * pow( max( abs( c ), 0.05 ), - 0.4 ) * sign( c ) * s; // d lobe / d phase
-    vec3 rn = normalize( vRoundHw );
-    normal = normalize( ( dot( rn, normal ) > 0.0 ? rn : normal ) - vTanHw * clamp( slope, - 2.5, 2.5 ) * 0.5 );
-  }`);
-  };
-  mat.customProgramCacheKey = () => 'hwRind';
-  return mat;
-}
-function patchFlesh(mat) {
-  mat.onBeforeCompile = (sh) => {
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec3 orig;\nvarying vec3 vOrigHw;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvOrigHw = orig;');
-    sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
 varying vec3 vOrigHw;
+varying vec3 vTanHw;
+varying vec3 vRoundHw;
+varying float vFleshHw;
+const float LOBES_HW = ${LOBES.toFixed(1)};
 float hwH3( vec3 p ) { return fract( sin( dot( p, vec3( 12.9898, 78.233, 37.719 ) ) ) * 43758.5453 ); }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
-  {
+  bool hwFlesh = vFleshHw > 0.5;
+  vec3 p = vOrigHw;
+  if ( hwFlesh ) {
     // stringy fibres running round the axis, darker toward the rind, and pale seeds in the middle
-    vec3 p = vOrigHw;
     float rr = length( p.xz ) / ${R.toFixed(3)};
     float fib = 0.5 + 0.5 * sin( atan( p.x, p.z ) * 23.0 + rr * 31.0 + sin( p.y * 47.0 ) * 1.5 );
-    diffuseColor.rgb *= ( 0.82 + 0.18 * fib ) * mix( 1.05, 0.72, smoothstep( 0.55, 0.95, rr ) );
+    diffuseColor.rgb = vec3( 1.0, 0.68, 0.195 ) * ( 0.82 + 0.18 * fib ) * mix( 1.05, 0.72, smoothstep( 0.55, 0.95, rr ) );
     vec3 q = p * 26.0, cell = floor( q );
     vec3 o = vec3( hwH3( cell ), hwH3( cell + 3.1 ), hwH3( cell + 7.7 ) ) * 0.6 + 0.2;
     vec3 d = ( q - cell - o ) * vec3( 1.0, 1.8, 1.0 );
     float seed = ( 1.0 - smoothstep( 0.1, 0.16, length( d ) ) ) * step( hwH3( cell + 1.3 ), 0.45 ) * ( 1.0 - smoothstep( 0.35, 0.6, rr ) );
     diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 1.0, 0.95, 0.8 ), seed );
-  }`);
+  } else {
+    float c = cos( atan( p.x, p.z ) * LOBES_HW * 0.5 );
+    diffuseColor.rgb *= ( 0.62 + 0.38 * pow( abs( c ), 0.6 ) ) * ( 0.8 + 0.3 * smoothstep( 0.0, ${R.toFixed(3)}, p.y ) );
+  }`)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\tif ( hwFlesh ) roughnessFactor = 0.85;')
+      .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
+  if ( vFleshHw < 0.5 ) {
+    float a = atan( vOrigHw.x, vOrigHw.z ) * LOBES_HW * 0.5, c = cos( a ), s = sin( a );
+    float slope = - 0.6 * pow( max( abs( c ), 0.05 ), - 0.4 ) * sign( c ) * s; // d lobe / d phase
+    vec3 rn = normalize( vRoundHw );
+    normal = normalize( ( dot( rn, normal ) > 0.0 ? rn : normal ) - vTanHw * clamp( slope, - 2.5, 2.5 ) * 0.5 );
+  }`)
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\tif ( hwFlesh ) totalEmissiveRadiance = vec3( 1.0, 0.39, 0.03 ) * 0.45; // #ffd77a lit by #ffa830 (linear)');
   };
-  mat.customProgramCacheKey = () => 'hwFlesh';
+  mat.customProgramCacheKey = () => 'hwShard';
   return mat;
 }
-/** The piece's vertices in the lantern frame (= local - shape.offset + the hull's offset from the lantern origin). */
+/**
+ * The piece's vertices in the lantern frame (`orig` = local - shape.offset + the hull's offset from the lantern origin)
+ * and `flesh` (1 on the cut faces: pieceGeometry's second group); the groups dropped (one material).
+ */
 function withOrig(geo, piece, hullC) {
   const P = geo.attributes.position.array, so = piece.shape.offset, O = new Float32Array(P.length);
   for (let i = 0; i < P.length; i += 3) { O[i] = P[i] - so[0] + hullC[0]; O[i + 1] = P[i + 1] - so[1] + hullC[1]; O[i + 2] = P[i + 2] - so[2] + hullC[2]; }
   geo.setAttribute('orig', new THREE.BufferAttribute(O, 3));
+  const F = new Float32Array(P.length / 3), ix = geo.index.array, cut = geo.groups[1];
+  if (cut) for (let k = cut.start; k < cut.start + cut.count; k++) F[ix[k]] = 1;
+  geo.setAttribute('flesh', new THREE.BufferAttribute(F, 1));
+  geo.clearGroups();
   return geo;
 }
 
@@ -250,13 +254,12 @@ export class Lanterns {
       return pieces.map((pc) => ({ piece: pc, geometry: withOrig(pieceGeometry(pc, true), pc, this.hullC) }));
     });
     // the rind's ribs and the flesh's fibres and seeds come from each piece's `orig` (its vertices in the lantern frame)
-    this.rindMat = patchRind(new THREE.MeshStandardMaterial({ color: '#ff8a26', roughness: 0.5, emissive: '#ff6a10', emissiveIntensity: 0.4 }));
-    this.fleshMat = patchFlesh(new THREE.MeshStandardMaterial({ color: '#ffd77a', roughness: 0.85, emissive: '#ffa830', emissiveIntensity: 0.45 }));
+    this.shardMat = patchShard(new THREE.MeshStandardMaterial({ color: '#ff8a26', roughness: 0.5, emissive: '#ff6a10', emissiveIntensity: 0.4 }));
     this.slots = [];
     for (let s = 0; s < SLOTS; s++) {
       const v = this.variants[s % this.variants.length], meshes = [];
       for (const p of v) {
-        const m = new THREE.Mesh(p.geometry, [this.rindMat, this.fleshMat]);
+        const m = new THREE.Mesh(p.geometry, this.shardMat);
         m.visible = false; m.castShadow = true; m.frustumCulled = false;
         scene.add(m); meshes.push(m);
       }
