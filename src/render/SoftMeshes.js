@@ -215,22 +215,44 @@ export class ClothMesh extends SurfaceMesh {
     const read = (out) => readParticles(store.pos, ids, n, out);
     let refine = null;
     if (k > 1) {
-      // coarse positions -> rows refined along i -> the fine grid refined along j (scratch allocated once)
-      const rows = new Float32Array(NX * ny * 3), ti = crTaps(nx, k), tj = crTaps(ny, k);
-      refine = (coarse, out) => {
+      // coarse positions + normals -> rows refined along i -> the fine grid refined along j, both in one pass (the
+      // normals renormalised); a sample on a coarse row / column takes its one tap (scratch allocated once)
+      const rows = new Float32Array(NX * ny * 6), ti = crTaps(nx, k), tj = crTaps(ny, k);
+      refine = (cp, cn, op, on) => {
         const Ii = ti.idx, Wi = ti.w, Ij = tj.idx, Wj = tj.w;
         for (let j = 0; j < ny; j++) {
           for (let I = 0; I < NX; I++) {
-            let x = 0, y = 0, z = 0;
-            for (let q = 0; q < 4; q++) { const c = (Ii[I * 4 + q] + j * nx) * 3, w = Wi[I * 4 + q]; x += coarse[c] * w; y += coarse[c + 1] * w; z += coarse[c + 2] * w; }
-            const o3 = (I + j * NX) * 3; rows[o3] = x; rows[o3 + 1] = y; rows[o3 + 2] = z;
+            const o6 = (I + j * NX) * 6;
+            if (I % k === 0) {
+              const c = (I / k + j * nx) * 3;
+              rows[o6] = cp[c]; rows[o6 + 1] = cp[c + 1]; rows[o6 + 2] = cp[c + 2]; rows[o6 + 3] = cn[c]; rows[o6 + 4] = cn[c + 1]; rows[o6 + 5] = cn[c + 2];
+              continue;
+            }
+            let x = 0, y = 0, z = 0, u = 0, v = 0, w2 = 0;
+            for (let q = 0; q < 4; q++) {
+              const c = (Ii[I * 4 + q] + j * nx) * 3, w = Wi[I * 4 + q];
+              x += cp[c] * w; y += cp[c + 1] * w; z += cp[c + 2] * w; u += cn[c] * w; v += cn[c + 1] * w; w2 += cn[c + 2] * w;
+            }
+            rows[o6] = x; rows[o6 + 1] = y; rows[o6 + 2] = z; rows[o6 + 3] = u; rows[o6 + 4] = v; rows[o6 + 5] = w2;
           }
         }
         for (let J = 0; J < NY; J++) {
+          const exact = J % k === 0, jr = J / k;
           for (let I = 0; I < NX; I++) {
-            let x = 0, y = 0, z = 0;
-            for (let q = 0; q < 4; q++) { const c = (I + Ij[J * 4 + q] * NX) * 3, w = Wj[J * 4 + q]; x += rows[c] * w; y += rows[c + 1] * w; z += rows[c + 2] * w; }
-            const o3 = (I + J * NX) * 3; out[o3] = x; out[o3 + 1] = y; out[o3 + 2] = z;
+            let x, y, z, u, v, w2;
+            if (exact) {
+              const c = (I + jr * NX) * 6;
+              x = rows[c]; y = rows[c + 1]; z = rows[c + 2]; u = rows[c + 3]; v = rows[c + 4]; w2 = rows[c + 5];
+            } else {
+              x = 0; y = 0; z = 0; u = 0; v = 0; w2 = 0;
+              for (let q = 0; q < 4; q++) {
+                const c = (I + Ij[J * 4 + q] * NX) * 6, w = Wj[J * 4 + q];
+                x += rows[c] * w; y += rows[c + 1] * w; z += rows[c + 2] * w; u += rows[c + 3] * w; v += rows[c + 4] * w; w2 += rows[c + 5] * w;
+              }
+            }
+            const o3 = (I + J * NX) * 3, l = Math.sqrt(u * u + v * v + w2 * w2);
+            op[o3] = x; op[o3 + 1] = y; op[o3 + 2] = z;
+            if (l > 1e-20) { on[o3] = u / l; on[o3 + 1] = v / l; on[o3 + 2] = w2 / l; } else { on[o3] = 0; on[o3 + 1] = 1; on[o3 + 2] = 0; }
           }
         }
       };
@@ -240,8 +262,18 @@ export class ClothMesh extends SurfaceMesh {
     this.nx = nx; this.ny = ny;
     /** Subdivision factor and the drawn grid's size (= nx, ny when subdivide is 1). */
     this.subdivide = k; this.gridX = NX; this.gridY = NY;
-    this._refine = refine; this._coarse = refine ? new Float32Array(n * 3) : null;
-    if (refine) this.update(1); // (the base constructor drew before the refinement existed)
+    this._refine = refine; this._coarse = null;
+    if (refine) {
+      // the coarse grid's own index and normals: normals are computed on the coarse cloth and refined like the
+      // positions (then renormalised), a fraction of an area-weighted pass over the fine triangles
+      const ci = indexArray((nx - 1) * (ny - 1) * 6, n);
+      let q = 0;
+      for (let j = 0; j < ny - 1; j++) {
+        for (let i = 0; i < nx - 1; i++) { const a = i + j * nx, b = a + 1, c = a + nx, d = c + 1; ci[q++] = a; ci[q++] = b; ci[q++] = d; ci[q++] = a; ci[q++] = d; ci[q++] = c; }
+      }
+      this._coarse = new Float32Array(n * 3); this._coarseNrm = new Float32Array(n * 3); this._coarseIndex = ci;
+      this.update(1); // (the base constructor drew before the refinement existed)
+    }
   }
   /** After each fixed step (subdivided: the captured poses stay coarse, the particles only). */
   capture() {
@@ -251,18 +283,21 @@ export class ClothMesh extends SurfaceMesh {
     const t = this.prev; this.prev = this.cur; this.cur = t;
     this._read(this.cur);
   }
-  /** Per frame (subdivided: interpolate the coarse poses, then refine once). */
+  /**
+   * Per frame (subdivided: interpolate the coarse poses, refine them once; the normals come from the coarse cloth,
+   * refined the same way and renormalised; the bounds from the coarse poses plus a margin for the curve's overshoot).
+   */
   update(alpha = 1) {
     if (!this._refine) { super.update(alpha); return; }
-    const c = this._coarse, p = this.positions, nrm = this.normals;
+    const c = this._coarse, cn = this._coarseNrm, p = this.positions, nrm = this.normals;
     if (this.cur === null) this._read(c); else lerp(this.prev, this.cur, alpha, c);
-    this._refine(c, p);
-    vertexNormals(p, this.index, nrm, this.weld);
+    vertexNormals(c, this._coarseIndex, cn, null);
+    this._refine(c, cn, p, nrm);
     const f = this.inflate;
     if (f !== 0) for (let i = 0, n = p.length; i < n; i++) p[i] += nrm[i] * f;
     this.positionAttr.needsUpdate = true;
     this.normalAttr.needsUpdate = true;
-    applyBounds(this.geometry, p, 0);
+    applyBounds(this.geometry, c, 0.1 + Math.abs(f));
   }
 }
 
