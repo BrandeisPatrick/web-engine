@@ -209,6 +209,54 @@ export class GameAudio {
     const ctx = this.bus.ctx, out = this.bus.bus('ui'), t = ctx.currentTime;
     [[69, 0], [74, 0.09], [78, 0.18], [81, 0.27]].forEach(([m, d]) => playTone(ctx, out, { type: 'triangle', pitch: [[0, hz(m)]], peak: 0.09, attack: 0.004, decay: d === 0.27 ? 0.5 : 0.16, when: t + d }));
   }
+  // ---- porches (porches.js)
+  /** A knock on a porch door (two raps); haunted: three slow, deep ones and a low chuckle from inside. */
+  knock(haunted = false) {
+    if (!this.ready) return;
+    const ctx = this.bus.ctx, out = this.bus.bus('effects'), t = ctx.currentTime, n = haunted ? 3 : 2, gap = haunted ? 0.26 : 0.14;
+    for (let k = 0; k < n; k++) {
+      const w = t + k * gap, f = haunted ? 95 : 150;
+      playTone(ctx, out, { type: 'sine', pitch: [[0, f * 1.6], [0.05, f]], peak: 0.32, attack: 0.002, decay: 0.09, when: w });
+      playNoiseBurst(ctx, out, this.pink, { peak: 0.18, attack: 0.001, decay: 0.05, filter: { type: 'bandpass', frequency: haunted ? 500 : 900, Q: 1.4 }, when: w });
+    }
+    if (haunted) for (let k = 0; k < 4; k++) playTone(ctx, out, { type: 'sawtooth', pitch: [[0, 120 - k * 6], [0.12, 105 - k * 6]], peak: 0.05, attack: 0.02, decay: 0.14, filter: { type: 'bandpass', frequency: 380, Q: 3 }, when: t + 1.0 + k * 0.17 });
+  }
+  /** The door swings open: a rising creak (quick: a trick flings it). */
+  creak(fast = false) {
+    if (!this.ready) return;
+    const ctx = this.bus.ctx, out = this.bus.bus('effects'), t = ctx.currentTime, d = fast ? 0.3 : 0.75;
+    const pts = []; for (let k = 0; k <= 10; k++) pts.push([k * d / 10, 260 + 220 * (k / 10) + 40 * Math.sin(k * 2.7)]);
+    pts[0][0] = 0;
+    playTone(ctx, out, { type: 'sawtooth', pitch: pts, peak: 0.035, attack: 0.03, decay: d, filter: { type: 'bandpass', frequency: 1300, Q: 6 }, when: t });
+  }
+  /** A treat pours out: a warm "trick or treat" chime and a rustle of wrappers. */
+  treat() {
+    if (!this.ready) return;
+    const ctx = this.bus.ctx, out = this.bus.bus('ui'), t = ctx.currentTime;
+    [74, 78, 81, 86].forEach((m, i) => playTone(ctx, out, { type: 'triangle', pitch: [[0, hz(m)]], peak: 0.08, attack: 0.003, decay: 0.3, when: t + i * 0.07 }));
+    playNoiseBurst(ctx, this.bus.bus('effects'), this.white, { peak: 0.08, attack: 0.02, decay: 0.35, filter: { type: 'highpass', frequency: 3500 }, when: t + 0.05 });
+  }
+  /** A trick: a cackle of falling minor notes over a whoosh. */
+  trick() {
+    if (!this.ready) return;
+    const ctx = this.bus.ctx, out = this.bus.bus('effects'), t = ctx.currentTime;
+    [81, 77, 74, 70, 69].forEach((m, i) => playTone(ctx, out, { type: 'square', pitch: [[0, hz(m)], [0.08, hz(m) * 0.97]], peak: 0.045, attack: 0.004, decay: 0.12, filter: { type: 'lowpass', frequency: 2600 }, when: t + i * 0.085 }));
+    playNoiseBurst(ctx, out, this.pink, { peak: 0.22, attack: 0.05, decay: 0.5, filter: { type: 'bandpass', frequency: 600, Q: 0.9 }, rate: 0.8, when: t });
+  }
+  /** A resident drops from the chimney: a falling wail; pan -1..1 (its side of the view). */
+  resident(pan = 0) {
+    if (!this.ready) return;
+    const ctx = this.bus.ctx, out = this.bus.bus('effects'), t = ctx.currentTime;
+    playTone(ctx, out, { type: 'sine', pitch: [[0, 620], [0.5, 300], [0.9, 240]], peak: 0.08, attack: 0.05, decay: 0.95, filter: { type: 'lowpass', frequency: 1400 }, when: t, pan });
+    playNoiseBurst(ctx, out, this.pink, { peak: 0.1, attack: 0.1, decay: 0.6, filter: { type: 'bandpass', frequency: 1200, Q: 1.5 }, when: t, pan });
+  }
+  /** Every lane porch visited (Full Round): the rank fanfare an octave up with a bell under it. */
+  fullRound() {
+    if (!this.ready) return;
+    const ctx = this.bus.ctx, out = this.bus.bus('ui'), t = ctx.currentTime;
+    [[74, 0], [78, 0.08], [81, 0.16], [86, 0.24], [90, 0.32]].forEach(([m, d]) => playTone(ctx, out, { type: 'triangle', pitch: [[0, hz(m)]], peak: 0.09, attack: 0.004, decay: d === 0.32 ? 0.7 : 0.18, when: t + d }));
+    this.bell(1, 1, 392);
+  }
   tick(high = false) { if (!this.ready) return; playTone(this.bus.ctx, this.bus.bus('ui'), { type: 'square', pitch: [[0, high ? 1500 : 1100]], peak: 0.05, decay: 0.05, filter: { type: 'lowpass', frequency: 3000 } }); }
   ui() { if (!this.ready) return; playTone(this.bus.ctx, this.bus.bus('ui'), { type: 'triangle', pitch: [[0, 660], [0.06, 990]], peak: 0.08, decay: 0.12 }); }
   regrow() { if (!this.ready) return; playTone(this.bus.ctx, this.bus.bus('effects'), { type: 'sine', pitch: [[0, 220], [0.3, 440]], peak: 0.03, attack: 0.05, decay: 0.3 }); }

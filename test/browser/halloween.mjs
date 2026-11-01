@@ -80,6 +80,7 @@ const only = args.only ? String(args.only).split(',') : Object.keys(PROFILES);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
 let failures = 0;
+const RANKS_V2 = '0/60/140/240/360/520'; // hud.js RANKS thresholds (design 2.6, retuned on the pass-2 bots)
 function check(profile, name, ok, detail = '') {
   results.push(`${ok ? 'PASS' : 'FAIL'}  ${profile.padEnd(17)} ${name}${detail ? `  (${detail})` : ''}`);
   if (!ok) failures++;
@@ -767,7 +768,122 @@ async function runProfile(name) {
     await sleep(250); // the catch's hitstop is over
     const cj = await G(page, () => ({ shakes: window.__game.juice.shakes, ts: window.__game.engine.clock.timeScale }));
     check(name, 'juice: catches shake the camera (gentler on phones), game speed back to 1', cj.shakes >= (phone ? 3 : 3) && cj.ts === 1, JSON.stringify(cj));
-    // ---- the Witching Hour (the last 30 s): call-out, x2 badge, every lantern relit, candy x2, rain, a catch costs <= 6
+    // ---- porches (porches.js): a treat on a lit mat (8, the lamp dark for 40 s), a dark mat (nothing), a trick (BOO on
+    // the mat: 14, a resident drops from the chimney and chases, 60 s), the haunted porch (a knock only; a trick: 22 and
+    // two residents, 70 s), the railing jack-o'-lanterns, a relight (the lamp, a trail), the Full Round (+25, once), the
+    // paced call-outs (one per 2.5 s, duplicates dropped), a resident from a wandering ghost
+    await G(page, () => {
+      const g = window.__game, C = g.candy;
+      g.setTimeLeft(120); g.G.popT = 99; g.G.riseSaid = true; g.G.wakeIdx = 99; // mid-round, no pop or ghost news meanwhile
+      window.__spills = []; window.__calls = [];
+      const sp = C.spill.bind(C); C.spill = (x, y, z, n, s, d, ttl) => { if (ttl === g.PORCH.SPILL_TTL) window.__spills.push(n); return sp(x, y, z, n, s, d, ttl); };
+      const co = g.hud.callout.bind(g.hud); g.hud.callout = (t, ...r) => { window.__calls.push(t); return co(t, ...r); };
+      g.G.candy = 10; g.hud.setCandy(10); g.G.streak = 0;
+    });
+    /** The kid onto porch k's mat (camera behind it on the lane side), the ghosts calm and away, no candy near. */
+    const ontoMat = (k, safe = 9) => G(page, ([k, safe]) => {
+      const g = window.__game, S = g.porches.spots[k], yaw = S.yaw, C = g.candy;
+      g.G.safeT = safe; g.G.streak = 0;
+      for (const q of g.ghosts.list) { q.calm = 99; if (q.state === 'chase') q.state = 'wander'; }
+      for (let i = 0; i < C.state.length; i++) if (C.state[i] && Math.hypot(C.p[i * 3] - S.mat.x, C.p[i * 3 + 2] - S.mat.z) < 9) C.state[i] = 0;
+      g.rig.yaw = yaw; g.camState.facing = yaw; g.player.rotation.y = yaw;
+      g.cc.teleport(S.mat.x, S.mat.y + 0.05, S.mat.z); g.cc.velocity.set(0, 0, 0); g.rig.snap();
+      return { st: g.porches.st[k], spills: window.__spills.length };
+    }, [k, safe]);
+    const offMat = (k) => G(page, (k) => { const g = window.__game, S = g.porches.spots[k], x = S.mat.x + Math.sin(S.yaw) * 4, z = S.mat.z + Math.cos(S.yaw) * 4; g.cc.teleport(x, g.world.heightAt(x, z) + 0.05, z); }, k);
+    const pboo = async () => { if (phone) { const bo = await rect(page, '.hw-boo-btn'); await T.tap(bo.cx, bo.cy); } else await page.keyboard.press('KeyE'); };
+    const psnap = () => G(page, () => window.__game.porches.snapshot());
+    // a treat at P3
+    const c0 = (await state(page)).candy;
+    await ontoMat(2);
+    const treated = await waitFor(page, () => window.__game.porches.st[2] === 2, null, 2000);
+    const t1 = await G(page, () => ({ spills: window.__spills.slice(), call: document.querySelector('.hw-call').textContent, cd: window.__game.porches.cd[2], door: window.__game.porches.door[2], plus: document.querySelector('.hw-plus').textContent }));
+    await sleep(1800);
+    const t2 = await psnap(), c1 = (await state(page)).candy;
+    check(name, 'porch: a lit mat is a treat (a knock, the door opens, 8 candies pour out, "TRICK OR TREAT!"), the lamp goes dark for 40 s',
+      treated && t1.spills.join() === '8' && /TRICK OR TREAT/.test(t1.call) && t1.plus === '+8' && t1.cd > 39 && t1.cd <= 40 && t1.door > 0.1 && t2.porches[2].lamp < 0.05 && c1 - c0 >= 6,
+      JSON.stringify({ treated, ...t1, lamp: t2.porches[2].lamp, gained: c1 - c0 }));
+    check(name, 'porch: a visited porch lights the jack-o\'-lantern on its railing', t2.porches[2].visited && t2.porches[2].rail > 0.9 && t2.porches.filter((p) => p.rail > 0.05).length === 1, JSON.stringify(t2.porches.map((p) => p.rail)));
+    // the dark mat: nothing
+    await offMat(2); await sleep(200);
+    const d0 = await ontoMat(2);
+    await sleep(1300);
+    const d1 = await G(page, () => ({ spills: window.__spills.length, st: window.__game.porches.st[2], door: window.__game.porches.door[2] }));
+    check(name, 'porch: a dark mat pays nothing (no knock, no candy)', d0.st === 2 && d1.spills === d0.spills && d1.st === 2, JSON.stringify({ d0, d1 }));
+    // a trick at P4: BOO on the lit mat; a resident drops from the chimney within a second
+    await G(page, () => { const g = window.__game; g.ghosts.reset(); g.G.booT = 5; });
+    await ontoMat(3, 0);
+    await sleep(120);
+    const booAt = Date.now();
+    await pboo();
+    const tricked = await waitFor(page, () => window.__game.porches.st[3] === 2, null, 1500);
+    const tk = await G(page, () => ({ spills: window.__spills.slice(-1)[0], call: document.querySelector('.hw-call').textContent, cd: window.__game.porches.cd[3], tricks: window.__game.porches.tricks }));
+    const resident = await waitFor(page, () => window.__game.ghosts.list.some((q) => q.state === 'chase'), null, 1600);
+    const resMs = Date.now() - booAt;
+    const rg = await G(page, () => { const q = window.__game.ghosts.list.find((o) => o.state === 'chase'), C = window.__game.porches.spots[3].chimney; return q ? { y: +q.y.toFixed(2), fromChimney: Math.hypot(q.x - C[0], q.z - C[2]) < 3, calm: q.calm } : null; });
+    check(name, 'porch: BOO on a lit mat is a trick (14 candies, "TRICK! +14", dark for 60 s)', tricked && tk.spills === 14 && /^TRICK! \+14/.test(tk.call) && tk.cd > 59 && tk.cd <= 60 && tk.tricks === 1, JSON.stringify(tk));
+    check(name, 'porch: the trick\'s resident ghost drops from the chimney and chases within a second', resident && resMs < 1700 && !!rg && rg.fromChimney && rg.calm <= 0, JSON.stringify({ resident, resMs, rg }));
+    // the haunted porch (P6): stepping on is only a knock; a trick pays 22 and wakes two residents
+    await G(page, () => { const g = window.__game; g.ghosts.reset(); g.G.booT = 5; });
+    await ontoMat(5, 0);
+    await sleep(1300);
+    const h0 = await G(page, () => ({ spills: window.__spills.length, st: window.__game.porches.st[5], door: window.__game.porches.door[5], knocking: window.__game.porches.knocking }));
+    await pboo();
+    const hTricked = await waitFor(page, () => window.__game.porches.st[5] === 2, null, 1500);
+    const hk = await G(page, () => ({ spills: window.__spills.slice(-1)[0], n: window.__spills.length, call: document.querySelector('.hw-call').textContent, cd: window.__game.porches.cd[5] }));
+    const two = await waitFor(page, () => window.__game.ghosts.list.filter((q) => q.state === 'chase').length === 2, null, 1600);
+    check(name, 'porch: the haunted porch only knocks (the door stays shut, no candy)', h0.st === 0 && h0.door === 0 && h0.knocking === 5, JSON.stringify(h0));
+    check(name, 'porch: a trick at the haunted porch pays 22 with two residents chasing, dark for 70 s', hTricked && hk.spills === 22 && hk.n === h0.spills + 1 && /^TRICK! \+22/.test(hk.call) && hk.cd > 69 && hk.cd <= 70 && two, JSON.stringify({ ...hk, two }));
+    await G(page, () => { const g = window.__game; g.G.safeT = 9; for (const q of g.ghosts.list) { q.calm = 99; if (q.state === 'chase') q.state = 'wander'; } });
+    // a relight: the lamp comes back up (fading over the last 3 s), a trail of 5 along the lane (the kid far away)
+    const nearP3 = () => G(page, () => { const g = window.__game, P = g.porches, S = P.spots[2], C = g.candy; let n = 0; for (let i = 0; i < C.state.length; i++) if (C.state[i] === 1 && Math.hypot(C.p[i * 3] - S.mat.x, C.p[i * 3 + 2] - S.mat.z) <= 12.5) n++; return { st: P.st[2], lamp: +P.lampLv[2].toFixed(3), near: n }; });
+    await G(page, () => { const g = window.__game; g.cc.teleport(0, g.world.heightAt(0, 6) + 0.05, 6); g.porches.cd[2] = 2.5; });
+    const r0 = await nearP3();
+    await sleep(1000);
+    const rmid = (await nearP3()).lamp;
+    await sleep(2000);
+    const r1 = await nearP3();
+    check(name, 'porch: a porch relights (the lamp fades back up over 3 s) and lays a trail of 5 along the lane', r0.st === 2 && r1.st === 0 && rmid > 0.25 && rmid < 0.8 && r1.lamp > 0.9 && r1.near >= r0.near + 5, JSON.stringify({ r0, rmid, r1 }));
+    // the Full Round: P3, P4 visited; treat P1, P2, P5 -> +25 and "FULL ROUND!", once
+    const f0 = (await state(page)).candy;
+    for (const k of [0, 1, 4]) { await ontoMat(k); await waitFor(page, (k) => window.__game.porches.st[k] === 2, k, 2000); await sleep(400); }
+    await sleep(600);
+    const fr = await G(page, () => ({ full: window.__game.porches.fullPaid, lane: window.__game.porches.laneVisited, calls: window.__calls.filter((c) => c === 'FULL ROUND!').length, candy: window.__game.G.candy, rails: window.__game.porches.snapshot().porches.map((p) => p.rail > 0.9 ? 1 : 0).join('') }));
+    await G(page, () => { window.__game.porches.cd[0] = 0.01; });
+    await sleep(300);
+    await ontoMat(0); await waitFor(page, () => window.__game.porches.st[0] === 2, null, 2000); await sleep(500);
+    const fr2 = await G(page, () => window.__calls.filter((c) => c === 'FULL ROUND!').length);
+    check(name, 'porch: treating all five lane porches pays the Full Round (+25, "FULL ROUND!") once; every railing lit', fr.full && fr.lane === 5 && fr.calls === 1 && fr.candy - f0 >= 30 && fr2 === 1 && fr.rails === '111111',
+      JSON.stringify({ ...fr, gained: fr.candy - f0, again: fr2 }));
+    // a resident from a wandering ghost (none dormant): the nearest one turns to chase where it is
+    const wr = await G(page, () => {
+      const g = window.__game, gh = g.ghosts, p = g.cc.position;
+      while (gh.wake(p.x, p.z)) { /* every ghost up */ }
+      gh.list.forEach((q, i) => { gh._teleport(q, p.x + 6 + i * 4, p.y + 1.6, p.z); q.state = 'wander'; q.calm = 0; q.alpha = 1; q.mesh.mesh.visible = true; });
+      g.G.safeT = 0;
+      const q = gh.summon(p.x, p.y + 6, p.z), near = gh.list[0];
+      const out = { same: q === near, state: q && q.state, moved: q ? Math.abs(q.x - (p.x + 6)) < 0.5 : false };
+      g.G.safeT = 9; for (const o of gh.list) { o.calm = 99; if (o.state === 'chase') o.state = 'wander'; }
+      return out;
+    });
+    check(name, 'porch: with no dormant ghost the nearest wandering one is the resident (no teleport)', wr.same && wr.state === 'chase' && wr.moved, JSON.stringify(wr));
+    // paced call-outs: one per 2.5 s, a duplicate dropped
+    await sleep(2700);
+    const pc = await G(page, () => new Promise((done) => {
+      const h = window.__game.hud, d0 = h.dropped, seen = [];
+      h.say('PACE A'); h.say('PACE B'); h.say('PACE A');
+      const t0 = performance.now();
+      const tick = () => {
+        const t = (performance.now() - t0) / 1000, txt = document.querySelector('.hw-call').textContent;
+        if (!seen.length || seen[seen.length - 1][1] !== txt) seen.push([+t.toFixed(2), txt]);
+        if (t < 3.2) requestAnimationFrame(tick); else done({ seen, dropped: h.dropped - d0 });
+      };
+      requestAnimationFrame(tick);
+    }));
+    const bAt = (pc.seen.find((e) => e[1] === 'PACE B') || [99])[0];
+    check(name, 'call-outs: hints are paced (one per 2.5 s), a duplicate is dropped', pc.seen[0][1] === 'PACE A' && bAt >= 2.4 && bAt < 3.1 && pc.dropped === 1 && pc.seen.filter((e) => e[1] === 'PACE A').length === 1, JSON.stringify(pc));
+    await G(page, () => { const g = window.__game; g.G.candy = 100; g.hud.setCandy(100); });
+    // ---- the Witching Hour (the last 30 s): call-out, x2 badge, every lantern and porch relit, candy x2, rain, a catch costs <= 6
     await G(page, () => {
       const g = window.__game, L = g.lanterns;
       g.G.safeT = 3; for (const q of g.ghosts.list) { q.calm = 99; if (q.state === 'chase') q.state = 'wander'; }
@@ -776,11 +892,13 @@ async function runProfile(name) {
       for (let i = 0; i < C.state.length; i++) if (C.state[i] && Math.hypot(C.p[i * 3] - p.x, C.p[i * 3 + 2] - p.z) < 8) C.state[i] = 0;
       g.G.streak = 0;
       window.__deadBefore = L.n - L.alive.reduce((a, v) => a + v, 0);
+      window.__darkPorches = [...g.porches.st].filter((v) => v === 2).length;
       g.setTimeLeft(30.4);
     });
     await sleep(700);
-    const wh = await G(page, () => { const g = window.__game, L = g.lanterns; return { on: g.G.witching, call: document.querySelector('.hw-call').textContent, badge: +getComputedStyle(document.querySelector('.hw-x2')).opacity, pill: document.querySelector('.hw-candy').classList.contains('wh'), dead: L.n - L.alive.reduce((a, v) => a + v, 0), before: window.__deadBefore, auras: g.ghosts.witch, rain: g.G.rainLeft }; });
+    const wh = await G(page, () => { const g = window.__game, L = g.lanterns; return { on: g.G.witching, call: document.querySelector('.hw-call').textContent, badge: +getComputedStyle(document.querySelector('.hw-x2')).opacity, pill: document.querySelector('.hw-candy').classList.contains('wh'), dead: L.n - L.alive.reduce((a, v) => a + v, 0), before: window.__deadBefore, auras: g.ghosts.witch, rain: g.G.rainLeft, darkPorches: window.__darkPorches, porchesLit: [...g.porches.st].every((v) => v !== 2), lamps: Math.min(...g.porches.lampLv).toFixed(2) }; });
     check(name, 'Witching Hour: call-out, x2 badge on the pill, every lantern relit, orange auras', wh.on && /WITCHING HOUR/.test(wh.call) && wh.pill && wh.badge > 0.9 && wh.before >= 1 && wh.dead === 0 && wh.auras, JSON.stringify(wh));
+    check(name, 'Witching Hour: every dark porch relights at once', wh.darkPorches >= 1 && wh.porchesLit && +wh.lamps > 0.9, JSON.stringify({ dark: wh.darkPorches, lit: wh.porchesLit, lamps: wh.lamps }));
     const x2 = await pick((g) => { g.G.candy = 50; g.G.streak = 0; });
     check(name, 'Witching Hour: a candy counts 2', x2.candy === 52, `candy 50 -> ${x2.candy}`);
     await sleep(1500);
@@ -852,6 +970,9 @@ async function runProfile(name) {
     const lad = await G(page, () => ({ seg: document.querySelectorAll('.hw-screen:not(.off) .hw-ladder i').length, h: document.querySelector('.hw-ladder').getBoundingClientRect().height, next: document.querySelector('.hw-next').textContent, rank: document.querySelector('.hw-rank').textContent, candy: window.__game.G.candy, top: window.__game.RANKS[window.__game.RANKS.length - 1] }));
     const nextOk = lad.candy >= lad.top[0] ? lad.next === '' : /^\d+ MORE FOR [A-Z' -]+$/.test(lad.next);
     check(name, 'results: the rank ladder and what the next rank takes', lad.seg === 6 && lad.h >= 6 && nextOk && lad.rank.length > 0, JSON.stringify(lad));
+    const rs = await G(page, () => ({ stats: [...document.querySelectorAll('.hw-screen:not(.off) .hw-stats div')].map((e) => [e.querySelector('b').textContent, e.querySelector('span').textContent]), lane: window.__game.porches.laneVisited, tricks: window.__game.porches.tricks, R: window.__game.RANKS.map((r) => r[0]).join('/') }));
+    const stat = (l) => (rs.stats.find((e) => e[1] === l) || [null])[0];
+    check(name, 'results: porches n/5, tricks, BOOs, catches and best streak; ranks v2', rs.stats.length === 5 && stat('PORCHES') === `${rs.lane}/5` && stat('TRICKS') === String(rs.tricks) && rs.lane === 5 && rs.tricks === 2 && stat('BOOS') !== null && stat('CAUGHT') !== null && stat('BEST STREAK') !== null && rs.R === RANKS_V2, JSON.stringify(rs));
     const shb = await rect(page, '.hw-screen:not(.off) [data-a=share]');
     if (phone) await T.tap(shb.cx, shb.cy); else await page.mouse.click(shb.cx, shb.cy);
     await sleep(300);
@@ -920,6 +1041,9 @@ async function runProfile(name) {
         for (const q of g.ghosts.list) { g.ghosts._teleport(q, p.x + (Math.random() - 0.5) * 8, p.y + 1.6, p.z + (Math.random() - 0.5) * 8); q.state = 'chase'; q.alpha = 1; }
         for (let i = 0, n = 0; i < g.lanterns.n && n < 8; i++) if (g.lanterns.alive[i]) { g.lanterns.smash(i, 1, 0, 1.5); n++; }
         g.candy.spill(p.x, p.y + 1, p.z, 80, 4);
+        // every porch tricked at once: six showers (92 candies), seven residents, six doors flung open
+        const P = g.porches; P.st.fill(0); P.cd.fill(0);
+        for (let k = 0; k < P.n; k++) { const S = P.spots[k]; P.boo(S.mat.x, S.mat.y, S.mat.z); }
       });
       const hot = await storm;
       await c2.send('Emulation.setCPUThrottlingRate', { rate: 1 });

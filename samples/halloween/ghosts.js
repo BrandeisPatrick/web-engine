@@ -236,6 +236,22 @@ export class Ghosts {
     return g;
   }
 
+  /**
+   * A resident (porches.js, a trick): the next dormant ghost drops from (x, y, z) (a chimney), else the nearest wandering
+   * one turns where it is; it chases at once (calm 0). It takes a chase slot: past maxChasers, the farthest older chaser
+   * goes back to wandering. Returns the ghost or null.
+   */
+  summon(x, y, z) {
+    let g = this.list.find((q) => q.state === 'dormant'), d = Infinity, far = null, fd = -1, n = 0;
+    if (g) { this._teleport(g, x, y, z); g.alpha = 1; g.mesh.mesh.visible = true; }
+    else for (const q of this.list) { const e = Math.hypot(q.x - x, q.z - z); if (q.state === 'wander' && e < d) { d = e; g = q; } }
+    if (!g) return null;
+    g.state = 'chase'; g.t = 0; g.calm = 0; g.tame = 0; g.scared = 0;
+    for (const q of this.list) if (q.state === 'chase') { n++; const e = Math.hypot(q.x - x, q.z - z); if (q !== g && q.t > 1 && e > fd) { fd = e; far = q; } }
+    if (n > this.maxChasers && far) { far.state = 'wander'; far.t = 0; far.retarget = 0; }
+    return g;
+  }
+
   /** BOO at (x, z): every awake ghost within r flees. Returns the ghosts scared (in this.scaredList). */
   boo(x, z, r) {
     const out = this.scaredList || (this.scaredList = []);
