@@ -84,11 +84,12 @@ const MAGNET_TOUCH = 3.2, MAGNET_DESK = 2.4; // candy pull radius (m)
 // candy where the player looks: while the view is "dry" (fewer than DRY_NEED candies on screen within DRY_R m),
 // AHEAD_SHARE of the respawns land in a ring ahead of the camera (inside the view: at most ±50°, less in portrait, with
 // a clear straight run to it); after DRY_T s of a dry view, a far resting candy (off screen, > FAR m away) moves into
-// the nearer DRY_RING every respawn tick (a narrow portrait view used to show no candy at all for two thirds of a
-// round). A view with candy in it keeps the uniform respawns: good players get no extra help. Big pops rise POP_R m
-// away (inside the view while it is dry).
+// the nearer DRY_RING every respawn tick, whatever the resting count (a narrow portrait view used to show no candy at
+// all for two thirds of a round; the move used to wait for the full CANDY_TARGET, which play keeps a few under, so it
+// never came). A view with candy in it keeps the uniform respawns: good players get no extra help. Big pops rise POP_R
+// m away (inside the view while it is dry).
 const AHEAD_SHARE = 0.6, AHEAD_R = [9, 22], AHEAD_HALF = 50 * Math.PI / 180, POP_R = [14, 26];
-const DRY_R = 15, DRY_NEED = 2, DRY_T = 3, FAR = 30, DRY_RING = [8, 15];
+const DRY_R = 15, DRY_NEED = 2, DRY_T = 2.4, FAR = 30, DRY_RING = [8, 15];
 // the first desktop round shows how the mouse looks for LOOK_HINT_T s or until LOOK_HINT_RAD of look input
 const LOOK_HINT_T = 4, LOOK_HINT_RAD = 0.3;
 // haptic pulses (ms); a candy streak buzzes at most every CANDY_BUZZ_GAP s
@@ -276,7 +277,7 @@ async function boot() {
     pickups: 0, hintBoo: false, hintT: 0, newBest: false,
     catch1: -99, catch2: -99, mercyT: 0, lookHintT: 0, lookHintRad: 0, dryT: 0,
     witching: false, rainLeft: 0, rainT: 0, streakMax: 0, streakBonus: 0, bonusFrame: 0, rankMax: 0, passedBest: false,
-    paceK: 0, plusHold: 0, riseSaid: false, grabs: 0, thiefSaid: false,
+    paceK: 0, plusHold: 0, riseSaid: false, grabs: 0, thiefSaid: false, relocated: 0,
     handsAt: HAND.START * ROUND / 180, thiefAt: THIEF.APPEAR * ROUND / 180, // round s when the hands wake / the thief comes out
   };
   let pace = loadPace(); // the best run's candy at the PACE_N moments (null: no best run recorded yet)
@@ -398,7 +399,7 @@ async function boot() {
   function startRound() {
     audioHeld = false; audio.start(); audio.ui();
     Object.assign(G, { state: 'play', time: 0, left: ROUND, candy: 0, smashed: 0, booed: 0, caught: 0, pops: 0, booT: BOO_CD, safeT: 0, streak: 0, lastPick: -9, wakeIdx: 0, spawnT: 0, popT: 12, endT: 0, lastCount: 99, pickups: 0, catch1: -99, catch2: -99, mercyT: 0, lookHintT: 0, dryT: 0,
-      witching: false, rainLeft: 0, rainT: 0, streakMax: 0, streakBonus: 0, bonusFrame: 0, rankMax: 0, passedBest: false, paceK: 0, plusHold: 0, riseSaid: false, grabs: 0, thiefSaid: false,
+      witching: false, rainLeft: 0, rainT: 0, streakMax: 0, streakBonus: 0, bonusFrame: 0, rankMax: 0, passedBest: false, paceK: 0, plusHold: 0, riseSaid: false, grabs: 0, thiefSaid: false, relocated: 0,
       handsAt: HAND.START * ROUND / 180, thiefAt: THIEF.APPEAR * ROUND / 180 });
     paceRec.fill(0);
     if (engine.clock.paused) engine.clock.resume();
@@ -1005,8 +1006,10 @@ async function boot() {
           G.dryT = dry ? G.dryT + 1.2 : 0;
           // a porch's trail takes the place of that many ordinary respawns (porches.takeDebt); a dry view still gets its
           // candy in view
-          const i = candy.restingCount < CANDY_TARGET ? (!dry && porches.takeDebt() ? -1 : respawnCandy(p, dry)) : G.dryT >= DRY_T ? relocateFar(p) : -1;
+          const i = candy.restingCount < CANDY_TARGET ? (!dry && porches.takeDebt() ? -1 : respawnCandy(p, dry)) : -1;
           if (i >= 0) fx.motes(candy.p[i * 3], candy.p[i * 3 + 1], candy.p[i * 3 + 2], 6, 1.2, 0.8, 1.6);
+          const j = G.dryT >= DRY_T ? relocateFar(p) : -1; // a dry spell: a far one into view too, below the target as well
+          if (j >= 0) { G.relocated++; fx.motes(candy.p[j * 3], candy.p[j * 3 + 1], candy.p[j * 3 + 2], 6, 1.2, 0.8, 1.6); }
         }
         G.popT -= dt;
         if (G.popT <= 0) {
