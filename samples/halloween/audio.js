@@ -303,6 +303,27 @@ export class GameAudio {
     playNoiseBurst(ctx, this.bus.bus('effects'), this.pink, { peak: 0.2, attack: 0.002, decay: 0.12, filter: { type: 'bandpass', frequency: 900, Q: 1 }, when: t });
     [74, 79, 83, 86, 91].forEach((m, i) => playTone(ctx, out, { type: 'triangle', pitch: [[0, hz(m)]], peak: 0.085, attack: 0.003, decay: i === 4 ? 0.5 : 0.16, when: t + 0.04 + i * 0.06 }));
   }
+  // ---- potions (potions.js), secrets (secrets.js), stomp chains
+  /** A potion taken: a bubbly gulp, then a sparkle in its key (0 ZOOM up fast, 1 SNEAK low and hushed, 2 SWEET bright). */
+  potion(k = 0) {
+    if (!this.ready) return;
+    const ctx = this.bus.ctx, out = this.bus.bus('effects'), t = ctx.currentTime;
+    for (let i = 0; i < 4; i++) playTone(ctx, out, { type: 'sine', pitch: [[0, 180 + i * 70], [0.07, 420 + i * 90]], peak: 0.07, attack: 0.004, decay: 0.08, when: t + i * 0.06 });
+    const keys = [[74, 78, 81, 86, 90], [62, 65, 69], [81, 85, 88, 93]][k] || [74];
+    keys.forEach((m, i) => playTone(ctx, this.bus.bus('ui'), { type: k === 1 ? 'sine' : 'triangle', pitch: [[0, hz(m)]], peak: k === 1 ? 0.06 : 0.07, attack: 0.004, decay: 0.22, when: t + 0.26 + i * (k === 0 ? 0.04 : 0.07) }));
+  }
+  /** A secret found: 0 the well's echo ("boo... oo... oo"), 1 the crypt door grinding open, 2 the hollow oak's chime. */
+  secret(k = 0) {
+    if (!this.ready) return;
+    const ctx = this.bus.ctx, out = this.bus.bus('effects'), t = ctx.currentTime;
+    if (k === 0) {
+      for (let i = 0; i < 3; i++) playTone(ctx, out, { type: 'sawtooth', pitch: [[0, 150 - i * 6], [0.5, 110 - i * 6]], peak: 0.2 * Math.pow(0.45, i), attack: 0.03, decay: 0.55, filter: { type: 'bandpass', frequency: 380 - i * 40, Q: 3 }, when: t + 0.35 + i * 0.42 });
+    } else if (k === 1) {
+      playNoiseBurst(ctx, out, this.pink, { peak: 0.3, attack: 0.08, decay: 1.3, filter: { type: 'lowpass', frequency: 260 }, rate: 0.4, when: t });
+      playTone(ctx, out, { type: 'sine', pitch: [[0, 55], [1.3, 40]], peak: 0.22, attack: 0.1, decay: 1.3, when: t });
+    }
+    [69, 74, 77, 81, 86].forEach((m, i) => playTone(ctx, this.bus.bus('ui'), { type: 'triangle', pitch: [[0, hz(m)]], peak: 0.07, attack: 0.004, decay: i === 4 ? 0.6 : 0.18, when: t + (k === 0 ? 1.4 : k === 1 ? 0.9 : 0.05) + i * 0.07 }));
+  }
   tick(high = false) { if (!this.ready) return; playTone(this.bus.ctx, this.bus.bus('ui'), { type: 'square', pitch: [[0, high ? 1500 : 1100]], peak: 0.05, decay: 0.05, filter: { type: 'lowpass', frequency: 3000 } }); }
   ui() { if (!this.ready) return; playTone(this.bus.ctx, this.bus.bus('ui'), { type: 'triangle', pitch: [[0, 660], [0.06, 990]], peak: 0.08, decay: 0.12 }); }
   regrow() { if (!this.ready) return; playTone(this.bus.ctx, this.bus.bus('effects'), { type: 'sine', pitch: [[0, 220], [0.3, 440]], peak: 0.03, attack: 0.05, decay: 0.3 }); }

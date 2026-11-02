@@ -353,8 +353,9 @@ export class Thief {
       }
       default: break;
     }
-    // a touch while it is stunned tags it (a cornered one's touch is above: it snatches; a bolting one only flees)
-    if (sees && this.state === S_STUN && dk < THIEF.TAG_R) {
+    // a touch while it is stunned tags it (a cornered one's touch is above: it snatches; a bolting one only flees); a
+    // sneaking kid tags it too (the stunned thief sees nothing anyway)
+    if (playing && this.state === S_STUN && dk < THIEF.TAG_R) {
       E.tag = this.sack + THIEF.TAG_BONUS; this.sack = 0; this.tags++;
       this._set(S_HOME); this.homeT = THIEF.HOME_T; this.vx = this.vz = 0;
     }

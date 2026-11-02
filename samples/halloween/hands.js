@@ -6,7 +6,7 @@
 //           round (the game sets `awake`).
 //   grab    a kid whose feet are under HEIGHT m inside REACH m of standing hands is held HOLD s (the game freezes the
 //           controller: cc.hold; the kid wiggles), then released: it costs LOSS candy, spilled around, and the hands
-//           go down. No grab while the kid is safe (after a catch), sneaking (a potion, pass 4) or for GRACE s after a
+//           go down. No grab while the kid is safe (after a catch), sneaking (the SNEAK potion, potions.js) or for GRACE s after a
 //           release. A grab ALWAYS ends: the hold has a timer, release() (a catch, a BOO, the round's end, a reset)
 //           ends it at once, and a fixed step without play releases it.
 //   counter JUMP over the hands (feet above HEIGHT), or BOO within BOO_R m: telling or standing hands retract.
@@ -86,7 +86,7 @@ function handGeometry() {
 export class Hands {
   /**
    * @param {object} o  scene, heightAt, fx (Effects: dirt puffs; optional), spots ([x, z][]: HAND_SPOTS), rnd (the
-   *   hidden times' random stream: Math.random until the daily seed, pass 4)
+   *   hidden times' random stream: rng.js rng.hands, the night's seed; default Math.random)
    */
   constructor({ scene, heightAt, fx = null, spots = HAND_SPOTS, rnd = Math.random }) {
     this.spots = spots; this.fx = fx; this.rnd = rnd;

@@ -72,6 +72,13 @@
 // the kid can reach but not leave), the candy shares per zone, and a beacon within 30 m of anywhere on the lane. --perf
 // also holds the budgets (design pass 3, with the hands and the thief in the storm): the 4x storm's p95 <= 10 ms CPU
 // and at most 170 draw calls a frame (map v2's were 9.5 ms and 166).
+// Depth and replay (pass 4; the rules in detail: test/halloween-depth.mjs): the brew's lesson, a take (its call-out, the
+// run at 8.5 m/s, the pail's colour), SNEAK (a ghost beside the kid never chases), the well's echo and the crypt door
+// (BOO: each once a round), the fixed pops, the results' best chain and badges (the round's Full Round new, kept in
+// localStorage) and tonight's best, the share with the night's seed; desktop: two loads of one ?seed= lay out the same
+// first 60 candies, porch relight jitter and hand cycles, another seed does not, and the title names the night. The
+// --perf storm adds SWEET TOOTH (its aura and 7 m magnet) and the crypt door opening; the porch cooldowns carry the
+// night's +-2 s.
 // Screenshots: <out>/<profile>-{title,play,end,...}.png. The few committed in samples/halloween/screenshots/ are
 // picked from these by hand (downscaled JPEGs). Uses the system Google Chrome like the other browser scripts.
 import fs from 'node:fs';
@@ -104,7 +111,7 @@ const only = args.only ? String(args.only).split(',') : Object.keys(PROFILES);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
 let failures = 0;
-const RANKS_V2 = '0/60/140/230/360/520'; // hud.js RANKS thresholds (design 2.6, retuned on the pass-2 bots)
+const RANKS_V2 = '0/60/140/240/360/560'; // hud.js RANKS thresholds (design 2.6, the final retune of pass 4 on the bots)
 function check(profile, name, ok, detail = '') {
   results.push(`${ok ? 'PASS' : 'FAIL'}  ${profile.padEnd(17)} ${name}${detail ? `  (${detail})` : ''}`);
   if (!ok) failures++;
@@ -965,7 +972,7 @@ async function runProfile(name) {
       const g = window.__game, gh = g.ghosts, p = g.cc.position;
       while (gh.wake(p.x, p.z)) { /* every ghost up */ }
       gh.list.forEach((q, k) => { const a = (k / gh.list.length) * Math.PI * 2; gh._teleport(q, p.x + Math.cos(a) * 7, p.y + 1.6, p.z + Math.sin(a) * 7); q.state = 'wander'; q.t = 0; q.calm = 0; q.alpha = 1; q.retarget = 9; q.mesh.mesh.visible = true; });
-      g.G.safeT = 0;
+      g.G.safeT = 0; g.G.mercyT = 0; // (no mercy left over from the catch checks above: it allows one chaser)
       let most = 0; const t0 = performance.now();
       const tick = () => {
         most = Math.max(most, gh.list.filter((q) => q.state === 'chase').length);
@@ -1058,8 +1065,8 @@ async function runProfile(name) {
     const t1 = await G(page, () => ({ spills: window.__spills.slice(), call: document.querySelector('.hw-call').textContent, cd: window.__game.porches.cd[2], door: window.__game.porches.door[2], plus: document.querySelector('.hw-plus').textContent }));
     await sleep(1800);
     const t2 = await psnap(), c1 = (await state(page)).candy;
-    check(name, 'porch: a lit mat is a treat (a knock, the door opens, 8 candies pour out, "TRICK OR TREAT!"), the lamp goes dark for 40 s',
-      treated && t1.spills.join() === '8' && /TRICK OR TREAT/.test(t1.call) && t1.plus === '+8' && t1.cd > 39 && t1.cd <= 40 && t1.door > 0.1 && t2.porches[2].lamp < 0.05 && c1 - c0 >= 6,
+    check(name, 'porch: a lit mat is a treat (a knock, the door opens, 8 candies pour out, "TRICK OR TREAT!"), the lamp goes dark for 40 s (+- the night\'s 2 s)',
+      treated && t1.spills.join() === '8' && /TRICK OR TREAT/.test(t1.call) && t1.plus === '+8' && t1.cd > 37.5 && t1.cd <= 42 && t1.door > 0.1 && t2.porches[2].lamp < 0.05 && c1 - c0 >= 6,
       JSON.stringify({ treated, ...t1, lamp: t2.porches[2].lamp, gained: c1 - c0 }));
     check(name, 'porch: a visited porch lights the jack-o\'-lantern on its railing', t2.porches[2].visited && t2.porches[2].rail > 0.9 && t2.porches.filter((p) => p.rail > 0.05).length === 1, JSON.stringify(t2.porches.map((p) => p.rail)));
     // the map's porches (world.js PORCHES: lamp / railing light groups): no stand-in fronts, the levels in world.glowLevels
@@ -1083,7 +1090,7 @@ async function runProfile(name) {
     const resident = await waitFor(page, () => window.__game.ghosts.list.some((q) => q.state === 'chase'), null, 1600);
     const resMs = Date.now() - booAt;
     const rg = await G(page, () => { const q = window.__game.ghosts.list.find((o) => o.state === 'chase'), C = window.__game.porches.spots[3].chimney; return q ? { y: +q.y.toFixed(2), fromChimney: Math.hypot(q.x - C[0], q.z - C[2]) < 3, calm: q.calm } : null; });
-    check(name, 'porch: BOO on a lit mat is a trick (14 candies, "TRICK! +14", dark for 60 s)', tricked && tk.spills === 14 && /^TRICK! \+14/.test(tk.call) && tk.cd > 59 && tk.cd <= 60 && tk.tricks === 1, JSON.stringify(tk));
+    check(name, 'porch: BOO on a lit mat is a trick (14 candies, "TRICK! +14", dark for 60 s +- 2)', tricked && tk.spills === 14 && /^TRICK! \+14/.test(tk.call) && tk.cd > 57.5 && tk.cd <= 62 && tk.tricks === 1, JSON.stringify(tk));
     check(name, 'porch: the trick\'s resident ghost drops from the chimney and chases within a second', resident && resMs < 1700 && !!rg && rg.fromChimney && rg.calm <= 0, JSON.stringify({ resident, resMs, rg }));
     // the haunted porch (P6): stepping on is only a knock; a trick pays 22 and wakes two residents
     await G(page, () => { const g = window.__game; g.ghosts.reset(); g.G.booT = 5; });
@@ -1095,7 +1102,7 @@ async function runProfile(name) {
     const hk = await G(page, () => ({ spills: window.__spills.slice(-1)[0], n: window.__spills.length, call: document.querySelector('.hw-call').textContent, cd: window.__game.porches.cd[5] }));
     const two = await waitFor(page, () => window.__game.ghosts.list.filter((q) => q.state === 'chase').length === 2, null, 1600);
     check(name, 'porch: the haunted porch only knocks (the door stays shut, no candy)', h0.st === 0 && h0.door === 0 && h0.knocking === 5, JSON.stringify(h0));
-    check(name, 'porch: a trick at the haunted porch pays 22 with two residents chasing, dark for 70 s', hTricked && hk.spills === 22 && hk.n === h0.spills + 1 && /^TRICK! \+22/.test(hk.call) && hk.cd > 69 && hk.cd <= 70 && two, JSON.stringify({ ...hk, two }));
+    check(name, 'porch: a trick at the haunted porch pays 22 with two residents chasing, dark for 70 s +- 2', hTricked && hk.spills === 22 && hk.n === h0.spills + 1 && /^TRICK! \+22/.test(hk.call) && hk.cd > 67.5 && hk.cd <= 72 && two, JSON.stringify({ ...hk, two }));
     await G(page, () => { const g = window.__game; g.G.safeT = 9; for (const q of g.ghosts.list) { q.calm = 99; if (q.state === 'chase') q.state = 'wander'; } });
     // a relight: the lamp comes back up (fading over the last 3 s), a trail of 5 along the lane (the kid far away)
     const nearP3 = () => G(page, () => { const g = window.__game, P = g.porches, S = P.spots[2], C = g.candy; let n = 0; for (let i = 0; i < C.state.length; i++) if (C.state[i] === 1 && Math.hypot(C.p[i * 3] - S.mat.x, C.p[i * 3 + 2] - S.mat.z) <= 12.5) n++; return { st: P.st[2], lamp: +P.lampLv[2].toFixed(3), near: n }; });
@@ -1103,7 +1110,8 @@ async function runProfile(name) {
     const r0 = await nearP3();
     await sleep(1000);
     const rmid = (await nearP3()).lamp;
-    await sleep(2000);
+    await waitFor(page, () => window.__game.porches.st[2] === 0, null, 4000); // (the fixed steps lag real time on a slow frame)
+    await sleep(300);
     const r1 = await nearP3();
     check(name, 'porch: a porch relights (the lamp fades back up over 3 s) and lays a trail of 5 along the lane', r0.st === 2 && r1.st === 0 && rmid > 0.25 && rmid < 0.8 && r1.lamp > 0.9 && r1.near >= r0.near + 5, JSON.stringify({ r0, rmid, r1 }));
     // the Full Round: P3, P4 visited; treat P1, P2, P5 -> +25 and "FULL ROUND!", once
@@ -1144,6 +1152,52 @@ async function runProfile(name) {
     }));
     const bAt = (pc.seen.find((e) => e[1] === 'PACE B') || [99])[0];
     check(name, 'call-outs: hints are paced (one per 2.5 s), a duplicate is dropped', pc.seen[0][1] === 'PACE A' && bAt >= 2.4 && bAt < 3.1 && pc.dropped === 1 && pc.seen.filter((e) => e[1] === 'PACE A').length === 1, JSON.stringify(pc));
+    // ---- depth and replay (pass 4: potions.js, secrets.js): the brew's lesson (in view within 8 m for 2 s), a take
+    // (the colour showing names it; the pail light and the kid's aura in its colour; ZOOM's 8.5 m/s), SNEAK (a ghost
+    // beside the kid never chases), the well's echo (BOO: 4 candies), the crypt door (BOO: it sinks open, a ghost rises
+    // at it), the fixed pops on the knoll and the Bale Yard
+    // (the map checks walked the kid through the hollow oak and up to both fixed pops: every secret hidden again)
+    await G(page, () => { const g = window.__game; g.ghosts.reset(); g.G.wakeIdx = 99; g.G.popT = 99; g.G.safeT = 9; g.potions.reset(); g.secrets.reset(); g.hud.clearCalls(); });
+    const stand = (x, z, yaw = 0) => G(page, ([x, z, yaw]) => { const g = window.__game; g.cc.teleport(x, g.world.heightAt(x, z) + 0.05, z); g.cc.velocity.set(0, 0, 0); g.rig.yaw = yaw; g.camState.facing = yaw; g.player.rotation.y = yaw; g.rig.snap(); }, [x, z, yaw]);
+    const CDN = await G(page, () => window.__game.world.cauldron);
+    await stand(CDN.x, CDN.z + 6.5);
+    const brewLesson = await waitFor(page, () => /WALK INTO/.test(document.querySelector('.hw-call').textContent), null, 3600);
+    await G(page, () => { const P = window.__game.potions; P.cd = 0; P.phase = 0.6; window.__game.hud.clearCalls(); }); // green
+    await stand(CDN.x, CDN.z + 1.3);
+    const took = await waitFor(page, () => window.__game.potions.active === 0, null, 1000);
+    await sleep(200);
+    const zp = await G(page, () => { const g = window.__game, c = g.pailLight.color; return { call: document.querySelector('.hw-call').textContent, walk: g.cc.walk, pail: [c.r, c.g, c.b].map((v) => +v.toFixed(2)), ...g.potions.snapshot() }; });
+    if (name === 'small-portrait' || name === 'se-landscape' || name === 'desktop') await page.screenshot({ path: path.join(OUT, `${name}-potion.png`), scale: 'css' });
+    check(name, 'potions: the brew\'s lesson ("WALK INTO THE BREW"); walking into the ring takes the colour showing (green: "ZOOM!", the run 8.5 m/s, the pail green, the brew dark)',
+      brewLesson && took && /^ZOOM!/.test(zp.call) && zp.walk === 8.5 && zp.pail[1] > zp.pail[0] && zp.pail[1] > zp.pail[2] && !zp.lit, JSON.stringify(zp));
+    // SNEAK: a ghost 1.5 m off, unseen, never chases (the next take replaces ZOOM)
+    await G(page, () => { const g = window.__game, p = g.cc.position, q = g.ghosts.wake(p.x, p.z); g.potions.take(1); g.G.safeT = 0; g.ghosts._teleport(q, p.x + 1.5, p.y + 1.6, p.z); q.state = 'wander'; q.calm = 0; q.alpha = 1; q.t = 0; q.mesh.mesh.visible = true; window.__sq = q; });
+    const sneakChase = await waitFor(page, () => window.__sq.state === 'chase', null, 1200);
+    const snk = await G(page, () => ({ walk: window.__game.cc.walk, caught: window.__game.G.caught, sneak: window.__game.potions.sneak }));
+    await G(page, () => { const g = window.__game; g.potions.reset(); g.G.safeT = 9; window.__sq.state = 'wander'; window.__sq.calm = 99; });
+    check(name, 'potions: SNEAK replaces ZOOM (the run back to 6); a ghost 1.5 m off never chases the unseen kid', !sneakChase && snk.walk === 6 && snk.sneak, JSON.stringify({ sneakChase, ...snk }));
+    // the well: BOO beside it (its echo, 4 candies), once
+    await G(page, () => { const g = window.__game; g.ghosts.reset(); g.G.booT = 5; g.hud.clearCalls(); });
+    const WL = await G(page, () => window.__game.world.secrets.well);
+    await stand(WL.x, WL.z + 2.3);
+    await pboo(); await sleep(250);
+    const wl = await G(page, () => ({ call: document.querySelector('.hw-call').textContent, found: window.__game.secrets.found }));
+    await G(page, () => { window.__game.G.booT = 5; }); await pboo(); await sleep(150);
+    const wl2 = await G(page, () => window.__game.secrets.finds);
+    check(name, 'secrets: BOO by the well echoes ("BOO… OO… OO…", SECRET +4), once a round', /^BOO… OO… OO…SECRET \+4/.test(wl.call) && wl.found === 1 && wl2 === 1, JSON.stringify({ ...wl, finds: wl2 }));
+    // the crypt: BOO at its door: it sinks open, a ghost rises at it
+    const DR = await G(page, () => window.__game.world.secrets.crypt.door);
+    await stand(DR[0], DR[2] + 1.6);
+    await G(page, () => { const g = window.__game; g.ghosts.reset(); g.G.booT = 5; g.G.safeT = 9; g.hud.clearCalls(); });
+    await pboo(); await sleep(400);
+    const cr0 = await G(page, () => document.querySelector('.hw-call').textContent);
+    if (name === 'small-portrait' || name === 'se-landscape' || name === 'desktop') await page.screenshot({ path: path.join(OUT, `${name}-crypt.png`), scale: 'css' });
+    await sleep(1300);
+    const cr = await G(page, () => { const g = window.__game, D = g.world.secrets.crypt.door, q = g.ghosts.list.find((o) => o.state !== 'dormant'); return { door: g.secrets.doorT, visible: g.secrets.door.visible, ghost: q ? +Math.hypot(q.x - D[0], q.z - D[2]).toFixed(1) : null, found: g.secrets.found }; });
+    check(name, 'secrets: BOO at the crypt door ("CRYPT OPENS!", SECRET +17): it sinks open, a ghost rises at it', /^CRYPT OPENS!SECRET \+17/.test(cr0) && cr.door === 1 && !cr.visible && cr.ghost !== null && cr.ghost < 4 && cr.found === 3, JSON.stringify({ call: cr0, ...cr }));
+    const fp = await G(page, () => { const g = window.__game, C = g.candy, S = g.secrets; return Array.from(S.popSlot, (i, k) => (i >= 0 && C.state[i] === 1 && C.kind[i] === 2 && C.fixed[i] === k + 1 ? +Math.hypot(C.p[i * 3] - g.world.popSpots[k][0], C.p[i * 3 + 2] - g.world.popSpots[k][1]).toFixed(2) : -1)); });
+    check(name, 'secrets: a fixed big pop rests on the knoll\'s plateau and on the Bale Yard\'s platform', fp.length === 2 && fp.every((d) => d >= 0 && d < 0.05), JSON.stringify(fp));
+    await G(page, () => { const g = window.__game; g.ghosts.reset(); g.G.safeT = 3; g.hud.clearCalls(); });
     // ---- grave hands and the candy thief (hands.js, thief.js). The hands: their lesson, a telegraph then a grab (held
     // 1.0 s, frozen, then let go with 3 spilled), a jump over them, BOO sending them down, a catch freeing a grabbed kid.
     // The thief: out at 1:00 ("A CANDY THIEF!", an edge marker), eating a planted cluster at 2 a second, never within
@@ -1164,6 +1218,10 @@ async function runProfile(name) {
       g.G.safeT = 0; H.grace = 0; g.G.booT = 5;
       for (const q of g.ghosts.list) { q.calm = 99; if (q.state === 'chase') q.state = 'wander'; }
       g.cc.teleport(x, g.world.heightAt(x, z) + 0.05, z); g.cc.velocity.set(0, 0, 0);
+      // no resting candy in the magnet's reach (a dry view's respawns land 6 m ahead since pass 4: one picked up mid-grab
+      // read as a wrong spill)
+      const C = g.candy; for (let i = 0; i < C.state.length; i++) if (C.state[i] === 1 && !C.fixed[i] && Math.hypot(C.p[i * 3] - x, C.p[i * 3 + 2] - z) < 9) C.state[i] = 0;
+      g.G.spawnT = 6; // (and none respawning during the check)
       const yaw = Math.abs(dx) + Math.abs(dz) > 1 ? Math.atan2(dx, dz) : 0;
       g.rig.yaw = yaw; g.camState.facing = yaw; g.player.rotation.y = yaw; g.rig.snap();
     }, [HK, dx, dz]);
@@ -1188,7 +1246,9 @@ async function runProfile(name) {
       };
       requestAnimationFrame(tick);
     }), HK);
-    check(name, 'hands: a telegraph of 0.8 s, then they rise and grab a grounded kid in reach ("GRABBED!")', hg.up > 0.65 && hg.up < 0.98 && hg.grab >= hg.up && hg.grab - hg.up < 0.1 && hg.calls.includes('GRABBED!'), JSON.stringify(hg));
+    // (read in the HUD's game time, which runs ahead of the fixed steps when a frame takes over 4 of them: a 31 fps
+    // desktop read 1.0 s)
+    check(name, 'hands: a telegraph of 0.8 s, then they rise and grab a grounded kid in reach ("GRABBED!")', hg.up > 0.65 && hg.up < 1.1 && hg.grab >= hg.up && hg.grab - hg.up < 0.1 && hg.calls.includes('GRABBED!'), JSON.stringify(hg));
     check(name, 'hands: the grab holds the kid 1.0 s (frozen: a shove does not move it), then lets go: −3 spilled round it, the hands sink',
       hg.hold && hg.moved < 0.05 && hg.rel - hg.grab > 0.85 && hg.rel - hg.grab < 1.25 && hg.candy === 37 && hg.spills.some((q) => q[0] === 3 && q[1] === 10) && hg.st === 3 && !hg.holdAfter, JSON.stringify(hg));
     // a jump over standing hands: launched (the kid's own jump: 4.5 m/s up from 0.6 m, 6.5 m/s on) from 2.6 m before them
@@ -1380,15 +1440,18 @@ async function runProfile(name) {
     const lad = await G(page, () => ({ seg: document.querySelectorAll('.hw-screen:not(.off) .hw-ladder i').length, h: document.querySelector('.hw-ladder').getBoundingClientRect().height, next: document.querySelector('.hw-next').textContent, rank: document.querySelector('.hw-rank').textContent, candy: window.__game.G.candy, top: window.__game.RANKS[window.__game.RANKS.length - 1] }));
     const nextOk = lad.candy >= lad.top[0] ? lad.next === '' : /^\d+ MORE FOR [A-Z' -]+$/.test(lad.next);
     check(name, 'results: the rank ladder and what the next rank takes', lad.seg === 6 && lad.h >= 6 && nextOk && lad.rank.length > 0, JSON.stringify(lad));
-    const rs = await G(page, () => ({ stats: [...document.querySelectorAll('.hw-screen:not(.off) .hw-stats div')].map((e) => [e.querySelector('b').textContent, e.querySelector('span').textContent]), lane: window.__game.porches.laneVisited, tricks: window.__game.porches.tricks, tags: window.__game.thief.tags, R: window.__game.RANKS.map((r) => r[0]).join('/') }));
+    const rs = await G(page, () => ({ stats: [...document.querySelectorAll('.hw-screen:not(.off) .hw-stats div')].map((e) => [e.querySelector('b').textContent, e.querySelector('span').textContent]), lane: window.__game.porches.laneVisited, tricks: window.__game.porches.tricks, tags: window.__game.thief.tags, chain: window.__game.chain.best, R: window.__game.RANKS.map((r) => r[0]).join('/') }));
     const stat = (l) => (rs.stats.find((e) => e[1] === l) || [null])[0];
-    check(name, 'results: porches n/5, tricks, tags, BOOs, catches and best streak; ranks v2', rs.stats.length === 6 && stat('PORCHES') === `${rs.lane}/5` && stat('TRICKS') === String(rs.tricks) && rs.lane === 5 && rs.tricks === 2 && stat('TAGS') === String(rs.tags) && rs.tags === 1 && stat('BOOS') !== null && stat('CAUGHT') !== null && stat('BEST STREAK') !== null && rs.R === RANKS_V2, JSON.stringify(rs));
+    check(name, 'results: porches n/5, tricks, tags, BOOs, catches, best streak and best chain; ranks v2', rs.stats.length === 7 && stat('PORCHES') === `${rs.lane}/5` && stat('TRICKS') === String(rs.tricks) && rs.lane === 5 && rs.tricks === 2 && stat('TAGS') === String(rs.tags) && rs.tags === 1 && stat('BOOS') !== null && stat('CAUGHT') !== null && stat('BEST STREAK') !== null && stat('BEST CHAIN') === (rs.chain >= 2 ? `×${rs.chain}` : '0') && rs.R === RANKS_V2, JSON.stringify(rs));
+    // the badges (badges.js): the round's Full Round is new (named, ringed), kept on the device; the rest greyed; tonight's best
+    const bd = await G(page, () => { const o = document.querySelector('.hw-screen:not(.off)'), row = o.querySelector('.hw-badges'), r = row.getBoundingClientRect(); let kept = null; try { kept = JSON.parse(localStorage.getItem('midnight-candy-run.badges')); } catch { /* */ } return { icons: row.children.length, on: row.querySelectorAll('i.on').length, fresh: [...row.querySelectorAll('i.fresh')].map((e) => e.dataset.id), line: o.querySelector('.hw-badge-line').textContent, best: o.querySelector('.hw-best-line').textContent, kept, row: [Math.round(r.left), Math.round(r.right), Math.round(r.bottom)], vw: innerWidth, vh: innerHeight }; });
+    check(name, 'results: the badges row (7, the Full Round new: ringed and named, kept in localStorage), tonight\'s best', bd.icons === 7 && bd.fresh.includes('full') && bd.fresh.length <= 3 && /^NEW BADGES?: .*FULL ROUND/.test(bd.line) && bd.kept && bd.kept.full === 1 && bd.on === Object.keys(bd.kept).length && /TONIGHT/.test(bd.best) && bd.row[0] >= 0 && bd.row[1] <= bd.vw && bd.row[2] <= bd.vh, JSON.stringify(bd));
     const shb = await rect(page, '.hw-screen:not(.off) [data-a=share]');
     if (phone) await T.tap(shb.cx, shb.cy); else await page.mouse.click(shb.cx, shb.cy);
     await sleep(300);
     const sh = await G(page, () => ({ shared: window.__shared, copied: window.__copied, toast: document.querySelector('.hw-toast').textContent, candy: window.__game.G.candy, rank: document.querySelector('.hw-rank').textContent }));
     const shText = phone ? (sh.shared[0] ? `${sh.shared[0].text} ${sh.shared[0].url}` : '') : (sh.copied[0] || '');
-    check(name, `share: ${phone ? 'Web Share' : 'copied to the clipboard + a toast'} with the score, the rank and the game URL`, shText.includes(`${sh.candy} candy`) && shText.includes(sh.rank) && /https?:\/\/\S+\/halloween\/$/.test(shText) && (phone ? sh.shared.length === 1 && sh.copied.length === 0 : sh.copied.length === 1 && sh.toast === 'SCORE COPIED!'), JSON.stringify(sh));
+    check(name, `share: ${phone ? 'Web Share' : 'copied to the clipboard + a toast'} with the score, the rank, tonight's patch and the game URL with its seed`, shText.includes(`${sh.candy} candy`) && shText.includes(sh.rank) && /Tonight's Patch [A-Z]{3} \d{1,2}\./.test(shText) && /https?:\/\/\S+\/halloween\/\?seed=\d{8}$/.test(shText) && (phone ? sh.shared.length === 1 && sh.copied.length === 0 : sh.copied.length === 1 && sh.toast === 'SCORE COPIED!'), JSON.stringify(sh));
     const again = await rect(page, '.hw-screen:not(.off) [data-a=again]');
     check(name, 'PLAY AGAIN inside the viewport', inside(again, vp));
     const rbs = await buttons(page, '.hw-screen:not(.off) button');
@@ -1461,6 +1524,8 @@ async function runProfile(name) {
         // the hands: four up (the most the game allows), the thief bolting past with a full sack
         const H = g.hands; for (let k = 0; k < 4; k++) { H.st[k] = 2; H.t[k] = 0; H.wait[k] = 99; }
         const T = g.thief; T.awake = true; T._emerge(); T.x = p.x + 5; T.z = p.z - 3; T.sack = 18; T._set(4); T.boltT = 99;
+        // pass 4: SWEET TOOTH on (the aura, a 7 m magnet over the shower), the crypt door sinking open
+        g.potions.take(2); g.secrets.opening = true;
       });
       const hot = await storm;
       await c2.send('Emulation.setCPUThrottlingRate', { rate: 1 });
@@ -1563,6 +1628,42 @@ async function runHybrid(name) {
   await ctx.close();
 }
 
+/**
+ * Tonight's Patch (rng.js): two loads with the same ?seed= lay out the same first 60 candies, porch relight jitter and
+ * hand cycles; another seed differs in all three. The title names the night (tonight's date, or a friend's).
+ */
+async function runPatch() {
+  const name = 'patch';
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
+  await ctx.addInitScript(instrument);
+  const errs = [];
+  const night = async (q) => {
+    const page = await ctx.newPage(), e = watchErrors(page);
+    await page.goto(`${url}?touch=0${q ? `&${q}` : ''}`, { waitUntil: 'load', timeout: 90000 });
+    await waitFor(page, () => !!(window.__game && !document.querySelector('.ui-loading')), null, 60000);
+    const r = await G(page, () => {
+      const g = window.__game, C = g.candy, title = document.querySelector('.hw-patch').textContent;
+      g.startRound(); // (the round re-seeds: what it lays out is the night's, whatever ran before)
+      const pos = []; for (let i = 0; i < 60; i++) pos.push(C.state[i] === 1 ? `${C.p[i * 3].toFixed(3)},${C.p[i * 3 + 2].toFixed(3)},${C.kind[i]}` : '-');
+      const jit = []; for (let k = 0; k < 6; k++) jit.push(+(g.porches._cd(g.PORCH.CD_TREAT) - g.PORCH.CD_TREAT).toFixed(4));
+      return { seed: g.PATCH.seed, title, pos, jit, hands: Array.from(g.hands.wait, (v) => +v.toFixed(4)) };
+    });
+    errs.push(...e); await page.close();
+    return r;
+  };
+  try {
+    const a = await night('seed=4242'), b = await night('seed=4242'), c = await night('seed=4243'), d = await night(''), f = await night('seed=20261031');
+    const same = (x, y) => JSON.stringify(x) === JSON.stringify(y), diff = a.pos.filter((v, i) => v !== c.pos[i]).length;
+    check(name, 'two loads with the same seed: identical first 60 candies, porch relight jitter and hand cycles', a.seed === 4242 && same(a.pos, b.pos) && same(a.jit, b.jit) && same(a.hands, b.hands) && a.pos.every((v) => v !== '-'), `seed ${a.seed}, jitter ${a.jit.join(' ')}`);
+    check(name, 'another seed differs (candies, jitter, hand cycles)', diff > 50 && !same(a.jit, c.jit) && !same(a.hands, c.hands), `${diff}/60 candies differ`);
+    check(name, 'the title names the night: tonight\'s patch and its date, or a friend\'s (#4242, OCT 31)', /^TONIGHT'S PATCH[A-Z]{3} \d{1,2}$/.test(d.title) && d.seed > 20000000 && a.title === "A FRIEND'S PATCH#4242" && f.title === "A FRIEND'S PATCHOCT 31", JSON.stringify([d.title, a.title, f.title]));
+  } catch (e) {
+    check(name, 'run', false, e.message.split('\n')[0]);
+  }
+  check(name, 'no console errors', errs.length === 0, errs.slice(0, 3).join(' || '));
+  await ctx.close();
+}
+
 let url = args.url || null;
 try {
   if (!url) { vite = await startVite(); url = `${vite.base}/halloween/`; }
@@ -1571,6 +1672,7 @@ try {
     if (name === 'hybrid') await runHybrid(name); else if (PROFILES[name]) await runProfile(name); else console.log(`unknown profile ${name}`);
     if (name === 'pixel-portrait') await runReduced(name);
   }
+  if (only.includes('desktop')) await runPatch();
 } catch (e) {
   console.error(e); failures++;
 } finally {

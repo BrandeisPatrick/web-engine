@@ -10,6 +10,8 @@
 // At most `maxChasers` ghosts chase at once (the game sets 2 on phones); the others wait their turn HOLD_R m from the
 // kid (closer, a freed chase slot would start a chase from point-blank range). A "tame" ghost (g.tame > 0 s, the
 // game's BOO lesson) chases from any distance but slowly (TAME_SPEED) and cannot catch; a BOO or its time ends it.
+// A sneaking kid (kid.sneak: the SNEAK potion) is not seen: no ghost starts a chase or drifts toward it, chasers drop
+// back to wandering, and nothing catches it.
 // Every ghost exists (and is simulated) for the whole round; waking one teleports its head and its whole cloth
 // (positions and previous positions, so no velocity) to a grave. The face (eyes, mouth) is painted in the cloth
 // texture where the dome's front lands in UV. Ghosts pass through everything (head layer 0) and cast no shadow.
@@ -274,14 +276,14 @@ export class Ghosts {
   }
 
   /**
-   * Fixed step (before dyn.step): AI + head targets. kid: { x, y, z, vx, vz, safe (invulnerable) }.
+   * Fixed step (before dyn.step): AI + head targets. kid: { x, y, z, vx, vz, safe (invulnerable), sneak (unseen) }.
    * Fills this.events: caught (ghost index or -1), chaseStart (index or -1).
    */
   fixedUpdate(dt, kid, active) {
     this.time += dt;
     const E = this.events; E.caught = -1; E.chaseStart = -1;
     const L = this.list, D = this.difficulty;
-    const chaseSpeed = 3.2 + 1.5 * D, aggro = 10 + 5 * D;
+    const chaseSpeed = 3.2 + 1.5 * D, aggro = 10 + 5 * D, seen = active && !kid.sneak;
     let chasing = 0;
     for (let n = 0; n < L.length; n++) if (L[n].state === 'chase') chasing++;
     for (let n = 0; n < L.length; n++) {
@@ -309,12 +311,12 @@ export class Ghosts {
             g.tx = Math.max(-PLAY + 4, Math.min(PLAY - 4, g.x + Math.cos(a) * r));
             g.tz = Math.max(-PLAY + 4, Math.min(PLAY - 4, g.z + Math.sin(a) * r));
             // drift toward the kid a little, so the round stays lively (a calm ghost backs off instead)
-            if (active) { const w = g.calm > 0 ? -0.35 : 0.45; g.tx += (kid.x - g.tx) * w; g.tz += (kid.z - g.tz) * w; }
+            if (seen) { const w = g.calm > 0 ? -0.35 : 0.45; g.tx += (kid.x - g.tx) * w; g.tz += (kid.z - g.tz) * w; }
             g.retarget = 4 + Math.random() * 4;
           }
           const ex = g.tx - g.x, ez = g.tz - g.z, el = Math.hypot(ex, ez) || 1;
           wantX = ex / el; wantZ = ez / el; speed = 1.8 + 0.8 * D;
-          if (active && !kid.safe && g.calm <= 0 && (dist < aggro || g.tame > 0)) {
+          if (seen && !kid.safe && g.calm <= 0 && (dist < aggro || g.tame > 0)) {
             if (chasing < this.maxChasers) { g.state = 'chase'; g.t = 0; E.chaseStart = n; chasing++; }
             else if (dist < HOLD_R) { const k = HOLD_R / Math.max(dist, 0.1); g.tx = kid.x - dx * k; g.tz = kid.z - dz * k; g.retarget = 1; }
           }
@@ -327,9 +329,9 @@ export class Ghosts {
           // the lunge: a short burst once close (late and mild enough that a BOO at ~3 m still lands in time)
           if (dist < 2.8 && g.lungeCd <= 0) { g.lunge = 0.7; g.lungeCd = 2.4; }
           if (g.lunge > 0) { g.lunge -= dt; speed *= 1.3; accel = 6; }
-          if (!active || kid.safe || dist > aggro + 9) { g.state = 'wander'; g.t = 0; g.retarget = 0; }
+          if (!seen || kid.safe || dist > aggro + 9) { g.state = 'wander'; g.t = 0; g.retarget = 0; }
           else if (g.t > CHASE_MAX && g.lunge <= 0) { g.state = 'wander'; g.t = 0; g.retarget = 0; g.calm = CALM_GIVEUP; } // gives up
-          if (active && !kid.safe && g.tame <= 0 && dist < 0.85 && Math.abs(kid.y + 0.6 - (g.y - 0.5)) < 1.3) {
+          if (seen && !kid.safe && g.tame <= 0 && dist < 0.85 && Math.abs(kid.y + 0.6 - (g.y - 0.5)) < 1.3) {
             E.caught = n; g.state = 'retreat'; g.t = 0;
           }
           break;

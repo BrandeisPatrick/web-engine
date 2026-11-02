@@ -903,10 +903,11 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp 
  * A mausoleum at (x, y, z) facing +z: stepped plinth, a block of rusticated stone with pilasters, a cornice, a stone
  * roof whose ridge runs along x (its cap top at 5.06: the crows' perch), a portico of two fluted columns under a
  * pediment with a wreath, a banded double door, ivy, cracks and moss; the door candles and the green glow under the
- * door go through ctx. Returns { door: [x, y, z] (the door's foot, its front face), crack (the green glow's light
- * group), crackHalo }.
+ * door go through ctx. o.door false: no door leaf, a dark doorway in its frame (the game's own leaf closes it: the
+ * crypt secret, secrets.js). Returns { door: [x, y, z] (the door's foot, its front face), crack (the green glow's
+ * light group), crackHalo }.
  */
-export function crypt(B, G, ctx, { x, y, z }) {
+export function crypt(B, G, ctx, { x, y, z, door = true }) {
   const r = rngAt(x, z, 31), L = new Parts(), STONE = '#58535f', DARK = '#3b3743', LIGHT = '#6a6574';
   const st = (g, a = 0.75, b = 1.12) => vgrad(g, a, b, 0.05, (r() * 1e6) | 0);
   st(L.add(chamferBox(6.2, 0.32, 5.6, 0.05), DARK, 0, 0.1, 0.1), 0.6, 0.9);
@@ -937,10 +938,12 @@ export function crypt(B, G, ctx, { x, y, z }) {
     for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; L.add(new THREE.SphereGeometry(0.05, 5, 3), '#4f6b33', Math.cos(a) * 0.22, 4.22 + Math.sin(a) * 0.22, 2.87, a, 0, 0, 1.4, 0.7, 0.6); }
   }
   // the door: banded iron double door, ring handles, a stone frame
-  L.add(new THREE.BoxGeometry(1.6, 2.38, 0.1), '#141017', 0, 1.81, 2.22);
-  for (const yy of [1.0, 1.75, 2.5]) L.add(new THREE.BoxGeometry(1.62, 0.07, 0.04), '#2c2832', 0, yy, 2.29);
-  L.add(new THREE.BoxGeometry(0.04, 2.4, 0.04), '#2c2832', 0, 1.75, 2.29);
-  for (const sx of [-0.18, 0.18]) L.add(new THREE.TorusGeometry(0.07, 0.014, 4, 10), '#3b3540', sx, 1.6, 2.31);
+  if (door) {
+    L.add(new THREE.BoxGeometry(1.6, 2.38, 0.1), '#141017', 0, 1.81, 2.22);
+    for (const yy of [1.0, 1.75, 2.5]) L.add(new THREE.BoxGeometry(1.62, 0.07, 0.04), '#2c2832', 0, yy, 2.29);
+    L.add(new THREE.BoxGeometry(0.04, 2.4, 0.04), '#2c2832', 0, 1.75, 2.29);
+    for (const sx of [-0.18, 0.18]) L.add(new THREE.TorusGeometry(0.07, 0.014, 4, 10), '#3b3540', sx, 1.6, 2.31);
+  } else L.add(new THREE.BoxGeometry(1.6, 2.38, 0.02), '#040306', 0, 1.81, 2.205); // the dark inside behind the doorway
   st(L.add(chamferBox(2.0, 0.3, 0.3, 0.04), LIGHT, 0, 3.08, 2.22));
   for (const sx of [-0.9, 0.9]) st(L.add(chamferBox(0.22, 2.5, 0.28, 0.03), LIGHT, sx, 1.8, 2.22));
   st(L.add(chamferBox(3.6, 0.3, 1.2, 0.04), DARK, 0, 0.1, 2.9), 0.6, 0.95);

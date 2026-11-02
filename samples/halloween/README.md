@@ -39,11 +39,23 @@ Esc to pause, M for sound. A gamepad works too.
 - **The candy thief:** from 11:58 a raccoon in a little bedsheet runs to the candy you're heading for and eats it,
   stuffing its glowing pink sack. It keeps away from you. **BOO!** it when it's close to make it dizzy, then run into
   it to tag it: its whole sack spills out, plus 5 extra.
+- **Potions:** the witch's cauldron, in the ring of standing stones east of the green, bubbles green, violet and pink
+  in turn. Walk into it while it glows to drink the colour showing: green **ZOOM** (you run faster), violet **SNEAK**
+  (ghosts, grave hands and the thief can't see you) or pink **SWEET TOOTH** (candy flies to you from far off). Your
+  pail and a glow round you take its colour and blink when it's about to wear off. The brew takes 30 s to bubble up
+  again, and a new potion replaces the old one.
+- **Stomp chains:** a stomp bounces you up. Come down on another jack-o'-lantern before you land for a chain: 7, then
+  10, then 13 candies. The pumpkin patch's lanterns stand in little triangles for it.
+- **Secrets:** the village hides three. Big lollipops also grow on top of the knoll and on the Bale Yard's platform,
+  for whoever climbs up to them.
 - **Streaks:** grab candy quickly, one after another. Every 10th in a row adds 3 bonus candy.
 - **The Witching Hour:** in the last 30 seconds candy counts double, every lantern and porch lights up again and candy
   rains down around you. The hands come up twice as often, and the thief is back with a sack already full of candy.
 - **Ranks:** the number after your candy count is the next rank. Your best score is saved on your device; once you have
   one, the clock shows now and then how far ahead of it (or behind) you are. Share your score from the results.
+- **Tonight's Patch and badges:** every night (your device's date) has its own patch: the same candy, porch timings and
+  grave hands in every round that night, shown on the title. The results keep tonight's best and the badges you have
+  earned (a locked one gives a hint). Sharing sends your night along: the link opens the same patch for a friend.
 
 <p>
 <img src="screenshots/phone-portrait.jpg" width="200" alt="Portrait gameplay with ghosts and the touch controls">
@@ -118,7 +130,12 @@ The engine changes this game needed are opt-in and listed in the [CHANGELOG](../
 | `reach.js` | The faint ring on the ground that shows BOO's reach while a ghost is inside it. |
 | `environment.js` | The living night, driven by the round clock: wind gusts, blowing and kicked-up leaves, clouds over the moon and the blood moon, creeping mist, lightning and thunder, crows, flickering lights, the swinging gate and their sounds. Animated on the GPU from a few uniforms (`setFinale(on)` pushes it to its peak). |
 | `audio.js` | All synth sound on `AudioBus`: a D-minor music loop, ambience, effects and the midnight bells. |
-| `hud.js` | The DOM title, HUD (candy and the next rank, the streak meter, the clock and the pace against your best, call-outs: hints at most one per 2.5 s), pause, how-to-play and results screens (rank ladder, porches and tricks, share), and the full-screen toggle. |
+| `hud.js` | The DOM title (with Tonight's Patch), HUD (candy and the next rank, the streak meter, the clock and the pace against your best, call-outs: hints at most one per 2.5 s), pause, how-to-play and results screens (rank ladder, porches, tricks, the best chain, badges, tonight's best, share), and the full-screen toggle. |
+| `potions.js` | The cauldron's brew cycling green / violet / pink, the take, ZOOM / SNEAK / SWEET TOOTH and their effects, the pail's colour and the kid's aura. |
+| `chain.js` | Stomp chains: a stomp within 1.6 s of the last one pays 7, 10, 13. |
+| `secrets.js` | The well, the crypt door (its own sinking leaf) and the hollow oak, each paying once a round (the oak refills at the Witching Hour), and the fixed big pops on the knoll and the Bale Yard. |
+| `badges.js` | The badges (earned on the device, new ones named on the results, a locked one's hint) and the night's best. |
+| `rng.js` | Tonight's Patch: the night's seed (the date, or `?seed=`) laying out the candy, the porches' relight jitter and the grave hands' cycles. |
 
 </details>
 
@@ -136,7 +153,8 @@ phone (`npx vite --host` prints the address). On iPhone, sound also needs the si
 http://localhost:5191/halloween/.
 
 URL options: `?touch=1|0` (force the touch UI), `?quality=low|high` (touch devices default to low), `?nofx=1`, `?shadows=0`,
-`?round=60` (round length in seconds), `?fps=30`.
+`?round=60` (round length in seconds), `?fps=30`, `?seed=20261031` (a night's patch: the date, or any number; a shared
+link carries it).
 
 ## Tests
 
@@ -144,3 +162,6 @@ URL options: `?touch=1|0` (force the touch UI), `?quality=low|high` (touch devic
   small Android, portrait, landscape, rotation, two-thumb input). It checks controls, layout, pause, results and that
   five rounds in a row don't leak resources. Run `node test/browser/halloween.mjs`.
 - `test/browser/halloween-media.mjs` captures the stills and short clips used for social posts.
+- `test/halloween-enemies.mjs` and `test/halloween-depth.mjs` (in `npm test`, no browser) pin the rules of the grave
+  hands and the thief, and of the potions, chains, secrets, badges and the night's seed, and that none of them
+  allocates per frame.

@@ -44,8 +44,10 @@ const SUITES = [
   { file: 'dyn-fracture.mjs' },
   { file: 'character-dyn.mjs' },
   { file: 'ragdoll.mjs', shim: true },
-  // the Halloween sample: its enemies' rules and per-frame allocation (samples/halloween/hands.js, thief.js)
+  // the Halloween sample: its enemies' rules and per-frame allocation (samples/halloween/hands.js, thief.js), its
+  // depth and replay rules (potions.js, chain.js, secrets.js, badges.js, rng.js)
   { file: 'halloween-enemies.mjs', shim: true },
+  { file: 'halloween-depth.mjs', shim: true },
 ];
 let failed = 0, ran = 0;
 const t0 = performance.now();

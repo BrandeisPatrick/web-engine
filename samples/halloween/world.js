@@ -38,6 +38,7 @@ import { patchDetail, patchGrass, patchRibs } from './looks.js';
 import { Batch, pumpkinGeometry, pumpkinLeafGeometry } from './props.js';
 import * as P from './props.js';
 import * as V from './village.js';
+import { rng } from './rng.js';
 
 export { pumpkinGeometry };
 
@@ -319,13 +320,18 @@ const swayPatch = {
 	}
 `,
 };
-/** The glow material reads its light group's level (uGlowLv[grp], default 1) into the vertex colour. */
-function patchGlowGroups(mat, levels) {
+/**
+ * The glow material reads its light group's level (uGlowLv[grp], default 1) into the vertex colour; one group (tintGroup
+ * x: its index, -1 none) is also tinted by `tint` (the cauldron's brew: potions.js cycles its colour).
+ */
+function patchGlowGroups(mat, levels, tint, tintGroup) {
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uGlowLv = { value: levels };
+    sh.uniforms.uGlowTint = { value: tint };
+    sh.uniforms.uGlowTintG = tintGroup;
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', `#include <common>\nattribute float grp;\nuniform float uGlowLv[ ${GLOW.MAX} ];`)
-      .replace('#include <color_vertex>', '#include <color_vertex>\n\tvColor.rgb *= uGlowLv[ int( grp + 0.5 ) ];');
+      .replace('#include <common>', `#include <common>\nattribute float grp;\nuniform float uGlowLv[ ${GLOW.MAX} ];\nuniform vec3 uGlowTint;\nuniform vec2 uGlowTintG;`)
+      .replace('#include <color_vertex>', '#include <color_vertex>\n\tvColor.rgb *= uGlowLv[ int( grp + 0.5 ) ];\n\tif ( abs( grp - uGlowTintG.x ) < 0.5 ) vColor.rgb *= uGlowTint;');
   };
   mat.customProgramCacheKey = () => 'hwGlowGroups';
   return mat;
@@ -442,7 +448,7 @@ function picketFence(B, ax, az, bx, bz) {
 
 function crypt(B, G, physics) {
   const { x, z } = CRYPT, y = heightAt(x, z) - 0.15;
-  const a = P.crypt(B, G, glowCtx(G), { x, y, z });
+  const a = P.crypt(B, G, glowCtx(G), { x, y, z, door: false }); // (the door leaf is secrets.js's: it sinks open)
   physics.addStaticBox(x - 2.6, y - 1, x + 2.6, y + 4.5, z - 2.3, z + 2.5);
   return a;
 }
@@ -663,7 +669,9 @@ export function buildWorld({ scene, physics, low }) {
   props.customDepthMaterial = makeDepthMaterial(propMat);
   scene.add(props);
   const glowLevels = new Float32Array(GLOW.MAX).fill(1);
-  const glowMat = patchGlowGroups(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }), glowLevels);
+  // (a vec2 uniform: a plain { value: number } stores a boxed double; the brew's group is set once, below)
+  const glowTint = new THREE.Vector3(1, 1, 1), glowTintG = { value: new THREE.Vector2(CAULDRON.brew, 0) };
+  const glowMat = patchGlowGroups(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }), glowLevels, glowTint, glowTintG);
   const glow = G.build(glowMat, 'glow');
   scene.add(glow);
   // each light group's centre (its glowing parts' mean position: a window dims as the camera comes near it, halos())
@@ -822,33 +830,35 @@ export function buildWorld({ scene, physics, low }) {
   for (const L of PATHS) for (let i = 0; i < L.length - 1; i++) { const l = Math.hypot(L[i + 1][0] - L[i][0], L[i + 1][1] - L[i][1]); laneSegs.push([L[i][0], L[i][1], L[i + 1][0], L[i + 1][1], laneLen, l]); laneLen += l; }
   const C = CREEK, litPorches = [];
   let self = null;
+  // (the placement draws: the night's candy stream, rng.js, not the level's build stream: Tonight's Patch)
+  const rr = rng.candy;
   const sample = (zone, out) => {
     let x, z;
     if (zone === 'lane') {
-      const u = rnd() * laneLen;
+      const u = rr() * laneLen;
       let s = laneSegs[0];
       for (let i = 0; i < laneSegs.length; i++) if (u >= laneSegs[i][4]) s = laneSegs[i];
-      const f = (u - s[4]) / s[5], o = (rnd() * 2 - 1) * 2.5, dx = (s[2] - s[0]) / s[5], dz = (s[3] - s[1]) / s[5];
+      const f = (u - s[4]) / s[5], o = (rr() * 2 - 1) * 2.5, dx = (s[2] - s[0]) / s[5], dz = (s[3] - s[1]) / s[5];
       x = s[0] + (s[2] - s[0]) * f - dz * o; z = s[1] + (s[3] - s[1]) * f + dx * o;
-    } else if (zone === 'graveyard') { x = GRAVEYARD.x0 + 1 + rnd() * (GRAVEYARD.x1 - GRAVEYARD.x0 - 2); z = GRAVEYARD.z0 + 1 + rnd() * (GRAVEYARD.z1 - GRAVEYARD.z0 - 2); }
-    else if (zone === 'patch') { x = PATCH.x0 + rnd() * (PATCH.x1 - PATCH.x0); z = PATCH.z0 + rnd() * (PATCH.z1 - PATCH.z0); }
+    } else if (zone === 'graveyard') { x = GRAVEYARD.x0 + 1 + rr() * (GRAVEYARD.x1 - GRAVEYARD.x0 - 2); z = GRAVEYARD.z0 + 1 + rr() * (GRAVEYARD.z1 - GRAVEYARD.z0 - 2); }
+    else if (zone === 'patch') { x = PATCH.x0 + rr() * (PATCH.x1 - PATCH.x0); z = PATCH.z0 + rr() * (PATCH.z1 - PATCH.z0); }
     else if (zone === 'porch') {
       litPorches.length = 0;
       const lit = self && self.porchLit;
       for (let i = 0; i < PORCHES.length; i++) if (!lit || lit(i)) litPorches.push(i);
       if (!litPorches.length) return false;
-      const p = PORCHES[litPorches[Math.floor(rnd() * litPorches.length)]], a = p.yaw + (rnd() * 2 - 1) * 1.3, r = Math.sqrt(1.7 * 1.7 + rnd() * (100 - 1.7 * 1.7));
+      const p = PORCHES[litPorches[Math.floor(rr() * litPorches.length)]], a = p.yaw + (rr() * 2 - 1) * 1.3, r = Math.sqrt(1.7 * 1.7 + rr() * (100 - 1.7 * 1.7));
       x = p.mat.x + Math.sin(a) * r; z = p.mat.z + Math.cos(a) * r;
-    } else if (zone === 'creek') { x = (rnd() * 2 - 1) * (C.x - 1.5); z = C.z0 + C.lip + 0.45 + rnd() * (C.z1 - C.z0 - 2 * C.lip - 0.9); }
-    else if (zone === 'knoll') { const a = rnd() * Math.PI * 2, r = (KNOLL.r - 1) * Math.sqrt(rnd()); x = KNOLL.x + Math.cos(a) * r; z = KNOLL.z + Math.sin(a) * r; }
-    else { x = (rnd() * 2 - 1) * (PLAY - 3); z = (rnd() * 2 - 1) * (PLAY - 3); }
+    } else if (zone === 'creek') { x = (rr() * 2 - 1) * (C.x - 1.5); z = C.z0 + C.lip + 0.45 + rr() * (C.z1 - C.z0 - 2 * C.lip - 0.9); }
+    else if (zone === 'knoll') { const a = rr() * Math.PI * 2, r = (KNOLL.r - 1) * Math.sqrt(rr()); x = KNOLL.x + Math.cos(a) * r; z = KNOLL.z + Math.sin(a) * r; }
+    else { x = (rr() * 2 - 1) * (PLAY - 3); z = (rr() * 2 - 1) * (PLAY - 3); }
     out[0] = x; out[2] = z;
     return true;
   };
   const _cols = [];
   /** A free spot for a resting candy (inside the fence, clear of colliders, away from (ax, az)), drawn by zone share. */
   const candySpot = (out, ax = 1e9, az = 1e9, minDist = 6) => {
-    const k = rnd();
+    const k = rr();
     let zone = 'any', acc = 0;
     for (const [nm, w] of SHARES) { acc += w; if (k < acc) { zone = nm; break; } }
     for (const zz of zone === 'any' ? ['any'] : [zone, 'any']) {
@@ -890,6 +900,9 @@ export function buildWorld({ scene, physics, low }) {
     terrain, props, glow, pumpkins, leaves, tufts, moon, moonColor, sky, water, lanternSpots, ghostSpawns, graves, candySpot, heightAt, glowSpots, beacons,
     /** Light groups ([kind, flicker amount], see GLOW) and their levels (glowLevels: set per frame by the game; 1). */
     glowGroups: groups, glowLevels, gate, perches,
+    /** The tinted light group's colour, on its glow parts and its halos (the cauldron's brew: potions.js sets it per
+     * frame; 1, 1, 1 = as painted). */
+    glowTint,
     // the map v2 (also exported from world.js): the porch logic sets porchLit(i) -> bool (candy near lit mats only)
     porches: PORCHES, bridges: BRIDGES, creek: CREEK, handSpots: HAND_SPOTS, popSpots: POP_SPOTS, secrets: SECRETS, cauldron: CAULDRON, vantage: VANTAGE, thiefDen: THIEF_DEN, knoll: KNOLL,
     paths: PATHS, trees: trees.map((t) => [+t.x.toFixed(2), +t.z.toFixed(2), t.lod]), porchLit: null, zoneOf, pathDist,
@@ -911,9 +924,11 @@ export function buildWorld({ scene, physics, low }) {
         const dx = groupPos[k * 3] - c.x, dy = groupPos[k * 3 + 1] - c.y, dz = groupPos[k * 3 + 2] - c.z, d2 = dx * dx + dy * dy + dz * dz;
         if (d2 < 256) L[k] *= 0.45 + 0.55 * smooth((Math.sqrt(d2) - 4) / 12);
       }
+      const T = glowTint, tg = glowTintG.value.x; // (the tinted group's halos take its tint too: the brew's colour)
       for (let k = 0; k < GS.length; k++) {
         const q = GS[k], f = L[q[8]];
-        glows.set(base + k, q[0], q[1], q[2], q[3], q[4] * f, q[5] * f, q[6] * f);
+        if (q[8] === tg) glows.set(base + k, q[0], q[1], q[2], q[3], q[4] * f * T.x, q[5] * f * T.y, q[6] * f * T.z);
+        else glows.set(base + k, q[0], q[1], q[2], q[3], q[4] * f, q[5] * f, q[6] * f);
       }
       return GS.length;
     },

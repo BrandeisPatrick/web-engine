@@ -34,6 +34,10 @@
 // double, relights every lantern, rains candy around the kid and caps a catch at 6. Juice: a small camera shake on
 // smashes and catches, an FOV punch on BOO, a hitstop on smash / BOO / catch (gentler on phones; no motion with
 // prefers-reduced-motion). The results share the score (Web Share on phones, else the clipboard).
+// Depth and replay (pass 4): potions at the cauldron (potions.js: ZOOM, SNEAK, SWEET TOOTH), stomp chains (chain.js),
+// the secrets and the fixed big pops (secrets.js: the well, the crypt door, the hollow oak), badges and the night's best
+// (badges.js), and Tonight's Patch (rng.js: the night's seed lays out the candy, the porches' relight jitter and the
+// hands' cycles; ?seed=<n> opens a friend's night; the share carries it).
 // On touch, a push straight into a gravestone, tree, fence or wall slides the kid round it, the short way.
 // window.__game exposes the state for tests (test/browser/halloween.mjs).
 import * as THREE from 'three';
@@ -56,6 +60,11 @@ import { HUD, ACCENT, applyTheme, RANKS, rankIndex, rankFor, nextRankAt, taught 
 import { Porches, PORCH } from './porches.js';
 import { Hands, HAND } from './hands.js';
 import { Thief, THIEF } from './thief.js';
+import { rng, PATCH } from './rng.js';
+import { Potions, POTION_CALLS, POTION_COLORS } from './potions.js';
+import { Secrets, SECRET_CALLS } from './secrets.js';
+import { StompChain } from './chain.js';
+import { BadgeBook, dailyBest, saveDaily } from './badges.js';
 import { LOOK } from './looks.js';
 import { Environment } from './environment.js';
 
@@ -77,8 +86,10 @@ const STICK_DEAD = 0.12, STICK_FULL = 0.75;
 // it (AROUND_ALONG of the speed along it, AROUND_LEAN into it), the short way round the box in the way; the turn holds
 // AROUND_HOLD s while blocked and AROUND_AFTER s past the corner; it looks AROUND_LOOK m along the wall each way
 const AROUND_INTO = 0.6, AROUND_ALONG = 0.9, AROUND_LEAN = 0.3, AROUND_HOLD = 0.4, AROUND_AFTER = 0.06, AROUND_LOOK = 4;
-// a catch costs 10 % of the candy (2..12); 3 catches within MERCY_WINDOW s calm the ghosts (difficulty -MERCY) for MERCY_T s
-const CATCH_SHARE = 0.10, CATCH_MIN = 2, CATCH_MAX = 12, MERCY = 0.35, MERCY_WINDOW = 30, MERCY_T = 20;
+// a catch costs 10 % of the candy (2..12); 2 catches within MERCY_WINDOW s calm the ghosts for MERCY_T s: difficulty
+// -MERCY, one chaser at a time, and the pack calm MERCY_CALM s after each catch meanwhile (pass 4: it took 3 catches, and
+// a novice was caught 9 to 14 times a round, every 10 s once it started)
+const CATCH_SHARE = 0.10, CATCH_MIN = 2, CATCH_MAX = 12, MERCY = 0.35, MERCY_WINDOW = 30, MERCY_T = 20, MERCY_CALM = 8;
 const MAX_CHASERS_TOUCH = 2, MAX_CHASERS_DESK = 3;
 const MAGNET_TOUCH = 3.2, MAGNET_DESK = 2.4; // candy pull radius (m)
 // candy where the player looks: while the view is "dry" (fewer than DRY_NEED candies on screen within DRY_R m),
@@ -88,7 +99,9 @@ const MAGNET_TOUCH = 3.2, MAGNET_DESK = 2.4; // candy pull radius (m)
 // all for two thirds of a round; the move used to wait for the full CANDY_TARGET, which play keeps a few under, so it
 // never came). A view with candy in it keeps the uniform respawns: good players get no extra help. Big pops rise POP_R
 // m away (inside the view while it is dry).
-const AHEAD_SHARE = 0.6, AHEAD_R = [9, 22], AHEAD_HALF = 50 * Math.PI / 180, POP_R = [14, 26];
+// (pass 4: 0.8 of them, 6..14 m ahead: inside the 15 m the dry test looks at; 0.6 and 9..22 m left a narrow portrait
+// view dry for a third of a round)
+const AHEAD_SHARE = 0.8, AHEAD_R = [6, 14], AHEAD_HALF = 50 * Math.PI / 180, POP_R = [14, 26];
 const DRY_R = 15, DRY_NEED = 2, DRY_T = 2.4, FAR = 30, DRY_RING = [8, 15];
 // the first desktop round shows how the mouse looks for LOOK_HINT_T s or until LOOK_HINT_RAD of look input
 const LOOK_HINT_T = 4, LOOK_HINT_RAD = 0.3;
@@ -225,12 +238,13 @@ async function boot() {
       W.ghosts.settle(LOW ? 120 : 150);
       progress(0.85, 'Unwrapping candy…'); await nextFrame();
       // spilled candy lands on what is under it: the ground, or a porch deck, a footbridge, a bale (not through them)
-      W.candy = new Candy({ scene, heightAt, candySpot: W.world.candySpot, floorAt: (x, z, y) => physics.supportAt(x, z, y, 0.05) });
-      W.porches = new Porches({ scene, physics, heightAt, candy: W.candy, ghosts: W.ghosts, world: W.world });
+      W.candy = new Candy({ scene, heightAt, candySpot: W.world.candySpot, floorAt: (x, z, y) => physics.supportAt(x, z, y, 0.05), rnd: rng.candy });
+      W.porches = new Porches({ scene, physics, heightAt, candy: W.candy, ghosts: W.ghosts, world: W.world, rnd: rng.porch });
       W.fx = new Effects({ scene, heightAt, low: LOW });
-      W.hands = new Hands({ scene, heightAt, fx: W.fx });
+      W.hands = new Hands({ scene, heightAt, fx: W.fx, rnd: rng.hands });
+      W.secrets = new Secrets({ scene, heightAt, candy: W.candy, ghosts: W.ghosts, secrets: W.world.secrets, popSpots: W.world.popSpots, world: W.world, fx: W.fx });
       W.thief = new Thief({ scene, heightAt, physics, candy: W.candy, fx: W.fx, porches: W.porches });
-      W.glows = new Glows(432); // (the porches' doorways, the village's lamps, mats, windows and candles: ~40 halos; the hands' rings up to 44, the thief 4)
+      W.glows = new Glows(440); // (the porches' doorways, the village's lamps, mats, windows and candles: ~40 halos; the hands' rings up to 44, the thief 4)
       scene.add(W.glows.mesh);
       W.bats = new Bats({ scene, count: LOW ? 6 : 9 });
       // the living night: wind, leaves, clouds over the moon, mist, lightning, crows; escalates toward midnight
@@ -239,7 +253,7 @@ async function boot() {
     },
   }, 'world-load');
   await engine.load((p, label) => loading.setProgress(p, label));
-  const { world, dyn, lanterns, ghosts, candy, porches, hands, thief, fx, glows, bats, env } = W;
+  const { world, dyn, lanterns, ghosts, candy, porches, hands, thief, secrets, fx, glows, bats, env } = W;
   const booReach = new BooReach(scene); // BOO's reach on the ground while BOO glows
 
   // ---------------------------------------------------------------- the kid
@@ -258,6 +272,7 @@ async function boot() {
   let animMode = 'loco';
   ctl.events.on('end', (s) => { if ((s === 'jump' || (s && s.name === 'jump')) && cc.grounded) { animMode = 'loco'; ctl.play('locomotion'); } });
   const cc = new CharacterController({ radius: 0.3, height: 1.3, walk: 6, run: 6, jumpSpeed: 5.8, accel: 34, decel: 30, airControl: 0.6, stepHeight: 0.32 });
+  const potions = new Potions({ cauldron: world.cauldron, heightAt, world, cc, candy, pail: pailLight, fx }), chain = new StompChain(), badges = new BadgeBook();
   const intent = { moveX: 0, moveZ: 0, jump: false, fwd: 0 };
   const camState = { facing: 0, speed: 0, grounded: true, velocity: cc.velocity };
   const prev = new THREE.Vector3(), cur = new THREE.Vector3();
@@ -282,10 +297,10 @@ async function boot() {
   };
   let pace = loadPace(); // the best run's candy at the PACE_N moments (null: no best run recorded yet)
   const paceRec = new Array(PACE_N).fill(0);
-  let booedEver = loadTaught(), lookHinted = false, smashedEver = false, creekT = 0;
+  let booedEver = loadTaught(), lookHinted = false, smashedEver = false, creekT = 0, brewT = 0, rounds = 0;
   // START / RESUME / PLAY AGAIN run inside the click (a user gesture): the same call captures the mouse on desktop
   const hud = new HUD({
-    touch: TOUCH, streak: STREAK_EVERY,
+    touch: TOUCH, streak: STREAK_EVERY, patch: PATCH,
     onShare: () => shareScore(),
     onStart: () => { startRound(); captureMouse(); },
     onPause: () => setPaused(true),
@@ -393,6 +408,7 @@ async function boot() {
     animMode = 'loco'; ctl.play('locomotion');
   };
   const fillCandy = () => {
+    rng.reset(); // Tonight's Patch: every round starts the night's own field, porch jitter and hand cycles
     candy.reset();
     for (let i = 0; i < CANDY_TARGET; i++) candy.spawnRandom(SPAWN[0], SPAWN[1], undefined, 3);
   };
@@ -404,7 +420,7 @@ async function boot() {
     paceRec.fill(0);
     if (engine.clock.paused) engine.clock.resume();
     endJuice();
-    lanterns.reset(); ghosts.reset(); fx.clear(); env.reset(); fillCandy(); porches.reset(); hands.reset(); thief.reset(); placeKid(); hud.clearCalls();
+    lanterns.reset(); ghosts.reset(); fx.clear(); env.reset(); fillCandy(); porches.reset(); hands.reset(); thief.reset(); secrets.reset(); potions.reset(); chain.reset(); placeKid(); hud.clearCalls();
     hud.setCandy(0, false); hud.setGoal(nextRankAt(0)); hud.setClock(ROUND, ROUND); hud.showPlay(); hud.setDanger(0);
     input.map.enabled = true;
     rig.yaw = 0; rig.pitch = portraitCam ? PITCH.portrait : PITCH.landscape; setRig(rig); rig.recentre();
@@ -417,9 +433,9 @@ async function boot() {
     if (engine.clock.paused) setClockPaused(false);
     holdAudio(false);
     G.state = 'title'; endJuice();
-    lanterns.reset(); ghosts.reset(); fx.clear(); env.reset(); fillCandy(); porches.reset(); hands.reset(); thief.reset(); placeKid(); hud.clearCalls();
+    lanterns.reset(); ghosts.reset(); fx.clear(); env.reset(); fillCandy(); porches.reset(); hands.reset(); thief.reset(); secrets.reset(); potions.reset(); chain.reset(); placeKid(); hud.clearCalls();
     orbitTarget.position.set(-2, 0, -4); orbit.distance = 30; orbit.elevation = 0.3; orbit.azimuth = 0.4; // title framing
-    hud.showTitle(G.best); setRig(orbit);
+    hud.showTitle(G.best, dailyBest(PATCH.key)); setRig(orbit);
     for (let i = 0; i < 3; i++) ghosts.wake(SPAWN[0], SPAWN[1]); // a few ghosts drift around behind the title
   }
   function setClockPaused(on) { if (on) engine.clock.pause(); else engine.clock.resume(); }
@@ -440,6 +456,8 @@ async function boot() {
     for (let k = G.paceK; k < PACE_N; k++) paceRec[k] = G.candy;
     G.newBest = G.candy > G.best;
     if (G.newBest) { G.best = G.candy; saveBest(G.best); pace = paceRec.slice(); savePace(pace); }
+    G.daily = saveDaily(PATCH.key, G.candy); // tonight's best, and the badges this round earned (kept now, like the best)
+    G.badges = badges.record({ full: porches.fullPaid, tricks: porches.tricks, caught: G.caught, chain: chain.best, tags: thief.tags, secrets: secrets.found, potions: potions.taken }, rounds++);
     audio.bell(12, 0.5, 174); hud.flash(); hud.callout('MIDNIGHT!', 'warn', '', 1);
     input.touch && input.touch.releaseAll();
     if (lock.locked) lock.exit();
@@ -447,7 +465,7 @@ async function boot() {
   }
   function showResults() {
     G.state = 'over';
-    hud.showResults({ candy: G.candy, best: G.best, isBest: G.newBest, booed: G.booed, caught: G.caught, streak: G.streakMax, porches: porches.laneVisited, tricks: porches.tricks, tags: thief.tags });
+    hud.showResults({ candy: G.candy, best: G.best, isBest: G.newBest, booed: G.booed, caught: G.caught, streak: G.streakMax, porches: porches.laneVisited, tricks: porches.tricks, tags: thief.tags, chain: chain.best, daily: G.daily, badges: G.badges });
     orbitTarget.position.copy(cc.position); orbit.distance = 12; orbit.elevation = 0.35; orbit.azimuth = rig.yaw + Math.PI;
     setRig(orbit);
   }
@@ -512,6 +530,8 @@ async function boot() {
     fx.boo(p.x, p.y, p.z, BOO_R); audio.boo(); buzz(BUZZ.boo); fovPunch(); env.scare(p.x, p.z, BOO_R * 2);
     const scared = ghosts.boo(p.x, p.z, BOO_R), trick = porches.boo(p.x, p.y, p.z); // on a lit doormat: a trick
     if (trick >= 0) onTrick(trick);
+    const sec = secrets.boo(p.x, p.y, p.z); // by the well, at the crypt's door: a secret
+    if (sec >= 0) onSecret(sec, secrets.events.value);
     if (hands.boo(p.x, p.z) > 0) audio.handsUp(); // telling / standing hands within 4 m sink back (a grab lets go)
     if (thief.boo(p.x, p.z, BOO_R)) { // stunned: dizzy, stars; a touch now tags it
       const t = thief; audio.stars(sidePan(t.x, t.z)); hitstop(HITSTOP.boo); fx.burst(t.x, t.y + 0.8, t.z, 16, 1.6, 1.3, 0.4, 1.8, 1.5, 0.6, 0.09);
@@ -521,8 +541,8 @@ async function boot() {
       hitstop(scared.length >= 3 ? HITSTOP.boo3 : HITSTOP.boo);
       if (!booedEver) { booedEver = true; saveTaught(); } // the lesson is learnt: from now on the normal ghost schedule
       for (const g of scared) { candy.spill(g.x, g.y - 0.3, g.z, 2, 2.5, 0.25, 10); fx.burst(g.x, g.y, g.z, 18, 0.7, 0.6, 1.6, 3, 1.5); fx.flash(g.x, g.y, g.z, 3.4, 0.35, 0.55, 1.1, 0.4); }
-      if (trick < 0) hud.callout(scared.length > 1 ? `BOO! ×${scared.length}` : 'BOO!', 'boo');
-    } else if (trick < 0) hud.callout('BOO!', 'boo');
+      if (trick < 0 && sec < 0) hud.callout(scared.length > 1 ? `BOO! ×${scared.length}` : 'BOO!', 'boo');
+    } else if (trick < 0 && sec < 0) hud.callout('BOO!', 'boo');
   };
   // ---- porches: a knock, a treat (the door opens, candy pours out), a trick (BOO on the mat), the Full Round
   const doorBurst = (k, r, g, b) => { const P = porches; fx.burst(P.dx[k], P.dy[k], P.dz[k], 26, r, g, b, 2.6, 2, 0.8, 0.12); fx.flash(P.dx[k], P.dy[k], P.dz[k], 3.2, r * 0.5, g * 0.5, b * 0.5, 0.45); };
@@ -567,6 +587,13 @@ async function boot() {
     audio.tagged(); buzz(BUZZ.stomp); jolt(SHAKE.smash); hitstop(HITSTOP.stomp); taught.set('thief');
     fx.burst(t.x, t.y + 0.6, t.z, 30, 2.2, 0.5, 1.3, 3.2, 2.5, 0.9, 0.12); fx.flash(t.x, t.y + 0.6, t.z, 3, 0.8, 0.2, 0.55, 0.35);
   };
+  // ---- potions and secrets: a call-out names each (the first time a potion's sub-line says what it does)
+  const onPotion = (k) => {
+    const [text, cls, sub] = POTION_CALLS[k], p = cc.position;
+    hud.callout(text, cls, taught.has(`potion${k}`) ? '' : sub, 1); taught.set(`potion${k}`); taught.set('brew');
+    const q = POTION_COLORS[k]; audio.potion(k); buzz(BUZZ.pop); fx.flash(p.x, p.y + 0.9, p.z, 3.6, q[0], q[1], q[2], 0.45); fx.burst(p.x, p.y + 0.8, p.z, 24, q[0] * 1.5, q[1] * 1.5, q[2] * 1.5, 2.4, 2, 0.8, 0.1);
+  };
+  const onSecret = (k, v) => { hud.callout(SECRET_CALLS[k][0], SECRET_CALLS[k][1], `SECRET +${v * (G.witching ? WITCH_MULT : 1)}`, 1); audio.secret(k); buzz(BUZZ.stomp); jolt(SHAKE.smash); };
   const fullRound = () => {
     const p = cc.position;
     G.candy += PORCH.FULL_ROUND; candyChanged();
@@ -604,13 +631,14 @@ async function boot() {
     const kx = sp > 0.3 ? v.x / sp : 0, kz = sp > 0.3 ? v.z / sp : 0;
     const c = lanterns.smash(i, kx, kz, stomp ? 1.5 : 1);
     G.smashed++; smashedEver = true; G.lanternHint = false;
-    candy.spill(c.x, c.y + 0.2, c.z, stomp ? 7 : 4, stomp ? 3.4 : 2.6, 0.3, 14);
+    const pay = stomp ? chain.stomp(G.time) : 4; // a stomp within 1.6 s of the last one continues a chain: 7, 10, 13
+    candy.spill(c.x, c.y + 0.2, c.z, pay, stomp ? 3.4 : 2.6, 0.3, 14);
     fx.flash(c.x, c.y + 0.3, c.z, stomp ? 5 : 4, 1.4, 0.55, 0.1, 0.4);
     fx.burst(c.x, c.y, c.z, 34, 2.2, 0.9, 0.2, 3.5, 2.5, 0.9, 0.14);
     fx.burst(c.x, c.y, c.z, 14, 1.8, 1.6, 0.6, 2, 3.5, 0.6, 0.08);
     audio.smash(stomp); buzz(stomp ? BUZZ.stomp : BUZZ.smash);
     jolt(stomp ? SHAKE.stomp : SHAKE.smash); hitstop(stomp ? HITSTOP.stomp : HITSTOP.smash);
-    if (stomp) { v.y = 6.4; hud.callout('STOMP!', ''); }
+    if (stomp) { v.y = 6.4; if (chain.n > 1) { hud.callout(`CHAIN ×${chain.n}!`, 'rank', `+${pay}`, 1); audio.streak(); } else hud.callout('STOMP!', ''); }
   };
   // a catch costs 10 % (2..12; in the Witching Hour at most WITCH_CATCH): it used to be 3 + 12 % uncapped (-36 at
   // 0:10). The loss spills around the kid, quick to grab back (collectable after 0.45 s, gone after 10 s; in the
@@ -627,7 +655,8 @@ async function boot() {
     fx.burst(p.x, p.y + 0.8, p.z, 24, 0.8, 0.6, 1.8, 3, 2);
     if (lose > 0) hud.callout(`CAUGHT! −${lose}`, 'bad', 'GRAB IT BACK!', 1); else hud.callout('CAUGHT!', 'bad', '', 1);
     audio.caught(); buzz(BUZZ.caught);
-    if (G.time - G.catch2 < MERCY_WINDOW) G.mercyT = MERCY_T;
+    if (G.time - G.catch1 < MERCY_WINDOW) G.mercyT = MERCY_T;
+    if (G.mercyT > 0) for (const q of ghosts.list) q.calm = Math.max(q.calm, MERCY_CALM);
     G.catch2 = G.catch1; G.catch1 = G.time;
   };
   // a free spot for a candy in a ring around (px, pz): r in [r0, r1], within ±half of the bearing `yaw` (rig yaw
@@ -642,9 +671,10 @@ async function boot() {
     for (let i = 0; i < _cols.length; i++) if (_cols[i].maxY > top) return true;
     return false;
   };
+  const rr = rng.candy; // placement: the night's stream (rng.js)
   const ringSpot = (out, px, pz, r0, r1, yaw, half, clear = false) => {
     for (let t = 0; t < 12; t++) {
-      const a = yaw + (Math.random() * 2 - 1) * half, r = r0 + Math.random() * (r1 - r0), sx = -Math.sin(a), sz = -Math.cos(a);
+      const a = yaw + (rr() * 2 - 1) * half, r = r0 + rr() * (r1 - r0), sx = -Math.sin(a), sz = -Math.cos(a);
       const x = px + sx * r, z = pz + sz * r;
       if (Math.abs(x) > PLAY - 2 || Math.abs(z) > PLAY - 2 || blocked(x, z, 0.6)) continue;
       let ok = true;
@@ -657,10 +687,10 @@ async function boot() {
   };
   // the half-angle of the view a candy should land in: the horizontal half-FOV less a margin, at most AHEAD_HALF
   const viewHalf = () => Math.min(AHEAD_HALF, Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect) - 0.1);
-  const randomKind = () => (Math.random() < 0.35 ? CANDY_KIND.CORN : CANDY_KIND.WRAP);
+  const randomKind = () => (rr() < 0.35 ? CANDY_KIND.CORN : CANDY_KIND.WRAP);
   /** Respawn one resting candy: while the view is dry, AHEAD_SHARE of them ahead of the camera; else anywhere. */
   const respawnCandy = (p, dry) => {
-    if (dry && Math.random() < AHEAD_SHARE && ringSpot(_spot, p.x, p.z, AHEAD_R[0], AHEAD_R[1], rig.yaw, viewHalf(), true)) return candy.place(_spot[0], _spot[1], _spot[2], randomKind());
+    if (dry && rr() < AHEAD_SHARE && ringSpot(_spot, p.x, p.z, AHEAD_R[0], AHEAD_R[1], rig.yaw, viewHalf(), true)) return candy.place(_spot[0], _spot[1], _spot[2], randomKind());
     return candy.spawnRandom(p.x, p.z);
   };
   // is (x, y, z) on screen (last frame's camera)? margin: NDC limit
@@ -759,13 +789,13 @@ async function boot() {
     audio.bell(2, 0.8); audio.witching();
     lanterns.relightAll(relit);
     porches.relightAll(); // every dark porch lamp at once
-    hands.setWitch(true); thief.setWitch(true); // the hands cycle twice as fast; the thief is back with a full-ish sack
+    hands.setWitch(true); thief.setWitch(true); secrets.setWitch(true); // the hands cycle twice as fast; the thief is back with a full-ish sack; the oak refills
     ghosts.witch = true;
     env.setFinale(true); // the night at its peak: storm, lightning, the blood moon (env.reset() ends it: Play Again, title)
   };
   /** One candy of the rain: falls from high up into the ring around the kid (most of them inside the view). */
   const rainCandy = (p) => {
-    const half = Math.random() < WITCH_VIEW ? viewHalf() : Math.PI;
+    const half = rr() < WITCH_VIEW ? viewHalf() : Math.PI;
     if (!ringSpot(_spot, p.x, p.z, WITCH_RAIN_R[0], WITCH_RAIN_R[1], rig.yaw, half)) return;
     const i = candy.drop(_spot[0], _spot[1], _spot[2], randomKind(), 7);
     if (i >= 0) fx.burst(_spot[0], _spot[1] + 7, _spot[2], 6, 2, 1.3, 0.4, 0.8, 0, 0.6, 0.1);
@@ -773,8 +803,8 @@ async function boot() {
   // share the score without a server: the phone's share sheet (Web Share), else (or when it fails) the clipboard,
   // else a hidden textarea copy. Every browser call is guarded; a share the player cancels does nothing.
   const shareScore = () => {
-    const n = G.candy, url = location.origin + location.pathname.replace(/index\.html$/, '');
-    const text = `I grabbed ${n} candy before midnight (${rankFor(n)}) in Midnight Candy Run. Can you beat it?`;
+    const n = G.candy, url = `${location.origin}${location.pathname.replace(/index\.html$/, '')}?seed=${PATCH.seed}`; // a friend opens this night
+    const text = `I grabbed ${n} candy before midnight (${rankFor(n)}) in Midnight Candy Run, ${PATCH.today ? 'Tonight\'s Patch' : 'the patch of'} ${PATCH.label}. Can you beat it?`;
     const copy = () => {
       const both = `${text} ${url}`, done = (ok) => hud.toast(ok ? 'SCORE COPIED!' : 'COULD NOT SHARE');
       try {
@@ -865,6 +895,10 @@ async function boot() {
       }
       cur.copy(p);
       kidInfo.x = p.x; kidInfo.y = p.y; kidInfo.z = p.z; kidInfo.vx = cc.velocity.x; kidInfo.vz = cc.velocity.z; kidInfo.safe = G.safeT > 0;
+      potions.fixedUpdate(dt, kidInfo, playing); kidInfo.sneak = potions.sneak; // the brew (a take), SNEAK: unseen
+      if (playing && potions.events.take >= 0) onPotion(potions.events.take);
+      secrets.fixedUpdate(dt, kidInfo, playing); // the hollow oak, the fixed pops growing back
+      if (playing && secrets.events.found >= 0) onSecret(secrets.events.found, secrets.events.value);
       ghosts.fixedUpdate(dt, kidInfo, playing);
       if (ghosts.events.caught >= 0 && playing) caught(ghosts.list[ghosts.events.caught]);
       if (ghosts.events.chaseStart >= 0 && playing) {
@@ -967,6 +1001,7 @@ async function boot() {
         const prog = 1 - G.left / ROUND;
         if (G.mercyT > 0) G.mercyT -= dt;
         ghosts.difficulty = Math.max(0, prog - (G.mercyT > 0 ? MERCY : 0)); audio.intensity(prog);
+        ghosts.maxChasers = G.mercyT > 0 ? 1 : touchUI ? MAX_CHASERS_TOUCH : MAX_CHASERS_DESK;
         if (G.lookHintT > 0 && (G.lookHintT -= dt) <= 0) hud.lookHint(null);
         // ghosts rise on schedule
         const elapsed = ROUND - G.left;
@@ -987,6 +1022,9 @@ async function boot() {
         }
         // down in the creek's bed for 2 s (its banks are walls): how to get out (once per device)
         if (!taught.has('creek') && cc.grounded && world.inCreek(p.x, p.y, p.z)) { if ((creekT += dt) > 2) { taught.set('creek'); hud.say('JUMP OUT!', 'warn'); } } else creekT = 0;
+        // the potions' lesson (once per device): the lit brew in view within 8 m for 2 s
+        const CD = world.cauldron;
+        if (!taught.has('brew') && potions.lit && Math.hypot(CD.x - p.x, CD.z - p.z) < 8 && onScreen(CD.x, potions.y + 1.3, CD.z)) { if ((brewT += dt) > 2 && hud.say('WALK INTO', 'good', 'THE BREW')) taught.set('brew'); } else brewT = 0;
         // the hands' lesson (once per device): the first telegraph in view within 8 m; the thief's: within 10 m, BOO ready
         if (!taught.has('hands')) {
           for (let k = 0; k < hands.n; k++) {
@@ -1015,7 +1053,7 @@ async function boot() {
         if (G.popT <= 0) {
           // a big pop 14..26 m away, in view while the view is dry (it used to land anywhere 16+ m off: no novice or
           // casual bot ever got one); the call-out points at it, an edge marker shows it while it is off screen
-          G.popT = 20 + Math.random() * 8;
+          G.popT = 20 + rr() * 8;
           if (candy.countKind(CANDY_KIND.POP) < 2) {
             const dry = G.dryT > 0, i = ringSpot(_spot, p.x, p.z, POP_R[0], POP_R[1], rig.yaw, dry ? viewHalf() : Math.PI) ? candy.place(_spot[0], _spot[1], _spot[2], CANDY_KIND.POP) : candy.spawnRandom(p.x, p.z, CANDY_KIND.POP, 16);
             if (i >= 0) hud.say(`BIG POP SPOTTED ${arrowTo(candy.p[i * 3], candy.p[i * 3 + 2])}`, 'good');
@@ -1086,6 +1124,8 @@ async function boot() {
       n += porches.update(dt, glows, n, t); // doors, lamps (on the env's flicker), railing pumpkins, doorways
       n += hands.update(dt, glows, n, t);   // the hands, their soil ring's glow and puffs
       n += thief.update(dt, glows, n, t, camera.position); // the raccoon's pose, its sack's halo, the stun's stars
+      n += potions.update(dt, glows, n, t, player.position); // the brew's level and colour, the pail, the kid's aura
+      n += secrets.update(dt, glows, n, t); // the crypt's door, the crack's and the oak's glint, the open doorway
       n += world.halos(glows, n); // halos over the static glowing props, at their light's level (env: flicker, gusts)
       glows.commit(n);
       bats.update(dt);
@@ -1139,7 +1179,7 @@ async function boot() {
         let pi = -1, pd = Infinity;
         const C = candy;
         for (let i = 0; i < C.state.length; i++) {
-          if (C.state[i] === 0 || C.kind[i] !== CANDY_KIND.POP) continue;
+          if (C.state[i] === 0 || C.kind[i] !== CANDY_KIND.POP || C.fixed[i]) continue; // (not the fixed pops: they are landmarks)
           const q = Math.hypot(C.p[i * 3] - p.x, C.p[i * 3 + 2] - p.z); if (q < pd) { pd = q; pi = i; }
         }
         if (playing && pi >= 0 && placeEdge(C.p[pi * 3], C.p[pi * 3 + 1] + 0.6, C.p[pi * 3 + 2]).off) hud.setEdge(hud.popEdge, true, edge.x, edge.y, edge.ang, 1, pd);
@@ -1186,6 +1226,7 @@ async function boot() {
   const loadMs = Math.round(performance.now() - t0);
   window.__game = {
     THREE, engine, G, cc, ctl, camState, rig, orbit, input, hud, audio, world, dyn, lanterns, ghosts, candy, porches, PORCH, hands, HAND, thief, THIEF, taught, fx, postfx, atmo, physics, player, env,
+    potions, secrets, chain, badges, rng, PATCH, pailLight,
     loadMs, TOUCH, LOW, startRound, toTitle, setPaused, endRound, juice, paceRec, shareScore, RANKS, around,
     get pace() { return pace; }, get baseFov() { return baseFov; },
     get touchUI() { return touchUI; },
