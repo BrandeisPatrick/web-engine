@@ -1,7 +1,8 @@
 // DOM HUD and screens for Midnight Candy Run, on the engine UI kit's theme (setTheme: accent, font) plus its own CSS:
-//   title     logo, tag line, a big tap-to-start button (the gesture that also starts audio), HOW TO PLAY / sound /
+//   title     logo, Tonight's Patch (the night's seed: "TONIGHT'S PATCH · NOV 1", a friend's link: "A FRIEND'S PATCH"),
+//             tag line, a big tap-to-start button (the gesture that also starts audio), HOW TO PLAY / sound /
 //             full-screen buttons, three how-to cards (hidden on short landscape screens: HOW TO PLAY opens them),
-//             the control scheme for this device, best score
+//             the control scheme for this device, best score (and tonight's best)
 //   help      the how-to-play panel (cards, controls, tips), from the title and the pause screen
 //   hud       candy counter (+N pops) with the next rank's threshold after it ("/130"), a streak meter along its bottom
 //             edge while a streak runs and a gold "x2" badge in the Witching Hour; the clock to midnight with a progress
@@ -15,9 +16,10 @@
 //             out and off screen; BOO glows ("hot") while a chaser or the thief is in reach; a look hint pill
 //             (desktop: how the mouse looks)
 //   pause     resume / restart / how to play / title / music / sound
-//   results   candy, rank title, the rank ladder and what the next rank takes, best (NEW BEST), stats (porches n/5,
-//             tricks, tags, BOOs, catches, best streak), PLAY AGAIN / TITLE / share (the game shares through Web Share on
-//             phones, else copies; a toast says so)
+//   results   candy, rank title, the rank ladder and what the next rank takes, best (NEW BEST) and tonight's best,
+//             stats (porches n/5, tricks, tags, BOOs, catches, best streak, best chain), the badges (badges.js: a row of
+//             icons, earned ones lit, the new ones named; else one locked badge's hint), PLAY AGAIN / TITLE / share (the
+//             game shares through Web Share on phones, else copies; a toast says so)
 // Call-outs come two ways: callout() at once (the answer to the player's own action: BOO!, a trick, a catch, a rank,
 // the Witching Hour) and say() paced (hints and news: at most one per CALL_GAP s, duplicates dropped, stale ones too).
 // taught.has / taught.set keep the once-per-device lessons (localStorage midnight-candy-run.taught.<key>).
@@ -52,6 +54,17 @@ const POP_ICON = '<svg viewBox="0 0 24 32" aria-hidden="true"><path d="M11 15h2v
 // the candy thief: a raccoon's face (grey, the black mask, eyes shining) with its pink sack
 const RACCOON_ICON = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M9 20L11 7l10 8zM39 20L37 7l-10 8z" fill="#8f8796"/><ellipse cx="24" cy="26" rx="17" ry="14" fill="#a39ba9"/><path d="M8 24q8-7 16-2q8-5 16 2q-2 7-8 6q-5-1-8-4q-3 3-8 4q-6 1-8-6z" fill="#1d1920"/><circle cx="16.5" cy="25" r="2.6" fill="#fff3c4"/><circle cx="31.5" cy="25" r="2.6" fill="#fff3c4"/><ellipse cx="24" cy="34" rx="8" ry="5.5" fill="#ece6ee"/><ellipse cx="24" cy="31.5" rx="3" ry="2.2" fill="#120e14"/><circle cx="38" cy="38" r="7" fill="#ff4f9e"/><path d="M36 31.5l2 2 2-2" stroke="#b8236a" stroke-width="2" fill="none"/></svg>';
 const CHEVRON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 15l7-8 7 8" stroke="currentColor" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+// the badges (badges.js ids): a lit cottage, a trick's purple burst, a shield, a crown, the thief's pink sack, a key,
+// a potion in the brew's three colours
+const BADGE_ICONS = {
+  full: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12l9-8 9 8v9H3z" fill="#e8b071"/><path d="M1.5 12.5l10.5-9.5 10.5 9.5" stroke="#7a3a1c" stroke-width="2" fill="none"/><rect x="9.5" y="14" width="5" height="7" fill="#ffd36a"/></svg>',
+  trickster: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.6 6.2L21 7l-4.2 5L21 17l-6.4-1.2L12 22l-2.6-6.2L3 17l4.2-5L3 7l6.4 1.2z" fill="#b07cff"/><circle cx="12" cy="12" r="3.2" fill="#ffe27a"/></svg>',
+  untouchable: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z" fill="#7fd6ff"/><path d="M8 12l3 3 5-6" stroke="#10304a" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  chainking: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18L2 7l5 4 5-7 5 7 5-4-1 11z" fill="#ffc94a"/><rect x="3" y="18.5" width="18" height="3" rx="1" fill="#ff8a1e"/><circle cx="12" cy="13" r="1.8" fill="#ff4f8b"/></svg>',
+  tagger: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h8l-1.5-3h-5z" fill="#b8236a"/><path d="M12 7c6 0 9 4.5 9 9s-4 6-9 6-9-1.5-9-6 3-9 9-9z" fill="#ff4f9e"/><path d="M8 15l3 3 5-6" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/></svg>',
+  explorer: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.5" cy="12" r="5" stroke="#ffd36a" stroke-width="2.6" fill="none"/><path d="M12 12h10v3h-2v3h-3v-3h-5z" fill="#ffd36a"/></svg>',
+  potions: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 2h6v2h-1v4.5c3.5 1.2 6 4 6 7.5a8 8 0 0 1-16 0c0-3.5 2.5-6.3 6-7.5V4H9z" fill="#2a1a3a"/><path d="M5.2 15h13.6a6.8 6.8 0 0 1-13.6 0z" fill="#ff4f9e"/><path d="M5.6 12.5h12.8a6.8 6.8 0 0 1 .4 2.5H5.2a6.8 6.8 0 0 1 .4-2.5z" fill="#9b5cff"/><path d="M7.5 10.3h9a7 7 0 0 1 1.9 2.2H5.6a7 7 0 0 1 1.9-2.2z" fill="#4dff6a"/></svg>',
+};
 
 // ---- full screen (Android Chrome, desktop, iPad; iPhone Safari has no element full screen: the button stays hidden)
 const fsDoc = () => /** @type {any} */ (document);
@@ -218,6 +231,21 @@ const CSS = `
 .hw-card span{display:block;font-size:12.5px;line-height:1.3;color:rgba(255,240,230,.82)}
 .hw-ctrl{font-size:clamp(11.5px,2.4vmin,14px);color:rgba(255,235,220,.72);letter-spacing:.04em;line-height:1.5;max-width:44em}
 .hw-best{font-size:13px;letter-spacing:.3em;color:#d9c2ff;font-weight:700}
+/* Tonight's Patch under the logo: the night's seed */
+.hw-patch{display:flex;gap:.6em;align-items:baseline;justify-content:center;font-size:clamp(11px,2.6vmin,14px);letter-spacing:.24em;font-weight:800;
+  color:#c8f5d0;text-shadow:0 0 12px rgba(90,255,140,.45);margin-top:-2px}
+.hw-patch b{color:#fff;font-weight:900;letter-spacing:.16em}
+/* results: the badges (earned lit, new ones ringed and named, locked greyed) and their line */
+.hw-badges{display:flex;gap:clamp(4px,1.4vmin,8px);justify-content:center}
+.hw-badges i{width:clamp(28px,7vmin,36px);height:clamp(28px,7vmin,36px);border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);filter:grayscale(1);opacity:.32}
+.hw-badges i svg{width:66%;height:66%}
+.hw-badges i.on{filter:none;opacity:1;background:linear-gradient(160deg,rgba(80,36,110,.9),rgba(30,12,46,.9));border-color:rgba(255,200,120,.45)}
+.hw-badges i.now{box-shadow:0 0 10px rgba(255,190,90,.55)}
+.hw-badges i.fresh{border:2px solid #ffd36a;box-shadow:0 0 16px rgba(255,190,80,.9);animation:hwBest 1s ease-in-out infinite}
+.hw-badge-line{font-size:11px;letter-spacing:.18em;font-weight:800;color:rgba(255,226,196,.62);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hw-badge-line.new{color:#ffd36a;text-shadow:0 0 10px rgba(255,180,60,.6)}
+.hw-badge-line:empty{display:none}
 .hw-title-btns{align-items:center}.hw-title-btns .hw-btn2{padding:10px 18px}
 .hw-help{background:radial-gradient(ellipse at 50% 40%,rgba(30,12,46,.95),rgba(9,4,16,.97));z-index:45}
 .hw-help .hw-cards{display:flex}.hw-help .hw-ctrl{max-width:40em}
@@ -254,7 +282,7 @@ const CSS = `
 /* reduced motion: no zooming call-outs or bouncing badges (the game also skips the camera shake and FOV punch) */
 @media (prefers-reduced-motion:reduce){
   .hw-call.go,.hw-count.go{animation-name:hwFade}.hw-candy.bump b{animation:none}
-  .hw-logo .b,.hw-start,.hw-newbest{animation:none}
+  .hw-logo .b,.hw-start,.hw-newbest,.hw-badges i.fresh{animation:none}
   .hw-touch-on .ui-touch-btn.hw-boo-btn.hw-boo-hot{animation:none;box-shadow:0 0 30px 8px rgba(190,140,255,.9),0 6px 18px rgba(0,0,0,.35)}
   .hw-boo.hot .ring{animation:none;box-shadow:0 0 26px 6px rgba(190,140,255,.95)}
 }
@@ -332,7 +360,7 @@ export function applyTheme() {
 }
 
 export class HUD {
-  constructor({ touch = false, streak = 10, onStart, onPause, onResume, onRestart, onTitle, onMute, onMusic, onShare } = {}) {
+  constructor({ touch = false, streak = 10, patch = null, onStart, onPause, onResume, onRestart, onTitle, onMute, onMusic, onShare } = {}) {
     applyTheme();
     this.touch = touch;
     const root = this.root = el('div', 'hw', document.body);
@@ -376,6 +404,7 @@ export class HUD {
     const title = this.title = el('div', 'hw-screen hw-title-wrap', root);
     title.innerHTML = `
       <div class="hw-logo"><span class="s">MIDNIGHT</span><span class="b">CANDY RUN</span></div>
+      ${patch ? `<div class="hw-patch"><span>${patch.today ? 'TONIGHT\'S PATCH' : 'A FRIEND\'S PATCH'}</span><b>${patch.label}</b></div>` : ''}
       <div class="hw-tag">It's Halloween night. Grab every sweet in the pumpkin patch and the graveyard before the clock strikes twelve!</div>
       <button class="hw-start">TAP TO START</button>
       <div class="hw-small-btns hw-title-btns"><button class="hw-btn2" data-a="help">HOW TO PLAY</button><button class="hw-icon hw-mute" aria-label="Sound">${ICON.sound}</button>${fs ? `<button class="hw-icon hw-fs" aria-label="Full screen">${ICON.fullscreen}</button>` : ''}</div>
@@ -420,9 +449,11 @@ export class HUD {
       <div class="hw-score">${ICON.candy}<span class="n">0</span></div>
       <div class="hw-rank"></div><div class="hw-ladder">${'<i><b></b></i>'.repeat(RANKS.length)}</div><div class="hw-next"></div><div class="hw-best-line"></div>
       <div class="hw-stats"></div>
+      <div class="hw-badges"></div><div class="hw-badge-line"></div>
       <div class="hw-small-btns hw-row" style="margin-top:6px"><button class="hw-start" data-a="again">PLAY AGAIN</button><i class="hw-break"></i><button class="hw-btn2" data-a="title">TITLE</button><button class="hw-icon hw-share" data-a="share" aria-label="Share your score">${ICON_SHARE}</button></div>
       <div class="hw-pill hw-toast"></div>`;
     this.overN = over.querySelector('.n'); this.overRank = over.querySelector('.hw-rank'); this.overBest = over.querySelector('.hw-best-line'); this.overStats = over.querySelector('.hw-stats');
+    this.overBadges = over.querySelector('.hw-badges'); this.overBadgeLine = over.querySelector('.hw-badge-line');
     this.ladder = [...over.querySelectorAll('.hw-ladder b')]; this.overNext = over.querySelector('.hw-next'); this.toastEl = over.querySelector('.hw-toast');
     this.againBtn = over.querySelector('[data-a=again]');
     // the results come up while a thumb may still be hammering JUMP / BOO (TITLE sits where JUMP was in portrait):
@@ -452,8 +483,9 @@ export class HUD {
   showHelp(on) { this.help.classList.toggle('off', !on); }
   _syncFullscreen() { const f = isFullscreen(); for (const b of this.fsBtns) { b.innerHTML = f ? ICON.windowed : ICON.fullscreen; b.setAttribute('aria-label', f ? 'Leave full screen' : 'Full screen'); } }
 
-  showTitle(best) {
-    this.bestEl.textContent = best > 0 ? `BEST ${best} CANDY` : '';
+  /** The title (best: the best candy ever, daily: tonight's best, 0 when none). */
+  showTitle(best, daily = 0) {
+    this.bestEl.textContent = best > 0 ? `BEST ${best} CANDY${daily > 0 ? ` · TONIGHT ${daily}` : ''}` : '';
     this.title.classList.remove('off'); this.hud.classList.add('off'); this.pause.classList.add('off'); this.over.classList.add('off');
     this.showHelp(false);
     this.setTouchVisible(false);
@@ -477,10 +509,11 @@ export class HUD {
   }
 
   /**
-   * The results: candy, rank, the rank ladder (filled up to the next rank) with what the next rank takes, the best,
-   * the stats (lane porches visited of porchesOf, tricks, the thief tagged, ghosts booed, catches, best streak).
+   * The results: candy, rank, the rank ladder (filled up to the next rank) with what the next rank takes, the best and
+   * tonight's (daily: { best, isBest } or null), the stats (lane porches visited of porchesOf, tricks, the thief
+   * tagged, ghosts booed, catches, best streak, best chain), the badges (badges.js BadgeBook.record's result or null).
    */
-  showResults({ candy, best, isBest, booed, caught, streak, porches = 0, porchesOf = 5, tricks = 0, tags = 0 }) {
+  showResults({ candy, best, isBest, booed, caught, streak, porches = 0, porchesOf = 5, tricks = 0, tags = 0, chain = 0, daily = null, badges = null }) {
     this.overN.textContent = String(candy);
     const ri = rankIndex(candy), next = ri + 1 < RANKS.length ? RANKS[ri + 1] : null;
     this.overRank.textContent = RANKS[ri][1];
@@ -489,9 +522,19 @@ export class HUD {
       b.style.width = `${Math.round(Math.max(0, Math.min(1, f)) * 100)}%`;
     });
     this.overNext.textContent = next ? `${next[0] - candy} MORE FOR ${next[1].toUpperCase()}` : '';
-    this.overBest.innerHTML = isBest ? '<span class="hw-newbest">NEW BEST!</span>' : `<span class="hw-best">BEST ${best}</span>`;
+    const tonight = daily ? (daily.isBest && !isBest ? ' <span class="hw-newbest">TONIGHT\'S BEST!</span>' : ` <span class="hw-best">· TONIGHT ${daily.best}</span>`) : '';
+    this.overBest.innerHTML = (isBest ? '<span class="hw-newbest">NEW BEST!</span>' : `<span class="hw-best">BEST ${best}</span>`) + tonight;
     const stat = (v, label) => `<div><b>${v}</b><span>${label}</span></div>`;
-    this.overStats.innerHTML = stat(`${porches}/${porchesOf}`, 'PORCHES') + stat(tricks, 'TRICKS') + stat(tags, 'TAGS') + stat(booed, 'BOOS') + stat(caught, 'CAUGHT') + stat(streak, 'BEST STREAK');
+    this.overStats.innerHTML = stat(`${porches}/${porchesOf}`, 'PORCHES') + stat(tricks, 'TRICKS') + stat(tags, 'TAGS') + stat(booed, 'BOOS') + stat(caught, 'CAUGHT') + stat(streak, 'BEST STREAK') + stat(chain >= 2 ? `×${chain}` : '0', 'BEST CHAIN');
+    // the badges: the row (lit: earned on this device; ringed: new this round), then the new ones' names, or one
+    // locked badge's hint
+    const L = this.overBadgeLine;
+    if (badges) {
+      this.overBadges.innerHTML = badges.list.map((b) => `<i class="${b.on ? 'on' : ''}${b.now ? ' now' : ''}${b.fresh ? ' fresh' : ''}" data-id="${b.id}" aria-label="${b.on ? b.name : `${b.name} (locked: ${b.hint})`}">${BADGE_ICONS[b.id] || ''}</i>`).join('');
+      const fresh = badges.list.filter((b) => b.fresh).map((b) => b.name);
+      L.textContent = fresh.length ? `NEW BADGE${fresh.length > 1 ? 'S' : ''}: ${fresh.join(' · ')}` : badges.hint ? `LOCKED · ${badges.hint}` : 'EVERY BADGE EARNED!';
+      L.classList.toggle('new', fresh.length > 0);
+    } else { this.overBadges.innerHTML = ''; L.textContent = ''; }
     this.toastEl.classList.remove('go');
     this.hud.classList.add('off'); this.over.classList.remove('off');
     this.showHelp(false);
