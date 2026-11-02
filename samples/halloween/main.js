@@ -638,7 +638,7 @@ async function boot() {
     fx.burst(c.x, c.y, c.z, 14, 1.8, 1.6, 0.6, 2, 3.5, 0.6, 0.08);
     audio.smash(stomp); buzz(stomp ? BUZZ.stomp : BUZZ.smash);
     jolt(stomp ? SHAKE.stomp : SHAKE.smash); hitstop(stomp ? HITSTOP.stomp : HITSTOP.smash);
-    if (stomp) { v.y = 6.4; if (chain.n > 1) { hud.callout(`CHAIN ×${chain.n}!`, 'rank', `+${pay}`); audio.streak(); } else hud.callout('STOMP!', ''); }
+    if (stomp) { v.y = 6.4; if (chain.n > 1) { hud.callout(`CHAIN ×${chain.n}!`, 'rank', `+${pay}`, 1); audio.streak(); } else hud.callout('STOMP!', ''); }
   };
   // a catch costs 10 % (2..12; in the Witching Hour at most WITCH_CATCH): it used to be 3 + 12 % uncapped (-36 at
   // 0:10). The loss spills around the kid, quick to grab back (collectable after 0.45 s, gone after 10 s; in the

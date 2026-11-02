@@ -243,7 +243,8 @@ const CSS = `
 .hw-badges i.on{filter:none;opacity:1;background:linear-gradient(160deg,rgba(80,36,110,.9),rgba(30,12,46,.9));border-color:rgba(255,200,120,.45)}
 .hw-badges i.now{box-shadow:0 0 10px rgba(255,190,90,.55)}
 .hw-badges i.fresh{border:2px solid #ffd36a;box-shadow:0 0 16px rgba(255,190,80,.9);animation:hwBest 1s ease-in-out infinite}
-.hw-badge-line{font-size:11px;letter-spacing:.18em;font-weight:800;color:rgba(255,226,196,.62);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hw-badge-wrap{display:flex;flex-direction:column;align-items:center;gap:5px;max-width:100%;flex-shrink:0}
+.hw-badge-line{font-size:11px;line-height:1.45;letter-spacing:.16em;font-weight:800;color:rgba(255,226,196,.62);max-width:min(330px,100%)}
 .hw-badge-line.new{color:#ffd36a;text-shadow:0 0 10px rgba(255,180,60,.6)}
 .hw-badge-line:empty{display:none}
 .hw-title-btns{align-items:center}.hw-title-btns .hw-btn2{padding:10px 18px}
@@ -295,6 +296,7 @@ const CSS = `
   .hw-score{font-size:clamp(40px,15vh,64px)}.hw-score svg{width:44px}
   .hw-rank{font-size:18px}
   .hw-stats b{font-size:17px}.hw-stats span{font-size:9.5px}
+  .hw-badge-wrap{flex-direction:row;gap:10px}.hw-badge-line{max-width:300px;text-align:left;line-height:1.3}
   .hw-screen .hw-start{padding:10px 30px;font-size:19px}
   .hw-btn2{padding:9px 18px;font-size:13px}
 }
@@ -308,7 +310,7 @@ const CSS = `
   .hw-title-wrap .hw-cards{display:flex}.hw-card{padding:6px 10px}.hw-card svg{width:30px;height:30px}.hw-card span{font-size:11px}
 }
 @media (orientation:portrait){
-  .hw-stats{max-width:min(330px,100%)}
+  .hw-stats{max-width:min(340px,100%);gap:6px 12px}.hw-stats div{min-width:3.2em}
   .hw-cards{flex-direction:column;align-items:stretch;max-width:340px}
   .hw-card{max-width:none}
   .hw-clock{top:calc(var(--sa-t) + 64px)}
@@ -452,7 +454,7 @@ export class HUD {
       <div class="hw-score">${ICON.candy}<span class="n">0</span></div>
       <div class="hw-rank"></div><div class="hw-ladder">${'<i><b></b></i>'.repeat(RANKS.length)}</div><div class="hw-next"></div><div class="hw-best-line"></div>
       <div class="hw-stats"></div>
-      <div class="hw-badges"></div><div class="hw-badge-line"></div>
+      <div class="hw-badge-wrap"><div class="hw-badges"></div><div class="hw-badge-line"></div></div>
       <div class="hw-small-btns hw-row" style="margin-top:6px"><button class="hw-start" data-a="again">PLAY AGAIN</button><i class="hw-break"></i><button class="hw-btn2" data-a="title">TITLE</button><button class="hw-icon hw-share" data-a="share" aria-label="Share your score">${ICON_SHARE}</button></div>
       <div class="hw-pill hw-toast"></div>`;
     this.overN = over.querySelector('.n'); this.overRank = over.querySelector('.hw-rank'); this.overBest = over.querySelector('.hw-best-line'); this.overStats = over.querySelector('.hw-stats');

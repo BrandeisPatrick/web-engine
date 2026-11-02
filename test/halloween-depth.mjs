@@ -183,7 +183,7 @@ const stepS = (s) => { for (let i = 0; i < Math.round(s / DT); i++) S.fixedUpdat
   // the crypt's door sinks into its plinth (then hidden), the oak's glint goes dark
   for (let f = 0; f < 120; f++) { world.glowLevels.fill(1); S.update(1 / 60, glows, 0, f / 60); }
   check('secrets: the crypt door sinks open (hidden once down), the doorway glows green; the empty oak\'s glint is dark',
-    !S.door.visible && S.door.position.y < S.doorY - SECRET.DOOR_DROP + 0.01 && world.glowLevels[SECRETS.crypt.group] > 2 && world.glowLevels[SECRETS.oak.group] === 0, `door y ${S.door.position.y.toFixed(2)} (from ${S.doorY.toFixed(2)})`);
+    !S.door.visible && S.door.position.y < S.doorY - SECRET.DOOR_DROP + 0.01 && world.glowLevels[SECRETS.crypt.group] > 1.8 && world.glowLevels[SECRETS.oak.group] === 0, `door y ${S.door.position.y.toFixed(2)} (from ${S.doorY.toFixed(2)})`);
   // the Witching Hour refills the oak: it pays once more; a reset hides them all again
   spills.length = 0; S.setWitch(true); put(O[0] + 2.5, O[1] + 2.5); stepS(0.1); put(O[0], O[1]); stepS(0.1); stepS(0.5);
   const refill = spills.join(); spills.length = 0;

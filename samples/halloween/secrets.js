@@ -120,9 +120,11 @@ export class Secrets {
       this.opening = true;
       const oy = this.doorY + 0.8, oz = this.doorZ + 0.6;
       this._shower(this.doorX, oy, oz, SECRET.CRYPT, 3.2, 0); // out of the doorway (+z)
-      C.drop(this.doorX + 0.6, this.heightAt(this.doorX + 0.6, oz + 1.6), oz + 1.6, CANDY_KIND.POP, 1.2, 30);
-      if (this.fx) { this.fx.burst(this.doorX, this.doorY + 0.4, oz, 30, 0.4, 0.36, 0.32, 2.4, 1.2, 1.1, 0.16); this.fx.flash(this.doorX, oy, oz, 4, 0.2, 1.0, 0.4, 0.5); }
-      if (this.ghosts) { const sp = this._ghostSpot || (this._ghostSpot = [0, 0]); sp[0] = this.doorX + 1.6; sp[1] = this.doorZ + 0.6; this.ghosts.wake(x, z, Math.random, sp); }
+      // (the pop and the ghost to the sides of the doorway: a pop's beam or a rising sheet between the camera and the
+      // door washed the moment out on a phone)
+      C.drop(this.doorX - 1.5, this.heightAt(this.doorX - 1.5, oz + 0.9), oz + 0.9, CANDY_KIND.POP, 1.2, 30);
+      if (this.fx) { this.fx.burst(this.doorX, this.doorY + 0.4, oz, 30, 0.4, 0.36, 0.32, 2.4, 1.2, 1.1, 0.16); this.fx.flash(this.doorX, oy, oz, 2.6, 0.1, 0.55, 0.22, 0.45); }
+      if (this.ghosts) { const sp = this._ghostSpot || (this._ghostSpot = [0, 0]); sp[0] = this.doorX + 2.8; sp[1] = this.doorZ - 0.3; this.ghosts.wake(x, z, Math.random, sp); }
       this._find(CRYPT, SECRET.CRYPT + 5);
       return CRYPT;
     }
@@ -176,12 +178,12 @@ export class Secrets {
       if (this.fx && Math.floor(this.doorT * 12) !== Math.floor((this.doorT - dt / SECRET.DOOR_T) * 12)) this.fx.burst(this.doorX + (Math.random() - 0.5) * 1.4, this.doorY + 0.3, this.doorZ + 0.3, 4, 0.35, 0.32, 0.3, 1.2, 0.8, 0.8, 0.12);
     }
     if (W) {
-      if (S.crypt.group > 0) W.glowLevels[S.crypt.group] *= 1 + 2.2 * this.doorT; // the green light pours out as it opens
+      if (S.crypt.group > 0) W.glowLevels[S.crypt.group] *= 1 + 1.2 * this.doorT; // the green light pours out as it opens
       if (S.oak.group > 0) W.glowLevels[S.oak.group] *= this.oakFull ? 1 : 0;
     }
     if (this.doorT > 0) {
       const f = this.doorT * (0.85 + 0.15 * Math.sin(t * 2.3));
-      glows.set(base + n++, this.doorX, this.doorY + 1.2, this.doorZ + 0.3, 3.4, 0.03 * f, 0.26 * f, 0.1 * f);
+      glows.set(base + n++, this.doorX, this.doorY + 1.2, this.doorZ + 0.3, 2.6, 0.02 * f, 0.17 * f, 0.07 * f);
     }
     return n;
   }
