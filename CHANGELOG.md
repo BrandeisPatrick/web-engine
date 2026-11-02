@@ -144,6 +144,29 @@ in 1.0.0), driven by the new Halloween game sample (`samples/halloween/`, "Midni
   boxed arguments of two engine calls).
 - Midnight Candy Run: the far-candy move into a dry view (`relocateFar`) fires below `CANDY_TARGET` too, after 2.4 s
   of a dry view (was 3.6 s, and only with the full target resting, which play keeps a few under, so it never fired).
+- Midnight Candy Run depth and replay (design pass 4, phones first, no engine change, no new light, physics body or HUD
+  box). **Potions** (`samples/halloween/potions.js`): the cauldron's brew cycles green / violet / pink every 3 s;
+  walking into its ring while it glows takes the colour showing, and the brew goes dark for 30 s (fading up over its
+  last 3). ZOOM runs 8.5 m/s for 8 s, SNEAK hides the kid from the ghosts (no chase, no catch: chasers drop to
+  wandering), the grave hands (no grab) and the thief (no bolting; a stunned one is still tagged) for 8 s, SWEET TOOTH
+  pulls candy from 7 m and picks it up at 1.2 m for 12 s; one at a time (a new one replaces), the pail's light and an
+  aura round the kid take its colour and blink in its last 2 s; "WALK INTO / THE BREW" once per device. The brew's
+  colour is the glow mesh's one tinted light group (its parts and its halo; `world.glowTint`). **Stomp chains**
+  (`chain.js`): a stomp within 1.6 s of the last pays 7, 10, 13 ("CHAIN ×2!"). **Secrets** (`secrets.js`, no markers):
+  BOO by the well (an echo, 4 candies), BOO at the crypt's door (it sinks into the plinth: its own small mesh, the map's
+  crypt is built without its leaf; 12 + a pop, a ghost rises at it), walking into the hollow oak (8 + a pop; the
+  Witching Hour refills it); each once a round. **Fixed big pops** on the knoll's plateau and the Bale Yard's platform,
+  back 45 s after they are taken (`Candy.fixed`: not field candy, not the roaming pop's cap or edge marker; five pop
+  beams, culled off screen). **Badges** (`badges.js`, results only, kept on the device: Full Round, Trickster,
+  Untouchable, Chain King, Tagger, Explorer, Potion Master; up to 3 new ones named, a locked one's four-word hint) and
+  the results' BEST CHAIN. **Tonight's Patch** (`rng.js`): the night's seed (the local date, or `?seed=<n>` from a
+  shared link) lays out each round's candy (`candySpot`, kinds, the dry-view and pop draws), the porches' relight
+  jitter (+-2 s, new) and the grave hands' cycles, re-seeded every round; the title shows "TONIGHT'S PATCH · NOV 1"
+  (a friend's: "A FRIEND'S PATCH"), the results and the title keep tonight's best (`midnight-candy-run.daily.<seed>`),
+  the share carries the date and the seed. Tuning on the phone bots: mercy after 2 catches in 30 s (was 3), with one
+  chaser at a time and the pack calm 8 s after each catch while it lasts; a dry view's respawns land 6..14 m ahead, 0.8
+  of them (were 9..22 m, 0.6); the final ranks 0 / 60 / 140 / 240 / 360 / 560 (were 230 and 520). `test/halloween-depth.mjs` (headless, in `npm test`) pins the rules, the seed and no allocation per frame
+  for the potions and the secrets; the browser suite adds the pass-4 checks and two page loads of one seed.
 
 ## 1.0.0 — 2026-10-30
 The release of the 1.0 roadmap (phases 0.5.0 - 0.9.0, ENGINE.md): a general engine with its graphics and physics pushed as
