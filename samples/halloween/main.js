@@ -70,8 +70,8 @@ const RECENTRE_TOUCH = 0.7, RECENTRE_DESK = 0.8; // s without look input before 
 const STICK_DEAD = 0.12, STICK_FULL = 0.75;
 // slide around (touch): a push within acos(AROUND_INTO) of straight into a gravestone, tree, fence or wall turns along
 // it (AROUND_ALONG of the speed along it, AROUND_LEAN into it), the short way round the box in the way; the turn holds
-// AROUND_HOLD s while blocked and AROUND_AFTER s past the corner
-const AROUND_INTO = 0.6, AROUND_ALONG = 0.9, AROUND_LEAN = 0.3, AROUND_HOLD = 0.4, AROUND_AFTER = 0.06;
+// AROUND_HOLD s while blocked and AROUND_AFTER s past the corner; it looks AROUND_LOOK m along the wall each way
+const AROUND_INTO = 0.6, AROUND_ALONG = 0.9, AROUND_LEAN = 0.3, AROUND_HOLD = 0.4, AROUND_AFTER = 0.06, AROUND_LOOK = 4;
 // a catch costs 10 % of the candy (2..12); 3 catches within MERCY_WINDOW s calm the ghosts (difficulty -MERCY) for MERCY_T s
 const CATCH_SHARE = 0.10, CATCH_MIN = 2, CATCH_MAX = 12, MERCY = 0.35, MERCY_WINDOW = 30, MERCY_T = 20;
 const MAX_CHASERS_TOUCH = 2, MAX_CHASERS_DESK = 3;
@@ -218,10 +218,11 @@ async function boot() {
       W.ghosts = new Ghosts({ scene, dyn: W.dyn, heightAt, spawns: W.world.ghostSpawns, count: GHOSTS, grid: LOW ? 11 : 13, light: !LOW });
       W.ghosts.settle(LOW ? 120 : 150);
       progress(0.85, 'Unwrapping candy…'); await nextFrame();
-      W.candy = new Candy({ scene, heightAt, candySpot: W.world.candySpot });
+      // spilled candy lands on what is under it: the ground, or a porch deck, a footbridge, a bale (not through them)
+      W.candy = new Candy({ scene, heightAt, candySpot: W.world.candySpot, floorAt: (x, z, y) => physics.supportAt(x, z, y, 0.05) });
       W.porches = new Porches({ scene, physics, heightAt, candy: W.candy, ghosts: W.ghosts, world: W.world });
       W.fx = new Effects({ scene, heightAt, low: LOW });
-      W.glows = new Glows(360);
+      W.glows = new Glows(384); // (the porches' doorways, the village's lamps, mats, windows and candles: ~40 halos)
       scene.add(W.glows.mesh);
       W.bats = new Bats({ scene, count: LOW ? 6 : 9 });
       // the living night: wind, leaves, clouds over the moon, mist, lightning, crows; escalates toward midnight
@@ -272,7 +273,7 @@ async function boot() {
   };
   let pace = loadPace(); // the best run's candy at the PACE_N moments (null: no best run recorded yet)
   const paceRec = new Array(PACE_N).fill(0);
-  let booedEver = loadTaught(), lookHinted = false, smashedEver = false;
+  let booedEver = loadTaught(), lookHinted = false, smashedEver = false, creekT = 0;
   // START / RESUME / PLAY AGAIN run inside the click (a user gesture): the same call captures the mouse on desktop
   const hud = new HUD({
     touch: TOUCH, streak: STREAK_EVERY,
@@ -588,16 +589,23 @@ async function boot() {
   };
   // a free spot for a candy in a ring around (px, pz): r in [r0, r1], within ±half of the bearing `yaw` (rig yaw
   // convention: forward = (-sin, -cos)); inside the fence, clear of colliders. Fills out [x, y, z]; false when none.
-  // clear: also no collider on the straight run from the kid to it (no fence or grave between: it can be run to)
+  // clear: also nothing on the straight run from the kid to it that a jump does not clear (a house, a tree, a tall
+  // stone: it can be run to; a fence, a creek bank, a low stone can be hopped)
   const _cols = [], _spot = [0, 0, 0];
   const blocked = (x, z, r) => { _cols.length = 0; return physics.queryColliders(x, z, r, _cols).length > 0; };
+  const walled = (x, z, r) => {
+    _cols.length = 0; physics.queryColliders(x, z, r, _cols);
+    const top = heightAt(x, z) + 1.3;
+    for (let i = 0; i < _cols.length; i++) if (_cols[i].maxY > top) return true;
+    return false;
+  };
   const ringSpot = (out, px, pz, r0, r1, yaw, half, clear = false) => {
     for (let t = 0; t < 12; t++) {
       const a = yaw + (Math.random() * 2 - 1) * half, r = r0 + Math.random() * (r1 - r0), sx = -Math.sin(a), sz = -Math.cos(a);
       const x = px + sx * r, z = pz + sz * r;
       if (Math.abs(x) > PLAY - 2 || Math.abs(z) > PLAY - 2 || blocked(x, z, 0.6)) continue;
       let ok = true;
-      if (clear) for (let k = 1.5; k < r - 0.5 && ok; k += 1) ok = !blocked(px + sx * k, pz + sz * k, 0.35);
+      if (clear) for (let k = 1.5; k < r - 0.5 && ok; k += 1) ok = !walled(px + sx * k, pz + sz * k, 0.35);
       if (!ok) continue;
       out[0] = x; out[1] = heightAt(x, z); out[2] = z;
       return true;
@@ -644,19 +652,29 @@ async function boot() {
     return best;
   };
   // slide around: the side to turn along a wall of normal (nx, nz) for a push (mx, mz): the push's own lean along it,
-  // else the short way round the box in the way (projected on the wall's tangent)
+  // else the short way round the wall in the way (followed behind its face through the boxes that continue it: a fence
+  // into a house front is one wall); a way that another wall closes (a fence's inside corner: the kid was pinned there
+  // pushing at a porch beyond it) loses to one that is open
   const around = { t: 0, s: 1, nx: 0, nz: 0 };
   const aroundSide = (nx, nz, mx, mz) => {
     const tx = -nz, tz = nx, tan = (mx * tx + mz * tz) / (Math.hypot(mx, mz) || 1);
-    if (Math.abs(tan) > 0.25) return tan > 0 ? 1 : -1;
-    const p = cc.position;
-    _cols.length = 0; physics.queryColliders(p.x - nx * 0.45, p.z - nz * 0.45, 0.3, _cols);
-    let b = null;
-    for (let i = 0; i < _cols.length; i++) { const q = _cols[i]; if (q.maxY > p.y + 0.35 && q.minX !== undefined) { b = q; break; } }
-    if (!b) return tan >= 0 ? 1 : -1;
-    const a0 = b.minX * tx, a1 = b.maxX * tx, c0 = b.minZ * tz, c1 = b.maxZ * tz, kp = p.x * tx + p.z * tz;
-    const tmin = Math.min(a0, a1) + Math.min(c0, c1), tmax = Math.max(a0, a1) + Math.max(c0, c1);
-    return tmax - kp < kp - tmin ? 1 : -1;
+    const p = cc.position, top = p.y + 0.35, bx = p.x - nx * 0.45, bz = p.z - nz * 0.45;
+    const wall = (x, z, r) => {
+      _cols.length = 0; physics.queryColliders(x, z, r, _cols);
+      for (let i = 0; i < _cols.length; i++) if (_cols[i].maxY > top && _cols[i].minX !== undefined) return true;
+      return false;
+    };
+    // how far the wall runs that way (m, up to AROUND_LOOK), or Infinity when a wall across the kid's line closes it
+    const way = (s) => {
+      let d = 0;
+      while (d < AROUND_LOOK && wall(bx + tx * s * d, bz + tz * s * d, 0.15)) d += 0.3;
+      for (let e = 0.35; e <= d + 0.25; e += 0.3) if (wall(p.x + tx * s * e, p.z + tz * s * e, 0.2)) return Infinity;
+      return d;
+    };
+    const a = way(1), b = way(-1), lean = tan >= 0 ? 1 : -1;
+    if (a === b) return lean;
+    if (Math.abs(tan) > 0.25 && (lean > 0 ? a : b) < Infinity) return lean;
+    return a < b ? 1 : -1;
   };
   // the arrow toward a world point, from the camera's view: ahead / behind / left / right
   const arrowTo = (x, z) => {
@@ -669,7 +687,8 @@ async function boot() {
   const _tspot = [0, 0];
   const wakeTutor = (p) => {
     let g = null;
-    if (ringSpot(_spot, p.x, p.z, TUTOR_R[0], TUTOR_R[1], rig.yaw, 0.25)) { _tspot[0] = _spot[0]; _tspot[1] = _spot[2]; g = ghosts.wake(p.x, p.z, Math.random, _tspot); }
+    // (nearer when a house stands there: a player heading for the first porch faces it at 5 s)
+    if (ringSpot(_spot, p.x, p.z, TUTOR_R[0], TUTOR_R[1], rig.yaw, 0.25) || ringSpot(_spot, p.x, p.z, 6.5, TUTOR_R[0], rig.yaw, 0.25)) { _tspot[0] = _spot[0]; _tspot[1] = _spot[2]; g = ghosts.wake(p.x, p.z, Math.random, _tspot); }
     if (!g) g = ghosts.wake(p.x, p.z);
     if (!g) return;
     g.tame = TUTOR_T;
@@ -899,6 +918,8 @@ async function boot() {
         if (porches.knocking >= 0 && G.booT >= BOO_CD && taught.has('treat') && !taught.has('trick') && !taught.has('trickHint')) {
           taught.set('trickHint'); hud.say('BOO AT THE DOOR', 'boo', '= TRICK!');
         }
+        // down in the creek's bed for 2 s (its banks are walls): how to get out (once per device)
+        if (!taught.has('creek') && cc.grounded && world.inCreek(p.x, p.y, p.z)) { if ((creekT += dt) > 2) { taught.set('creek'); hud.say('JUMP OUT!', 'warn'); } } else creekT = 0;
         // candy trickles back; big pops now and then
         G.spawnT -= dt;
         if (G.spawnT <= 0) {

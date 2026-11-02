@@ -9,6 +9,10 @@ Phone or computer, nothing to install. The first tap starts the game and the sou
 You're a kid in a witch costume on Halloween night. Grab as much candy as you can before the clock strikes midnight.
 A round lasts 3 minutes, from 11:57 to 12:00.
 
+The village: a lane loops past lit cottage porches, the graveyard gate and the witch's hollow; a haunted house stands on
+a knoll; a creek cuts across the south with three footbridges (or jump it); Porch Row, the pumpkin patch, the Bale Yard
+and a hollow oak in the far corner.
+
 ## How to play
 
 **On a phone or tablet** (portrait or landscape)
@@ -26,6 +30,8 @@ Esc to pause, M for sound. A gamepad works too.
   trick. Visit all five cottages in one round for a **Full Round** bonus: each porch you have visited keeps a lit
   jack-o'-lantern on its post.
 - **Jack-o'-lanterns:** run into one to kick it apart, or jump on it for more candy.
+- **The creek:** cross on a footbridge or JUMP it anywhere. Fall in and it takes a JUMP at the bank to climb out (the
+  candy in its bed is the reward).
 - **Ghosts** chase you and steal candy when they touch you. Press **BOO!** when one gets close: it scares every ghost
   nearby, and each one drops 2 candies. BOO recharges in 5 s.
 - **Streaks:** grab candy quickly, one after another. Every 10th in a row adds 3 bonus candy.
@@ -95,12 +101,13 @@ The engine changes this game needed are opt-in and listed in the [CHANGELOG](../
 |---|---|
 | `main.js` | Wires everything up: Engine (120 Hz fixed step, render interpolation, adaptive resolution), PhysicsWorld, CharacterController, AnimationController, camera rigs, CharacterInput with the phone touch layout, the night Atmosphere, PostFX and the round flow. |
 | `kid.js` | The procedural skinned kid in one skinned mesh (chibi head with a toon face, braids, a bent witch hat, a pleated starry cape, striped stockings, curly boots, the glowing pumpkin pail), its own clips (idle, walk, run, jump) and a landing pose. |
-| `props.js` | The modelling kit (sweep, lathe, slab, crack, star, chamfered boxes, Batch) and reusable prop builders: gravestones, iron fences and the gate, gnarled trees, the haunted house, the crypt, the scarecrow, the cauldron, hay bales, pumpkins and their leaves. |
-| `world.js` | The level's layout: the terrain, the props (built by `props.js`, merged into one mesh) and the glowing windows and candles, instanced pumpkins and grass, the moon, the horizon and the colliders. |
+| `props.js` | The modelling kit (sweep, lathe, slab, crack, star, chamfered boxes, Batch) and reusable prop builders: gravestones, iron fences and the gate, gnarled trees, the haunted house, the crypt, the scarecrow, the cauldron, hay bales, pumpkins and their leaves; the village's cottages with porches (lamp, doormat, railing jack-o'-lantern), footbridges, creek banks and reeds, standing stones, straw-bale stairs, the well, the signpost, the hollow oak, picket fences and path stones. |
+| `world.js` | The map: the terrain (a knoll and a creek in one height function), the lane ring and its spokes, every landmark's place, the lantern and ghost spots, candy spawns by zone, the moon and the horizon; it exports the map the game rules build on (`PORCHES`, `HAND_SPOTS`, `BRIDGES`, `CREEK`, `POP_SPOTS`, `SECRETS`, `CAULDRON`, `VANTAGE`, `THIEF_DEN`). |
+| `village.js` | Places the village (`props.js` builders) on the map with its colliders: the porch houses (each with a doorway for its door), the creek's bank walls and bridges, the Bale Yard, the standing stones, the hollow oak; and the creek's water (one additive mesh). |
 | `pumpkins.js` | The jack-o'-lanterns (ribbed, a carved face with depth): lights from the `NearestLights` pool; smashing uses `fracturePieces` + `pieceGeometry`, real dynamic bodies on the `DynamicsWorld`, shaded with ribs, fibres and seeds. |
 | `ghosts.js` | Each ghost is a `Cloth.grid` sheet pinned to a kinematic head sphere, drawn with `ClothMesh` (2x subdivided), a cute face painted through a uv warp, moved by a small state machine (rise, wander, chase, flee, retreat); `summon` sends one after the kid (a porch's resident). |
 | `porches.js` | Trick-or-treat: the porch lamps and their cooldowns, treats and tricks (BOO on a lit doormat), the haunted porch, resident ghosts, candy trails to a porch that relights, the Full Round and its railing jack-o'-lanterns; the hinged doors (one instanced mesh). |
-| `porch-spots.js` | Where the six porches are. A stand-in until the map's cottages land: `porches.js` then builds a simple porch front at each spot. |
+| `porch-spots.js` | The six porches `porches.js` drives: the map's (`world.js` `PORCHES`: the doormats on the porch decks, the lamps and railings as light groups, the chimneys). |
 | `candy.js` | The candy pool: instanced meshes (wrapped sweets, candy corn, swirl lollipops, hand-shaded), the magnet and spilled candy. |
 | `effects.js` | Glow billboards, the engine `ParticleSystem` sparks and the BOO ring. |
 | `reach.js` | The faint ring on the ground that shows BOO's reach while a ghost is inside it. |

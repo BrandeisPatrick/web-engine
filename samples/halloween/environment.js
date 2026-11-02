@@ -15,10 +15,13 @@
 //              and mist pouring out of a grave as a ghost rises (additive soft quads, one draw)
 //   lightning  soft sheet lightning (sky, clouds and the ambient fill brighten for under a second, never a hard
 //              strobe; reduced motion: one slow, dim swell), thunder a moment later
-//   crows      Crows (state; drawn by Fliers): perched on the gate finials, the scarecrow, the crypt and the tall
-//              stones; they lift off when the kid runs near (or a BOO / thunder), fly off, and glide back later
+//   crows      Crows (state; drawn by Fliers): perched on the gate finials, the scarecrow, the crypt, the hollow oak,
+//              the cottages' roofs, the signpost and the tall stones (world.perches); they lift off when the kid runs
+//              near (or a BOO / thunder), fly off, and glide back later
 //   lights     every lamp, candle and window of the merged glow mesh flickers by its light group (world.glowLevels):
-//              flames gutter in the gusts, the house windows blink out now and then near midnight and at a strike
+//              flames gutter in the gusts, the house windows blink out now and then near midnight and at a strike, the
+//              porch lamps (GLOW.LAMP: also their railings' jack-o'-lanterns and the oak's glint) stay steady; the game
+//              scales a level after this (the porch logic dims a lamp, lights a railing)
 //   gate       the graveyard's gate leaves (part of the props mesh, world.js) swing in the gusts, and creak
 // Draw calls: three (Fliers, MistField, MoonClouds); world.js gave back one (the moon and its halo are one quad now).
 //   sound      on the game's AudioBus: wind swells with the gusts, thunder, caws and wing beats, the gate's creak
@@ -868,6 +871,7 @@ export class Environment {
         if (this._blink[k] > 0) { this._blink[k] -= dt; v *= 0.12 + 0.2 * Math.max(0, Math.sin(t * 24 + k)); }
       } else if (kind === GLOW.BREW) v = 0.86 + 0.14 * Math.sin(t * 1.7 + k) + 0.18 * S;
       else if (kind === GLOW.EMBER) v = 0.85 + 0.1 * Math.sin(t * 5.1 + k) + 0.08 * Math.sin(t * 13.3 + k) + 0.35 * G;
+      else if (kind === GLOW.LAMP) v = 1 - amt * (0.04 + 0.03 * Math.sin(t * 3.1 + k * 1.7)); // steady (the game scales it)
       lv[k] = Math.max(0.15, v);
     }
   }

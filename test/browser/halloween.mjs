@@ -41,7 +41,8 @@
 // prefers-reduced-motion), the Witching Hour (call-out, x2 badge, every lantern relit, candy x2, candy rain, a catch
 // capped at 6, orange auras), the last-ten countdown under the clock pill, the results' rank ladder and next-rank line,
 // sharing (phones: Web Share, stubbed; desktop: the clipboard, stubbed, and a toast); phones: pushing straight into a
-// gravestone slides round it. --perf also measures a finale storm (the Witching Hour on top of the storm).
+// gravestone slides round it, pushing into an inside corner (the graveyard fence's, Porch Row's) slides out along it.
+// --perf also measures a finale storm (the Witching Hour on top of the storm).
 // Porches (porches.js): a lit doormat is a treat (8 candies, the lamp dark for 40 s, "TRICK OR TREAT!"), a dark one pays
 // nothing, BOO on a lit one is a trick (14, 60 s) whose resident ghost drops from the chimney and chases within a
 // second, the haunted porch only knocks and its trick pays 22 with two residents (70 s), a visited porch lights its
@@ -55,6 +56,13 @@
 // desktop), the stick stays held while the other thumb drags to look, the manifest + icons load (pixel-portrait), a
 // stubbed Bluetooth gamepad plays (pixel-landscape: stick moves, A jumps, X BOOs), and the 'hybrid' profile (a laptop
 // with a touchscreen: no touch reported) shows the touch controls on its first touch and hides them on a key press.
+// Map v2 (desktop): the exports the rules build on (PORCHES, HAND_SPOTS, BRIDGES, CREEK, POP_SPOTS, SECRETS, CAULDRON),
+// colliders <= 280 and 34 lanterns, every porch mat on its deck, the cottages' walls, the creek (walking out of its bed
+// is blocked, a JUMP at the bank clears it, a running JUMP clears the creek, "JUMP OUT!" after 2 s in the bed), each
+// footbridge end to end, the knoll path up to the haunted porch and down, every enclosure left on foot (the hollow oak,
+// the Bale Yard's stair, Porch Row's yard, behind the east cottage, each porch), a flood fill of the whole map (no spot
+// the kid can reach but not leave), the candy shares per zone, and a beacon within 30 m of anywhere on the lane. --perf
+// also holds the map v2 budgets: the 4x storm's p95 <= 9.5 ms CPU and at most 166 draw calls a frame.
 // Screenshots: <out>/<profile>-{title,play,end,...}.png. The few committed in samples/halloween/screenshots/ are
 // picked from these by hand (downscaled JPEGs). Uses the system Google Chrome like the other browser scripts.
 import fs from 'node:fs';
@@ -258,6 +266,216 @@ const nearCandy = (page) => G(page, () => {
   return false;
 });
 
+/**
+ * The map v2 (world.js + village.js), on the keyboard profile: the exports the porch / enemy passes build against, the
+ * collider budget, the lantern count, the mats on their decks, the cottages' walls, the creek (walking out of the bed is
+ * blocked, a JUMP clears the bank, a running jump clears the whole creek, "JUMP OUT!" after 2 s in the bed), each bridge
+ * end to end, the knoll path up to the haunted house's steps and back down, every enclosure left on foot (the hollow
+ * oak, the Bale Yard's stair, Porch Row's yard through a gate gap and over the fence, the east cottage's back, every
+ * porch deck), a flood fill over the whole map from the spawn (no free spot the kid cannot get back from), the candy
+ * shares per zone over 1200 spawns, and the beacon rule (a lamp, lantern or candle within 30 m of anywhere on the lane).
+ */
+async function mapChecks(page, name) {
+  const calm = () => G(page, () => { const g = window.__game; g.G.safeT = 30; for (const q of g.ghosts.list) { q.calm = 99; if (q.state === 'chase') q.state = 'wander'; } });
+  const put = (x, z, yaw = 0, y = null) => G(page, ([x, z, yaw, y]) => { const g = window.__game; g.cc.teleport(x, y ?? g.world.heightAt(x, z) + 0.05, z); g.cc.velocity.set(0, 0, 0); g.rig.yaw = yaw; g.camState.facing = yaw; g.rig.snap(); }, [x, z, yaw, y]);
+  /**
+   * Hold W and steer (the camera's yaw) through the points; jump: (state) -> bool presses Space once, autoJump: a JUMP
+   * whenever the kid is held up for 0.2 s. Returns { done, trace, minY, maxY, last }.
+   */
+  const walk = async (pts, { timeout = 9000, jump = null, autoJump = false, near = 0.6 } = {}) => {
+    await calm();
+    await page.keyboard.down('KeyW');
+    let i = 0, jumped = false, slow = 0, minY = Infinity, maxY = -Infinity;
+    const t0 = Date.now(), trace = [];
+    while (i < pts.length && Date.now() - t0 < timeout) {
+      const s = await G(page, ([x, z]) => { const g = window.__game, p = g.cc.position, dx = x - p.x, dz = z - p.z; g.rig.yaw = Math.atan2(-dx, -dz); g.G.safeT = 30; return { x: p.x, y: p.y, z: p.z, d: Math.hypot(dx, dz), g: g.cc.grounded, v: g.cc.speed }; }, pts[i]);
+      trace.push(s); minY = Math.min(minY, s.y); maxY = Math.max(maxY, s.y);
+      if (jump && !jumped && jump(s)) { await page.keyboard.press('Space'); jumped = true; }
+      if (autoJump) { slow = s.g && s.v < 1.2 && Date.now() - t0 > 300 ? slow + 1 : 0; if (slow >= 5) { await page.keyboard.press('Space'); slow = 0; } }
+      if (s.d < near) i++;
+      await sleep(30);
+    }
+    await page.keyboard.up('KeyW');
+    await sleep(150);
+    const last = await G(page, () => { const p = window.__game.cc.position; return { x: p.x, y: p.y, z: p.z }; });
+    return { done: i >= pts.length, trace, minY, maxY, last };
+  };
+  const f2 = (v) => (Number.isFinite(v) ? v.toFixed(2) : String(v));
+  // ---- the exports, the budgets
+  const ex = await G(page, () => {
+    const g = window.__game, w = g.world;
+    return {
+      porches: w.porches.map((p) => [p.id, p.haunted, Number.isFinite(p.x) && Number.isFinite(p.z) && Number.isFinite(p.yaw) && ['x', 'z', 'w', 'd', 'y'].every((k) => Number.isFinite(p.mat[k]))
+        && p.lamp > 0 && p.railing > 0 && p.chimney.length === 3 && p.chimney.every(Number.isFinite) && w.glowGroups[p.lamp][0] === 5 && w.glowGroups[p.railing][0] === 5]),
+      hands: w.handSpots.length, bridges: w.bridges.map((b) => b.id + (Number.isFinite(b.y) ? '' : '?')).join(''), creek: w.creek, pops: w.popSpots.filter((p) => p.length === 3 && p.every(Number.isFinite)).length,
+      secrets: ['well', 'crypt', 'oak'].every((k) => w.secrets[k]) && w.secrets.crypt.group > 0 && w.secrets.oak.group > 0, cauldron: w.cauldron.brew > 0 && w.cauldron.brewHalo >= 0,
+      vantage: w.vantage.length === 2, den: Number.isFinite(w.thiefDen.x), colliders: g.physics.staticBoxes.length, lanterns: g.lanterns.n, doors: g.porches.doors.count,
+    };
+  });
+  check(name, 'map v2 exports: PORCHES (P1..P6, P6 haunted; mats, lamp / railing groups, chimneys), HAND_SPOTS, BRIDGES, CREEK, POP_SPOTS, SECRETS, CAULDRON, VANTAGE, THIEF_DEN',
+    ex.porches.length === 6 && ex.porches.every((p, i) => p[0] === `P${i + 1}` && p[2] && p[1] === (i === 5)) && ex.hands === 10 && ex.bridges === 'WCE' && ex.creek.z0 === 19 && ex.creek.z1 === 22.5 && ex.creek.depth === 1.2
+    && ex.pops === 2 && ex.secrets && ex.cauldron && ex.vantage && ex.den && ex.doors === 6, JSON.stringify(ex));
+  check(name, `colliders <= 280, 34 lanterns`, ex.colliders <= 280 && ex.lanterns === 34, `${ex.colliders} colliders, ${ex.lanterns} lanterns`);
+  // ---- every mat lies on its deck: a kid dropped on it stands at mat.y
+  const mats = [];
+  for (let i = 0; i < 6; i++) {
+    const m = await G(page, (k) => window.__game.world.porches[k].mat, i);
+    await put(m.x, m.z, 0, m.y + 0.4); await sleep(450);
+    const s = await G(page, () => ({ y: window.__game.cc.position.y, g: window.__game.cc.grounded }));
+    mats.push([i + 1, +(s.y - m.y).toFixed(3), s.g]);
+  }
+  check(name, 'porch mats: a kid on each mat stands on its deck (mat.y)', mats.every(([, d, gr]) => Math.abs(d) < 0.06 && gr), JSON.stringify(mats));
+  // ---- the cottages' walls block (P3 from behind: walking north into its back wall)
+  await put(-4, 40.5, 0); await sleep(200);
+  const wall = await walk([[-4, 33]], { timeout: 1800 });
+  check(name, 'cottage walls block (P3, walked into from behind)', !wall.done && wall.last.z > 38.2, `stopped at z ${f2(wall.last.z)}`);
+  // ---- the creek
+  const C = ex.creek, bedZ = (C.z0 + C.z1) / 2;
+  await put(10, bedZ, 0); await sleep(300);
+  const bed0 = await G(page, () => window.__game.cc.position.y);
+  const out1 = await walk([[10, 15]], { timeout: 2600 });
+  const told = await G(page, () => document.querySelector('.hw-call').textContent);
+  check(name, 'creek: walking out of the bed is blocked by the bank; "JUMP OUT!" after 2 s down there', !out1.done && out1.last.z > C.z0 + C.lip - 0.05 && out1.maxY < bed0 + 0.4 && /JUMP OUT/.test(told), `z ${f2(out1.last.z)}, rose ${f2(out1.maxY - bed0)} m, call "${told}"`);
+  await put(10, bedZ, 0); await sleep(300);
+  const out2 = await walk([[10, 15]], { timeout: 3000, jump: (s) => s.z < C.z0 + C.lip + 0.45 });
+  check(name, 'creek: a JUMP at the bank gets the kid out', out2.done || out2.last.z < C.z0 - 0.5, `ended at z ${f2(out2.last.z)}`);
+  await put(10, 11, Math.PI); await sleep(300);
+  const leap = await walk([[10, 30]], { timeout: 3500, jump: (s) => s.z > 17 });
+  const inBed = leap.trace.filter((s) => s.z > C.z0 + C.lip && s.z < C.z1 - C.lip && s.g && s.y < bed0 + 0.6).length;
+  const land = leap.trace.find((s, k) => k > 0 && s.g && leap.trace[k - 1].z > 17 && s.z > C.z0);
+  check(name, 'creek: a running JUMP at z 17 clears it (lands past z 23)', inBed === 0 && !!land && land.z > 23, `landed at z ${land ? f2(land.z) : '?'}, ${inBed} samples in the bed`);
+  // ---- candy spilled on a bridge lands on its deck (not in the creek under it)
+  await put(-10, 10, 0); await sleep(200);
+  const spill = await G(page, () => new Promise((done) => {
+    const g = window.__game, b = g.world.bridges.find((q) => q.id === 'C'), C = g.candy;
+    C.spill(b.x, b.y + 1.2, b.z, 6, 0.6, 0.1, 30);
+    setTimeout(() => {
+      const ys = [];
+      for (let i = 0; i < C.state.length; i++) if (C.state[i] === 2 && Math.hypot(C.p[i * 3] - b.x, C.p[i * 3 + 2] - b.z) < 1.25) ys.push(+(C.p[i * 3 + 1] - b.y).toFixed(2));
+      done(ys);
+    }, 1800);
+  }));
+  check(name, 'candy spilled on a footbridge lands on its deck', spill.length >= 3 && spill.every((dy) => Math.abs(dy) < 0.06), JSON.stringify(spill));
+  // ---- each bridge, end to end (south from the green side), never down in the bed
+  const br = [];
+  for (const id of ['W', 'C', 'E']) {
+    const b = await G(page, (k) => { const q = window.__game.world.bridges.find((o) => o.id === k); return { x: q.x, y: q.y }; }, id);
+    await put(b.x, 15.5, Math.PI); await sleep(250);
+    const r = await walk([[b.x, 26.5]], { timeout: 4000 });
+    const onDeck = r.trace.filter((s) => s.z > C.z0 + 0.4 && s.z < C.z1 - 0.4);
+    br.push([id, r.done, onDeck.length ? f2(Math.min(...onDeck.map((s) => s.y)) - b.y) : 'n/a']);
+  }
+  check(name, 'bridges W, C, E: walkable end to end (on the deck all the way)', br.every(([, d, dy]) => d && +dy > -0.15), JSON.stringify(br));
+  // ---- the knoll: the spoke up to the vantage and the haunted house's steps, then back down to the lane
+  await put(0, 6, 0); await sleep(250);
+  const up = await walk([[-12, -8.3], [-17, -15], [-20.8, -16.3]], { timeout: 9000, near: 0.8 });
+  const plateau = await G(page, () => { const w = window.__game.world, k = w.knoll; return w.heightAt(k.x, k.z); });
+  const down = await walk([[-17, -15], [-12, -8.6], [-12, -6]], { timeout: 7000, near: 0.8 });
+  check(name, 'knoll: the path walks up to the plateau (the haunted porch\'s steps) and back down', up.done && up.maxY > plateau - 0.6 && down.done && down.last.y < plateau - 3, `up ${up.done} (top ${f2(up.maxY)} of ${f2(plateau)}), down ${down.done} (y ${f2(down.last.y)})`);
+  // ---- enclosures: in and out on foot
+  const enc = {};
+  await put(-41.2, -41.2, 0); await sleep(250);
+  const oakIn = await walk([[-43.9, -43.9]], { timeout: 3000, near: 0.45 });
+  const oakOut = await walk([[-41.6, -41.6], [-38, -38]], { timeout: 4000 });
+  enc.oak = oakIn.done && oakOut.done;
+  await put(37.7, 34.6, Math.PI); await sleep(250);
+  const top = await G(page, () => window.__game.world.popSpots[1][2]);
+  const climb = await walk([[38.3, 38.3], [40.2, 40.2], [42.75, 42.75]], { timeout: 9000, autoJump: true, near: 0.7 });
+  const off = await walk([[46.5, 46.5]], { timeout: 3500 });
+  enc.baleYard = climb.done && climb.maxY > top - 0.15 && off.done;
+  await put(-4, 43, 0); await sleep(250);
+  enc.rowGate = (await walk([[-15, 36], [-15, 30], [-4, 27]], { timeout: 7000 })).done;
+  await put(-10.5, 34.5, 0); await sleep(250);
+  enc.rowHop = (await walk([[-10.5, 29]], { timeout: 3000, jump: (s) => s.z < 33.1 })).done;
+  await put(49.15, -2, Math.PI); await sleep(250);
+  enc.p5Back = (await walk([[49.15, 3], [44, 4]], { timeout: 5000 })).done;
+  // every porch: up its steps onto the mat from 6 m out, off again to the side round its railing, and straight out
+  const decks = [];
+  for (let i = 0; i < 6; i++) {
+    const p = await G(page, (k) => { const q = window.__game.world.porches[k]; return { x: q.mat.x, z: q.mat.z, y: q.mat.y, yaw: q.yaw }; }, i);
+    const fx = Math.sin(p.yaw), fz = Math.cos(p.yaw), sx = fz, sz = -fx; // out from the door; along the wall
+    await put(p.x + fx * 6, p.z + fz * 6, p.yaw); await sleep(250);
+    const onto = await walk([[p.x, p.z]], { timeout: 3500, near: 0.5 });
+    const side = await walk([[p.x + fx * 1.2 + sx * 4, p.z + fz * 1.2 + sz * 4], [p.x + fx * 4 + sx * 4, p.z + fz * 4 + sz * 4]], { timeout: 4000, autoJump: true, near: 0.7 });
+    await put(p.x, p.z, p.yaw + Math.PI, p.y + 0.3); await sleep(250);
+    const out = await walk([[p.x + fx * 5, p.z + fz * 5]], { timeout: 3000 });
+    decks.push(`${onto.done ? 1 : 0}${side.done ? 1 : 0}${out.done ? 1 : 0}`);
+  }
+  await G(page, () => window.__game.porches.reset(false));
+  enc.decks = decks.every((d) => d === '111');
+  check(name, 'enclosures: the hollow oak in and out, up the Bale Yard\'s stair to the pop and off, Porch Row\'s yard through a gate gap and over the fence, behind the east cottage; every porch onto its mat, off round the side, out the front', Object.values(enc).every(Boolean), JSON.stringify({ ...enc, decks }));
+  // ---- the whole map: from the spawn, every free spot (0.5 m grid) is reachable and the kid can get back
+  const flood = await G(page, () => {
+    const g = window.__game, w = g.world, P = g.physics, S = 0.5, N = Math.round(99 / S) + 1, o = -49.5;
+    const h = new Float32Array(N * N), free = new Uint8Array(N * N), out = [];
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const x = o + i * S, z = o + j * S, k = j * N + i, ground = w.heightAt(x, z);
+      // the kid (r 0.3) next to a low box stands at its top (a step, a jump); a box over 2.4 m (a wall, a house) blocks
+      let top = ground, wall = false;
+      for (const b of P.queryColliders(x, z, 0.3, out)) {
+        if (b.minX === undefined || b.maxY < ground - 0.05) continue;
+        if (b.maxY - ground > 2.4) wall = true; else top = Math.max(top, b.maxY);
+      }
+      h[k] = top; free[k] = wall ? 0 : 1;
+    }
+    // reachable from the spawn, moving to a neighbour no more than a jump (1.3 m) higher; and back: from each cell the
+    // spawn's region is reachable on the reversed graph (a cell the kid can enter but not leave is a trap)
+    const flow = (from, rev) => {
+      const seen = new Uint8Array(N * N), q = [from]; seen[from] = 1;
+      while (q.length) {
+        const k = q.pop(), i = k % N, j = (k - i) / N;
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= N || b >= N) continue;
+          const n = b * N + a; if (seen[n] || !free[n]) continue;
+          if ((rev ? h[k] - h[n] : h[n] - h[k]) > 1.3) continue;
+          seen[n] = 1; q.push(n);
+        }
+      }
+      return seen;
+    };
+    const s0 = Math.round((6 - o) / S) * N + Math.round((0 - o) / S), fwd = flow(s0, false), back = flow(s0, true);
+    let freeN = 0, unreached = 0; const traps = [];
+    for (let k = 0; k < N * N; k++) { if (!free[k]) continue; freeN++; if (!fwd[k]) unreached++; else if (!back[k]) traps.push([+(o + (k % N) * S).toFixed(1), +(o + Math.floor(k / N) * S).toFixed(1)]); }
+    return { free: freeN, unreached, traps: traps.length, sample: traps.slice(0, 8) };
+  });
+  check(name, 'no trap anywhere: every free spot reached from the spawn can get back to it (0.5 m grid, a jump climbs 1.3 m)', flood.traps === 0, JSON.stringify(flood));
+  // ---- candy shares per zone (1200 spawns) and the beacon rule
+  const shares = await G(page, () => {
+    const w = window.__game.world, out = [0, 0, 0], n = {};
+    for (let k = 0; k < 1200; k++) if (w.candySpot(out)) n[w.candySpot.zone] = (n[w.candySpot.zone] || 0) + 1;
+    const tot = Object.values(n).reduce((a, b) => a + b, 0);
+    return w.candySpot.shares.map(([z, want]) => [z, want, +((n[z] || 0) / tot).toFixed(3)]);
+  });
+  check(name, 'candy spawns: each zone\'s share within 5 % of the design (lane 30, graveyard 22, patch 13, porches 10, creek 8, knoll 7, anywhere 10)', shares.every(([, want, got]) => Math.abs(got - want) <= 0.05), JSON.stringify(shares));
+  const trails = await G(page, () => {
+    const P = window.__game.porches, T = P.trail, n = window.__game.PORCH.TRAIL;
+    return { lane: P.spots.map((S, k) => [P.trailN[k], +Math.max(0, ...Array.from({ length: P.trailN[k] }, (_, j) => Math.hypot(T[(k * n + j) * 2] - S.mat.x, T[(k * n + j) * 2 + 1] - S.mat.z))).toFixed(1)]), spawn: P.startTrailN };
+  });
+  check(name, 'porch trails on the map: 5 spots along the lane within 12 m of each mat, 5 from the spawn to P1', trails.lane.every(([n, d]) => n === 5 && d <= 12.5) && trails.spawn === 5, JSON.stringify(trails));
+  const beacon = await G(page, () => {
+    const w = window.__game.world, B = w.beacons;
+    let worst = 0, at = null;
+    for (const L of w.paths) for (let i = 0; i < L.length - 1; i++) {
+      const [ax, az] = L[i], [bx, bz] = L[i + 1], n = Math.ceil(Math.hypot(bx - ax, bz - az));
+      for (let s = 0; s <= n; s++) {
+        const x = ax + ((bx - ax) * s) / n, z = az + ((bz - az) * s) / n;
+        let d = Infinity; for (const b of B) d = Math.min(d, Math.hypot(b[0] - x, b[1] - z));
+        if (d > worst) { worst = d; at = [+x.toFixed(1), +z.toFixed(1)]; }
+      }
+    }
+    // the clutter cap (DESIGN 7.1): most porch lamps / lanterns inside one 20 m circle (2 m grid of centres)
+    let lamps = 0, lan = 0;
+    for (let x = -48; x <= 48; x += 2) for (let z = -48; z <= 48; z += 2) {
+      let a = 0, b = 0; for (const q of B) if (Math.hypot(q[0] - x, q[1] - z) <= 10) { if (q[2] === 'porch') a++; else if (q[2] === 'lantern') b++; }
+      lamps = Math.max(lamps, a); lan = Math.max(lan, b);
+    }
+    return { worst: +worst.toFixed(1), at, beacons: B.length, maxLampsIn20m: lamps, maxLanternsIn20m: lan };
+  });
+  check(name, 'beacons: a porch lamp, lantern or bridge candle within 30 m of anywhere on the lane', beacon.worst <= 30, JSON.stringify(beacon));
+  // (standing on every mat treated the porches: back to a fresh round's porches for the porch checks)
+  await G(page, () => { const g = window.__game; g.setTimeLeft(Math.max(g.G.left, 170)); g.porches.reset(false); g.hud.clearCalls(); });
+}
+
 async function runProfile(name) {
   const opts = PROFILES[name], phone = name !== 'desktop';
   const ctx = await browser.newContext({ ...opts });
@@ -403,6 +621,8 @@ async function runProfile(name) {
         const walked = await fenceRun(false), hopped = await fenceRun(true);
         check(name, 'graveyard fence: walking into it stops, a JUMP clears it', walked > 8.15 && hopped < 7.6, `z ${lane}: walked to x ${walked.toFixed(2)}, jumped to x ${hopped.toFixed(2)}`);
       }
+      await mapChecks(page, name); // the map v2: exports, budgets, the creek, bridges, the knoll, enclosures, candy shares
+      await calmAll(); await home(); await sleep(200);
     } else {
       check(name, 'touch start: no pointer-lock request', (await G(page, () => window.__lockReq)) === 0);
     }
@@ -568,10 +788,29 @@ async function runProfile(name) {
         const pe = await G(page, () => ({ x: window.__game.cc.position.x, z: window.__game.cc.position.z }));
         check(name, 'slide around: pushing straight into a gravestone slides round it (past within 1.5 s)', past && Math.abs(pe.x - grave[0]) < 3, `past ${past}, ended ${(pe.x - grave[0]).toFixed(2)} m to the side`);
       }
+      // ---- (map v2) and out of an inside corner: in the graveyard's south-west and south-east corners, the stick pushed at
+      // the lit mat beyond the fence (P1, P5; bots stood there 85 s), and on Porch Row's lane side where the picket fence
+      // runs into P4's front, pushing at the yard behind: 20 degrees either side, the kid slides out along the wall
+      // (world.js GRAVEYARD x0 8, x1 46, z1 -10; ROW_FENCE z 32, its stretch 8.2..14.4 ends at P4's west wall)
+      const corners = [];
+      for (const [x, z, k, tz] of [[8.45, -10.45, 0], [45.55, -10.45, 4], [13.95, 31.5, -1, 40]]) for (const err of [-0.35, 0.35]) {
+        await calmAll();
+        await G(page, ([x, z, k, tz, err]) => {
+          const g = window.__game, m = k >= 0 ? g.world.porches[k].mat : { x, z: tz }, yaw = Math.atan2(-(m.x - x), -(m.z - z)) + err;
+          g.cc.teleport(x, g.world.heightAt(x, z) + 0.05, z); g.cc.velocity.set(0, 0, 0); g.rig.yaw = yaw; g.camState.facing = yaw; g.rig.snap();
+        }, [x, z, k, tz ?? 0, err]);
+        await sleep(200);
+        await T.start([{ x: hx, y: hy, id: 1 }]);
+        for (let i = 1; i <= 4; i++) { await T.move([{ x: hx, y: hy - i * 13, id: 1 }]); await sleep(16); }
+        const out = await waitFor(page, ([x, z]) => Math.hypot(window.__game.cc.position.x - x, window.__game.cc.position.z - z) > 3, [x, z], 2500);
+        await T.end();
+        corners.push(out ? 1 : 0);
+      }
+      check(name, "slide around: pushed into an inside corner (the graveyard's SW and SE at a porch beyond, Porch Row's fence into P4; 20 degrees either side), the kid slides out along the wall (3 m in 2.5 s)", corners.every(Boolean), corners.join(''));
     }
     // ---- the BOO lesson (a first session): the first ghost rose 9..11 m ahead of the camera, tame (slow, no catch)
     const tw = await waitFor(page, () => !!window.__game.G.tutorWake, null, 8000) && await G(page, () => ({ ...window.__game.G.tutorWake, tame: window.__game.ghosts.list.some((q) => q.tame > 0 || q.state !== 'dormant') }));
-    check(name, 'BOO lesson: the first ghost rises in view, 9..11 m ahead', !!tw && tw.d > 8 && tw.d < 12 && tw.ahead > 0.85 && tw.tame, JSON.stringify(tw));
+    check(name, 'BOO lesson: the first ghost rises in view, 9..11 m ahead (6.5..9 with a house in the way)', !!tw && tw.d > 5.5 && tw.d < 12 && tw.ahead > 0.85 && tw.tame, JSON.stringify(tw));
     // ---- smash a lantern by running into it (and the juice: a hitstop, a camera shake)
     await lineUpLantern(page);
     await sleep(200);
@@ -783,6 +1022,7 @@ async function runProfile(name) {
       const g = window.__game, C = g.candy;
       g.setTimeLeft(120); g.G.popT = 99; g.G.riseSaid = true; g.G.wakeIdx = 99; // mid-round, no pop or ghost news meanwhile
       g.hud.clearCalls(); // (the last catch's call-out would hold the screen a second against the porch's)
+      g.porches.reset(false); // (a check before may have walked the kid over a mat: the gatekeeper's is 17 m from the spawn)
       window.__spills = []; window.__calls = [];
       const sp = C.spill.bind(C); C.spill = (x, y, z, n, s, d, ttl) => { if (ttl === g.PORCH.SPILL_TTL) window.__spills.push(n); return sp(x, y, z, n, s, d, ttl); };
       const co = g.hud.callout.bind(g.hud); g.hud.callout = (t, ...r) => { window.__calls.push(t); return co(t, ...r); };
@@ -812,6 +1052,10 @@ async function runProfile(name) {
       treated && t1.spills.join() === '8' && /TRICK OR TREAT/.test(t1.call) && t1.plus === '+8' && t1.cd > 39 && t1.cd <= 40 && t1.door > 0.1 && t2.porches[2].lamp < 0.05 && c1 - c0 >= 6,
       JSON.stringify({ treated, ...t1, lamp: t2.porches[2].lamp, gained: c1 - c0 }));
     check(name, 'porch: a visited porch lights the jack-o\'-lantern on its railing', t2.porches[2].visited && t2.porches[2].rail > 0.9 && t2.porches.filter((p) => p.rail > 0.05).length === 1, JSON.stringify(t2.porches.map((p) => p.rail)));
+    // the map's porches (world.js PORCHES: lamp / railing light groups): no stand-in fronts, the levels in world.glowLevels
+    const gl = await G(page, () => { const g = window.__game, w = g.world, P = g.porches; return { stand: P.stand, front: !!P.front, glow: !!P.glow, cols: P.colliders, lamps: P.spots.map((S) => +w.glowLevels[S.lamp].toFixed(3)), rails: P.spots.map((S) => +w.glowLevels[S.railing].toFixed(3)) }; });
+    check(name, 'porch: the map\'s porches drive world.glowLevels (no stand-ins): the treated lamp dark, its railing lit, the rest lit / dark',
+      !gl.stand && !gl.front && !gl.glow && gl.cols === 0 && gl.lamps[2] < 0.1 && gl.lamps.every((v, i) => i === 2 || v > 0.6) && gl.rails[2] > 0.8 && gl.rails.every((v, i) => i === 2 || v < 0.05), JSON.stringify(gl));
     // the dark mat: nothing
     await offMat(2); await sleep(200);
     const d0 = await ontoMat(2);
@@ -1035,11 +1279,13 @@ async function runProfile(name) {
       const c2 = cdp || await ctx.newCDPSession(page);
       await c2.send('Emulation.setCPUThrottlingRate', { rate: 4 });
       await sleep(1500);
+      let maxCalls = 0;
       const sample = (ms) => G(page, (dur) => new Promise((done) => {
         const g = window.__game, out = [], t0 = performance.now();
-        const tick = () => { out.push(g.engine.profiler.frame.ms); if (performance.now() - t0 < dur) requestAnimationFrame(tick); else done(out); };
+        let calls = 0;
+        const tick = () => { out.push(g.engine.profiler.frame.ms); calls = Math.max(calls, g.engine.profiler.frame.calls); if (performance.now() - t0 < dur) requestAnimationFrame(tick); else done({ out, calls }); };
         requestAnimationFrame(tick);
-      }), ms);
+      }), ms).then((r) => { maxCalls = Math.max(maxCalls, r.calls); return r.out; });
       const calm = await sample(2000);
       const storm = sample(3000);
       await G(page, () => {
@@ -1058,6 +1304,7 @@ async function runProfile(name) {
       const q = (a, f) => { const b = [...a].sort((x, y) => x - y); return b[Math.min(b.length - 1, Math.floor(b.length * f))]; };
       const msg = `CPU ms per frame at 4x: calm p50 ${q(calm, 0.5).toFixed(1)} p95 ${q(calm, 0.95).toFixed(1)}; storm p50 ${q(hot, 0.5).toFixed(1)} p95 ${q(hot, 0.95).toFixed(1)} max ${Math.max(...hot).toFixed(1)}`;
       check(name, 'perf: 4x throttled storm stays under 16 ms CPU at p95', q(hot, 0.95) < 16, msg);
+      check(name, 'perf (map v2 budget): 4x throttled storm p95 <= 9.5 ms CPU', q(hot, 0.95) <= 9.5, msg);
       // the finale on top: the Witching Hour (candy rain, every lantern relit, orange auras), a storm again
       await c2.send('Emulation.setCPUThrottlingRate', { rate: 4 });
       await G(page, () => { const g = window.__game; g.setTimeLeft(30.4); });
@@ -1074,6 +1321,7 @@ async function runProfile(name) {
       await c2.send('Emulation.setCPUThrottlingRate', { rate: 1 });
       const fmsg = `finale storm at 4x: p50 ${q(fh, 0.5).toFixed(1)} p95 ${q(fh, 0.95).toFixed(1)} max ${Math.max(...fh).toFixed(1)} (witching ${await G(page, () => window.__game.G.witching)})`;
       check(name, 'perf: 4x throttled finale storm (Witching Hour) under 16 ms CPU at p95', q(fh, 0.95) < 16, fmsg);
+      check(name, 'perf (map v2 budget): at most 166 draw calls a frame through both storms', maxCalls <= 166, `max ${maxCalls} calls`);
     }
     // page sanity: no scroll, no text selection
     const sane = await G(page, () => ({ sx: scrollX, sy: scrollY, sel: String(getSelection()), bodyScroll: document.scrollingElement.scrollHeight <= innerHeight + 1 }));

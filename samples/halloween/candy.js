@@ -135,9 +135,12 @@ function patchCandy(mat) {
 }
 
 export class Candy {
-  /** @param {object} o  scene, heightAt, candySpot (world.candySpot) */
-  constructor({ scene, heightAt, candySpot }) {
-    this.heightAt = heightAt; this.candySpot = candySpot;
+  /**
+   * @param {object} o  scene, heightAt, candySpot (world.candySpot), floorAt (optional (x, z, y) -> the surface a falling
+   *   candy lands on: the ground or a deck, a bridge, a bale under it; default the ground, heightAt)
+   */
+  constructor({ scene, heightAt, candySpot, floorAt = null }) {
+    this.heightAt = heightAt; this.candySpot = candySpot; this.floorAt = floorAt;
     const f = (k = 1) => new Float32Array(MAX * k);
     this.p = f(3); this.v = f(3); this.age = f(); this.ttl = f(); this.spin = f();
     this.state = new Uint8Array(MAX); // 0 free, 1 resting, 2 flying (spilled), 3 pulled by the magnet
@@ -227,7 +230,7 @@ export class Candy {
    */
   update(dt, kid, time, onPick) {
     this.collectedThisFrame = 0; this.valueThisFrame = 0; this.popThisFrame = 0;
-    const P = this.p, V = this.v, H = this.heightAt, mag = this.magnet, cx = kid.x, cy = kid.y + 0.7, cz = kid.z;
+    const P = this.p, V = this.v, H = this.heightAt, F = this.floorAt, mag = this.magnet, cx = kid.x, cy = kid.y + 0.7, cz = kid.z;
     for (let i = 0; i < MAX; i++) {
       const st = this.state[i];
       if (st === 0) continue;
@@ -235,8 +238,9 @@ export class Candy {
       const i3 = i * 3;
       if (st === 2) { // flying: ballistic with bounces on the terrain
         V[i3 + 1] -= 14 * dt;
+        const y0 = P[i3 + 1]; // (a surface counts if the candy was above it before this step: it may have dropped past it)
         P[i3] += V[i3] * dt; P[i3 + 1] += V[i3 + 1] * dt; P[i3 + 2] += V[i3 + 2] * dt;
-        const g = H(P[i3], P[i3 + 2]);
+        const g = F ? F(P[i3], P[i3 + 2], y0) : H(P[i3], P[i3 + 2]);
         if (P[i3 + 1] < g) { P[i3 + 1] = g; V[i3 + 1] *= -0.35; V[i3] *= 0.6; V[i3 + 2] *= 0.6; if (Math.abs(V[i3 + 1]) < 0.6) { V[i3] = V[i3 + 1] = V[i3 + 2] = 0; } }
         if (this.age[i] > this.ttl[i]) { this.state[i] = 0; continue; }
         // keep inside the fence
