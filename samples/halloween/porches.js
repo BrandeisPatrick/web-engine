@@ -6,8 +6,8 @@
 //           60 s, and RESIDENT_DELAY s later a resident ghost drops from the chimney and chases at once
 //   HAUNTED P6 (the haunted house): a treat is only a knock (the door rattles, stays shut); a trick pays 22 and wakes
 //           two residents; dark for 70 s
-// The lamp dims to 0 on use and fades back up over the last FADE s of its cooldown (readable from far: about to
-// relight); a porch that relights lays a trail of TRAIL candies along the lane within TRAIL_R m of its mat (from the
+// Each cooldown is the night's own by +- JITTER s (rng.js: Tonight's Patch). The lamp dims to 0 on use and fades back
+// up over the last FADE s of its cooldown (readable from far: about to relight); a porch that relights lays a trail of TRAIL candies along the lane within TRAIL_R m of its mat (from the
 // respawn budget: the game skips that many respawns, `takeDebt`). Treating or tricking each lane porch (P1..P5) once in
 // a round pays the FULL ROUND bonus; a visited porch keeps a lit jack-o'-lantern on its railing for the rest of the
 // round (the tracker: no HUD). The Witching Hour relights every porch at once (relightAll).
@@ -32,6 +32,7 @@ import { PORCHES } from './porch-spots.js';
 export const PORCH = {
   TREAT: 8, TRICK: 14, HAUNTED: 22,                 // candy per visit
   CD_TREAT: 40, CD_TRICK: 60, CD_HAUNTED: 70,       // lamp dark (s)
+  JITTER: 2,                                        // +- s on each cooldown, from the night's seed (rng.js: Tonight's Patch)
   FADE: 3,                                          // the lamp fades back up over the last FADE s of the cooldown
   KNOCK_T: 0.8,                                     // s from stepping on a lit mat to the treat (BOO in it = trick)
   RESIDENT_DELAY: 0.6,                              // s after the trick's BOO (so the BOO does not scare the resident)
@@ -92,10 +93,11 @@ function porchGlowMaterial(levels) {
 export class Porches {
   /**
    * @param {object} o  scene, physics (PhysicsWorld: stand-in colliders, trail checks), heightAt, candy (Candy),
-   *   ghosts (Ghosts: summon), world (world.glowLevels for the map pass's lamp groups), spots (PORCHES)
+   *   ghosts (Ghosts: summon), world (world.glowLevels for the map pass's lamp groups), spots (PORCHES), rnd (the
+   *   relight jitter and the trails' kinds: rng.js rng.porch; default Math.random)
    */
-  constructor({ scene, physics, heightAt, candy, ghosts, world = null, spots = PORCHES }) {
-    this.spots = spots; this.candy = candy; this.ghosts = ghosts; this.physics = physics; this.heightAt = heightAt; this.world = world;
+  constructor({ scene, physics, heightAt, candy, ghosts, world = null, spots = PORCHES, rnd = Math.random }) {
+    this.spots = spots; this.candy = candy; this.ghosts = ghosts; this.physics = physics; this.heightAt = heightAt; this.world = world; this.rnd = rnd;
     const n = this.n = spots.length, f = () => new Float32Array(n);
     this.st = new Uint8Array(n);       // 0 lit, 1 knocking (the door opening: a BOO now is a trick), 2 dark (cooling down)
     this.cd = f(); this.knockT = f();  // cooldown left (s); time since the knock
@@ -299,10 +301,13 @@ export class Porches {
   }
 
   _place(x, z) {
-    const C = this.candy, i = C.place(x, this.heightAt(x, z), z, Math.random() < 0.35 ? 1 : 0);
+    const C = this.candy, i = C.place(x, this.heightAt(x, z), z, this.rnd() < 0.35 ? 1 : 0);
     if (i >= 0 && this.debt < PORCH.DEBT_MAX) this.debt++;
     return i;
   }
+
+  /** A cooldown of `base` s with the night's jitter (+- JITTER s). */
+  _cd(base) { return base + (this.rnd() * 2 - 1) * PORCH.JITTER; }
 
   /** The game's respawn tick asks: true = a trail candy already took this respawn's place (skip it). */
   takeDebt() { if (this.debt > 0) { this.debt--; return true; } return false; }
@@ -348,7 +353,7 @@ export class Porches {
     for (let k = 0; k < this.n; k++) {
       if (this.st[k] === 2 || !this._on(k, x, y, z, PORCH.BOO_MARGIN)) continue;
       const H = this.spots[k].haunted, v = this.lastValue = H ? PORCH.HAUNTED : PORCH.TRICK;
-      this.st[k] = 2; this.cd[k] = H ? PORCH.CD_HAUNTED : PORCH.CD_TRICK; this.knocking = -1;
+      this.st[k] = 2; this.cd[k] = this._cd(H ? PORCH.CD_HAUNTED : PORCH.CD_TRICK); this.knocking = -1;
       this._door(k, 1, PORCH.DOOR_TRICK, PORCH.DOOR_HOLD);
       this._shower(k, v);
       this.resT[k] = PORCH.RESIDENT_DELAY; this.resN[k] = H ? 2 : 1;
@@ -387,7 +392,7 @@ export class Porches {
       if (this.st[k] === 1) {
         if (on) this.knocking = k;
         if ((this.knockT[k] += dt) >= PORCH.KNOCK_T) { // the treat
-          this.st[k] = 2; this.cd[k] = PORCH.CD_TREAT; E.treat = k; this.lastValue = PORCH.TREAT;
+          this.st[k] = 2; this.cd[k] = this._cd(PORCH.CD_TREAT); E.treat = k; this.lastValue = PORCH.TREAT;
           this.doorHold[k] = PORCH.DOOR_HOLD;
           this._shower(k, PORCH.TREAT);
           this.treats++;

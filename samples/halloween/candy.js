@@ -4,7 +4,10 @@
 // glossy highlight, a rim, and the swirl / bands / stripes painted per pixel). Candy rests bobbing and
 // spinning on the grass, flies in arcs when spilled (smashed lanterns, booed ghosts, or the kid dropping some when a
 // ghost catches it), and is pulled toward the kid inside the magnet radius. Spilled candy that nobody picks up blinks
-// and vanishes after a while; resting candy stays.
+// and vanishes after a while; resting candy stays. A resting pop can be `fixed` (secrets.js: the knoll's and the Bale
+// Yard's pops, id = its spot + 1): it is not counted as field candy (restingCount, countKind). The SWEET TOOTH potion
+// widens the pull (boost: the magnet's radius while > 0) and the pickup reach (reach). Placement draws (the kind of a
+// random spawn) come from `rnd` (rng.js: the night's seed); colours and spins stay cosmetic (Math.random).
 import * as THREE from 'three';
 import { lathe } from './props.js';
 
@@ -137,14 +140,16 @@ function patchCandy(mat) {
 export class Candy {
   /**
    * @param {object} o  scene, heightAt, candySpot (world.candySpot), floorAt (optional (x, z, y) -> the surface a falling
-   *   candy lands on: the ground or a deck, a bridge, a bale under it; default the ground, heightAt)
+   *   candy lands on: the ground or a deck, a bridge, a bale under it; default the ground, heightAt), rnd (placement
+   *   draws: rng.js rng.candy; default Math.random)
    */
-  constructor({ scene, heightAt, candySpot, floorAt = null }) {
-    this.heightAt = heightAt; this.candySpot = candySpot; this.floorAt = floorAt;
+  constructor({ scene, heightAt, candySpot, floorAt = null, rnd = Math.random }) {
+    this.heightAt = heightAt; this.candySpot = candySpot; this.floorAt = floorAt; this.rnd = rnd;
     const f = (k = 1) => new Float32Array(MAX * k);
     this.p = f(3); this.v = f(3); this.age = f(); this.ttl = f(); this.spin = f();
     this.state = new Uint8Array(MAX); // 0 free, 1 resting, 2 flying (spilled), 3 pulled by the magnet
     this.kind = new Uint8Array(MAX); this.color = new Uint8Array(MAX); this.delay = f();
+    this.fixed = new Uint8Array(MAX); // a fixed pop's spot + 1 (secrets.js), 0 for field candy
     this.count = 0; this.resting = 0;
     const mat = patchCandy(new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide }));
     this.meshes = [wrappedGeometry(), cornGeometry(), popGeometry()].map((g, k) => {
@@ -165,8 +170,9 @@ export class Candy {
     const col = new Float32Array(bg.attributes.position.count * 3);
     for (let i = 0; i < a.length; i++) { const t = 1 - bg.attributes.position.getY(i) / 14; col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = t * t; }
     bg.setAttribute('color', new THREE.BufferAttribute(col, 3)); beamMat.vertexColors = true;
-    for (let k = 0; k < 3; k++) { const b = new THREE.Mesh(bg, beamMat); b.visible = false; b.renderOrder = 7; b.frustumCulled = false; scene.add(b); this.beams.push(b); }
-    this.magnet = 2.4;
+    // (five: the two fixed pops and the oak's or the crypt's keep theirs while two roaming pops are out; culled off screen)
+    for (let k = 0; k < 5; k++) { const b = new THREE.Mesh(bg, beamMat); b.visible = false; b.renderOrder = 7; scene.add(b); this.beams.push(b); }
+    this.magnet = 2.4; this.boost = 0; this.reach = 0.75; // the pull's radius (m; boost > 0 widens it), the pickup reach (m)
     this._spot = [0, 0, 0];
     this.collectedThisFrame = 0; this.valueThisFrame = 0; this.popThisFrame = 0;
   }
@@ -181,17 +187,17 @@ export class Candy {
     return best;
   }
 
-  /** Resting candy at (x, y, z). */
-  place(x, y, z, kind) {
+  /** Resting candy at (x, y, z) (fixed: a fixed pop's id, secrets.js). */
+  place(x, y, z, kind, fixed = 0) {
     const i = this._alloc(); if (i < 0) return -1;
-    this.state[i] = 1; this.kind[i] = kind; this.color[i] = (Math.random() * WRAP_COLORS.length) | 0;
+    this.state[i] = 1; this.kind[i] = kind; this.fixed[i] = fixed; this.color[i] = (Math.random() * WRAP_COLORS.length) | 0;
     this.p[i * 3] = x; this.p[i * 3 + 1] = y; this.p[i * 3 + 2] = z; this.v[i * 3] = this.v[i * 3 + 1] = this.v[i * 3 + 2] = 0;
     this.age[i] = 0; this.ttl[i] = Infinity; this.spin[i] = Math.random() * 6.28; this.delay[i] = 0;
     return i;
   }
 
   /** A resting candy at a random free spot away from (ax, az). Returns the slot or -1. */
-  spawnRandom(ax, az, kind = Math.random() < 0.35 ? CANDY_KIND.CORN : CANDY_KIND.WRAP, minDist = 6) {
+  spawnRandom(ax, az, kind = this.rnd() < 0.35 ? CANDY_KIND.CORN : CANDY_KIND.WRAP, minDist = 6) {
     if (!this.candySpot(this._spot, ax, az, minDist)) return -1;
     return this.place(this._spot[0], this._spot[1], this._spot[2], kind);
   }
@@ -201,7 +207,7 @@ export class Candy {
     for (let k = 0; k < n; k++) {
       const i = this._alloc(); if (i < 0) return;
       const a = Math.random() * Math.PI * 2, s = speed * (0.5 + Math.random() * 0.6);
-      this.state[i] = 2; this.kind[i] = Math.random() < 0.3 ? 1 : 0; this.color[i] = (Math.random() * WRAP_COLORS.length) | 0;
+      this.state[i] = 2; this.kind[i] = Math.random() < 0.3 ? 1 : 0; this.color[i] = (Math.random() * WRAP_COLORS.length) | 0; this.fixed[i] = 0;
       this.p[i * 3] = x; this.p[i * 3 + 1] = y; this.p[i * 3 + 2] = z;
       this.v[i * 3] = Math.cos(a) * s; this.v[i * 3 + 1] = 3.5 + Math.random() * 2.5; this.v[i * 3 + 2] = Math.sin(a) * s;
       this.age[i] = 0; this.ttl[i] = ttl; this.spin[i] = Math.random() * 6.28; this.delay[i] = delay;
@@ -214,15 +220,17 @@ export class Candy {
    */
   drop(x, y, z, kind, height = 7, ttl = 60) {
     const i = this._alloc(); if (i < 0) return -1;
-    this.state[i] = 2; this.kind[i] = kind; this.color[i] = (Math.random() * WRAP_COLORS.length) | 0;
+    this.state[i] = 2; this.kind[i] = kind; this.color[i] = (Math.random() * WRAP_COLORS.length) | 0; this.fixed[i] = 0;
     this.p[i * 3] = x; this.p[i * 3 + 1] = y + height; this.p[i * 3 + 2] = z;
     this.v[i * 3] = 0; this.v[i * 3 + 1] = -2; this.v[i * 3 + 2] = 0;
     this.age[i] = 0; this.ttl[i] = ttl; this.spin[i] = Math.random() * 6.28; this.delay[i] = 0;
     return i;
   }
 
-  countKind(kind) { let n = 0; for (let i = 0; i < MAX; i++) if (this.state[i] !== 0 && this.kind[i] === kind) n++; return n; }
-  get restingCount() { let n = 0; for (let i = 0; i < MAX; i++) if (this.state[i] === 1) n++; return n; }
+  /** Live candies of a kind in the field (the fixed pops not counted). */
+  countKind(kind) { let n = 0; for (let i = 0; i < MAX; i++) if (this.state[i] !== 0 && this.kind[i] === kind && !this.fixed[i]) n++; return n; }
+  /** Resting candies in the field (the fixed pops not counted). */
+  get restingCount() { let n = 0; for (let i = 0; i < MAX; i++) if (this.state[i] === 1 && !this.fixed[i]) n++; return n; }
 
   /**
    * Per frame. kid: { x, y, z } (feet). Collected candy is counted into collectedThisFrame / valueThisFrame (+ the
@@ -230,7 +238,8 @@ export class Candy {
    */
   update(dt, kid, time, onPick) {
     this.collectedThisFrame = 0; this.valueThisFrame = 0; this.popThisFrame = 0;
-    const P = this.p, V = this.v, H = this.heightAt, F = this.floorAt, mag = this.magnet, cx = kid.x, cy = kid.y + 0.7, cz = kid.z;
+    const P = this.p, V = this.v, H = this.heightAt, F = this.floorAt, cx = kid.x, cy = kid.y + 0.7, cz = kid.z;
+    const mag = this.boost > 0 ? Math.max(this.magnet, this.boost) : this.magnet, reach0 = this.reach, reachPop = Math.max(1.1, this.reach);
     for (let i = 0; i < MAX; i++) {
       const st = this.state[i];
       if (st === 0) continue;
@@ -249,7 +258,7 @@ export class Candy {
       }
       if (this.age[i] < this.delay[i]) continue;
       const dx = cx - P[i3], dy = cy - (P[i3 + 1] + 0.35), dz = cz - P[i3 + 2], d2 = dx * dx + dy * dy + dz * dz;
-      const reach = this.kind[i] === 2 ? 1.1 : 0.75;
+      const reach = this.kind[i] === 2 ? reachPop : reach0;
       if (d2 < reach * reach) {
         const k = this.kind[i];
         this.state[i] = 0;
