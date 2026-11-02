@@ -15,8 +15,9 @@
 //   - instanced decor pumpkins + leaves (1 draw each, the patch only), grass tufts (1 draw; fewer on phones)
 //   - sky dressing: a big moon billboard + halo and a ring of tree-line silhouettes, both depth-less (the post fog reads
 //     them as sky) and following the camera
-// Colliders go to the PhysicsWorld as static boxes. The graveyard has four ways out (the south gate and a gap in each
-// other side) and its iron fence collides only up to FENCE_TOP above the ground, so a JUMP clears it (walking does not).
+// Colliders go to the PhysicsWorld as static boxes. The graveyard has five ways out (the south gate, a south gap by the
+// east cottage's porch, and a gap in each other side) and its iron fence collides only up to FENCE_TOP above the
+// ground, so a JUMP clears it (walking does not).
 // The creek's banks are walls of the bed's depth: falling in is allowed, a JUMP gets out (walking does not); Porch Row's
 // picket fences are 1 m high (a jump clears them) with a gate gap between each pair of cottages.
 // Exposes the map to the game (the passes build against these names): PORCHES (the six trick-or-treat porches: mats,
@@ -95,8 +96,10 @@ function bedDist(x, z) {
 
 // ------------------------------------------------------------------ regions and landmarks
 export const GRAVEYARD = { x0: 8, x1: 46, z0: -46, z1: -10, gate: [13.5, 18.5],
-  // the gaps (m along their side): south (the gate, x), west (x = x0, z), east (x = x1, z), north (z = z0, x)
-  exits: { s: [13.5, 18.5], w: [-30, -25.5], e: [-24, -19.5], n: [26, 30.5] } };
+  // the gaps (m along their side): south (the gate, x), south-east (x: by the east cottage's porch, whose lit mat a kid
+  // in that corner sees through the fence 9 m off; the gate is 20+ m back west), west (x = x0, z), east (x = x1, z),
+  // north (z = z0, x)
+  exits: { s: [13.5, 18.5], se: [39, 43.5], w: [-30, -25.5], e: [-24, -19.5], n: [26, 30.5] } };
 const FENCE_TOP = 1.1; // the graveyard fence collider's top above the ground (the jump apex is ~1.7 m, a step 0.32 m)
 export const PATCH = { x0: -47, x1: -14, z0: -6, z1: 16 };
 /** The knoll: 4.5 m high, a plateau of radius 7 m easing out to 15 m (h += 4.5 smooth((15 - d) / 8)). */
@@ -549,13 +552,13 @@ export function buildWorld({ scene, physics, low }) {
   }
   const v1 = v1Trees(rnd, low, graves); // the stream's next draws, as v1 made them (planted below where they still fit)
   const G0 = GRAVEYARD, X = G0.exits, inGap = (v, g) => v > g[0] && v < g[1];
-  P.ironFence(B, G0.x0, G0.z1, G0.x1, G0.z1, heightAt, (x, z) => Math.abs(z - G0.z1) < 0.3 && inGap(x, X.s));
+  P.ironFence(B, G0.x0, G0.z1, G0.x1, G0.z1, heightAt, (x, z) => Math.abs(z - G0.z1) < 0.3 && (inGap(x, X.s) || inGap(x, X.se)));
   P.ironFence(B, G0.x1, G0.z1, G0.x1, G0.z0, heightAt, (x, z) => Math.abs(x - G0.x1) < 0.3 && inGap(z, X.e));
   P.ironFence(B, G0.x1, G0.z0, G0.x0, G0.z0, heightAt, (x, z) => Math.abs(z - G0.z0) < 0.3 && inGap(x, X.n));
   P.ironFence(B, G0.x0, G0.z0, G0.x0, G0.z1, heightAt, (x, z) => Math.abs(x - G0.x0) < 0.3 && inGap(z, X.w));
   // fence colliders: ~4 m pieces whose top is FENCE_TOP over the highest ground under them (a jump clears the fence,
-  // walking does not), with the four gaps open
-  const fenceSide = (along, at, a0, a1, gap) => { // along 'x' (a side at z = at) or 'z' (a side at x = at)
+  // walking does not), with the gaps open (ascending along the side)
+  const fenceSide = (along, at, a0, a1, ...gaps) => { // along 'x' (a side at z = at) or 'z' (a side at x = at)
     const pieces = (b0, b1) => {
       const n = Math.max(1, Math.round((b1 - b0) / 4));
       for (let i = 0; i < n; i++) {
@@ -566,15 +569,18 @@ export function buildWorld({ scene, physics, low }) {
         else physics.addStaticBox(at - 0.1, -5, at + 0.1, top + FENCE_TOP, c0, c1);
       }
     };
-    pieces(a0, gap[0]); pieces(gap[1], a1);
+    let b = a0;
+    for (const g of gaps) { pieces(b, g[0]); b = g[1]; }
+    pieces(b, a1);
   };
-  fenceSide('x', G0.z1, G0.x0 - 0.1, G0.x1 + 0.1, X.s);
+  fenceSide('x', G0.z1, G0.x0 - 0.1, G0.x1 + 0.1, X.s, X.se);
   fenceSide('x', G0.z0, G0.x0 - 0.1, G0.x1 + 0.1, X.n);
   fenceSide('z', G0.x0, G0.z0, G0.z1, X.w);
   fenceSide('z', G0.x1, G0.z0, G0.z1, X.e);
   // gate posts with stone caps at every gap (+ an iron arch with scrolls and a crescent moon over the south gate)
   const gatePost = (gx, gz) => P.gatePost(B, gx, heightAt(gx, gz), gz);
   for (const gx of X.s) gatePost(gx, G0.z1);
+  for (const gx of X.se) gatePost(gx, G0.z1);
   for (const gx of X.n) gatePost(gx, G0.z0);
   for (const gz of X.w) gatePost(G0.x0, gz);
   for (const gz of X.e) gatePost(G0.x1, gz);
