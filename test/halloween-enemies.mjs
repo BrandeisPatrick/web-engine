@@ -13,7 +13,7 @@
 import * as THREE from 'three';
 import { ALLOC, BOXED, bytesPerCall, describe, functionsOf } from './helpers/alloc.mjs';
 import { PhysicsWorld } from '../src/physics/PhysicsWorld.js';
-import { heightAt } from '../samples/halloween/world.js';
+import { heightAt, BRIDGES, CREEK } from '../samples/halloween/world.js';
 import { Candy } from '../samples/halloween/candy.js';
 import { Glows } from '../samples/halloween/effects.js';
 import { Hands, HAND } from '../samples/halloween/hands.js';
@@ -123,6 +123,8 @@ const quiet = () => { H.reset(); H.awake = false; for (let k = 0; k < H.n; k++) 
   check('hands: 600 s on the spots: grabbed again and again, never held longer than 1.0 s', grabs > 20 && longest <= HAND.HOLD + 1.5 * DT, `${grabs} grabs, longest hold ${longest.toFixed(3)} s`);
   check('hands: at most 4 tell or stand at once', maxOut === HAND.MAX_UP, `max ${maxOut}`);
   check('hands: ten spots, none on the village green (r 11 round (0, 2))', H.n === 10 && onGreen === 0);
+  const atBridge = BRIDGES.map((b) => HAND_SPOTS.some(([x, z]) => Math.abs(x - b.x) < 1.5 && z < CREEK.z0 && z > CREEK.z0 - 4));
+  check('hands: a spot at the north end of each of the creek\'s three bridges (world.js BRIDGES, CREEK)', atBridge.length === 3 && atBridge.every(Boolean), JSON.stringify(atBridge));
 }
 { // the Witching Hour: hidden 3..6 s; the instanced draw only while some are out
   quiet(); put(0, 30); H.setWitch(true); H.awake = true; H.wait[K] = 0.01;

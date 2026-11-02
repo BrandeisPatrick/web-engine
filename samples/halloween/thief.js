@@ -1,5 +1,5 @@
 // The candy thief (DESIGN.md 2.4): a raccoon in a little bedsheet with eye holes, its loot in a glowing pink sack on
-// its back that swells as it fills. It lives in a den (hand-spots.js THIEF_DEN until the map pass exports it) and comes
+// its back that swells as it fills. It lives in a den (the map's THIEF_DEN, its opening: hand-spots.js) and comes
 // out at APPEAR s of a 180 s round (the game sets `awake`).
 //   roam    runs at SPEED to the candy the kid is heading for: the best cluster (>= CLUSTER_N resting candies within
 //           CLUSTER_R m, >= CLUSTER_KID m from the kid; ahead of the kid's run counts double), else it lurks LURK m off.

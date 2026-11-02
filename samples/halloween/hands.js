@@ -1,5 +1,5 @@
-// Grave hands (DESIGN.md 2.4): at ten fixed spots (the graveyard aisle, among the graves, the bridges; hand-spots.js
-// until the map pass exports HAND_SPOTS) two bony hands burst out of the soil and grab a kid who runs over them.
+// Grave hands (DESIGN.md 2.4): at ten fixed spots (the graveyard aisle, among the graves, the bridges:
+// the map's HAND_SPOTS through hand-spots.js) two bony hands burst out of the soil and grab a kid who runs over them.
 //   cycle   hidden HIDDEN s (each spot its own, seeded by `rnd`; the Witching Hour HIDDEN_WITCH) -> the TELL: a soil
 //           ring glows crimson, dirt puffs, a crack, the fingertips poke out (0.8 s) -> UP: the hands wave (2.5 s) ->
 //           they sink (DOWN s). At most MAX_UP spots tell or stand up at once; the hands wake at START s of a 180 s

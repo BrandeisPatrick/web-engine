@@ -125,7 +125,7 @@ in 1.0.0), driven by the new Halloween game sample (`samples/halloween/`, "Midni
   mat beyond it).
 - Midnight Candy Run enemies (design pass 3, phones first, no engine change, no new light, physics body or HUD box):
   **grave hands** (`samples/halloween/hands.js`) at ten fixed spots (the graveyard aisle, among the graves, and where
-  the creek's bridges will be; `hand-spots.js` stands in for the map pass's `HAND_SPOTS`): hidden 7..12 s (3..6 s in
+  the creek's three bridges: the map's `HAND_SPOTS` through `hand-spots.js`): hidden 7..12 s (3..6 s in
   the Witching Hour), a 0.8 s telegraph (a crimson soil ring, dirt puffs, a crack, the fingertips poking out), then two
   bony hands stand 2.5 s; at most 4 out at once, awake from 0:40. A grounded kid in reach (0.9 m, feet under 0.6 m) is
   grabbed: held 1.0 s (`cc.hold`, the kid wiggles), then let go with 3 candies spilled round it. JUMP clears them, BOO
