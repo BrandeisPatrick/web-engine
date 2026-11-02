@@ -70,8 +70,8 @@ const RECENTRE_TOUCH = 0.7, RECENTRE_DESK = 0.8; // s without look input before 
 const STICK_DEAD = 0.12, STICK_FULL = 0.75;
 // slide around (touch): a push within acos(AROUND_INTO) of straight into a gravestone, tree, fence or wall turns along
 // it (AROUND_ALONG of the speed along it, AROUND_LEAN into it), the short way round the box in the way; the turn holds
-// AROUND_HOLD s while blocked and AROUND_AFTER s past the corner
-const AROUND_INTO = 0.6, AROUND_ALONG = 0.9, AROUND_LEAN = 0.3, AROUND_HOLD = 0.4, AROUND_AFTER = 0.06;
+// AROUND_HOLD s while blocked and AROUND_AFTER s past the corner; it looks AROUND_LOOK m along the wall each way
+const AROUND_INTO = 0.6, AROUND_ALONG = 0.9, AROUND_LEAN = 0.3, AROUND_HOLD = 0.4, AROUND_AFTER = 0.06, AROUND_LOOK = 4;
 // a catch costs 10 % of the candy (2..12); 3 catches within MERCY_WINDOW s calm the ghosts (difficulty -MERCY) for MERCY_T s
 const CATCH_SHARE = 0.10, CATCH_MIN = 2, CATCH_MAX = 12, MERCY = 0.35, MERCY_WINDOW = 30, MERCY_T = 20;
 const MAX_CHASERS_TOUCH = 2, MAX_CHASERS_DESK = 3;
@@ -652,26 +652,29 @@ async function boot() {
     return best;
   };
   // slide around: the side to turn along a wall of normal (nx, nz) for a push (mx, mz): the push's own lean along it,
-  // else the short way round the box in the way (projected on the wall's tangent), unless another wall closes that end
-  // (a fence's inside corner: the kid pinned there pushing at a porch beyond it), then the long way
+  // else the short way round the wall in the way (followed behind its face through the boxes that continue it: a fence
+  // into a house front is one wall); a way that another wall closes (a fence's inside corner: the kid was pinned there
+  // pushing at a porch beyond it) loses to one that is open
   const around = { t: 0, s: 1, nx: 0, nz: 0 };
   const aroundSide = (nx, nz, mx, mz) => {
     const tx = -nz, tz = nx, tan = (mx * tx + mz * tz) / (Math.hypot(mx, mz) || 1);
-    if (Math.abs(tan) > 0.25) return tan > 0 ? 1 : -1;
-    const p = cc.position;
-    _cols.length = 0; physics.queryColliders(p.x - nx * 0.45, p.z - nz * 0.45, 0.3, _cols);
-    let b = null;
-    for (let i = 0; i < _cols.length; i++) { const q = _cols[i]; if (q.maxY > p.y + 0.35 && q.minX !== undefined) { b = q; break; } }
-    if (!b) return tan >= 0 ? 1 : -1;
-    const a0 = b.minX * tx, a1 = b.maxX * tx, c0 = b.minZ * tz, c1 = b.maxZ * tz, kp = p.x * tx + p.z * tz;
-    const tmin = Math.min(a0, a1) + Math.min(c0, c1), tmax = Math.max(a0, a1) + Math.max(c0, c1);
-    const closed = (e) => { // a wall just past the end at tangent e, on the kid's line (one continuing this one is not)
-      _cols.length = 0; physics.queryColliders(p.x + tx * (e - kp), p.z + tz * (e - kp), 0.2, _cols);
-      for (let i = 0; i < _cols.length; i++) if (_cols[i] !== b && _cols[i].maxY > p.y + 0.35) return true;
+    const p = cc.position, top = p.y + 0.35, bx = p.x - nx * 0.45, bz = p.z - nz * 0.45;
+    const wall = (x, z, r) => {
+      _cols.length = 0; physics.queryColliders(x, z, r, _cols);
+      for (let i = 0; i < _cols.length; i++) if (_cols[i].maxY > top && _cols[i].minX !== undefined) return true;
       return false;
     };
-    const s = tmax - kp < kp - tmin ? 1 : -1;
-    return closed(s > 0 ? tmax + 0.25 : tmin - 0.25) && !closed(s > 0 ? tmin - 0.25 : tmax + 0.25) ? -s : s;
+    // how far the wall runs that way (m, up to AROUND_LOOK), or Infinity when a wall across the kid's line closes it
+    const way = (s) => {
+      let d = 0;
+      while (d < AROUND_LOOK && wall(bx + tx * s * d, bz + tz * s * d, 0.15)) d += 0.3;
+      for (let e = 0.35; e <= d + 0.25; e += 0.3) if (wall(p.x + tx * s * e, p.z + tz * s * e, 0.2)) return Infinity;
+      return d;
+    };
+    const a = way(1), b = way(-1), lean = tan >= 0 ? 1 : -1;
+    if (a === b) return lean;
+    if (Math.abs(tan) > 0.25 && (lean > 0 ? a : b) < Infinity) return lean;
+    return a < b ? 1 : -1;
   };
   // the arrow toward a world point, from the camera's view: ahead / behind / left / right
   const arrowTo = (x, z) => {

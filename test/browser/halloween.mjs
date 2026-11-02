@@ -41,7 +41,7 @@
 // prefers-reduced-motion), the Witching Hour (call-out, x2 badge, every lantern relit, candy x2, candy rain, a catch
 // capped at 6, orange auras), the last-ten countdown under the clock pill, the results' rank ladder and next-rank line,
 // sharing (phones: Web Share, stubbed; desktop: the clipboard, stubbed, and a toast); phones: pushing straight into a
-// gravestone slides round it, pushing at a porch beyond the graveyard fence's inside corner slides out along the fence.
+// gravestone slides round it, pushing into an inside corner (the graveyard fence's, Porch Row's) slides out along it.
 // --perf also measures a finale storm (the Witching Hour on top of the storm).
 // Porches (porches.js): a lit doormat is a treat (8 candies, the lamp dark for 40 s, "TRICK OR TREAT!"), a dark one pays
 // nothing, BOO on a lit one is a trick (14, 60 s) whose resident ghost drops from the chimney and chases within a
@@ -788,24 +788,25 @@ async function runProfile(name) {
         const pe = await G(page, () => ({ x: window.__game.cc.position.x, z: window.__game.cc.position.z }));
         check(name, 'slide around: pushing straight into a gravestone slides round it (past within 1.5 s)', past && Math.abs(pe.x - grave[0]) < 3, `past ${past}, ended ${(pe.x - grave[0]).toFixed(2)} m to the side`);
       }
-      // ---- (map v2) and out of an inside corner: in the graveyard's south-west corner, the stick pushed straight at the
-      // gatekeeper's lit mat beyond the fence (bots stood there 85 s): the kid slides out along the fence
-      {
+      // ---- (map v2) and out of an inside corner: in the graveyard's south-west and south-east corners, the stick pushed at
+      // the lit mat beyond the fence (P1, P5; bots stood there 85 s), and on Porch Row's lane side where the picket fence
+      // runs into P4's front, pushing at the yard behind: 20 degrees either side, the kid slides out along the wall
+      // (world.js GRAVEYARD x0 8, x1 46, z1 -10; ROW_FENCE z 32, its stretch 8.2..14.4 ends at P4's west wall)
+      const corners = [];
+      for (const [x, z, k, tz] of [[8.45, -10.45, 0], [45.55, -10.45, 4], [13.95, 31.5, -1, 40]]) for (const err of [-0.35, 0.35]) {
         await calmAll();
-        const c0 = await G(page, () => {
-          const g = window.__game, x = 8.45, z = -10.45, m = g.world.porches[0].mat; // world.js GRAVEYARD x0 8, z1 -10
-          const yaw = Math.atan2(-(m.x - x), -(m.z - z));
-          g.cc.teleport(x, g.world.heightAt(x, z) + 0.05, z); g.rig.yaw = yaw; g.camState.facing = yaw; g.rig.snap();
-          return { x, z };
-        });
+        await G(page, ([x, z, k, tz, err]) => {
+          const g = window.__game, m = k >= 0 ? g.world.porches[k].mat : { x, z: tz }, yaw = Math.atan2(-(m.x - x), -(m.z - z)) + err;
+          g.cc.teleport(x, g.world.heightAt(x, z) + 0.05, z); g.cc.velocity.set(0, 0, 0); g.rig.yaw = yaw; g.camState.facing = yaw; g.rig.snap();
+        }, [x, z, k, tz ?? 0, err]);
         await sleep(200);
         await T.start([{ x: hx, y: hy, id: 1 }]);
         for (let i = 1; i <= 4; i++) { await T.move([{ x: hx, y: hy - i * 13, id: 1 }]); await sleep(16); }
-        const out = await waitFor(page, ([x, z]) => Math.hypot(window.__game.cc.position.x - x, window.__game.cc.position.z - z) > 3, [c0.x, c0.z], 2500);
+        const out = await waitFor(page, ([x, z]) => Math.hypot(window.__game.cc.position.x - x, window.__game.cc.position.z - z) > 3, [x, z], 2500);
         await T.end();
-        const pe = await G(page, () => ({ x: +window.__game.cc.position.x.toFixed(2), z: +window.__game.cc.position.z.toFixed(2) }));
-        check(name, "slide around: pushed at a porch beyond the graveyard's inside corner, the kid slides out along the fence (3 m in 2.5 s)", out, JSON.stringify(pe));
+        corners.push(out ? 1 : 0);
       }
+      check(name, "slide around: pushed into an inside corner (the graveyard's SW and SE at a porch beyond, Porch Row's fence into P4; 20 degrees either side), the kid slides out along the wall (3 m in 2.5 s)", corners.every(Boolean), corners.join(''));
     }
     // ---- the BOO lesson (a first session): the first ghost rose 9..11 m ahead of the camera, tame (slow, no catch)
     const tw = await waitFor(page, () => !!window.__game.G.tutorWake, null, 8000) && await G(page, () => ({ ...window.__game.G.tutorWake, tame: window.__game.ghosts.list.some((q) => q.tame > 0 || q.state !== 'dormant') }));
