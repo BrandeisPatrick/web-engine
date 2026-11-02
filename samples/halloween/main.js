@@ -87,8 +87,9 @@ const STICK_DEAD = 0.12, STICK_FULL = 0.75;
 // AROUND_HOLD s while blocked and AROUND_AFTER s past the corner; it looks AROUND_LOOK m along the wall each way
 const AROUND_INTO = 0.6, AROUND_ALONG = 0.9, AROUND_LEAN = 0.3, AROUND_HOLD = 0.4, AROUND_AFTER = 0.06, AROUND_LOOK = 4;
 // a catch costs 10 % of the candy (2..12); 2 catches within MERCY_WINDOW s calm the ghosts for MERCY_T s: difficulty
-// -MERCY and one chaser at a time (pass 4: it took 3, and a novice was caught 9 to 14 times a round, in bursts)
-const CATCH_SHARE = 0.10, CATCH_MIN = 2, CATCH_MAX = 12, MERCY = 0.35, MERCY_WINDOW = 30, MERCY_T = 20;
+// -MERCY, one chaser at a time, and the pack calm MERCY_CALM s after each catch meanwhile (pass 4: it took 3 catches, and
+// a novice was caught 9 to 14 times a round, every 10 s once it started)
+const CATCH_SHARE = 0.10, CATCH_MIN = 2, CATCH_MAX = 12, MERCY = 0.35, MERCY_WINDOW = 30, MERCY_T = 20, MERCY_CALM = 8;
 const MAX_CHASERS_TOUCH = 2, MAX_CHASERS_DESK = 3;
 const MAGNET_TOUCH = 3.2, MAGNET_DESK = 2.4; // candy pull radius (m)
 // candy where the player looks: while the view is "dry" (fewer than DRY_NEED candies on screen within DRY_R m),
@@ -655,6 +656,7 @@ async function boot() {
     if (lose > 0) hud.callout(`CAUGHT! −${lose}`, 'bad', 'GRAB IT BACK!', 1); else hud.callout('CAUGHT!', 'bad', '', 1);
     audio.caught(); buzz(BUZZ.caught);
     if (G.time - G.catch1 < MERCY_WINDOW) G.mercyT = MERCY_T;
+    if (G.mercyT > 0) for (const q of ghosts.list) q.calm = Math.max(q.calm, MERCY_CALM);
     G.catch2 = G.catch1; G.catch1 = G.time;
   };
   // a free spot for a candy in a ring around (px, pz): r in [r0, r1], within ±half of the bearing `yaw` (rig yaw

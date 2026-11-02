@@ -331,11 +331,13 @@ const CSS = `
 .hw-hidden-touch .ui-touch{display:none}
 `;
 
-// rank thresholds (candy in a 3-minute round), v2 with the porches (design 2.6: 0 / 60 / 140 / 240 / 360 / 520, Sugar
-// Goblin retuned to 230 on 36 pass-2 phone-bot rounds): a novice ends a Trick-or-Treater or a Candy Collector, a
-// casual player a Collector or a Sugar Goblin, a skilled one Pumpkin Royalty, and Lord of the Night is rare even for the
-// skilled bot (1 of 6 of its rounds; a bot that sees every candy on the map)
-export const RANKS = [[0, 'Little Pumpkin'], [60, 'Trick-or-Treater'], [140, 'Candy Collector'], [230, 'Sugar Goblin'], [360, 'Pumpkin Royalty'], [520, 'Lord of the Night']];
+// rank thresholds (candy in a 3-minute round), v2 with the porches (design 2.6: 0 / 60 / 140 / 240 / 360 / 520), the
+// final retune of pass 4 on the phone bots (Sugar Goblin back at the design's 240: at 230 a casual round was a Goblin
+// more often than a Collector; Lord of the Night 520 -> 560: the secrets, potions, chains and fixed pops add some 30..60
+// to a skilled round): a novice ends a Trick-or-Treater or a Candy Collector, a casual player a Collector or a Sugar
+// Goblin, a skilled one Pumpkin Royalty, and Lord of the Night is rare even for the skilled bot (a bot that sees every
+// candy on the map and knows the secrets)
+export const RANKS = [[0, 'Little Pumpkin'], [60, 'Trick-or-Treater'], [140, 'Candy Collector'], [240, 'Sugar Goblin'], [360, 'Pumpkin Royalty'], [560, 'Lord of the Night']];
 /** Index into RANKS for n candy. */
 export const rankIndex = (n) => { let r = 0; for (let k = 1; k < RANKS.length; k++) if (n >= RANKS[k][0]) r = k; return r; };
 export const rankFor = (n) => RANKS[rankIndex(n)][1];
@@ -432,6 +434,7 @@ export class HUD {
       comes down the chimney). Lollipops under a light beam are worth 5. Stomp a lantern for extra candy.
       Frosty screen edges? A ghost is close: let it come near, then BOO! Caught? Grab the candy you drop.
       Red soil ring? Jump the grave hands. BOO the raccoon thief, then tag it for its sack!
+      Walk into the witch's brew for a potion (its colour is the potion). Stomp lantern after lantern for a chain.
       Jump over the graveyard fence! Grab candy fast for a streak bonus. The last 30 seconds are the Witching Hour:
       candy counts double!</div>
       <div class="hw-small-btns"><button class="hw-start" data-a="close">GOT IT</button></div>`;

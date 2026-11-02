@@ -111,7 +111,7 @@ const only = args.only ? String(args.only).split(',') : Object.keys(PROFILES);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
 let failures = 0;
-const RANKS_V2 = '0/60/140/230/360/520'; // hud.js RANKS thresholds (design 2.6, retuned on the pass-2 bots)
+const RANKS_V2 = '0/60/140/240/360/560'; // hud.js RANKS thresholds (design 2.6, the final retune of pass 4 on the bots)
 function check(profile, name, ok, detail = '') {
   results.push(`${ok ? 'PASS' : 'FAIL'}  ${profile.padEnd(17)} ${name}${detail ? `  (${detail})` : ''}`);
   if (!ok) failures++;
