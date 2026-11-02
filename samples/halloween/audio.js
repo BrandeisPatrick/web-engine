@@ -6,7 +6,8 @@
 //   sfx       candy chimes (rising with the pickup streak), the pumpkin smash, the jump / land, the BOO shout, a ghost's
 //             moan and squeal, caught, bells (the midnight tolls), the final ticks, UI blips; porches: a knock (a deep
 //             one and a chuckle at the haunted house), the door's creak, a treat, a trick, a resident's wail, the Full
-//             Round fanfare.
+//             Round fanfare; grave hands: the soil's crack, their burst out of it, a grab's rattle; the candy thief: its
+//             chitter, the stun's bonk and stars, the tag's chimes.
 // The context starts on the first gesture (bus.unlockOnGesture + the start button), so iOS / Chrome allow it.
 import { AudioBus, OscStack, NoiseVoice, LFO, noiseBuffer, playTone, playNoiseBurst } from '@vibe/engine/audio';
 
@@ -258,6 +259,49 @@ export class GameAudio {
     const ctx = this.bus.ctx, out = this.bus.bus('ui'), t = ctx.currentTime;
     [[74, 0], [78, 0.08], [81, 0.16], [86, 0.24], [90, 0.32]].forEach(([m, d]) => playTone(ctx, out, { type: 'triangle', pitch: [[0, hz(m)]], peak: 0.09, attack: 0.004, decay: d === 0.32 ? 0.7 : 0.18, when: t + d }));
     this.bell(1, 1, 392);
+  }
+  // ---- grave hands (hands.js) and the candy thief (thief.js); pan -1..1 = their side of the view
+  /** The soil cracks open (a telegraph): a dry crack and a low rumble of earth. */
+  crack(pan = 0) {
+    if (!this.ready) return;
+    const ctx = this.bus.ctx, out = this.bus.bus('effects'), t = ctx.currentTime;
+    playNoiseBurst(ctx, out, this.white, { peak: 0.22, attack: 0.001, decay: 0.07, filter: { type: 'highpass', frequency: 1800 }, when: t, pan });
+    playNoiseBurst(ctx, out, this.pink, { peak: 0.14, attack: 0.002, decay: 0.05, filter: { type: 'bandpass', frequency: 2600, Q: 2 }, when: t + 0.09, pan });
+    playTone(ctx, out, { type: 'sine', pitch: [[0, 70], [0.6, 46]], peak: 0.16, attack: 0.05, decay: 0.6, when: t, pan });
+  }
+  /** The hands burst out of the soil: a thud and a scatter of dirt. */
+  handsUp(pan = 0) {
+    if (!this.ready) return;
+    const ctx = this.bus.ctx, out = this.bus.bus('effects'), t = ctx.currentTime;
+    playNoiseBurst(ctx, out, this.pink, { peak: 0.2, attack: 0.002, decay: 0.2, filter: { type: 'lowpass', frequency: 700 }, rate: 0.7, when: t, pan });
+    playTone(ctx, out, { type: 'sine', pitch: [[0, 110], [0.12, 55]], peak: 0.18, decay: 0.16, when: t, pan });
+  }
+  /** Grabbed: a bony rattle and a gasp. */
+  grabbed() {
+    if (!this.ready) return;
+    const ctx = this.bus.ctx, out = this.bus.bus('effects'), t = ctx.currentTime;
+    for (let k = 0; k < 6; k++) playNoiseBurst(ctx, out, this.white, { peak: 0.09, attack: 0.001, decay: 0.025, filter: { type: 'bandpass', frequency: 1500 + k * 260, Q: 5 }, when: t + k * 0.055 });
+    playTone(ctx, out, { type: 'triangle', pitch: [[0, 520], [0.18, 760], [0.3, 640]], peak: 0.07, attack: 0.01, decay: 0.32, when: t + 0.02 });
+  }
+  /** A raccoon's chitter: a few quick squeaky chirps (it appears, eats, snatches). */
+  chitter(pan = 0, n = 4) {
+    if (!this.ready) return;
+    const ctx = this.bus.ctx, out = this.bus.bus('effects'), t = ctx.currentTime, f = 1700 + Math.random() * 400;
+    for (let k = 0; k < n; k++) playTone(ctx, out, { type: 'square', pitch: [[0, f * (1 + 0.08 * (k % 2))], [0.035, f * 0.82]], peak: 0.03, attack: 0.002, decay: 0.045, filter: { type: 'bandpass', frequency: 2200, Q: 2 }, when: t + k * 0.065, pan });
+  }
+  /** The thief stunned: a cartoon "bonk" and stars twinkling round its head. */
+  stars(pan = 0) {
+    if (!this.ready) return;
+    const ctx = this.bus.ctx, out = this.bus.bus('effects'), t = ctx.currentTime;
+    playTone(ctx, out, { type: 'sine', pitch: [[0, 380], [0.12, 190]], peak: 0.14, decay: 0.16, when: t, pan });
+    [88, 91, 95, 91, 88, 95].forEach((m, i) => playTone(ctx, this.bus.bus('ui'), { type: 'sine', pitch: [[0, hz(m)]], peak: 0.035, attack: 0.002, decay: 0.12, when: t + 0.12 + i * 0.09, pan: Math.sin(i * 1.7) * 0.5 }));
+  }
+  /** TAGGED: the sack bursts, a bright run of chimes. */
+  tagged() {
+    if (!this.ready) return;
+    const ctx = this.bus.ctx, out = this.bus.bus('ui'), t = ctx.currentTime;
+    playNoiseBurst(ctx, this.bus.bus('effects'), this.pink, { peak: 0.2, attack: 0.002, decay: 0.12, filter: { type: 'bandpass', frequency: 900, Q: 1 }, when: t });
+    [74, 79, 83, 86, 91].forEach((m, i) => playTone(ctx, out, { type: 'triangle', pitch: [[0, hz(m)]], peak: 0.085, attack: 0.003, decay: i === 4 ? 0.5 : 0.16, when: t + 0.04 + i * 0.06 }));
   }
   tick(high = false) { if (!this.ready) return; playTone(this.bus.ctx, this.bus.bus('ui'), { type: 'square', pitch: [[0, high ? 1500 : 1100]], peak: 0.05, decay: 0.05, filter: { type: 'lowpass', frequency: 3000 } }); }
   ui() { if (!this.ready) return; playTone(this.bus.ctx, this.bus.bus('ui'), { type: 'triangle', pitch: [[0, 660], [0.06, 990]], peak: 0.08, decay: 0.12 }); }

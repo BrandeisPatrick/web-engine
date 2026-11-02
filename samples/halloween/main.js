@@ -25,6 +25,9 @@
 // a trick (more candy, and a resident ghost drops from the chimney); visiting all five lane porches pays a Full Round
 // bonus. Hints go through the HUD's paced call-outs (hud.say: at most one per 2.5 s); the answers to the player's own
 // actions show at once (hud.callout).
+// Enemies (pass 3): grave hands (hands.js) rise at fixed spots after a glowing soil ring: JUMP over them or BOO them
+// down, or they hold the kid a second (cc.hold) and cost 3; the candy thief (thief.js), a raccoon with a pink sack, eats
+// the candy the kid is running toward: BOO stuns it, a touch then TAGS it (its sack + 5 spill out).
 // Score chasing: ranks (hud.js RANKS) with the next one's threshold on the candy pill and a call-out on reaching one,
 // the pace against the best run (kept in localStorage) every 20 s, "NEW BEST!" when the run passes it. A streak of
 // quick pickups fills a meter; every 10th pickup of one adds a bonus. The Witching Hour (the last 30 s) counts candy
@@ -51,6 +54,8 @@ import { BooReach } from './reach.js';
 import { GameAudio } from './audio.js';
 import { HUD, ACCENT, applyTheme, RANKS, rankIndex, rankFor, nextRankAt, taught } from './hud.js';
 import { Porches, PORCH } from './porches.js';
+import { Hands, HAND } from './hands.js';
+import { Thief, THIEF } from './thief.js';
 import { LOOK } from './looks.js';
 import { Environment } from './environment.js';
 
@@ -79,11 +84,12 @@ const MAGNET_TOUCH = 3.2, MAGNET_DESK = 2.4; // candy pull radius (m)
 // candy where the player looks: while the view is "dry" (fewer than DRY_NEED candies on screen within DRY_R m),
 // AHEAD_SHARE of the respawns land in a ring ahead of the camera (inside the view: at most ±50°, less in portrait, with
 // a clear straight run to it); after DRY_T s of a dry view, a far resting candy (off screen, > FAR m away) moves into
-// the nearer DRY_RING every respawn tick (a narrow portrait view used to show no candy at all for two thirds of a
-// round). A view with candy in it keeps the uniform respawns: good players get no extra help. Big pops rise POP_R m
-// away (inside the view while it is dry).
+// the nearer DRY_RING every respawn tick, whatever the resting count (a narrow portrait view used to show no candy at
+// all for two thirds of a round; the move used to wait for the full CANDY_TARGET, which play keeps a few under, so it
+// never came). A view with candy in it keeps the uniform respawns: good players get no extra help. Big pops rise POP_R
+// m away (inside the view while it is dry).
 const AHEAD_SHARE = 0.6, AHEAD_R = [9, 22], AHEAD_HALF = 50 * Math.PI / 180, POP_R = [14, 26];
-const DRY_R = 15, DRY_NEED = 2, DRY_T = 3, FAR = 30, DRY_RING = [8, 15];
+const DRY_R = 15, DRY_NEED = 2, DRY_T = 2.4, FAR = 30, DRY_RING = [8, 15];
 // the first desktop round shows how the mouse looks for LOOK_HINT_T s or until LOOK_HINT_RAD of look input
 const LOOK_HINT_T = 4, LOOK_HINT_RAD = 0.3;
 // haptic pulses (ms); a candy streak buzzes at most every CANDY_BUZZ_GAP s
@@ -222,7 +228,9 @@ async function boot() {
       W.candy = new Candy({ scene, heightAt, candySpot: W.world.candySpot, floorAt: (x, z, y) => physics.supportAt(x, z, y, 0.05) });
       W.porches = new Porches({ scene, physics, heightAt, candy: W.candy, ghosts: W.ghosts, world: W.world });
       W.fx = new Effects({ scene, heightAt, low: LOW });
-      W.glows = new Glows(384); // (the porches' doorways, the village's lamps, mats, windows and candles: ~40 halos)
+      W.hands = new Hands({ scene, heightAt, fx: W.fx });
+      W.thief = new Thief({ scene, heightAt, physics, candy: W.candy, fx: W.fx, porches: W.porches });
+      W.glows = new Glows(432); // (the porches' doorways, the village's lamps, mats, windows and candles: ~40 halos; the hands' rings up to 44, the thief 4)
       scene.add(W.glows.mesh);
       W.bats = new Bats({ scene, count: LOW ? 6 : 9 });
       // the living night: wind, leaves, clouds over the moon, mist, lightning, crows; escalates toward midnight
@@ -231,7 +239,7 @@ async function boot() {
     },
   }, 'world-load');
   await engine.load((p, label) => loading.setProgress(p, label));
-  const { world, dyn, lanterns, ghosts, candy, porches, fx, glows, bats, env } = W;
+  const { world, dyn, lanterns, ghosts, candy, porches, hands, thief, fx, glows, bats, env } = W;
   const booReach = new BooReach(scene); // BOO's reach on the ground while BOO glows
 
   // ---------------------------------------------------------------- the kid
@@ -269,7 +277,8 @@ async function boot() {
     pickups: 0, hintBoo: false, hintT: 0, newBest: false,
     catch1: -99, catch2: -99, mercyT: 0, lookHintT: 0, lookHintRad: 0, dryT: 0,
     witching: false, rainLeft: 0, rainT: 0, streakMax: 0, streakBonus: 0, bonusFrame: 0, rankMax: 0, passedBest: false,
-    paceK: 0, plusHold: 0, riseSaid: false,
+    paceK: 0, plusHold: 0, riseSaid: false, grabs: 0, thiefSaid: false, relocated: 0,
+    handsAt: HAND.START * ROUND / 180, thiefAt: THIEF.APPEAR * ROUND / 180, // round s when the hands wake / the thief comes out
   };
   let pace = loadPace(); // the best run's candy at the PACE_N moments (null: no best run recorded yet)
   const paceRec = new Array(PACE_N).fill(0);
@@ -377,6 +386,7 @@ async function boot() {
   // ---------------------------------------------------------------- round flow
   const placeKid = () => {
     const x = SPAWN[0], z = SPAWN[1];
+    cc.hold = false;
     cc.teleport(x, heightAt(x, z) + 0.05, z);
     prev.copy(cc.position); cur.copy(cc.position); player.position.copy(cc.position); yOff = 0;
     camState.facing = 0; player.rotation.y = 0; intent.moveX = intent.moveZ = intent.fwd = 0; intent.jump = false;
@@ -389,11 +399,12 @@ async function boot() {
   function startRound() {
     audioHeld = false; audio.start(); audio.ui();
     Object.assign(G, { state: 'play', time: 0, left: ROUND, candy: 0, smashed: 0, booed: 0, caught: 0, pops: 0, booT: BOO_CD, safeT: 0, streak: 0, lastPick: -9, wakeIdx: 0, spawnT: 0, popT: 12, endT: 0, lastCount: 99, pickups: 0, catch1: -99, catch2: -99, mercyT: 0, lookHintT: 0, dryT: 0,
-      witching: false, rainLeft: 0, rainT: 0, streakMax: 0, streakBonus: 0, bonusFrame: 0, rankMax: 0, passedBest: false, paceK: 0, plusHold: 0, riseSaid: false });
+      witching: false, rainLeft: 0, rainT: 0, streakMax: 0, streakBonus: 0, bonusFrame: 0, rankMax: 0, passedBest: false, paceK: 0, plusHold: 0, riseSaid: false, grabs: 0, thiefSaid: false, relocated: 0,
+      handsAt: HAND.START * ROUND / 180, thiefAt: THIEF.APPEAR * ROUND / 180 });
     paceRec.fill(0);
     if (engine.clock.paused) engine.clock.resume();
     endJuice();
-    lanterns.reset(); ghosts.reset(); fx.clear(); env.reset(); fillCandy(); porches.reset(); placeKid(); hud.clearCalls();
+    lanterns.reset(); ghosts.reset(); fx.clear(); env.reset(); fillCandy(); porches.reset(); hands.reset(); thief.reset(); placeKid(); hud.clearCalls();
     hud.setCandy(0, false); hud.setGoal(nextRankAt(0)); hud.setClock(ROUND, ROUND); hud.showPlay(); hud.setDanger(0);
     input.map.enabled = true;
     rig.yaw = 0; rig.pitch = portraitCam ? PITCH.portrait : PITCH.landscape; setRig(rig); rig.recentre();
@@ -406,7 +417,7 @@ async function boot() {
     if (engine.clock.paused) setClockPaused(false);
     holdAudio(false);
     G.state = 'title'; endJuice();
-    lanterns.reset(); ghosts.reset(); fx.clear(); env.reset(); fillCandy(); porches.reset(); placeKid(); hud.clearCalls();
+    lanterns.reset(); ghosts.reset(); fx.clear(); env.reset(); fillCandy(); porches.reset(); hands.reset(); thief.reset(); placeKid(); hud.clearCalls();
     orbitTarget.position.set(-2, 0, -4); orbit.distance = 30; orbit.elevation = 0.3; orbit.azimuth = 0.4; // title framing
     hud.showTitle(G.best); setRig(orbit);
     for (let i = 0; i < 3; i++) ghosts.wake(SPAWN[0], SPAWN[1]); // a few ghosts drift around behind the title
@@ -436,7 +447,7 @@ async function boot() {
   }
   function showResults() {
     G.state = 'over';
-    hud.showResults({ candy: G.candy, best: G.best, isBest: G.newBest, booed: G.booed, caught: G.caught, streak: G.streakMax, porches: porches.laneVisited, tricks: porches.tricks });
+    hud.showResults({ candy: G.candy, best: G.best, isBest: G.newBest, booed: G.booed, caught: G.caught, streak: G.streakMax, porches: porches.laneVisited, tricks: porches.tricks, tags: thief.tags });
     orbitTarget.position.copy(cc.position); orbit.distance = 12; orbit.elevation = 0.35; orbit.azimuth = rig.yaw + Math.PI;
     setRig(orbit);
   }
@@ -492,7 +503,7 @@ async function boot() {
 
   // ---------------------------------------------------------------- gameplay helpers
   const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _v = new THREE.Vector3();
-  const kidInfo = { x: 0, y: 0, z: 0, vx: 0, vz: 0, safe: false };
+  const kidInfo = { x: 0, y: 0, z: 0, vx: 0, vz: 0, safe: false, sneak: false }; // sneak: the SNEAK potion (pass 4)
   const OFFSTAGE = { x: 1e6, y: 0, z: 1e6 }; // the magnet's "kid" while no round runs
   const doBoo = () => {
     if (G.booT < BOO_CD) { audio.tick(); return; }
@@ -501,6 +512,10 @@ async function boot() {
     fx.boo(p.x, p.y, p.z, BOO_R); audio.boo(); buzz(BUZZ.boo); fovPunch(); env.scare(p.x, p.z, BOO_R * 2);
     const scared = ghosts.boo(p.x, p.z, BOO_R), trick = porches.boo(p.x, p.y, p.z); // on a lit doormat: a trick
     if (trick >= 0) onTrick(trick);
+    if (hands.boo(p.x, p.z) > 0) audio.handsUp(); // telling / standing hands within 4 m sink back (a grab lets go)
+    if (thief.boo(p.x, p.z, BOO_R)) { // stunned: dizzy, stars; a touch now tags it
+      const t = thief; audio.stars(sidePan(t.x, t.z)); hitstop(HITSTOP.boo); fx.burst(t.x, t.y + 0.8, t.z, 16, 1.6, 1.3, 0.4, 1.8, 1.5, 0.6, 0.09);
+    }
     if (scared.length) {
       G.booed += scared.length; audio.scared(scared.length); G.hintBoo = false;
       hitstop(scared.length >= 3 ? HITSTOP.boo3 : HITSTOP.boo);
@@ -524,6 +539,33 @@ async function boot() {
     audio.trick(); audio.creak(true); doorBurst(k, porches.spots[k].haunted ? 0.9 : 1.6, 0.6, 1.6);
     jolt(SHAKE.smash); hitstop(HITSTOP.boo3);
     taught.set('trick');
+  };
+  // ---- grave hands and the candy thief: a grab (held a second, then 3 spilled), a snatch, a tag
+  /** -1..1: (x, z) to the left / right of the view (a sound's pan). */
+  const sidePan = (x, z) => { const p = cc.position, dx = x - p.x, dz = z - p.z, d = Math.hypot(dx, dz) || 1; rig.getRight(_r); return clamp((dx * _r.x + dz * _r.z) / d, -1, 1); };
+  const onGrab = () => {
+    G.grabs++;
+    hud.callout('GRABBED!', 'bad', taught.has('hands') ? '' : 'JUMP THE HANDS!', 1); taught.set('hands');
+    audio.grabbed(); buzz(BUZZ.caught); jolt(SHAKE.stomp); hitstop(HITSTOP.smash);
+  };
+  const onRelease = () => { // the hands let go: HAND.LOSS spilled round the kid, quick to grab back
+    const lose = Math.min(G.candy, HAND.LOSS), p = cc.position;
+    if (lose <= 0) return;
+    G.candy -= lose; candyChanged(); hud.plusText(`−${lose}`, true); G.plusHold = 0.8;
+    candy.spill(p.x, p.y + 0.7, p.z, lose, 4, 0.55, 10);
+  };
+  const onSnatch = () => { // a cornered thief's touch
+    const lose = Math.min(G.candy, THIEF.TOUCH);
+    G.candy -= lose; candyChanged(); thief.stole(lose);
+    hud.callout(lose > 0 ? `SNATCHED! −${lose}` : 'SNATCHED!', 'bad'); if (lose > 0) { hud.plusText(`−${lose}`, true); G.plusHold = 0.8; }
+    audio.chitter(sidePan(thief.x, thief.z), 6); buzz(BUZZ.smash);
+  };
+  const onTag = (n) => { // TAGGED: the sack + TAG_BONUS spill round it
+    const t = thief, mult = G.witching ? WITCH_MULT : 1;
+    candy.spill(t.x, t.y + 0.6, t.z, n, 2.8, 0.3, 14);
+    hud.callout(`TAGGED! +${n * mult}`, 'thief', '', 1); G.plusHold = 0;
+    audio.tagged(); buzz(BUZZ.stomp); jolt(SHAKE.smash); hitstop(HITSTOP.stomp); taught.set('thief');
+    fx.burst(t.x, t.y + 0.6, t.z, 30, 2.2, 0.5, 1.3, 3.2, 2.5, 0.9, 0.12); fx.flash(t.x, t.y + 0.6, t.z, 3, 0.8, 0.2, 0.55, 0.35);
   };
   const fullRound = () => {
     const p = cc.position;
@@ -574,6 +616,7 @@ async function boot() {
   // 0:10). The loss spills around the kid, quick to grab back (collectable after 0.45 s, gone after 10 s; in the
   // Witching Hour each candy counts double, so half as many spill); three catches within 30 s calm the ghosts a while
   const caught = (g) => {
+    hands.release(); // knocked out of any grab
     G.caught++; G.safeT = SAFE_T;
     const lose = Math.min(G.candy, clamp(Math.round(G.candy * CATCH_SHARE), CATCH_MIN, G.witching ? WITCH_CATCH : CATCH_MAX));
     G.candy -= lose; candyChanged();
@@ -716,6 +759,7 @@ async function boot() {
     audio.bell(2, 0.8); audio.witching();
     lanterns.relightAll(relit);
     porches.relightAll(); // every dark porch lamp at once
+    hands.setWitch(true); thief.setWitch(true); // the hands cycle twice as fast; the thief is back with a full-ish sack
     ghosts.witch = true;
     env.setFinale(true); // the night at its peak: storm, lightning, the blood moon (env.reset() ends it: Play Again, title)
   };
@@ -805,6 +849,7 @@ async function boot() {
     fixedUpdate(dt) {
       prev.copy(cur);
       const playing = G.state === 'play';
+      cc.hold = playing && hands.holding >= 0; // a grab: frozen until the hands let go (they always do: hands.js)
       cc.step(dt, playing ? intent.moveX : 0, playing ? intent.moveZ : 0, playing && intent.jump, false, physics);
       intent.jump = false;
       if (cc.jumpedThisStep) { audio.jump(); if (animMode !== 'jump') { animMode = 'jump'; ctl.play('jump'); } }
@@ -835,6 +880,27 @@ async function boot() {
         if (PE.treat >= 0) onTreat(PE.treat);
         if (PE.resident >= 0) audio.resident();
         if (PE.full) fullRound();
+      }
+      // grave hands (awake from 0:40) and the candy thief (out from 1:00): after the catch, so a catch frees the kid
+      const el = ROUND - G.left;
+      hands.awake = playing && el >= G.handsAt;
+      hands.fixedUpdate(dt, kidInfo, playing);
+      const HE = hands.events;
+      if (playing) {
+        const near = (k) => Math.hypot(hands.x[k] - p.x, hands.z[k] - p.z) < 18; // the cracks of far-off hands stay quiet
+        if (HE.tell >= 0 && near(HE.tell)) audio.crack(sidePan(hands.x[HE.tell], hands.z[HE.tell]));
+        if (HE.rise >= 0 && near(HE.rise)) { const k = HE.rise; audio.handsUp(sidePan(hands.x[k], hands.z[k])); fx.burst(hands.x[k], hands.gy[k] + 0.1, hands.z[k], 14, 0.45, 0.3, 0.18, 2, 2.4, 0.6, 0.09); }
+        if (HE.grab >= 0) onGrab();
+        if (HE.release >= 0) onRelease();
+      }
+      thief.awake = playing && el >= G.thiefAt;
+      thief.fixedUpdate(dt, kidInfo, playing);
+      const TE = thief.events;
+      if (playing) {
+        if (TE.appear && !G.thiefSaid) { G.thiefSaid = true; hud.say('A CANDY THIEF!', 'thief'); audio.chitter(sidePan(thief.x, thief.z), 5); }
+        if (TE.eat && Math.random() < 0.4) audio.chitter(sidePan(thief.x, thief.z), 2);
+        if (TE.steal) onSnatch();
+        if (TE.tag > 0) onTag(TE.tag);
       }
       lanterns.fixedUpdate(dt);
       dyn.step(dt);
@@ -877,6 +943,7 @@ async function boot() {
       kid.hatTip.rotation.x = -M.hat + Math.sin(M.t * 9.4) * 0.07 * sp;
       kid.hatTip.rotation.z = Math.sin(M.t * 6.1 + 1) * (0.05 + 0.08 * sp);
       view.rotation.x = -M.lean;
+      view.rotation.z = hands.holding >= 0 ? Math.sin(M.t * 38) * 0.13 : 0; // held by the hands: the kid wiggles
       view.scale.set(1 + M.squash * 0.6, 1 - M.squash, 1 + M.squash * 0.6);
       landPose(kid, M.squash / 0.14); // knees and hips give with the squash (after the clips)
     },
@@ -920,6 +987,17 @@ async function boot() {
         }
         // down in the creek's bed for 2 s (its banks are walls): how to get out (once per device)
         if (!taught.has('creek') && cc.grounded && world.inCreek(p.x, p.y, p.z)) { if ((creekT += dt) > 2) { taught.set('creek'); hud.say('JUMP OUT!', 'warn'); } } else creekT = 0;
+        // the hands' lesson (once per device): the first telegraph in view within 8 m; the thief's: within 10 m, BOO ready
+        if (!taught.has('hands')) {
+          for (let k = 0; k < hands.n; k++) {
+            if (hands.st[k] !== 1 || Math.hypot(hands.x[k] - p.x, hands.z[k] - p.z) > 8 || !onScreen(hands.x[k], hands.gy[k] + 0.2, hands.z[k])) continue;
+            if (hud.say('JUMP THE HANDS!', 'bad')) taught.set('hands');
+            break;
+          }
+        }
+        if (!taught.has('thief') && thief.catchable && G.booT >= BOO_CD && Math.hypot(thief.x - p.x, thief.z - p.z) < 10 && onScreen(thief.x, thief.y + 0.4, thief.z)) {
+          if (hud.say('BOO IT,', 'thief', 'THEN TAG IT!')) taught.set('thief');
+        }
         // candy trickles back; big pops now and then
         G.spawnT -= dt;
         if (G.spawnT <= 0) {
@@ -928,8 +1006,10 @@ async function boot() {
           G.dryT = dry ? G.dryT + 1.2 : 0;
           // a porch's trail takes the place of that many ordinary respawns (porches.takeDebt); a dry view still gets its
           // candy in view
-          const i = candy.restingCount < CANDY_TARGET ? (!dry && porches.takeDebt() ? -1 : respawnCandy(p, dry)) : G.dryT >= DRY_T ? relocateFar(p) : -1;
+          const i = candy.restingCount < CANDY_TARGET ? (!dry && porches.takeDebt() ? -1 : respawnCandy(p, dry)) : -1;
           if (i >= 0) fx.motes(candy.p[i * 3], candy.p[i * 3 + 1], candy.p[i * 3 + 2], 6, 1.2, 0.8, 1.6);
+          const j = G.dryT >= DRY_T ? relocateFar(p) : -1; // a dry spell: a far one into view too, below the target as well
+          if (j >= 0) { G.relocated++; fx.motes(candy.p[j * 3], candy.p[j * 3 + 1], candy.p[j * 3 + 2], 6, 1.2, 0.8, 1.6); }
         }
         G.popT -= dt;
         if (G.popT <= 0) {
@@ -1004,6 +1084,8 @@ async function boot() {
       }
       n += fx.glow(glows, n);
       n += porches.update(dt, glows, n, t); // doors, lamps (on the env's flicker), railing pumpkins, doorways
+      n += hands.update(dt, glows, n, t);   // the hands, their soil ring's glow and puffs
+      n += thief.update(dt, glows, n, t, camera.position); // the raccoon's pose, its sack's halo, the stun's stars
       n += world.halos(glows, n); // halos over the static glowing props, at their light's level (env: flicker, gusts)
       glows.commit(n);
       bats.update(dt);
@@ -1047,7 +1129,8 @@ async function boot() {
         hud.setDanger(playing ? clamp((7 - d) / 5, 0, 1) * 0.9 : 0, ang);
         // BOO glows while it is ready and a chaser is in reach (novices had BOO ready at 25 of 28 catches), and (the
         // trick lesson, until a first trick) at a door that is opening for the kid
-        const ghostHot = playing && G.booT >= BOO_CD && d < BOO_R;
+        const td = thief.catchable ? Math.hypot(thief.x - p.x, thief.z - p.z) : Infinity; // the thief in reach: stun it
+        const ghostHot = playing && G.booT >= BOO_CD && (d < BOO_R || td < BOO_R);
         const hot = ghostHot || (playing && G.booT >= BOO_CD && porches.knocking >= 0 && taught.has('treat') && !taught.has('trick'));
         if (hot !== booHot) { booHot = hot; if (booBtn) booBtn.el.classList.toggle('hw-boo-hot', hot); hud.setBooHot(hot); }
         // BOO's reach on the ground while it glows: inside the ring means BOO now
@@ -1061,6 +1144,9 @@ async function boot() {
         }
         if (playing && pi >= 0 && placeEdge(C.p[pi * 3], C.p[pi * 3 + 1] + 0.6, C.p[pi * 3 + 2]).off) hud.setEdge(hud.popEdge, true, edge.x, edge.y, edge.ang, 1, pd);
         else hud.setEdge(hud.popEdge, false);
+        // the candy thief while it is out and off screen (a raccoon and its distance)
+        if (playing && thief.out && placeEdge(thief.x, thief.y + 0.5, thief.z).off) hud.setEdge(hud.thiefEdge, true, edge.x, edge.y, edge.ang, 1, Math.hypot(thief.x - p.x, thief.z - p.z));
+        else hud.setEdge(hud.thiefEdge, false);
         // ghosts closing in from off screen or from behind the kid (the camera side): a chevron, stronger as they near
         let k = 0;
         if (playing) {
@@ -1091,7 +1177,7 @@ async function boot() {
     const warm = [fx.ring, fx.ring2, fx.dome, booReach.mesh];
     for (const g of ghosts.list) warm.push(g.mesh.mesh);
     for (const sl of lanterns.slots) warm.push(...sl.meshes);
-    warm.push(porches.doors);
+    warm.push(porches.doors, hands.mesh, thief.root, thief.skinned);
     const was = warm.map((o) => [o.visible, o.frustumCulled]);
     for (const o of warm) { o.visible = true; o.frustumCulled = false; }
     renderer.render(scene, camera);
@@ -1099,7 +1185,7 @@ async function boot() {
   }
   const loadMs = Math.round(performance.now() - t0);
   window.__game = {
-    THREE, engine, G, cc, ctl, camState, rig, orbit, input, hud, audio, world, dyn, lanterns, ghosts, candy, porches, PORCH, taught, fx, postfx, atmo, physics, player, env,
+    THREE, engine, G, cc, ctl, camState, rig, orbit, input, hud, audio, world, dyn, lanterns, ghosts, candy, porches, PORCH, hands, HAND, thief, THIEF, taught, fx, postfx, atmo, physics, player, env,
     loadMs, TOUCH, LOW, startRound, toTitle, setPaused, endRound, juice, paceRec, shareScore, RANKS, around,
     get pace() { return pace; }, get baseFov() { return baseFov; },
     get touchUI() { return touchUI; },

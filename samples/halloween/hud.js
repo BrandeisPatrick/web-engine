@@ -11,11 +11,12 @@
 //             seconds counting down under the clock; a cold frost on the edges when a ghost is close, and (desktop) a
 //             BOO cooldown meter; on phones the BOO button itself shows the ring (TouchControls).
 //             Edge markers: a lollipop + distance at the screen edge toward an off-screen big pop, ghost chevrons
-//             toward chasers that are off screen or behind; BOO glows ("hot") while a chaser is in reach; a look
-//             hint pill (desktop: how the mouse looks)
+//             toward chasers that are off screen or behind, a raccoon + distance toward the candy thief while it is
+//             out and off screen; BOO glows ("hot") while a chaser or the thief is in reach; a look hint pill
+//             (desktop: how the mouse looks)
 //   pause     resume / restart / how to play / title / music / sound
 //   results   candy, rank title, the rank ladder and what the next rank takes, best (NEW BEST), stats (porches n/5,
-//             tricks, BOOs, catches, best streak), PLAY AGAIN / TITLE / share (the game shares through Web Share on
+//             tricks, tags, BOOs, catches, best streak), PLAY AGAIN / TITLE / share (the game shares through Web Share on
 //             phones, else copies; a toast says so)
 // Call-outs come two ways: callout() at once (the answer to the player's own action: BOO!, a trick, a catch, a rank,
 // the Witching Hour) and say() paced (hints and news: at most one per CALL_GAP s, duplicates dropped, stale ones too).
@@ -48,6 +49,8 @@ const CARDS = `
 const CTRL_TOUCH = 'Left thumb: move &nbsp;·&nbsp; Right thumb: drag to look &nbsp;·&nbsp; JUMP &nbsp;·&nbsp; BOO! &nbsp;·&nbsp; ❚❚ pause';
 const CTRL_KEYS = '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move &nbsp;·&nbsp; mouse look &nbsp;·&nbsp; <kbd>←</kbd><kbd>→</kbd> turn &nbsp;·&nbsp; <kbd>Space</kbd> jump &nbsp;·&nbsp; <kbd>E</kbd> BOO &nbsp;·&nbsp; <kbd>Esc</kbd> pause &nbsp;·&nbsp; gamepad: stick, A, X';
 const POP_ICON = '<svg viewBox="0 0 24 32" aria-hidden="true"><path d="M11 15h2v16h-2z" fill="#f3ead8"/><circle cx="12" cy="10" r="9" fill="#fff4fa"/><path d="M12 10m-6 0a6 6 0 1 0 12 0a4 4 0 1 0-8 0a2 2 0 1 0 4 0" stroke="#ff3d8b" stroke-width="2.4" fill="none"/></svg>';
+// the candy thief: a raccoon's face (grey, the black mask, eyes shining) with its pink sack
+const RACCOON_ICON = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M9 20L11 7l10 8zM39 20L37 7l-10 8z" fill="#8f8796"/><ellipse cx="24" cy="26" rx="17" ry="14" fill="#a39ba9"/><path d="M8 24q8-7 16-2q8-5 16 2q-2 7-8 6q-5-1-8-4q-3 3-8 4q-6 1-8-6z" fill="#1d1920"/><circle cx="16.5" cy="25" r="2.6" fill="#fff3c4"/><circle cx="31.5" cy="25" r="2.6" fill="#fff3c4"/><ellipse cx="24" cy="34" rx="8" ry="5.5" fill="#ece6ee"/><ellipse cx="24" cy="31.5" rx="3" ry="2.2" fill="#120e14"/><circle cx="38" cy="38" r="7" fill="#ff4f9e"/><path d="M36 31.5l2 2 2-2" stroke="#b8236a" stroke-width="2" fill="none"/></svg>';
 const CHEVRON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 15l7-8 7 8" stroke="currentColor" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 // ---- full screen (Android Chrome, desktop, iPad; iPhone Safari has no element full screen: the button stays hidden)
@@ -140,7 +143,8 @@ const CSS = `
   0 6px 0 rgba(0,0,0,.3),0 0 26px var(--glow)}
 .hw-call.go{animation:hwCall 1.15s cubic-bezier(.2,.9,.25,1) forwards}
 .hw-call.boo{--glow:rgba(176,120,255,1)}.hw-call.bad{--glow:rgba(150,96,255,1)}.hw-call.warn{--glow:rgba(255,120,56,1)}.hw-call.good{--glow:rgba(80,255,130,.95)}
-.hw-call.rank,.hw-call.witch{--glow:rgba(255,176,40,1)}
+.hw-call.rank,.hw-call.witch{--glow:rgba(255,176,40,1)}.hw-call.thief{--glow:rgba(255,80,165,1)}
+.hw-call.thief small{color:#ffd6ea}
 .hw-call.rank{font-size:clamp(23px,6.4vmin,52px)} /* "LORD OF THE NIGHT!" fits a 360 px phone */
 .hw-call small{display:block;font-size:.42em;letter-spacing:.14em;margin-top:.3em;color:#ffe9b8;
   text-shadow:1px 1px 0 var(--ink),-1px 1px 0 var(--ink),1px -1px 0 var(--ink),-1px -1px 0 var(--ink),0 2px 0 var(--ink),0 0 14px var(--glow)}
@@ -188,6 +192,8 @@ const CSS = `
 .hw-edge.ghost .in{background:radial-gradient(circle,rgba(200,225,255,.28) 40%,rgba(200,225,255,0) 70%)}
 .hw-edge.ghost .in svg{width:30px;height:30px;filter:drop-shadow(0 0 6px rgba(190,220,255,.9))}
 .hw-edge.ghost .arr{color:#dbe9ff}
+.hw-edge.thief{opacity:1}
+.hw-edge.thief .in svg{width:32px;height:32px;filter:drop-shadow(0 0 6px rgba(255,80,160,.75))}
 /* ---------------- screens (title / pause / results) */
 .hw-screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(8px,2vmin,16px);
   padding:calc(var(--sa-t) + 16px) calc(var(--sa-r) + 18px) calc(var(--sa-b) + 16px) calc(var(--sa-l) + 18px);pointer-events:auto;z-index:40;text-align:center;
@@ -365,6 +371,7 @@ export class HUD {
     };
     this.popEdge = edge('pop', POP_ICON);
     this.ghostEdges = [edge('ghost', ICON.ghost), edge('ghost', ICON.ghost), edge('ghost', ICON.ghost)];
+    this.thiefEdge = edge('thief', RACCOON_ICON);
     // ---- title
     const title = this.title = el('div', 'hw-screen hw-title-wrap', root);
     title.innerHTML = `
@@ -393,8 +400,9 @@ export class HUD {
     const help = this.help = el('div', 'hw-screen hw-help off', root);
     help.innerHTML = `<div class="hw-h1">HOW TO PLAY</div><div class="hw-cards">${CARDS}</div><div class="hw-ctrl"></div>
       <div class="hw-tips">Lit porches: step on the glowing doormat for a treat, or BOO there for a trick (more candy, but a ghost
-      comes down the chimney). Swirl lollipops under a light beam are worth 5. Jump onto a lantern to stomp it for extra candy.
-      When the screen edges frost over, a ghost is close: let it come near, then BOO! Caught? Grab the candy you drop.
+      comes down the chimney). Lollipops under a light beam are worth 5. Stomp a lantern for extra candy.
+      Frosty screen edges? A ghost is close: let it come near, then BOO! Caught? Grab the candy you drop.
+      Red soil ring? Jump the grave hands. BOO the raccoon thief, then tag it for its sack!
       Jump over the graveyard fence! Grab candy fast for a streak bonus. The last 30 seconds are the Witching Hour:
       candy counts double!</div>
       <div class="hw-small-btns"><button class="hw-start" data-a="close">GOT IT</button></div>`;
@@ -460,7 +468,7 @@ export class HUD {
   showPause(on) { this.pause.classList.toggle('off', !on); if (!on) this.showHelp(false); this.setTouchVisible(!on); }
   setMusicLabel(on) { this.musicBtn.textContent = `MUSIC: ${on ? 'ON' : 'OFF'}`; }
   setTouchVisible(on) { document.body.classList.toggle('hw-hidden-touch', !on); }
-  hideEdges() { this.setEdge(this.popEdge, false); for (const g of this.ghostEdges) this.setEdge(g, false); }
+  hideEdges() { this.setEdge(this.popEdge, false); this.setEdge(this.thiefEdge, false); for (const g of this.ghostEdges) this.setEdge(g, false); }
   setMuted(m) {
     for (const b of this.muteBtns) {
       if (b.dataset.a === 'sound') b.textContent = `SOUND: ${m ? 'OFF' : 'ON'}`; else b.innerHTML = m ? ICON.muted : ICON.sound;
@@ -470,9 +478,9 @@ export class HUD {
 
   /**
    * The results: candy, rank, the rank ladder (filled up to the next rank) with what the next rank takes, the best,
-   * the stats (lane porches visited of porchesOf, tricks, ghosts booed, catches, best streak).
+   * the stats (lane porches visited of porchesOf, tricks, the thief tagged, ghosts booed, catches, best streak).
    */
-  showResults({ candy, best, isBest, booed, caught, streak, porches = 0, porchesOf = 5, tricks = 0 }) {
+  showResults({ candy, best, isBest, booed, caught, streak, porches = 0, porchesOf = 5, tricks = 0, tags = 0 }) {
     this.overN.textContent = String(candy);
     const ri = rankIndex(candy), next = ri + 1 < RANKS.length ? RANKS[ri + 1] : null;
     this.overRank.textContent = RANKS[ri][1];
@@ -483,7 +491,7 @@ export class HUD {
     this.overNext.textContent = next ? `${next[0] - candy} MORE FOR ${next[1].toUpperCase()}` : '';
     this.overBest.innerHTML = isBest ? '<span class="hw-newbest">NEW BEST!</span>' : `<span class="hw-best">BEST ${best}</span>`;
     const stat = (v, label) => `<div><b>${v}</b><span>${label}</span></div>`;
-    this.overStats.innerHTML = stat(`${porches}/${porchesOf}`, 'PORCHES') + stat(tricks, 'TRICKS') + stat(booed, 'BOOS') + stat(caught, 'CAUGHT') + stat(streak, 'BEST STREAK');
+    this.overStats.innerHTML = stat(`${porches}/${porchesOf}`, 'PORCHES') + stat(tricks, 'TRICKS') + stat(tags, 'TAGS') + stat(booed, 'BOOS') + stat(caught, 'CAUGHT') + stat(streak, 'BEST STREAK');
     this.toastEl.classList.remove('go');
     this.hud.classList.add('off'); this.over.classList.remove('off');
     this.showHelp(false);

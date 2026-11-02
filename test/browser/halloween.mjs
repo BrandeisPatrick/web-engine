@@ -50,6 +50,14 @@
 // once, a wandering ghost is the resident when none is dormant, the Witching Hour relights every porch, the results
 // show porches n/5 and tricks, the ranks are v2; hints are paced (one call-out per 2.5 s, duplicates dropped). The
 // --perf storm also tricks every porch at once.
+// Grave hands and the candy thief (hands.js, thief.js; their rules in detail: test/halloween-enemies.mjs): the hands'
+// lesson ("JUMP THE HANDS!" at the first telegraph in view), a 0.8 s telegraph then a grab ("GRABBED!") that holds the
+// kid 1.0 s (a shove does not move it) and lets go with 3 spilled, a jump over standing hands is not grabbed, BOO
+// within 4 m sends them down, a ghost's catch frees a grabbed kid, a grab still on at midnight ends with the round; the
+// thief out at 1:00 ("A CANDY THIEF!", an edge marker), eating a planted cluster at 2 a second, never within 6 m of a
+// kid standing still, BOO glowing with it in reach, a BOO stunning it 1.8 s, a touch then tagging it ("TAGGED! +12": its
+// sack + 5), a cornered touch snatching 5; the Witching Hour bringing it back with 10 in its sack; TAGS on the results.
+// The five-round check keeps both busy, and the --perf storms add four hands up and the thief bolting past.
 // Mobile controls: every button (title, HUD, pause, how-to-play, results) is at least 44 x 44 px inside the safe area,
 // HOW TO PLAY opens and closes by touch, the sound and pause buttons work, the full-screen button exists exactly where
 // the Fullscreen API does and toggles, haptics fire on candy / smash / BOO / catch (navigator.vibrate stubbed; none on
@@ -62,7 +70,8 @@
 // footbridge end to end, the knoll path up to the haunted porch and down, every enclosure left on foot (the hollow oak,
 // the Bale Yard's stair, Porch Row's yard, behind the east cottage, each porch), a flood fill of the whole map (no spot
 // the kid can reach but not leave), the candy shares per zone, and a beacon within 30 m of anywhere on the lane. --perf
-// also holds the map v2 budgets: the 4x storm's p95 <= 9.5 ms CPU and at most 166 draw calls a frame.
+// also holds the budgets (design pass 3, with the hands and the thief in the storm): the 4x storm's p95 <= 10 ms CPU
+// and at most 170 draw calls a frame (map v2's were 9.5 ms and 166).
 // Screenshots: <out>/<profile>-{title,play,end,...}.png. The few committed in samples/halloween/screenshots/ are
 // picked from these by hand (downscaled JPEGs). Uses the system Google Chrome like the other browser scripts.
 import fs from 'node:fs';
@@ -541,6 +550,7 @@ async function runProfile(name) {
     // ---- start: a tap / click (also the audio gesture)
     if (phone) await T.tap(startBtn.cx, startBtn.cy); else await page.mouse.click(startBtn.cx, startBtn.cy);
     check(name, 'tap / click starts the round', await waitFor(page, () => window.__game.G.state === 'play'));
+    await G(page, () => { const g = window.__game.G; g.handsAt = 1e9; g.thiefAt = 1e9; }); // the hands and the thief: their own section
     await sleep(400);
     s = await state(page);
     check(name, 'audio context running after the gesture', s.audio === 'running', s.audio);
@@ -1134,6 +1144,146 @@ async function runProfile(name) {
     }));
     const bAt = (pc.seen.find((e) => e[1] === 'PACE B') || [99])[0];
     check(name, 'call-outs: hints are paced (one per 2.5 s), a duplicate is dropped', pc.seen[0][1] === 'PACE A' && bAt >= 2.4 && bAt < 3.1 && pc.dropped === 1 && pc.seen.filter((e) => e[1] === 'PACE A').length === 1, JSON.stringify(pc));
+    // ---- grave hands and the candy thief (hands.js, thief.js). The hands: their lesson, a telegraph then a grab (held
+    // 1.0 s, frozen, then let go with 3 spilled), a jump over them, BOO sending them down, a catch freeing a grabbed kid.
+    // The thief: out at 1:00 ("A CANDY THIEF!", an edge marker), eating a planted cluster at 2 a second, never within
+    // 6 m of a kid standing still, BOO glowing with it in reach, a BOO stunning it, a touch tagging it (its sack + 5), a
+    // cornered touch snatching 5
+    await G(page, () => {
+      const g = window.__game;
+      g.ghosts.reset(); g.G.wakeIdx = 99; g.G.popT = 99; g.G.streak = 0; g.hud.clearCalls();
+      window.__hs = []; const sp = g.candy.spill.bind(g.candy);
+      g.candy.spill = (x, y, z, n, sd, d, ttl) => { window.__hs.push([n, ttl, +x.toFixed(1), +z.toFixed(1)]); return sp(x, y, z, n, sd, d, ttl); };
+    });
+    const HK = 2; // the graveyard aisle spot (16, -26)
+    /** Every hand under the soil, the kid at (dx, dz) from spot HK facing it, grounded, not safe. */
+    const handStage = (dx, dz) => G(page, ([HK, dx, dz]) => {
+      const g = window.__game, H = g.hands, x = H.x[HK] + dx, z = H.z[HK] + dz;
+      if (H.holding >= 0) H.release();
+      for (let k = 0; k < H.n; k++) { H.st[k] = 0; H.wait[k] = 99; }
+      g.G.safeT = 0; H.grace = 0; g.G.booT = 5;
+      for (const q of g.ghosts.list) { q.calm = 99; if (q.state === 'chase') q.state = 'wander'; }
+      g.cc.teleport(x, g.world.heightAt(x, z) + 0.05, z); g.cc.velocity.set(0, 0, 0);
+      const yaw = Math.abs(dx) + Math.abs(dz) > 1 ? Math.atan2(dx, dz) : 0;
+      g.rig.yaw = yaw; g.camState.facing = yaw; g.player.rotation.y = yaw; g.rig.snap();
+    }, [HK, dx, dz]);
+    await handStage(0, 5);
+    await G(page, (HK) => { const H = window.__game.hands; H.st[HK] = 1; H.t[HK] = 0; }, HK);
+    const hLesson = await waitFor(page, () => /JUMP THE HANDS/.test(document.querySelector('.hw-call').textContent), null, 3200);
+    check(name, 'hands: the first telegraph in view within 8 m says "JUMP THE HANDS!" (once per device)', hLesson && await G(page, () => window.__game.taught.has('hands')));
+    await handStage(0.4, 0);
+    await G(page, () => { const g = window.__game; g.G.candy = 40; g.hud.setCandy(40); window.__hs.length = 0; window.__calls.length = 0; g.hud.clearCalls(); });
+    const hg = await G(page, (HK) => new Promise((done) => {
+      const g = window.__game, H = g.hands, p = g.cc.position, out = { up: -1, grab: -1, rel: -1, frozen: true, hold: false, moved: 0 };
+      let x0 = 0, z0 = 0;
+      H.st[HK] = 1; H.t[HK] = 0;
+      const t0 = g.G.time, r0 = performance.now(); // game time (a loaded machine runs the game slower than real time)
+      const tick = () => {
+        const t = g.G.time - t0;
+        if (out.up < 0 && H.st[HK] === 2) out.up = +t.toFixed(2);
+        if (out.grab < 0 && H.holding === HK) { out.grab = +t.toFixed(2); x0 = p.x; z0 = p.z; g.cc.velocity.set(4, 0, 0); } // a shove: it stays put
+        if (out.grab >= 0 && out.rel < 0) { if (g.cc.hold) out.hold = true; out.moved = Math.max(out.moved, Math.hypot(p.x - x0, p.z - z0)); }
+        if (out.grab >= 0 && out.rel < 0 && H.holding < 0) { out.rel = +t.toFixed(2); out.candy = g.G.candy; out.st = H.st[HK]; }
+        if (t < 2.6 && performance.now() - r0 < 12000) requestAnimationFrame(tick); else { out.holdAfter = g.cc.hold; out.spills = window.__hs.slice(); out.calls = window.__calls.slice(); done(out); }
+      };
+      requestAnimationFrame(tick);
+    }), HK);
+    check(name, 'hands: a telegraph of 0.8 s, then they rise and grab a grounded kid in reach ("GRABBED!")', hg.up > 0.65 && hg.up < 0.98 && hg.grab >= hg.up && hg.grab - hg.up < 0.1 && hg.calls.includes('GRABBED!'), JSON.stringify(hg));
+    check(name, 'hands: the grab holds the kid 1.0 s (frozen: a shove does not move it), then lets go: −3 spilled round it, the hands sink',
+      hg.hold && hg.moved < 0.05 && hg.rel - hg.grab > 0.85 && hg.rel - hg.grab < 1.25 && hg.candy === 37 && hg.spills.some((q) => q[0] === 3 && q[1] === 10) && hg.st === 3 && !hg.holdAfter, JSON.stringify(hg));
+    // a jump over standing hands: launched (the kid's own jump: 4.5 m/s up from 0.6 m, 6.5 m/s on) from 2.6 m before them
+    await handStage(0, 2.6);
+    const hj = await G(page, (HK) => new Promise((done) => {
+      const g = window.__game, H = g.hands, p = g.cc.position, gr0 = H.stats.grabs;
+      H.st[HK] = 2; H.t[HK] = 0.3; H.grace = 0;
+      g.cc.teleport(p.x, p.y + 0.6, p.z); g.cc.velocity.set(0, 4.5, -6.5);
+      let minFeet = 99, inside = 0; const t0 = performance.now();
+      const tick = () => {
+        H.t[HK] = Math.min(H.t[HK], 1); // they keep standing
+        if (Math.hypot(p.x - H.x[HK], p.z - H.z[HK]) < 0.9) { inside++; minFeet = Math.min(minFeet, p.y - H.gy[HK]); }
+        if (performance.now() - t0 < 1500) requestAnimationFrame(tick); else done({ grabbed: H.stats.grabs - gr0, inside, minFeet: +minFeet.toFixed(2), past: +(H.z[HK] - p.z).toFixed(1) });
+      };
+      requestAnimationFrame(tick);
+    }), HK);
+    check(name, 'hands: a kid jumping over standing hands (feet above 0.6 m over them) is not grabbed', hj.grabbed === 0 && hj.inside > 0 && hj.minFeet > 0.6 && hj.past > 2, JSON.stringify(hj));
+    // BOO within 4 m: they go back down (the ones 6 m off stay)
+    await handStage(0, 3);
+    await G(page, (HK) => { const H = window.__game.hands; H.st[HK] = 2; H.t[HK] = 0.3; H.st[HK + 1] = 2; H.t[HK + 1] = 0.3; }, HK);
+    await sleep(100);
+    await pboo();
+    const hRet = await waitFor(page, (HK) => window.__game.hands.st[HK] === 3, HK, 800);
+    check(name, 'hands: BOO within 4 m sends them back down (the ones 9 m off stay up)', hRet && (await G(page, (HK) => window.__game.hands.st[HK + 1], HK)) === 2);
+    // a ghost's catch frees a grabbed kid at once (and knocks it away)
+    await handStage(0.3, 0);
+    await G(page, (HK) => { const H = window.__game.hands; H.st[HK] = 2; H.t[HK] = 0.3; }, HK);
+    const hHeld = await waitFor(page, () => window.__game.hands.holding >= 0, null, 800);
+    const hFree = await G(page, () => new Promise((done) => {
+      const g = window.__game, gh = g.ghosts, p = g.cc.position, q = window.__catcher, c0 = g.G.caught, x0 = p.x, z0 = p.z, t0 = performance.now();
+      gh._teleport(q, p.x + 0.3, p.y + 1.6, p.z + 0.3); q.state = 'chase'; q.t = 0; q.calm = 0; q.tame = 0; q.alpha = 1; q.mesh.mesh.visible = true;
+      const tick = () => {
+        if (g.G.caught > c0 && g.hands.holding < 0) { setTimeout(() => done({ ms: Math.round(performance.now() - t0), hold: g.cc.hold, moved: +Math.hypot(p.x - x0, p.z - z0).toFixed(2) }), 250); return; }
+        if (performance.now() - t0 < 1500) requestAnimationFrame(tick); else done({ ms: -1 });
+      };
+      requestAnimationFrame(tick);
+    }));
+    check(name, 'hands: a ghost catching a grabbed kid frees it at once (knocked away)', hHeld && hFree.ms >= 0 && hFree.ms < 400 && !hFree.hold && hFree.moved > 0.25, JSON.stringify(hFree));
+    await G(page, () => { const g = window.__game; g.G.safeT = 9; for (const q of g.ghosts.list) { q.calm = 99; if (q.state === 'chase') q.state = 'wander'; } const H = g.hands; for (let k = 0; k < H.n; k++) { H.st[k] = 0; H.wait[k] = 99; } });
+    // the thief: out at 1:00, a call-out, an edge marker toward it while it is off screen
+    await home();
+    await G(page, () => { const g = window.__game; g.hud.clearCalls(); g.G.thiefSaid = false; g.thief.reset(); g.G.thiefAt = 0; });
+    const tOut = await waitFor(page, () => window.__game.thief.out && /A CANDY THIEF/.test(document.querySelector('.hw-call').textContent), null, 3200);
+    await sleep(200);
+    const tEdge = await G(page, () => { const e = document.querySelector('.hw-edge.thief'); return { on: e.classList.contains('on'), text: e.querySelector('b').textContent, st: window.__game.thief.stateName }; });
+    check(name, 'thief: out of its den at 1:00 with "A CANDY THIEF!" and an edge marker toward it (off screen, its distance)', tOut && tEdge.on && /^\d+ m$/.test(tEdge.text), JSON.stringify(tEdge));
+    // eating: a cluster planted 10 m ahead, the thief on it: 4 in 2 s, the sack swells
+    const tAte = await G(page, () => new Promise((done) => {
+      const g = window.__game, T = g.thief, C = g.candy, p = g.cc.position, cx = p.x, cz = p.z - 10;
+      for (let i = 0; i < C.state.length; i++) if (C.state[i] && Math.hypot(C.p[i * 3] - cx, C.p[i * 3 + 2] - cz) < 7) C.state[i] = 0;
+      for (let i = 0; i < 6; i++) C.place(cx + Math.cos(i * 2.4) * 0.3, g.world.heightAt(cx, cz), cz + Math.sin(i * 2.4) * 0.3, 0);
+      T.x = cx; T.z = cz; T.sack = 0; T.eaten = 0; T._set(3); T.eatT = 0;
+      const s0 = T.bones.sack.scale.x, t0 = g.G.time, r0 = performance.now();
+      const tick = () => {
+        if (g.G.time - t0 < 2.15 && performance.now() - r0 < 12000) { requestAnimationFrame(tick); return; }
+        let left = 0; for (let i = 0; i < C.state.length; i++) if (C.state[i] === 1 && Math.hypot(C.p[i * 3] - cx, C.p[i * 3 + 2] - cz) < 1) left++;
+        done({ eaten: T.eaten, sack: T.sack, left, s0: +s0.toFixed(2), s1: +T.bones.sack.scale.x.toFixed(2), s: +(g.G.time - t0).toFixed(2) });
+      };
+      requestAnimationFrame(tick);
+    }));
+    check(name, 'thief: eats a cluster at 2 a second (4 of 6 in 2 s), its sack swelling', tAte.eaten >= 3 && tAte.eaten <= 5 && tAte.sack === tAte.eaten && tAte.left === 6 - tAte.eaten && tAte.s1 > tAte.s0, JSON.stringify(tAte));
+    // wary: clusters 8.5 m round a kid who stands still; it never steps within 6 m
+    const tKeep = await G(page, () => new Promise((done) => {
+      const g = window.__game, T = g.thief, C = g.candy, p = g.cc.position;
+      for (const [dx, dz] of [[8.5, 0], [-8.5, 0], [0, 8.5], [6, -6]]) for (let i = 0; i < 4; i++) C.place(p.x + dx + Math.cos(i) * 0.4, p.y, p.z + dz + Math.sin(i) * 0.4, 0);
+      T.x = p.x + 12; T.z = p.z + 3; T.sack = 0; T._set(2); T.retarget = 0; T.minKid = Infinity;
+      setTimeout(() => done({ min: +T.minKid.toFixed(2), eaten: T.eaten }), 4000);
+    }));
+    check(name, 'thief: never steps within 6 m of a kid who stands still (4 s round clusters 8.5 m off)', tKeep.min >= 5.95 && tKeep.min < 12, JSON.stringify(tKeep));
+    // BOO: it glows with the thief in reach; a BOO stuns it (stars) 1.8 s; a touch then tags it: its sack + 5 spill
+    await home();
+    await G(page, () => { const g = window.__game, T = g.thief, p = g.cc.position; T.x = p.x + 0.4; T.z = p.z - 6.5; T.sack = 7; T._set(2); T.tx = T.x; T.tz = T.z; T.target = -1; T.retarget = 9; g.G.booT = 5; g.G.safeT = 0; g.hud.clearCalls(); window.__hs.length = 0; window.__calls.length = 0; });
+    await sleep(250);
+    const tHot = await G(page, () => document.querySelector('.hw-boo').classList.contains('hot') && (!document.querySelector('.hw-boo-btn') || document.querySelector('.hw-boo-btn').classList.contains('hw-boo-hot')));
+    await pboo();
+    const tStun = await waitFor(page, () => window.__game.thief.stateName === 'stun', null, 800);
+    const tSt = await G(page, () => ({ stunT: +window.__game.thief.stunT.toFixed(2), d: +Math.hypot(window.__game.thief.x - window.__game.cc.position.x, window.__game.thief.z - window.__game.cc.position.z).toFixed(1) }));
+    check(name, 'thief: BOO glows with it in reach; a BOO within 7.5 m stuns it (1.8 s)', tHot && tStun && tSt.stunT > 1.4 && tSt.stunT <= 1.8, JSON.stringify({ tHot, ...tSt }));
+    await G(page, () => { const g = window.__game, T = g.thief, x = T.x, z = T.z + 0.6; g.cc.teleport(x, g.world.heightAt(x, z) + 0.05, z); });
+    const tTag = await waitFor(page, () => window.__game.thief.tags > 0, null, 800);
+    await sleep(150);
+    const tg = await G(page, () => ({ spills: window.__hs.slice(), calls: window.__calls.slice(), st: window.__game.thief.stateName, sack: window.__game.thief.sack }));
+    check(name, 'thief: a touch while it is stunned TAGS it ("TAGGED! +12": its sack of 7 + 5 spill out) and it runs home', tTag && tg.spills.some((q) => q[0] === 12) && tg.calls.includes('TAGGED! +12') && tg.st === 'home' && tg.sack === 0, JSON.stringify(tg));
+    // a cornered thief's touch snatches 5
+    await G(page, () => {
+      const g = window.__game, T = g.thief, p = g.cc.position, C = g.candy; // (no candy in reach: the tag's spill would add to the count)
+      for (let i = 0; i < C.state.length; i++) if (C.state[i] && Math.hypot(C.p[i * 3] - p.x, C.p[i * 3 + 2] - p.z) < 12) C.state[i] = 0;
+      g.G.candy = 30; g.hud.setCandy(30); g.G.safeT = 0; g.G.streak = 0; T.x = p.x + 0.4; T.z = p.z; T.sack = 0; T._set(2); window.__calls.length = 0; g.hud.clearCalls();
+    });
+    const tSn = await waitFor(page, () => window.__game.thief.steals > 0, null, 800);
+    await sleep(100);
+    const sn = await G(page, () => ({ candy: window.__game.G.candy, sack: window.__game.thief.sack, st: window.__game.thief.stateName, calls: window.__calls.slice() }));
+    check(name, 'thief: cornered, its touch snatches 5 ("SNATCHED! −5") into its sack and it bolts', tSn && sn.candy === 25 && sn.sack === 5 && sn.st === 'bolt' && sn.calls.includes('SNATCHED! −5'), JSON.stringify(sn));
+    const toDen = () => G(page, () => { const g = window.__game, T = g.thief; T._set(7); T.homeT = 1e9; T.root.visible = false; }); // in its den (its tags kept)
+    await toDen(); await G(page, () => { window.__game.G.safeT = 3; });
     await G(page, () => { const g = window.__game; g.G.candy = 100; g.hud.setCandy(100); });
     // ---- the Witching Hour (the last 30 s): call-out, x2 badge, every lantern and porch relit, candy x2, rain, a catch costs <= 6
     await G(page, () => {
@@ -1151,6 +1301,9 @@ async function runProfile(name) {
     const wh = await G(page, () => { const g = window.__game, L = g.lanterns; return { on: g.G.witching, call: document.querySelector('.hw-call').textContent, badge: +getComputedStyle(document.querySelector('.hw-x2')).opacity, pill: document.querySelector('.hw-candy').classList.contains('wh'), dead: L.n - L.alive.reduce((a, v) => a + v, 0), before: window.__deadBefore, auras: g.ghosts.witch, rain: g.G.rainLeft, darkPorches: window.__darkPorches, porchesLit: [...g.porches.st].every((v) => v !== 2), lamps: Math.min(...g.porches.lampLv).toFixed(2) }; });
     check(name, 'Witching Hour: call-out, x2 badge on the pill, every lantern relit, orange auras', wh.on && /WITCHING HOUR/.test(wh.call) && wh.pill && wh.badge > 0.9 && wh.before >= 1 && wh.dead === 0 && wh.auras, JSON.stringify(wh));
     check(name, 'Witching Hour: every dark porch relights at once', wh.darkPorches >= 1 && wh.porchesLit && +wh.lamps > 0.75, JSON.stringify({ dark: wh.darkPorches, lit: wh.porchesLit, lamps: wh.lamps }));
+    const whT = await G(page, () => ({ out: window.__game.thief.out, sack: window.__game.thief.sack, handsWitch: window.__game.hands.witch }));
+    check(name, 'Witching Hour: the thief is back at once with a 10-candy sack; the hands cycle twice as fast', whT.out && whT.sack >= 10 && whT.handsWitch, JSON.stringify(whT));
+    await toDen(); // (out of the way of the finale's catch check)
     const x2 = await pick((g) => { g.G.candy = 50; g.G.streak = 0; });
     check(name, 'Witching Hour: a candy counts 2', x2.candy === 52, `candy 50 -> ${x2.candy}`);
     await sleep(1500);
@@ -1212,8 +1365,13 @@ async function runProfile(name) {
     const cd = await G(page, () => { const c = document.querySelector('.hw-count'), k = document.querySelector('.hw-clock'), a = c.getBoundingClientRect(), b = k.getBoundingClientRect(); return { text: c.textContent, top: Math.round(a.top), bottom: Math.round(a.bottom), cx: Math.round(a.left + a.width / 2), clockBottom: Math.round(b.bottom), clockCx: Math.round(b.left + b.width / 2), counting: document.querySelector('.hw-hud').classList.contains('counting'), h: innerHeight }; });
     check(name, 'countdown under the clock pill', cd.text === '9' && cd.top >= cd.clockBottom - 4 && Math.abs(cd.cx - cd.clockCx) < 3 && cd.bottom < cd.h * 0.45 && cd.counting, JSON.stringify(cd));
     // ---- midnight: the round ends, results, best saved, play again
-    await G(page, () => window.__game.setTimeLeft(1.2));
+    // a grab held past midnight (its timer stopped here on purpose) ends with the round
+    await G(page, (HK) => { const g = window.__game, H = g.hands, x = H.x[HK], z = H.z[HK]; g.G.safeT = 0; H.grace = 0; g.cc.teleport(x, g.world.heightAt(x, z) + 0.05, z); H.st[HK] = 2; H.t[HK] = 0.2; }, HK);
+    const midHeld = await waitFor(page, () => window.__game.hands.holding >= 0, null, 800);
+    await G(page, () => { const g = window.__game; g.hands.holdT = 99; g.setTimeLeft(1.2); });
     check(name, 'the clock strikes midnight (ending)', await waitFor(page, () => window.__game.G.state === 'ending', null, 4000));
+    await sleep(100);
+    check(name, 'hands: a grab still on at midnight lets go with the round (the kid never stays held)', midHeld && await G(page, () => window.__game.hands.holding < 0 && !window.__game.cc.hold));
     check(name, 'results screen', await waitFor(page, () => window.__game.G.state === 'over' && !!document.querySelector('.hw-screen:not(.off) .hw-score'), null, 6000));
     await sleep(1800);
     s = await state(page);
@@ -1222,9 +1380,9 @@ async function runProfile(name) {
     const lad = await G(page, () => ({ seg: document.querySelectorAll('.hw-screen:not(.off) .hw-ladder i').length, h: document.querySelector('.hw-ladder').getBoundingClientRect().height, next: document.querySelector('.hw-next').textContent, rank: document.querySelector('.hw-rank').textContent, candy: window.__game.G.candy, top: window.__game.RANKS[window.__game.RANKS.length - 1] }));
     const nextOk = lad.candy >= lad.top[0] ? lad.next === '' : /^\d+ MORE FOR [A-Z' -]+$/.test(lad.next);
     check(name, 'results: the rank ladder and what the next rank takes', lad.seg === 6 && lad.h >= 6 && nextOk && lad.rank.length > 0, JSON.stringify(lad));
-    const rs = await G(page, () => ({ stats: [...document.querySelectorAll('.hw-screen:not(.off) .hw-stats div')].map((e) => [e.querySelector('b').textContent, e.querySelector('span').textContent]), lane: window.__game.porches.laneVisited, tricks: window.__game.porches.tricks, R: window.__game.RANKS.map((r) => r[0]).join('/') }));
+    const rs = await G(page, () => ({ stats: [...document.querySelectorAll('.hw-screen:not(.off) .hw-stats div')].map((e) => [e.querySelector('b').textContent, e.querySelector('span').textContent]), lane: window.__game.porches.laneVisited, tricks: window.__game.porches.tricks, tags: window.__game.thief.tags, R: window.__game.RANKS.map((r) => r[0]).join('/') }));
     const stat = (l) => (rs.stats.find((e) => e[1] === l) || [null])[0];
-    check(name, 'results: porches n/5, tricks, BOOs, catches and best streak; ranks v2', rs.stats.length === 5 && stat('PORCHES') === `${rs.lane}/5` && stat('TRICKS') === String(rs.tricks) && rs.lane === 5 && rs.tricks === 2 && stat('BOOS') !== null && stat('CAUGHT') !== null && stat('BEST STREAK') !== null && rs.R === RANKS_V2, JSON.stringify(rs));
+    check(name, 'results: porches n/5, tricks, tags, BOOs, catches and best streak; ranks v2', rs.stats.length === 6 && stat('PORCHES') === `${rs.lane}/5` && stat('TRICKS') === String(rs.tricks) && rs.lane === 5 && rs.tricks === 2 && stat('TAGS') === String(rs.tags) && rs.tags === 1 && stat('BOOS') !== null && stat('CAUGHT') !== null && stat('BEST STREAK') !== null && rs.R === RANKS_V2, JSON.stringify(rs));
     const shb = await rect(page, '.hw-screen:not(.off) [data-a=share]');
     if (phone) await T.tap(shb.cx, shb.cy); else await page.mouse.click(shb.cx, shb.cy);
     await sleep(300);
@@ -1255,6 +1413,8 @@ async function runProfile(name) {
           for (let i = 0, n = 0; i < g.lanterns.n && n < 4; i++) if (g.lanterns.alive[i]) { g.lanterns.smash(i, 1, 0, 1.5); n++; }
           while (g.ghosts.wake(p.x, p.z)) { /* every ghost up */ }
           g.candy.spill(p.x + 3, p.y + 1, p.z, 30, 3);
+          const H = g.hands; g.G.handsAt = 0; g.G.thiefAt = 0; for (let k = 0; k < 4; k++) { H.st[k] = k % 2 ? 2 : 1; H.t[k] = 0; } // the hands out, the thief too
+          const T = g.thief; T.awake = true; T._emerge(); T.x = p.x + 7; T.z = p.z; T.sack = 9; T._set(2); T.boo(p.x, p.z, 7.5);
         });
         await sleep(1500);
         await G(page, () => window.__game.setTimeLeft(0.2));
@@ -1298,13 +1458,16 @@ async function runProfile(name) {
         // every porch tricked at once: six showers (92 candies), seven residents, six doors flung open
         const P = g.porches; P.st.fill(0); P.cd.fill(0);
         for (let k = 0; k < P.n; k++) { const S = P.spots[k]; P.boo(S.mat.x, S.mat.y, S.mat.z); }
+        // the hands: four up (the most the game allows), the thief bolting past with a full sack
+        const H = g.hands; for (let k = 0; k < 4; k++) { H.st[k] = 2; H.t[k] = 0; H.wait[k] = 99; }
+        const T = g.thief; T.awake = true; T._emerge(); T.x = p.x + 5; T.z = p.z - 3; T.sack = 18; T._set(4); T.boltT = 99;
       });
       const hot = await storm;
       await c2.send('Emulation.setCPUThrottlingRate', { rate: 1 });
       const q = (a, f) => { const b = [...a].sort((x, y) => x - y); return b[Math.min(b.length - 1, Math.floor(b.length * f))]; };
       const msg = `CPU ms per frame at 4x: calm p50 ${q(calm, 0.5).toFixed(1)} p95 ${q(calm, 0.95).toFixed(1)}; storm p50 ${q(hot, 0.5).toFixed(1)} p95 ${q(hot, 0.95).toFixed(1)} max ${Math.max(...hot).toFixed(1)}`;
       check(name, 'perf: 4x throttled storm stays under 16 ms CPU at p95', q(hot, 0.95) < 16, msg);
-      check(name, 'perf (map v2 budget): 4x throttled storm p95 <= 9.5 ms CPU', q(hot, 0.95) <= 9.5, msg);
+      check(name, 'perf (pass 3 budget): 4x throttled storm p95 <= 10 ms CPU', q(hot, 0.95) <= 10, msg);
       // the finale on top: the Witching Hour (candy rain, every lantern relit, orange auras), a storm again
       await c2.send('Emulation.setCPUThrottlingRate', { rate: 4 });
       await G(page, () => { const g = window.__game; g.setTimeLeft(30.4); });
@@ -1316,12 +1479,14 @@ async function runProfile(name) {
         for (const q of g.ghosts.list) { g.ghosts._teleport(q, p.x + (Math.random() - 0.5) * 8, p.y + 1.6, p.z + (Math.random() - 0.5) * 8); q.state = 'chase'; q.alpha = 1; }
         for (let i = 0, n = 0; i < g.lanterns.n && n < 8; i++) if (g.lanterns.alive[i]) { g.lanterns.smash(i, 1, 0, 1.5); n++; }
         g.candy.spill(p.x, p.y + 1, p.z, 80, 4);
+        const H = g.hands; for (let k = 4; k < 8; k++) { H.st[k] = 2; H.t[k] = 0; H.wait[k] = 99; }
+        const T = g.thief; T.x = p.x - 5; T.z = p.z - 3; T._set(4); T.boltT = 99;
       });
       const fh = await fin;
       await c2.send('Emulation.setCPUThrottlingRate', { rate: 1 });
       const fmsg = `finale storm at 4x: p50 ${q(fh, 0.5).toFixed(1)} p95 ${q(fh, 0.95).toFixed(1)} max ${Math.max(...fh).toFixed(1)} (witching ${await G(page, () => window.__game.G.witching)})`;
       check(name, 'perf: 4x throttled finale storm (Witching Hour) under 16 ms CPU at p95', q(fh, 0.95) < 16, fmsg);
-      check(name, 'perf (map v2 budget): at most 166 draw calls a frame through both storms', maxCalls <= 166, `max ${maxCalls} calls`);
+      check(name, 'perf (pass 3 budget): at most 170 draw calls a frame through both storms', maxCalls <= 170, `max ${maxCalls} calls`);
     }
     // page sanity: no scroll, no text selection
     const sane = await G(page, () => ({ sx: scrollX, sy: scrollY, sel: String(getSelection()), bodyScroll: document.scrollingElement.scrollHeight <= innerHeight + 1 }));

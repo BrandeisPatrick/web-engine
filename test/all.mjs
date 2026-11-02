@@ -44,6 +44,8 @@ const SUITES = [
   { file: 'dyn-fracture.mjs' },
   { file: 'character-dyn.mjs' },
   { file: 'ragdoll.mjs', shim: true },
+  // the Halloween sample: its enemies' rules and per-frame allocation (samples/halloween/hands.js, thief.js)
+  { file: 'halloween-enemies.mjs', shim: true },
 ];
 let failed = 0, ran = 0;
 const t0 = performance.now();
