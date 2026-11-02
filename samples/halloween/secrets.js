@@ -87,6 +87,18 @@ export class Secrets {
     this.popSlot[k] = this.candy.place(s[0], s[2], s[1], CANDY_KIND.POP, k + 1);
   }
 
+  /** n candies out of (x, y, z), fanned round the bearing `yaw` (three.js: toward (sin, cos)): out of a doorway, not into its walls. */
+  _shower(x, y, z, n, speed, yaw) {
+    const C = this.candy;
+    C.spill(x, y, z, n, 0, 0.45, 18);
+    const P = C.p, V = C.v;
+    for (let i = 0, m = 0; i < C.state.length && m < n; i++) {
+      if (C.state[i] !== 2 || C.age[i] !== 0 || P[i * 3] !== x || P[i * 3 + 2] !== z) continue;
+      const a = yaw + (Math.random() * 2 - 1) * 0.9, sp = speed * (0.55 + Math.random() * 0.6);
+      V[i * 3] = Math.sin(a) * sp; V[i * 3 + 2] = Math.cos(a) * sp; m++;
+    }
+  }
+
   _find(k, value) {
     if (!this.has(k)) this.finds++;
     this.found |= 1 << k;
@@ -107,7 +119,7 @@ export class Secrets {
     if (!this.has(CRYPT) && cx * cx + cz * cz <= R2) {
       this.opening = true;
       const oy = this.doorY + 0.8, oz = this.doorZ + 0.6;
-      C.spill(this.doorX, oy, oz, SECRET.CRYPT, 3.2, 0.5, 18);
+      this._shower(this.doorX, oy, oz, SECRET.CRYPT, 3.2, 0); // out of the doorway (+z)
       C.drop(this.doorX + 0.6, this.heightAt(this.doorX + 0.6, oz + 1.6), oz + 1.6, CANDY_KIND.POP, 1.2, 30);
       if (this.fx) { this.fx.burst(this.doorX, this.doorY + 0.4, oz, 30, 0.4, 0.36, 0.32, 2.4, 1.2, 1.1, 0.16); this.fx.flash(this.doorX, oy, oz, 4, 0.2, 1.0, 0.4, 0.5); }
       if (this.ghosts) { const sp = this._ghostSpot || (this._ghostSpot = [0, 0]); sp[0] = this.doorX + 1.6; sp[1] = this.doorZ + 0.6; this.ghosts.wake(x, z, Math.random, sp); }
@@ -142,7 +154,7 @@ export class Secrets {
     const O = this.S.oak.inside, dx = kid.x - O[0], dz = kid.z - O[1];
     if (dx * dx + dz * dz < SECRET.OAK_R * SECRET.OAK_R && kid.y < this.oakY + 1) {
       this.oakFull = false; this.oakTaken++;
-      C.spill(O[0], this.oakY + 0.9, O[1], SECRET.OAK, 2.2, 0.45, 18);
+      this._shower(O[0], this.oakY + 0.9, O[1], SECRET.OAK, 2.2, Math.PI / 4); // toward its opening (south-east)
       C.drop(O[0] + 0.25, this.oakY, O[1] + 0.25, CANDY_KIND.POP, 1.4, 30);
       if (this.fx) this.fx.burst(O[0], this.oakY + 1, O[1], 26, 1.6, 1.2, 0.4, 2, 2.4, 0.8, 0.1);
       this._find(OAK, SECRET.OAK + 5);
