@@ -1110,7 +1110,8 @@ async function runProfile(name) {
     const r0 = await nearP3();
     await sleep(1000);
     const rmid = (await nearP3()).lamp;
-    await sleep(2000);
+    await waitFor(page, () => window.__game.porches.st[2] === 0, null, 4000); // (the fixed steps lag real time on a slow frame)
+    await sleep(300);
     const r1 = await nearP3();
     check(name, 'porch: a porch relights (the lamp fades back up over 3 s) and lays a trail of 5 along the lane', r0.st === 2 && r1.st === 0 && rmid > 0.25 && rmid < 0.8 && r1.lamp > 0.9 && r1.near >= r0.near + 5, JSON.stringify({ r0, rmid, r1 }));
     // the Full Round: P3, P4 visited; treat P1, P2, P5 -> +25 and "FULL ROUND!", once
@@ -1217,6 +1218,10 @@ async function runProfile(name) {
       g.G.safeT = 0; H.grace = 0; g.G.booT = 5;
       for (const q of g.ghosts.list) { q.calm = 99; if (q.state === 'chase') q.state = 'wander'; }
       g.cc.teleport(x, g.world.heightAt(x, z) + 0.05, z); g.cc.velocity.set(0, 0, 0);
+      // no resting candy in the magnet's reach (a dry view's respawns land 6 m ahead since pass 4: one picked up mid-grab
+      // read as a wrong spill)
+      const C = g.candy; for (let i = 0; i < C.state.length; i++) if (C.state[i] === 1 && !C.fixed[i] && Math.hypot(C.p[i * 3] - x, C.p[i * 3 + 2] - z) < 9) C.state[i] = 0;
+      g.G.spawnT = 6; // (and none respawning during the check)
       const yaw = Math.abs(dx) + Math.abs(dz) > 1 ? Math.atan2(dx, dz) : 0;
       g.rig.yaw = yaw; g.camState.facing = yaw; g.player.rotation.y = yaw; g.rig.snap();
     }, [HK, dx, dz]);
@@ -1241,7 +1246,9 @@ async function runProfile(name) {
       };
       requestAnimationFrame(tick);
     }), HK);
-    check(name, 'hands: a telegraph of 0.8 s, then they rise and grab a grounded kid in reach ("GRABBED!")', hg.up > 0.65 && hg.up < 0.98 && hg.grab >= hg.up && hg.grab - hg.up < 0.1 && hg.calls.includes('GRABBED!'), JSON.stringify(hg));
+    // (read in the HUD's game time, which runs ahead of the fixed steps when a frame takes over 4 of them: a 31 fps
+    // desktop read 1.0 s)
+    check(name, 'hands: a telegraph of 0.8 s, then they rise and grab a grounded kid in reach ("GRABBED!")', hg.up > 0.65 && hg.up < 1.1 && hg.grab >= hg.up && hg.grab - hg.up < 0.1 && hg.calls.includes('GRABBED!'), JSON.stringify(hg));
     check(name, 'hands: the grab holds the kid 1.0 s (frozen: a shove does not move it), then lets go: −3 spilled round it, the hands sink',
       hg.hold && hg.moved < 0.05 && hg.rel - hg.grab > 0.85 && hg.rel - hg.grab < 1.25 && hg.candy === 37 && hg.spills.some((q) => q[0] === 3 && q[1] === 10) && hg.st === 3 && !hg.holdAfter, JSON.stringify(hg));
     // a jump over standing hands: launched (the kid's own jump: 4.5 m/s up from 0.6 m, 6.5 m/s on) from 2.6 m before them

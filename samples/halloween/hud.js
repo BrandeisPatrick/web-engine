@@ -306,6 +306,13 @@ const CSS = `
   .hw-title-wrap .hw-ctrl{display:none}.hw-tips{font-size:11.5px}
   .hw-title-btns .hw-btn2{padding:6px 14px;font-size:12px}
 }
+/* the shortest landscape phones (an iPhone under its browser bar, 342 px): the results without their first line and
+   with a smaller score, the help's tips tighter (the badges and the longer tips must fit) */
+@media (max-height:400px){
+  .hw-over{gap:4px}.hw-over .hw-sub{display:none}
+  .hw-over .hw-score{font-size:clamp(36px,13vh,52px)}
+  .hw-help .hw-tips{line-height:1.3}
+}
 @media (max-height:500px) and (min-width:700px){
   .hw-title-wrap .hw-cards{display:flex}.hw-card{padding:6px 10px}.hw-card svg{width:30px;height:30px}.hw-card span{font-size:11px}
 }
@@ -436,8 +443,7 @@ export class HUD {
       comes down the chimney). Lollipops under a light beam are worth 5. Stomp a lantern for extra candy.
       Frosty screen edges? A ghost is close: let it come near, then BOO! Caught? Grab the candy you drop.
       Red soil ring? Jump the grave hands. BOO the raccoon thief, then tag it for its sack!
-      Walk into the witch's brew for a potion (its colour is the potion). Stomp lantern after lantern for a chain.
-      Jump over the graveyard fence! Grab candy fast for a streak bonus. The last 30 seconds are the Witching Hour:
+      Walk into the witch's brew for a potion. Stomp lanterns in a row for a chain! Grab candy fast for a streak bonus. The last 30 seconds are the Witching Hour:
       candy counts double!</div>
       <div class="hw-small-btns"><button class="hw-start" data-a="close">GOT IT</button></div>`;
     wire(help.querySelector('[data-a=close]'), () => this.showHelp(false));
@@ -449,7 +455,7 @@ export class HUD {
     if (fs) for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, () => this._syncFullscreen());
     this.ctrlEls = [...root.querySelectorAll('.hw-ctrl')];
     // ---- results
-    const over = this.over = el('div', 'hw-screen off', root);
+    const over = this.over = el('div', 'hw-screen hw-over off', root);
     over.innerHTML = `<div class="hw-sub">THE CLOCK STRUCK</div><div class="hw-h1">MIDNIGHT!</div>
       <div class="hw-score">${ICON.candy}<span class="n">0</span></div>
       <div class="hw-rank"></div><div class="hw-ladder">${'<i><b></b></i>'.repeat(RANKS.length)}</div><div class="hw-next"></div><div class="hw-best-line"></div>
