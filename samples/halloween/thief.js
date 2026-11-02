@@ -2,7 +2,9 @@
 // its back that swells as it fills. It lives in a den (hand-spots.js THIEF_DEN until the map pass exports it) and comes
 // out at APPEAR s of a 180 s round (the game sets `awake`).
 //   roam    runs at SPEED to the candy the kid is heading for: the best cluster (>= CLUSTER_N resting candies within
-//           CLUSTER_R m, >= CLUSTER_KID m from the kid; ahead of the kid's run counts double), else it lurks LURK m off
+//           CLUSTER_R m, >= CLUSTER_KID m from the kid; ahead of the kid's run counts double), else it lurks LURK m off.
+//           It is shy of lit porches: it takes no candy within SHY m of a lit porch's mat (a porch's trail stays the
+//           kid's breadcrumb to the door)
 //   eat     one candy every EAT_T s (gone from the field, into the sack; it stops eating at SACK_MAX)
 //   wary    it keeps KEEP m from the kid (its own steps never bring it closer) and bolts (BOLT m/s, zigzagging, BOLT_T s)
 //           when the kid comes within NEAR m; cornered, a touch takes TOUCH candy from the kid and it bolts
@@ -27,6 +29,8 @@ export const THIEF = {
   KEEP: 6, NEAR: 4,                    // keeps this far from the kid; bolts when the kid comes this close (m)
   EAT_T: 0.5, SACK_MAX: 20,            // s per candy; it stops eating with a full sack
   CLUSTER_N: 3, CLUSTER_R: 5, CLUSTER_KID: 8, CLUSTER_FAR: 34, // a cluster: n resting within r m, >= KID m from the kid, <= FAR
+  SHY: 12,                             // m round a lit porch's mat where it takes no candy (the porch's trail)
+  AIM: 1,                              // 1: the cluster the kid is running at (ahead counts double); 0: the one nearest to it
   LURK: 12,                            // no cluster: it hangs about this far from the kid
   TOUCH: 5, TOUCH_R: 0.7,              // a cornered thief's touch takes TOUCH candy (m: the touch)
   STUN: 1.8, TAG_R: 1.1, TAG_BONUS: 5, // stunned s; a touch this close tags it; + candy on top of the sack
@@ -148,10 +152,10 @@ function thiefMaterial(uSack) {
 export class Thief {
   /**
    * @param {object} o  scene, heightAt, physics (PhysicsWorld: the look-ahead probe), candy (Candy: what it eats), fx
-   *   (Effects: sparkles; optional), den ([x, z])
+   *   (Effects: sparkles; optional), den ([x, z]), porches (Porches: it is shy of the lit ones; optional)
    */
-  constructor({ scene, heightAt, physics, candy, fx = null, den = THIEF_DEN }) {
-    this.heightAt = heightAt; this.physics = physics; this.candy = candy; this.fx = fx;
+  constructor({ scene, heightAt, physics, candy, fx = null, den = THIEF_DEN, porches = null }) {
+    this.heightAt = heightAt; this.physics = physics; this.candy = candy; this.fx = fx; this.porches = porches;
     this.denX = den[0]; this.denZ = den[1]; this.denY = heightAt(den[0], den[1]); this._px = 0; this._pz = 0;
     // the model: one skinned mesh under a group placed per frame
     const bones = [], by = {};
@@ -214,6 +218,18 @@ export class Thief {
     return true;
   }
 
+  /** (x, z) within SHY m of a lit porch's mat (its trail): not the thief's. */
+  _shy(x, z) {
+    const P = this.porches;
+    if (!P) return false;
+    for (let k = 0; k < P.n; k++) {
+      if (P.st[k] === 2) continue; // dark: no trail to keep
+      const M = P.spots[k].mat, dx = x - M.x, dz = z - M.z;
+      if (dx * dx + dz * dz < THIEF.SHY * THIEF.SHY) return true;
+    }
+    return false;
+  }
+
   /** The kid's run gives away where it is heading: the best cluster (see the header), or -1. */
   _pickCluster(kid) {
     const C = this.candy, P = C.p, ST = C.state, K = C.kind, n = ST.length;
@@ -223,7 +239,7 @@ export class Thief {
     for (let i = 0; i < n; i++) {
       if (ST[i] !== 1 || K[i] === 2) continue;
       const x = P[i * 3], z = P[i * 3 + 2], dx = x - kid.x, dz = z - kid.z, dk = len2(dx, dz);
-      if (dk < THIEF.CLUSTER_KID || dk > THIEF.CLUSTER_FAR) continue;
+      if (dk < THIEF.CLUSTER_KID || dk > THIEF.CLUSTER_FAR || this._shy(x, z)) continue;
       let c = 0;
       for (let j = 0; j < n && c < THIEF.CLUSTER_N; j++) {
         if (ST[j] !== 1 || K[j] === 2) continue;
@@ -231,8 +247,8 @@ export class Thief {
         if (ex * ex + ez * ez <= R2) c++;
       }
       if (c < THIEF.CLUSTER_N) continue;
-      const ahead = (dx * hx + dz * hz) / dk;
-      const sc = dk * (1.2 - 0.6 * ahead) + 0.3 * len2(x - this.x, z - this.z);
+      const ahead = (dx * hx + dz * hz) / dk, dt = len2(x - this.x, z - this.z);
+      const sc = (1 - THIEF.AIM) * dt + THIEF.AIM * (dk * (1.2 - 0.6 * ahead) + 0.3 * dt);
       if (sc < bs) { bs = sc; best = i; }
     }
     return best;
@@ -245,7 +261,7 @@ export class Thief {
     for (let i = 0; i < ST.length; i++) {
       if (ST[i] !== 1 || K[i] === 2) continue;
       const dx = P[i * 3] - this.x, dz = P[i * 3 + 2] - this.z, d2 = dx * dx + dz * dz;
-      if (d2 < bd) { bd = d2; best = i; }
+      if (d2 < bd && !this._shy(P[i * 3], P[i * 3 + 2])) { bd = d2; best = i; }
     }
     return best;
   }

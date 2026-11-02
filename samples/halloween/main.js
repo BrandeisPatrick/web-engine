@@ -228,7 +228,7 @@ async function boot() {
       W.porches = new Porches({ scene, physics, heightAt, candy: W.candy, ghosts: W.ghosts, world: W.world });
       W.fx = new Effects({ scene, heightAt, low: LOW });
       W.hands = new Hands({ scene, heightAt, fx: W.fx });
-      W.thief = new Thief({ scene, heightAt, physics, candy: W.candy, fx: W.fx });
+      W.thief = new Thief({ scene, heightAt, physics, candy: W.candy, fx: W.fx, porches: W.porches });
       W.glows = new Glows(432); // (the porches' doorways, the village's lamps, mats, windows and candles: ~40 halos; the hands' rings up to 44, the thief 4)
       scene.add(W.glows.mesh);
       W.bats = new Bats({ scene, count: LOW ? 6 : 9 });

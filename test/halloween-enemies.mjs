@@ -5,7 +5,8 @@
 // the village green, the Witching Hour's faster cycle; the candy thief coming out, running to a cluster and eating it
 // at 2 per second, never stepping within 6 m of a kid who stands still, bolting from one within 4 m, a BOO within
 // 7.5 m stunning it 1.8 s, a touch while stunned tagging it (its sack + 5) and sending it home for 25 s, a cornered
-// touch, the Witching Hour's 10-candy sack, its way round a wall; and the allocation per frame in TurboFan
+// touch, the Witching Hour's 10-candy sack, its way round a wall, its shyness of lit porches (their trails stay the
+// kid's); and the allocation per frame in TurboFan
 // (test/helpers/alloc.mjs): none for the hands; for the thief only the boxed arguments of two engine calls (its ground
 // height, the collider probe), no object or array. No browser, no WebGL: the modules run on three.js objects, the
 // engine's PhysicsWorld and the game's Candy pool. Run: node --import ./test/helpers/dom-shim.mjs test/halloween-enemies.mjs
@@ -202,6 +203,17 @@ const resting = () => candy.restingCount;
   T.x = 30; T.z = 30; T._set(6); // on its way home
   T.setWitch(true);
   check('thief: the Witching Hour brings it back at once with 10 in its sack', T.stateName === 'emerge' && T.sack === THIEF.WITCH_SACK && T.events.appear);
+}
+{ // shy of lit porches: a cluster by a lit porch's mat is not its; the same cluster by a dark one is
+  const porches = { n: 1, st: new Uint8Array(1), spots: [{ mat: { x: -30, z: -6 } }] };
+  const shy = new Thief({ scene, heightAt, physics, candy, den: THIEF_DEN, porches });
+  const pick = () => { shy.reset(); shy.awake = true; shy.x = -20; shy.z = -20; shy._set(2); return shy._pickCluster(kid); };
+  clearCandy(); put(-20, 0); plant(-30, -2, 5); // 4 m from the mat
+  const lit = pick(); porches.st[0] = 2; const dark = pick();
+  porches.st[0] = 0; plant(-36, 10, 5); const other = pick(); // a second cluster farther off, clear of the porch
+  check('thief: shy of lit porches (no cluster within 12 m of a lit mat; by a dark one it is fair game)', lit < 0 && dark >= 0 && other >= 0 && Math.hypot(candy.p[other * 3] + 36, candy.p[other * 3 + 2] - 10) < 1,
+    `lit ${lit}, dark ${dark}, other ${other}`);
+  shy.root.removeFromParent();
 }
 { // its way round a wall (one probe a step): a 6 m wall between it and its cluster, it gets there (round or over)
   physics.addStaticBox(-40.2, -1, -39.8, 3, -9, 3);
