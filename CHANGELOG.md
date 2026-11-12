@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+- `world/Shore.js` reads its texture sets from the shared texture root (`textureBase()`, so `TextureSets.options.base`
+  applies) and no longer requests a set the root's `manifest.json` does not list: a game that ships its own sets gets
+  no 404 per map (the two city demos logged eight each), and the procedural stand-in is used at once. Without a
+  manifest the maps are tried as before. `sharedTextureManifest(base)` (one request per root per page, used by
+  `loadPbrTextures` and the shore) and `manifestListsSet(manifest, id)` are exported from `@vibe/engine/render`;
+  `test/texture-manifest.mjs`. The rendered frames are unchanged (pixel differences at load-to-load noise).
+- `samples/index.html` declares an empty icon (no favicon 404).
+- `test/vehicles-hd.mjs`: the build-time check is a blow-up guard (1500 ms), not a machine-speed limit.
+
 ## 1.1.0-beta.1 — 2026-11-12 — NYC and Miami demos, quality tiers, asset detail
 A pre-release from the `feat/nyc-miami-demos` branch. Before / after captures: `docs/BEFORE-AFTER.md`. Known open
 point: the two city demos' desktop tier misses its 12 ms frame budget at 3024x1964 (15-19 ms on an Apple M4); the

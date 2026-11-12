@@ -237,6 +237,25 @@ export async function loadTextureManifest(base = textureBase()) {
   return null;
 }
 
+const _manifests = new Map();
+/**
+ * loadTextureManifest once per texture root per page: every caller of the same `base` shares one request (and one
+ * result, null included). The world layer's loaders use it, so a root's manifest.json is fetched once however many
+ * of them ask.
+ */
+export function sharedTextureManifest(base = textureBase()) {
+  let p = _manifests.get(base);
+  if (!p) { p = loadTextureManifest(base); _manifests.set(base, p); }
+  return p;
+}
+/** True when `manifest` lists a set with this id (or has no set list to go by: null / malformed counts as "unknown, try"). */
+export function manifestListsSet(manifest, id) {
+  if (!manifest || !manifest.sets || typeof manifest.sets !== 'object') return true;
+  if (id in manifest.sets) return true;
+  for (const k in manifest.sets) { const e = manifest.sets[k]; if (e && e.id === id) return true; }
+  return false;
+}
+
 async function loadBitmap(url) {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`HTTP ${r.status} ${url}`);

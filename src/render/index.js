@@ -26,7 +26,7 @@ export {
 } from './shadowKernel.js';
 export { makeCloudTexture, sampleCloud, makeFlareTextures } from './skyTextures.js';
 export {
-  textureBase, basisPath, loadTextureManifest, loadTextureSet, makeTextureArray, proceduralPbr, TextureSets, ktx2Support,
+  textureBase, basisPath, loadTextureManifest, sharedTextureManifest, manifestListsSet, loadTextureSet, makeTextureArray, proceduralPbr, TextureSets, ktx2Support,
   makeAsphaltTexture, makePavingTexture, makeConcreteTexture, makeGroundTexture, makeGrassTexture, makeWaterNormalTexture,
   makeCanvas, paintCanvas, finishTexture, makeDataArrayTexture, freeAfterUpload,
 } from './TextureSets.js';

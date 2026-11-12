@@ -4,7 +4,7 @@
 // PBR material roles the building shader indexes (PBR / PBR_SETS / GROUND_SETS).
 import { mulberry32 } from './geom.js';
 import {
-  makeCanvas, ctx2d, makeDataArrayTexture, makeTextureArray, loadTextureSet, loadTextureManifest, textureBase,
+  makeCanvas, ctx2d, makeDataArrayTexture, makeTextureArray, loadTextureSet, loadTextureManifest, sharedTextureManifest, textureBase,
   makeAsphaltTexture, makePavingTexture, makeGroundTexture, makeGrassTexture, makeWaterNormalTexture,
 } from '../render/TextureSets.js';
 
@@ -191,7 +191,7 @@ export const GROUND_SETS = { asphalt: 'asphalt_02', asphalt2: 'clean_asphalt', s
  */
 export async function loadPbrTextures(renderer, { size = 1024, onProgress } = {}) {
   const base = textureBase();
-  const manifest = await loadTextureManifest(base);
+  const manifest = await sharedTextureManifest(base);
   // ground sets: plain THREE textures (KTX2 CompressedTextures when compressed, else browser-decoded JPGs), null where
   // missing; fetched in parallel with the array so their transcode / decode overlaps the array packing
   const ground = {};

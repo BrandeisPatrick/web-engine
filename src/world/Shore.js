@@ -31,15 +31,23 @@ import { Raster, polygonToBoxes } from '../physics/spatial.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mulberry32, hash2, clamp, smoothstep, signedArea } from './geom.js';
 import { buildShoreField, createWaterMaterial, makeNoiseTexture, Water } from './Water.js';
+import { textureBase, sharedTextureManifest, manifestListsSet } from '../render/TextureSets.js';
 import { Boats, createBoatMaterial, fishingBoatGeometry, sailboatGeometry, launchGeometry } from './Boats.js';
 
 // ====================================================================== textures (Poly Haven CC0, fetch-textures.mjs)
-const texBase = () => `${(import.meta.env && import.meta.env.BASE_URL) || '/'}textures/`;
-const _loader = new THREE.TextureLoader();
+// Read from the texture root everything else uses (render/TextureSets.js textureBase(): TextureSets.options.base when
+// a game set one, else `${BASE_URL}textures/`). When that root has a manifest.json that does not list a set, the
+// set's maps are not requested (a game that ships its own sets gets no 404 per map) and the procedural stand-in is
+// used at once; without a manifest the maps are tried as before and fall back when they fail.
+const _loader = new THREE.ImageLoader();
 let _tex = null;
 function loadMap(renderer, id, file, srgb, fb) {
-  const t = _loader.load(`${texBase()}${id}/${file}.jpg`, undefined, undefined, () => {
-    t.image = fallbackImage(file, fb); t.needsUpdate = true; // offline / not fetched: procedural stand-in
+  const t = new THREE.Texture();
+  const fallback = () => { t.image = fallbackImage(file, fb); t.needsUpdate = true; }; // offline / not shipped: procedural stand-in
+  const base = textureBase();
+  sharedTextureManifest(base).then((manifest) => {
+    if (!manifestListsSet(manifest, id)) { fallback(); return; }
+    _loader.load(`${base}${id}/${file}.jpg`, (image) => { t.image = image; t.needsUpdate = true; }, undefined, fallback);
   });
   t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
   t.wrapS = t.wrapT = THREE.RepeatWrapping;

@@ -14,6 +14,7 @@ const SUITES = [
   { file: 'core.mjs' },
   { file: 'look-stats.mjs' },
   { file: 'memory.mjs' },
+  { file: 'texture-manifest.mjs' },
   // world: the high-detail vehicle level (lod 'hd'), with LOD 0 / 1 pinned byte-identical
   { file: 'vehicles-hd.mjs', shim: true },
   // quality tiers (desktop / mobile): device recommendation, ?quality= / stored precedence, preset merge
