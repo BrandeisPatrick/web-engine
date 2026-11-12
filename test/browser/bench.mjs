@@ -7,12 +7,14 @@
 // after it was ready is waited out and the run retried once. Exit code 1 on errors (console errors, no harness, unknown
 // pose / setting, watchdog).
 //
-//   node test/browser/bench.mjs --page=canyon-run --size=3024x1964 --poses=straight,chase --frames=24 \
+//   node test/browser/bench.mjs --page=nyc-night --size=3024x1964 --frames=24 \
 //     --label=baseline --settings='[{"label":"a","set":{"postfx.aa":"fxaa"}}]'
-// Options: --page (canyon-run), --size (3024x1964), --poses (all), --frames (24), --warmup (3), --label (baseline),
-// --settings (JSON array of { label, set: { path: value } }; default: the current settings), --out (bench/results),
-// --query (extra URL query, e.g. notraffic&nostream=1), --headless (debug only: no real GPU timing on CI),
-// --config (another vite config).
+//   node test/browser/bench.mjs --page=miami-drive-mobile          # the same page on the mobile quality tier
+// Options: --page (nyc-night; nyc-night, miami-drive, or either with -mobile), --size (3024x1964), --poses (all),
+// --frames (24), --warmup (3), --label (baseline), --settings (JSON array of { label, set: { path: value } }; default:
+// the current settings), --out (bench/results), --query (extra URL query, e.g. quality=mobile), --headless (debug
+// only: no real GPU timing on CI), --config (another vite config). A page is pinned to its tier (?quality=desktop or
+// mobile) unless --query names one, so a choice stored by the gear menu in the profile cannot change a run.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -22,11 +24,15 @@ import {
 } from './playwright.config.mjs';
 
 const args = parseArgs();
-const pageId = typeof args.page === 'string' ? args.page : 'canyon-run';
+// pages that are another page on another quality tier (as in smoke.mjs)
+const PAGE_PATH = { 'nyc-night-mobile': 'nyc-night', 'miami-drive-mobile': 'miami-drive' };
+const pageId = typeof args.page === 'string' ? args.page : 'nyc-night';
 const size = parseSize(args.size || benchSize);
 const label = typeof args.label === 'string' && args.label ? args.label : 'baseline';
 const headless = !!args.headless;
-const query = typeof args.query === 'string' && args.query ? `&${args.query.replace(/^[?&]+/, '')}` : '';
+const userQuery = typeof args.query === 'string' && args.query ? args.query.replace(/^[?&]+/, '') : '';
+const tierQuery = /(^|&)quality=/.test(userQuery) ? '' : `quality=${/-mobile$/.test(pageId) ? 'mobile' : 'desktop'}`;
+const query = [tierQuery, userQuery].filter(Boolean).map((q) => `&${q}`).join('');
 const intArg = (name, def, min) => {
   if (args[name] === undefined) return def;
   const v = Number(args[name]);
@@ -55,7 +61,7 @@ onSignals(cleanup);
 
 try {
   vite = await startVite({ configFile: typeof args.config === 'string' ? args.config : undefined });
-  const pagePath = await resolvePage(vite, pageId);
+  const pagePath = await resolvePage(vite, PAGE_PATH[pageId] || pageId);
   if (!pagePath) throw new Error(`no page '${pageId}' on this server (root ${vite.server.config.root})`);
   const url = `${vite.base}${pagePath}?bench=1&size=${size.w}x${size.h}${query}`;
   const chromeH = 120; // tab strip, toolbar and the automation info bar

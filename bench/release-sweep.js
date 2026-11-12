@@ -1,49 +1,35 @@
-// The 1.0 measurement sweep (ENGINE.md "Measured (1.0)"): every sample page, every pose, at 3024x1964 and 2560x1440,
-// under the engine defaults and under the "everything on" settings, run in the desktop app's browser pane through
-// window.__sample.run(plan) (src/core/Bench.js). Load a page with ?bench=1&size=WxH (plus the page query listed per
-// plan), then from the console (Vite serves the repository under /@fs/):
-//   const s = await import('/@fs/<repo>/bench/release-sweep.js'); const r = await s.run('canyon');
+// The release measurement sweep (ENGINE.md "Measured (1.0)"): every sample page, every pose, at 3024x1964 and
+// 2560x1440, under the engine defaults and under the "everything on" settings, run in the desktop app's browser pane
+// through window.__sample.run(plan) (src/core/Bench.js). Load a page with ?bench=1&size=WxH (plus the page query listed
+// per plan), then from the console (Vite serves the repository under /@fs/):
+//   const s = await import('/@fs/<repo>/bench/release-sweep.js'); const r = await s.run('nyc-night');
 // r.result is the run(plan) table (ms per frame, pixel diff against the first setting) and r.file the name the
 // result was saved under in bench/results/ (the receiver that wrote them during the 1.0 pass is not part of the
 // package: any `fetch` of r.file / r.result to a local endpoint, or copy(JSON.stringify(r.result)), works).
-// Settings are paths the sample registered (see each sample's createBenchHarness call); run() restores them
-// between settings, so every row starts from the state the page loaded with.
+// Settings are paths the sample registered (see each sample's createBenchHarness call); a path the page did not
+// register is left out of that row, and a row left with nothing to set (other than 'default') is skipped. run()
+// restores them between settings, so every row starts from the state the page loaded with. An empty pose list runs
+// every pose the page has. The 1.0 plans (canyon-run, city, character, sandbox) were removed with those samples:
+// `git show fc73161:bench/release-sweep.js`.
 const FX_MAX = { 'postfx.gbuffer': true, 'postfx.aa': 'taa', 'postfx.ssr': true, 'postfx.volumetric': true, 'postfx.dof': true, 'postfx.motionBlur': 1, 'postfx.ao.normals': 'gbuffer' };
 const GB = { 'postfx.gbuffer': true, 'postfx.aa': 'taa' };
-const CANYON_POSES = ['straight', 'chase', 'aerial', 'ahead'];
+const TIER_ROWS = [
+  { label: 'default', set: {} },
+  { label: 'gbuffer+taa', set: GB },
+  { label: 'max', set: { ...FX_MAX, 'shadows.kernel': 'pcss' } },
+];
 export const plans = {
-  // /canyon-run/?bench=1&size=WxH
-  canyon: { poses: CANYON_POSES, settings: [
-    { label: 'default', set: {} },
-    { label: 'gbuffer+taa', set: GB },
-    { label: 'max', set: { ...FX_MAX, 'shadows.kernel': 'pcss' } },
-  ] },
-  // /canyon-run/?bench=1&size=WxH&lamps=1&t=night&gpuparticles=1
-  'canyon-night': { poses: ['night-lamps', 'devils', 'chase'], settings: [
-    { label: 'default (lamps, gpu particles)', set: {} },
-    { label: 'max', set: { ...FX_MAX, 'shadows.kernel': 'pcss' } },
-  ] },
-  // /city/?bench=1&size=WxH (traffic and streaming on, as shipped)
-  city: { poses: ['street', 'crossing', 'high', 'shore'], settings: [
-    { label: 'default', set: {} },
-    { label: 'gbuffer+taa', set: GB },
-    { label: 'max', set: { ...FX_MAX, 'water.refraction': true } },
-    { label: 'night max clustered', set: { ...FX_MAX, 'water.refraction': true, 'time': 'night', 'lights.mode': 'clustered' } },
-  ] },
-  // /sandbox/?bench=1&size=WxH&scene=<stack|bench1000|cloth|rope|soft|buoyancy|destructible>
-  sandbox: { poses: ['overview', 'close'], settings: [
-    { label: 'default', set: {} },
-    { label: 'max', set: FX_MAX },
-  ] },
-  // /character/?bench=1&size=WxH
-  character: { poses: ['idle', 'run', 'aerial', 'push', 'ragdoll'], settings: [
-    { label: 'default', set: {} },
-    { label: 'gbuffer+taa', set: GB },
-    { label: 'max', set: { ...FX_MAX, 'shadows.kernel': 'pcss' } },
-  ] },
+  // /nyc-night/?bench=1&size=WxH&quality=desktop
+  'nyc-night': { poses: [], settings: TIER_ROWS },
+  // /nyc-night/?bench=1&size=WxH&quality=mobile (the mobile tier's budgets; same rows)
+  'nyc-night-mobile': { poses: [], settings: TIER_ROWS },
+  // /miami-drive/?bench=1&size=WxH&quality=desktop
+  'miami-drive': { poses: [], settings: TIER_ROWS },
+  // /miami-drive/?bench=1&size=WxH&quality=mobile
+  'miami-drive-mobile': { poses: [], settings: TIER_ROWS },
 };
 const pad = (n) => String(n).padStart(2, '0');
-/** Run one plan on the current page; label = plan name (+ '-<scene>' for the sandbox). Resolves { file, result }. */
+/** Run one plan on the current page; label = plan name. Resolves { file, result }. */
 export async function run(name, { frames = 24, warmup = 3, label = name } = {}) {
   const S = window.__sample;
   if (!S || !S.ready) throw new Error('window.__sample is not ready');
@@ -51,8 +37,13 @@ export async function run(name, { frames = 24, warmup = 3, label = name } = {}) 
   if (!plan) throw new Error(`unknown plan '${name}' (${Object.keys(plans).join(', ')})`);
   const missing = plan.poses.filter((p) => !S.poses.includes(p));
   if (missing.length) throw new Error(`poses missing on this page: ${missing.join(', ')}`);
+  const poses = plan.poses.length ? plan.poses : S.poses.slice();
+  const has = new Set(S.settings || []);
+  const settings = plan.settings
+    .map((x) => ({ label: x.label, set: Object.fromEntries(Object.entries(x.set).filter(([k]) => has.has(k))) }))
+    .filter((x, i) => i === 0 || Object.keys(x.set).length);
   const t0 = performance.now();
-  const result = await S.run({ poses: plan.poses, settings: plan.settings, frames, warmup });
+  const result = await S.run({ poses, settings, frames, warmup });
   const d = new Date();
   const size = `${result.size.w}x${result.size.h}`;
   const file = `${d.toISOString().slice(0, 10)}-${pad(d.getHours())}${pad(d.getMinutes())}-${S.name}-${size}-p6-${label}.json`;
@@ -62,7 +53,7 @@ export async function run(name, { frames = 24, warmup = 3, label = name } = {}) 
     browser: 'claude-desktop-app in-app Chromium', chrome: ua && ua.brands ? (ua.brands.find((b) => /Chromium/.test(b.brand)) || {}).version : undefined,
     headless: false, platform: `${navigator.platform} ${ua ? ua.platform : ''}`.trim(), renderer: result.renderer,
     size: result.size, frames: result.frames, warmup: result.warmup, runMs: Math.round(performance.now() - t0),
-    poses: plan.poses, settings: plan.settings, rows: result.rows,
+    poses, settings, rows: result.rows,
   };
   return { file, result: header };
 }
