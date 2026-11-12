@@ -152,7 +152,7 @@ phone (`npx vite --host` prints the address). On iPhone, sound also needs the si
 `npm run build` writes it to `dist/halloween/`, and `npm run preview` serves the build at
 http://localhost:5191/halloween/.
 
-URL options: `?touch=1|0` (force the touch UI), `?quality=low|high` (touch devices default to low), `?nofx=1`, `?shadows=0`,
+URL options: `?touch=1|0` (force the touch UI), `?quality=mobile|desktop` (the old `low|high` still work; without it the game uses the choice from the settings gear on the title, else phones and tablets get mobile), `?look=classic` (the first, violet look, for comparison with the 2026-11 remaster), `?taa=0` (desktop: FXAA instead of TAA), `?bench=1&size=WxH` (the world without a round, with the engine's bench harness as `window.__sample`: poses gate, graveyard, village, house; the smoke test's look gate; `&closeups=1` adds close-ups of a wall, a grave, a pumpkin, a trunk, the witch, candy, the graveyard gate and a porch lantern), `?clouds=1` (the experimental cumulus billboards), `?nofx=1`, `?shadows=0`,
 `?round=60` (round length in seconds), `?fps=30`, `?seed=20261031` (a night's patch: the date, or any number; a shared
 link carries it).
 

@@ -1,7 +1,7 @@
 // DOM HUD and screens for Midnight Candy Run, on the engine UI kit's theme (setTheme: accent, font) plus its own CSS:
 //   title     logo, Tonight's Patch (the night's seed: "TONIGHT'S PATCH · NOV 1", a friend's link: "A FRIEND'S PATCH"),
 //             tag line, a big tap-to-start button (the gesture that also starts audio), HOW TO PLAY / sound /
-//             full-screen buttons, three how-to cards (hidden on short landscape screens: HOW TO PLAY opens them),
+//             full-screen / settings (gear: graphics quality) buttons, three how-to cards (hidden on short landscape screens: HOW TO PLAY opens them),
 //             the control scheme for this device, best score (and tonight's best)
 //   help      the how-to-play panel (cards, controls, tips), from the title and the pause screen
 //   hud       candy counter (+N pops) with the next rank's threshold after it ("/130"), a streak meter along its bottom
@@ -15,7 +15,10 @@
 //             toward chasers that are off screen or behind, a raccoon + distance toward the candy thief while it is
 //             out and off screen; BOO glows ("hot") while a chaser or the thief is in reach; a look hint pill
 //             (desktop: how the mouse looks)
-//   pause     resume / restart / how to play / title / music / sound
+//   pause     resume / restart / how to play / title / music / sound / graphics
+//   settings  the engine UI kit's QualityMenu panel (addSettings): Mac / desktop or Phone / tablet, the device's pick
+//             tagged Recommended; centred over the title or pause screen, never shown during play (the corners hold
+//             the HUD buttons and the thumbs' controls there)
 //   results   candy, rank title, the rank ladder and what the next rank takes, best (NEW BEST) and tonight's best,
 //             stats (porches n/5, tricks, tags, BOOs, catches, best streak, best chain), the badges (badges.js: a row of
 //             icons, earned ones lit, the new ones named; else one locked badge's hint), PLAY AGAIN / TITLE / share (the
@@ -338,6 +341,21 @@ const CSS = `
 .hw-touch-on .ui-touch-stick.on{border-color:rgba(255,210,150,.85);background:rgba(60,24,90,.4);box-shadow:0 0 22px rgba(255,140,40,.35)}
 .hw-touch-on .ui-touch-stick.on .ui-touch-knob{background:radial-gradient(circle at 50% 35%,rgba(255,225,160,.95),rgba(255,140,40,.75));box-shadow:0 0 16px rgba(255,160,60,.7)}
 .hw-hidden-touch .ui-touch{display:none}
+/* quiet (the remaster): the candy and clock pills smaller and more see-through, the frame stays the night's */
+.hw-quiet .hw-pill{padding:4px 13px 4px 8px;gap:8px;background:linear-gradient(160deg,rgba(30,20,40,.62),rgba(14,9,20,.55));border-color:rgba(255,170,90,.18)}
+.hw-quiet .hw-candy svg{width:clamp(27px,4.8vmin,36px)}
+.hw-quiet .hw-candy b{font-size:clamp(21px,4.4vmin,32px)}
+.hw-quiet .hw-clock{padding:5px 14px 7px;min-width:clamp(128px,25vmin,178px)}
+.hw-quiet .hw-clock .time{font-size:clamp(15px,3.2vmin,20px)}
+.hw-quiet .hw-icon{background:linear-gradient(160deg,rgba(30,20,40,.62),rgba(14,9,20,.55));border-color:rgba(255,170,90,.18)}
+/* the settings panel (ui QualityMenu, added to <body> after this sheet: hence the body prefix) centred over the screens
+   in the game's colours */
+body .ui-q-panel.hw-qpanel{top:50%;left:50%;right:auto;bottom:auto;transform:translate(-50%,-50%);z-index:50;font-family:var(--hw-font);box-sizing:border-box;
+  max-height:calc(100% - var(--sa-t) - var(--sa-b) - 24px);overflow-y:auto;
+  background:linear-gradient(160deg,rgba(46,20,66,.96),rgba(20,9,32,.96));border:1px solid rgba(255,170,90,.35);border-radius:20px}
+body .ui-q-panel.hw-qpanel .ui-q-title{color:#d9c2ff;font-weight:800;letter-spacing:.24em}
+body .ui-q-panel.hw-qpanel .ui-q-tier b{color:#ffd38a;font-weight:800}
+body .ui-q-panel.hw-qpanel .ui-q-tier span{color:rgba(255,240,230,.82)}
 `;
 
 // rank thresholds (candy in a 3-minute round), v2 with the porches (design 2.6: 0 / 60 / 140 / 240 / 360 / 520), the
@@ -371,10 +389,10 @@ export function applyTheme() {
 }
 
 export class HUD {
-  constructor({ touch = false, streak = 10, patch = null, onStart, onPause, onResume, onRestart, onTitle, onMute, onMusic, onShare } = {}) {
+  constructor({ touch = false, streak = 10, patch = null, quiet = false, onStart, onPause, onResume, onRestart, onTitle, onMute, onMusic, onShare } = {}) {
     applyTheme();
     this.touch = touch;
-    const root = this.root = el('div', 'hw', document.body);
+    const root = this.root = el('div', quiet ? 'hw hw-quiet' : 'hw', document.body);
     const stop = (fn) => (e) => { e.preventDefault(); e.stopPropagation(); fn(); };
     const fs = canFullscreen();
     this.muteBtns = []; this.fsBtns = []; this.ctrlEls = [];
@@ -501,14 +519,39 @@ export class HUD {
     this.showHelp(false);
     this.setTouchVisible(false);
   }
+  /**
+   * The settings panel (a ui QualityMenu): its gear joins the title's small buttons and GRAPHICS the pause screen's
+   * music / sound row; the panel opens centred over them. A tap elsewhere on a screen closes it (the screens stop
+   * pointerdown from reaching the document, where the menu listens), and so does leaving the screen.
+   */
+  addSettings(menu) {
+    this.settings = menu;
+    const gear = menu.button;
+    gear.className = 'hw-icon hw-gear'; // out of its fixed corner: a button in the row
+    this.title.querySelector('.hw-title-btns').append(gear);
+    const row = this.musicBtn.parentElement, gfx = el('button', 'hw-btn2', row, 'GRAPHICS');
+    gfx.dataset.a = 'graphics';
+    gfx.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); menu.setOpen(!menu.open); });
+    menu.panel.classList.add('hw-qpanel');
+    this.root.addEventListener('pointerdown', (e) => { if (menu.open && !e.target.closest('.hw-gear,[data-a=graphics]')) menu.setOpen(false); }, true);
+  }
+  _closeSettings() {
+    const m = this.settings;
+    if (!m) return;
+    if (m.open) m.setOpen(false);
+    // a focused gear / GRAPHICS would take the Space that starts or resumes play as a click (on key up) and open again
+    const a = document.activeElement;
+    if (a && (a === m.button || a.dataset.a === 'graphics')) a.blur();
+  }
   showPlay() {
+    this._closeSettings();
     this.title.classList.add('off'); this.pause.classList.add('off'); this.over.classList.add('off'); this.hud.classList.remove('off');
     this.hideEdges(); this.lookHint(null); this.setBooHot(false);
     this.setWitching(false); this.setStreak(0, false); this.setCounting(false); this.clock.classList.remove('pacing');
     this.showHelp(false);
     this.setTouchVisible(true);
   }
-  showPause(on) { this.pause.classList.toggle('off', !on); if (!on) this.showHelp(false); this.setTouchVisible(!on); }
+  showPause(on) { this.pause.classList.toggle('off', !on); if (!on) { this.showHelp(false); this._closeSettings(); } this.setTouchVisible(!on); }
   setMusicLabel(on) { this.musicBtn.textContent = `MUSIC: ${on ? 'ON' : 'OFF'}`; }
   setTouchVisible(on) { document.body.classList.toggle('hw-hidden-touch', !on); }
   hideEdges() { this.setEdge(this.popEdge, false); this.setEdge(this.thiefEdge, false); for (const g of this.ghostEdges) this.setEdge(g, false); }

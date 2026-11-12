@@ -350,7 +350,14 @@ function pailParts(P) {
 
 function bodyGeometry() {
   const P = [];
-  faceParts(P); hairParts(P); hatParts(P); bodyParts(P); limbParts(P); capeParts(P); pailParts(P);
+  // material kind per part group (`mk`: 1 skin, 2 hair, 3 cloth (hat, dress, stockings), 4 the cape, 0 the pail):
+  // the remaster's patchKid tells them apart (weave, strands); the classic material ignores it
+  const kinds = [];
+  for (const [fn, k] of [[faceParts, 1], [hairParts, 2], [hatParts, 3], [bodyParts, 3], [limbParts, 3], [capeParts, 4], [pailParts, 0]]) {
+    const n0 = P.length; fn(P);
+    for (let i = n0; i < P.length; i++) kinds[i] = k;
+  }
+  P.forEach((g, i) => g.setAttribute('mk', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count).fill(kinds[i]), 1)));
   for (const g of P) { if (g.attributes.normal === undefined) g.computeVertexNormals(); }
   const g = mergeGeometries(P);
   for (const p of P) p.dispose();
@@ -487,7 +494,44 @@ export function landPose(kid, k) {
   rz(B.upperArmL, 0.5 * k); rz(B.upperArmR, -0.35 * k);
 }
 
-export function buildKid() {
+/**
+ * (the remaster) Cloth and hair detail on the kid, by the `mk` kind: a fine twill weave bending the normal on the hat,
+ * the dress and the stockings, a coarser wool on the cape with a slightly darker nap, strands along the braids (light
+ * and dark streaks, a sheen), the skin left smooth. In the bind-pose space, so the pattern rides the skinning.
+ */
+function patchKid(mat) {
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (sh, r) => {
+    if (prev && prev !== THREE.Material.prototype.onBeforeCompile) prev(sh, r);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float mk;\nvarying float vMkHw;\nvarying vec3 vBindHw;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvMkHw = mk; vBindHw = position;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vMkHw;\nvarying vec3 vBindHw;')
+      .replace('#include <color_fragment>', `#include <color_fragment>
+  int hwMk = int( vMkHw + 0.5 );
+  vec3 hwP = vBindHw;
+  if ( hwMk == 2 ) { // braids: strands
+    float s = sin( ( hwP.x * 3.0 + hwP.z * 2.0 + hwP.y * 0.4 ) * 260.0 ) * 0.5 + 0.5;
+    diffuseColor.rgb *= 0.78 + 0.4 * s;
+  } else if ( hwMk == 3 || hwMk == 4 ) { // weave: two crossing thread sets
+    float k = hwMk == 4 ? 520.0 : 900.0;
+    float w = ( sin( ( hwP.x + hwP.y ) * k ) * sin( ( hwP.z - hwP.y ) * k ) ) * 0.5 + 0.5;
+    diffuseColor.rgb *= ( hwMk == 4 ? 0.86 : 0.9 ) + 0.18 * w;
+  }`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+  if ( hwMk == 3 || hwMk == 4 ) {
+    float k = hwMk == 4 ? 520.0 : 900.0;
+    normal = normalize( normal + 0.12 * vec3( cos( ( hwP.x + hwP.y ) * k ), cos( ( hwP.z - hwP.y ) * k ), 0.0 ) );
+  }`)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\tif ( int( vMkHw + 0.5 ) == 2 ) roughnessFactor *= 0.7;');
+  };
+  const prevKey = mat.customProgramCacheKey.bind(mat);
+  mat.customProgramCacheKey = () => `${prevKey()}|hwKid`;
+  return mat;
+}
+
+export function buildKid({ detail = false } = {}) {
   const geometry = bodyGeometry();
   const bones = [], byName = {};
   for (const [name, parent, p] of SKELETON) {
@@ -500,6 +544,7 @@ export function buildKid() {
   // a cool moonlit rim (looks.js): the kid is mostly seen from behind, against the moon, so the silhouette reads
   const material = patchRim(patchGlow(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0, emissive: '#160b1e', emissiveIntensity: 1 }), 'hwKidGlow'),
     { color: new THREE.Color(0.4, 0.42, 0.8), power: 2.8, share: 0.25, fill: 0.14, key: 'kidRim' });
+  if (detail) patchKid(material);
   const skinnedMesh = new THREE.SkinnedMesh(geometry, material);
   skinnedMesh.name = 'kid';
   skinnedMesh.add(bones[0]);

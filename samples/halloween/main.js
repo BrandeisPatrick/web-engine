@@ -10,7 +10,11 @@
 // (lantern point lights) + looks.js (world-space detail, rims, grass wind) + ThirdPersonRig (drag-to-look, auto-recentre)
 // / OrbitRig (title, results) + CharacterInput (keyboard, mouse, gamepad, touch: floating stick, look pad, JUMP / BOO
 // with a cooldown ring, safe-area aware, portrait + landscape layouts) + AudioBus synth (audio.js) + DOM HUD (hud.js).
-// Query: ?touch=1|0 (force the touch UI), ?quality=low|high, ?nofx=1, ?round=<s> (round length), ?shadows=0, ?fps=N.
+// Query: ?touch=1|0 (force the touch UI), ?quality=mobile|desktop (or the old low|high), ?nofx=1, ?round=<s> (round
+// length), ?shadows=0, ?fps=N.
+// Quality (core/Quality.js resolveQuality): ?quality= (not stored), else the player's choice from the settings gear on
+// the title / GRAPHICS on the pause screen (ui QualityMenu; localStorage midnight-candy-run.quality; a change reloads),
+// else the device's recommendation (phones and tablets: mobile). The mobile tier is the game's lighter look (LOW).
 // Touch: on for phones and tablets (isTouchDevice multiTouch: an iPad with a keyboard too); anywhere else (a laptop with
 // a touchscreen) the first touch reveals the controls and a key press hides them again (CharacterInput touchReveal).
 // Haptics (navigator.vibrate: Android; iOS has none) on candy, smashes, BOO and catches while the touch UI is on.
@@ -41,14 +45,14 @@
 // On touch, a push straight into a gravestone, tree, fence or wall slides the kid round it, the short way.
 // window.__game exposes the state for tests (test/browser/halloween.mjs).
 import * as THREE from 'three';
-import { Engine } from '@vibe/engine/core';
+import { Engine, resolveQuality, createBenchHarness, readBenchParams } from '@vibe/engine/core';
 import { PhysicsWorld, CharacterController, DynamicsWorld } from '@vibe/engine/physics';
-import { Atmosphere, PostFX, DEFAULT_GRADE, DEFAULT_LOOKS } from '@vibe/engine/render';
+import { Atmosphere, PostFX, DEFAULT_GRADE, DEFAULT_LOOKS, mulberry32 } from '@vibe/engine/render';
 import { AnimationController } from '@vibe/engine/anim';
 import { CharacterInput, CHARACTER_ACTIONS, PointerLock, isTouchDevice, PAD_BUTTONS as PB } from '@vibe/engine/input';
 import { ThirdPersonRig, OrbitRig } from '@vibe/engine/camera';
-import { LoadingScreen } from '@vibe/engine/ui';
-import { buildWorld, heightAt, PLAY } from './world.js';
+import { LoadingScreen, QualityMenu } from '@vibe/engine/ui';
+import { buildWorld, loadGroundSets, loadPropSets, heightAt, PLAY } from './world.js';
 import { buildKid, landPose } from './kid.js';
 import { Lanterns } from './pumpkins.js';
 import { Candy, CANDY_KIND } from './candy.js';
@@ -67,12 +71,14 @@ import { StompChain } from './chain.js';
 import { BadgeBook, dailyBest, saveDaily } from './badges.js';
 import { LOOK } from './looks.js';
 import { Environment } from './environment.js';
+import { CumulusClouds } from './clouds.js';
 
 const params = new URLSearchParams(location.search);
 const flag = (k) => params.has(k) && params.get(k) !== '0';
 const FORCED = params.has('touch') ? flag('touch') : null; // ?touch=1 / ?touch=0 pin the touch UI on / off
 const TOUCH = FORCED ?? isTouchDevice({ multiTouch: true });  // at load; later touches / keys can switch (touchUI)
-const LOW = params.has('quality') ? params.get('quality') === 'low' : TOUCH;
+const QUALITY = resolveQuality({ storageKey: 'midnight-candy-run.quality' });
+const LOW = QUALITY.tier === 'mobile';
 const NOFX = flag('nofx');
 const SHADOWS = !(params.has('shadows') && params.get('shadows') === '0');
 const ROUND = Math.max(10, +params.get('round') || 180);
@@ -132,14 +138,28 @@ const HITSTOP = { smash: 0.035, stomp: 0.07, boo: 0.05, boo3: 0.08, catch: 0.09 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const wrapPi = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
 
-// night grade: moonlit indigo shadows, warm lantern highlights, more contrast than the stock night grade, bloom for
-// the lanterns and the moon, a vignette
-const GRADE = DEFAULT_GRADE.map((g) => (g.el > -8 ? g : {
-  ...g, exp: 1.45, aeMax: 1.45, bT: 0.8, bS: 0.85, bR: 0.66, sat: 1.18, con: 0.24, split: 1.25,
-  sh: [0.002, -0.004, 0.03], hi: [0.036, 0.016, -0.018], vig: 0.5, grain: 0.018, wb: [0.97, 0.97, 1.06],
-}));
-// night sky looks: clouds lit from the moon side (silver tops, dark bodies) instead of a flat purple smudge
-const LOOKS = DEFAULT_LOOKS.map((l) => (l.el > -12 ? l : { ...l, cover: 0.34, cop: 0.9, cs: [0.07, 0.075, 0.13], ca: [0.012, 0.01, 0.026] }));
+// The night's palette. Remastered (2026-11): a cool, desaturated moonlit blue-grey with a violet lean, where the
+// lanterns, windows and candy are the only saturated things in the frame; exposure kept off the clip (no light source
+// burns to white), small glow cores with a modest bloom, fine grain and a vignette. `?look=classic` keeps the first
+// look (a saturated violet wash) for comparison: the same numbers it always had.
+const CLASSIC = params.get('look') === 'classic';
+const TAA_WANTED = !CLASSIC && !(params.has('taa') && params.get('taa') === '0');
+const NIGHT = CLASSIC ? {
+  grade: { exp: 1.45, aeMax: 1.45, bT: 0.8, bS: 0.85, bR: 0.66, sat: 1.18, con: 0.24, split: 1.25, sh: [0.002, -0.004, 0.03], hi: [0.036, 0.016, -0.018], vig: 0.5, grain: 0.018, wb: [0.97, 0.97, 1.06] },
+  clouds: { cover: 0.34, cop: 0.9, cs: [0.07, 0.075, 0.13], ca: [0.012, 0.01, 0.026] },
+  zen: [0.004, 0.0045, 0.022], hor: [0.042, 0.028, 0.09], pollution: [0.032, 0.012, 0.04],
+  hemi: ['#5b5ccf', '#2c2230', 0.34], moon: [0.68, 0.74, 1.0], env: 0.55, mist: [0.065, 0.06, 0.11],
+} : {
+  grade: { exp: 1.7, aeMax: 1.3, bT: 1.15, bS: 0.42, bR: 0.5, sat: 0.86, con: 0.2, split: 0.7, sh: [0.004, 0.0, 0.009], hi: [0.03, 0.014, -0.012], vig: 0.58, grain: 0.03, wb: [0.975, 0.985, 1.02] },
+  clouds: { cover: params.get('clouds') === '1' ? 0.2 : 0.36, cop: 0.92, cs: [0.05, 0.056, 0.072], ca: [0.006, 0.0068, 0.0095] },
+  zen: [0.0052, 0.0052, 0.0088], hor: [0.036, 0.033, 0.048], pollution: [0.013, 0.012, 0.016],
+  hemi: ['#5f5f7c', '#211f21', 0.48], moon: [0.66, 0.73, 0.9], env: 0.5, mist: [0.05, 0.056, 0.068],
+};
+// night grade: moonlit shadows, warm lantern highlights, more contrast than the stock night grade, bloom, a vignette
+// (the remaster on phones: a touch more exposure, for the moonlit mist the volumetric pass adds on desktop)
+const GRADE = DEFAULT_GRADE.map((g) => (g.el > -8 ? g : { ...g, ...NIGHT.grade, ...(LOW && !CLASSIC ? { exp: NIGHT.grade.exp * 1.1 } : {}) }));
+// night sky looks: clouds lit from the moon side (silver tops, dark bodies) instead of a flat smudge
+const LOOKS = DEFAULT_LOOKS.map((l) => (l.el > -12 ? l : { ...l, ...NIGHT.clouds }));
 
 // input: the character preset with BOO on interact (E / F / B / Q, pad X / B, touch 'boo'), pause (Esc / P / pad Start),
 // start (Enter / Space / pad A), mute (M / pad Back): a Bluetooth gamepad paired to a phone plays the whole game too
@@ -201,7 +221,7 @@ async function boot() {
   const { scene, camera, renderer } = engine;
   const atmo = new Atmosphere({
     scene, renderer, camera, timeOfDay: 23.6, skyRadius: 1000, flare: false, cloudWind: [4, 1.5], looks: LOOKS,
-    moon: { azimuth: 22, elevation: 13 }, moonIntensity: 1.9, moonColor: [0.68, 0.74, 1.0], fogDensity: [0.022, 0],
+    moon: { azimuth: 22, elevation: 13 }, moonIntensity: 1.9, moonColor: NIGHT.moon, fogDensity: [0.022, 0],
     moonScatter: 0.05, // the ground mist glows toward the moon (and the desktop volumetric pass marches moonlight)
     shadows: LOW ? { cascades: 1, single: 24, singleMapSize: 1024, kernel: 'fast' } : { cascades: 1, single: 34, singleMapSize: 2048, kernel: 'fast' },
     maxCasterHeight: 24,
@@ -210,17 +230,17 @@ async function boot() {
   // environment / fog colour come from, then re-bake (setTime rebuilds the PMREM environment, the fog colour, horizon)
   for (const sky of [atmo.sky, atmo.envSky]) {
     const u = sky.material.uniforms;
-    u.uNightZen.value.setRGB(0.004, 0.0045, 0.022);
-    u.uNightHor.value.setRGB(0.042, 0.028, 0.09);
-    u.uPollution.value.setRGB(0.032, 0.012, 0.04);
+    u.uNightZen.value.fromArray(NIGHT.zen);
+    u.uNightHor.value.fromArray(NIGHT.hor);
+    u.uPollution.value.fromArray(NIGHT.pollution);
   }
   atmo.setTime(atmo.timeOfDay);
   // the visible sky lights its clouds from the moon (silver edges toward it); the night sky model itself ignores the
   // sun position, and the baked environment keeps the real one
   atmo.sky.material.uniforms.sunPosition.value.copy(atmo.moonDir);
   // less flat ambient, more moon: shapes read by moonlight and shadow instead of an even purple fill
-  atmo.hemi.intensity = 0.34; atmo.hemi.color.set('#5b5ccf'); atmo.hemi.groundColor.set('#2c2230');
-  scene.environmentIntensity = 0.55;
+  atmo.hemi.intensity = NIGHT.hemi[2]; atmo.hemi.color.set(NIGHT.hemi[0]); atmo.hemi.groundColor.set(NIGHT.hemi[1]);
+  scene.environmentIntensity = NIGHT.env;
   const fp = atmo.fogParams; fp.haze = 0.0048; fp.hazeK = 1 / 26; fp.mist = 0.05; fp.mistK = 1.6;
 
   // ---------------------------------------------------------------- world + game objects (one loading system)
@@ -228,17 +248,22 @@ async function boot() {
   engine.addSystem({
     async load(progress) {
       progress(0.1, 'Raising the graveyard…'); await nextFrame();
-      W.world = buildWorld({ scene, renderer, physics, low: LOW });
+      // the remaster's ground scans load first (the world's first frame has them)
+      const B0 = `${import.meta.env.BASE_URL}halloween/`;
+      const [ground, surfaces] = CLASSIC ? [null, null] : await Promise.all([
+        loadGroundSets(`${B0}ground/`, { low: LOW, anisotropy: LOW ? 1 : 4 }), loadPropSets(`${B0}props/`, { low: LOW, anisotropy: LOW ? 1 : 8 }),
+      ]);
+      W.world = buildWorld({ scene, renderer, physics, low: LOW, classic: CLASSIC, ground, surfaces });
       progress(0.45, 'Carving jack-o\'-lanterns…'); await nextFrame();
       W.dyn = new DynamicsWorld({ physics, substeps: 1, maxParticles: GHOSTS * 13 * 13 + 64, maxBodies: 128, sleep: { linear: 0.08, angular: 0.08, time: 0.4 } });
-      W.lanterns = new Lanterns({ scene, dyn: W.dyn, spots: W.world.lanternSpots, heightAt, lights: LOW ? 4 : 5 });
+      W.lanterns = new Lanterns({ scene, dyn: W.dyn, spots: W.world.lanternSpots, heightAt, lights: LOW ? 4 : 5, remaster: !CLASSIC, skin: !CLASSIC && !LOW });
       progress(0.65, 'Waking the ghosts…'); await nextFrame();
       // desktop / high: the nearest ghost also lights its surroundings (lights: 5 lanterns + the pail + this = 7 of 8)
-      W.ghosts = new Ghosts({ scene, dyn: W.dyn, heightAt, spawns: W.world.ghostSpawns, count: GHOSTS, grid: LOW ? 11 : 13, light: !LOW });
+      W.ghosts = new Ghosts({ scene, dyn: W.dyn, heightAt, spawns: W.world.ghostSpawns, count: GHOSTS, grid: LOW ? 11 : 13, light: !LOW, sheer: !CLASSIC });
       W.ghosts.settle(LOW ? 120 : 150);
       progress(0.85, 'Unwrapping candy…'); await nextFrame();
       // spilled candy lands on what is under it: the ground, or a porch deck, a footbridge, a bale (not through them)
-      W.candy = new Candy({ scene, heightAt, candySpot: W.world.candySpot, floorAt: (x, z, y) => physics.supportAt(x, z, y, 0.05), rnd: rng.candy });
+      W.candy = new Candy({ scene, heightAt, candySpot: W.world.candySpot, floorAt: (x, z, y) => physics.supportAt(x, z, y, 0.05), rnd: rng.candy, crisp: !CLASSIC });
       W.porches = new Porches({ scene, physics, heightAt, candy: W.candy, ghosts: W.ghosts, world: W.world, rnd: rng.porch });
       W.fx = new Effects({ scene, heightAt, low: LOW });
       W.hands = new Hands({ scene, heightAt, fx: W.fx, rnd: rng.hands });
@@ -249,6 +274,10 @@ async function boot() {
       W.bats = new Bats({ scene, count: LOW ? 6 : 9 });
       // the living night: wind, leaves, clouds over the moon, mist, lightning, crows; escalates toward midnight
       W.env = new Environment({ scene, camera, atmo, world: W.world, ghosts: W.ghosts, heightAt, low: LOW });
+      W.env.mist.u.uMsCol.value.fromArray(NIGHT.mist);
+      // (cumulus billboards, clouds.js: off by default, they read as smudges on the lens; ?clouds=1 shows them)
+      if (!CLASSIC && params.get('clouds') === '1') W.clouds = new CumulusClouds({ scene, count: LOW ? 5 : 18, rng: mulberry32(2610) });
+      if (!CLASSIC) W.glows.look(0.6, 0.8, 3); // smaller, tighter halos: a bright core that keeps its colour
       progress(1, 'Ready');
     },
   }, 'world-load');
@@ -257,10 +286,19 @@ async function boot() {
   const booReach = new BooReach(scene); // BOO's reach on the ground while BOO glows
 
   // ---------------------------------------------------------------- the kid
-  const kid = buildKid();
+  const kid = buildKid({ detail: !CLASSIC && !LOW });
   const view = new THREE.Group(); view.name = 'kidView'; view.rotation.y = Math.PI; view.add(kid.root);
   const player = new THREE.Group(); player.name = 'player'; player.add(view);
   scene.add(player);
+  if (!CLASSIC) { // (the remaster) a soft contact shadow under the kid's feet: it stands on the ground, not over it
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(0,0,0,0.75)'); gr.addColorStop(0.45, 'rgba(0,0,0,0.42)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+    const blob = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.75).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+    blob.position.y = 0.03; blob.renderOrder = 1; blob.name = 'kidContact';
+    player.add(blob);
+  }
   const pailLight = new THREE.PointLight(0xffa040, 2.6, 7.5, 1.5);
   pailLight.position.set(0.22, 0.55, -0.5); player.add(pailLight); // ahead of the pail, below the face
   const ctl = new AnimationController(kid.root, kid.clips, {
@@ -300,7 +338,7 @@ async function boot() {
   let booedEver = loadTaught(), lookHinted = false, smashedEver = false, creekT = 0, brewT = 0, rounds = 0;
   // START / RESUME / PLAY AGAIN run inside the click (a user gesture): the same call captures the mouse on desktop
   const hud = new HUD({
-    touch: TOUCH, streak: STREAK_EVERY, patch: PATCH,
+    touch: TOUCH, streak: STREAK_EVERY, patch: PATCH, quiet: !CLASSIC,
     onShare: () => shareScore(),
     onStart: () => { startRound(); captureMouse(); },
     onPause: () => setPaused(true),
@@ -310,6 +348,12 @@ async function boot() {
     onMute: () => { hud.setMuted(audio.toggleMute()); },
     onMusic: () => { G.music = !G.music; audio.setMusic(G.music); hud.setMusicLabel(G.music); },
   });
+  // graphics quality: picking the other tier stores it and reloads. Enter / Space / Esc are ignored while the panel is
+  // open and just after it closes (Esc closes the panel; it must not also resume a paused round)
+  let qShutAt = 0;
+  const quality = new QualityMenu({ quality: QUALITY, onToggle: (open) => { if (!open) qShutAt = performance.now(); } });
+  hud.addSettings(quality);
+  const settingsBusy = () => quality.open || performance.now() - qShutAt < 250;
   const canvas = renderer.domElement;
   let touchUI = TOUCH; // the touch presentation is on (controls, HUD texts, camera recentre, haptics)
   let booBtn = null, stickCtl = null, booHot = false;
@@ -364,22 +408,30 @@ async function boot() {
 
   // ---------------------------------------------------------------- post-processing
   let postfx = null;
+  const TAA = TAA_WANTED && !LOW;
   if (!NOFX) {
     try {
       const { width, height } = engine.size;
       postfx = new PostFX(renderer, scene, camera, {
         atmosphere: atmo, width, height, pixelRatio: engine.pixelRatio, grade: GRADE, aa: 'fxaa', msaaMaxPixels: 0,
-        ao: { radius: 0.7, thickness: 0.7, samples: LOW ? 6 : 8, maxPixels: LOW ? 0.25e6 : 0.6e6 },
+        // the remaster on desktop: the G-buffer path with TAA (a soft, stable image: no sparkle on the grass, the fence
+        // and the twigs' silhouettes); phones keep the forward path with FXAA
+        ...(TAA ? { gbuffer: true, aa: 'taa' } : {}),
+        ao: { radius: 0.7, thickness: 0.7, samples: LOW ? 6 : 8, maxPixels: LOW ? 0.25e6 : CLASSIC ? 0.6e6 : 0.4e6 },
         bloom: { strength: 0.9, radius: 0.6, threshold: 0.9, resolutionScale: LOW ? 0.35 : 0.5 },
         // desktop / high: moonlight shafts through the mist (the volumetric pass marching the moon: Atmosphere
         // moonScatter), shadowed by the moon's map (so not with ?shadows=0); phones keep the fog's analytic moon glow
-        volumetric: LOW || !SHADOWS ? false : { maxDistance: 50, steps: 16, intensity: 0.07 },
+        volumetric: LOW || !SHADOWS ? false : { maxDistance: 50, steps: 16, intensity: CLASSIC ? 0.07 : 0.1 },
       });
       if (LOW) postfx.ao.enabled = false;
     } catch (e) { console.warn('[halloween] post-processing unavailable', e); postfx = null; }
   }
   if (!postfx) atmo.setFogMode('scene');
-  engine.renderFn = (sc, cam, dt) => { if (postfx) postfx.render(dt); else renderer.render(sc, cam); };
+  let heldStill = false; // the bench harness holds TAA still (bench mode only: quiet)
+  engine.renderFn = (sc, cam, dt) => {
+    if (heldStill && postfx && postfx.taaPass) postfx.taaPass._reset = true; // (bench captures: TAA from a fresh history)
+    if (postfx) postfx.render(dt); else renderer.render(sc, cam);
+  };
   let viewW = engine.size.width, viewH = engine.size.height; // CSS px (the HUD's edge markers; no layout read per frame)
   engine.onResize = (w, h, pr) => { viewW = w; viewH = h; fitCamera(w, h); if (postfx) postfx.setSize(w, h, pr); };
   fitCamera(viewW, viewH);
@@ -830,7 +882,8 @@ async function boot() {
       const c = input.controls, m = input.map;
       if (m.justPressed('mute')) hud.setMuted(audio.toggleMute());
       // Enter / Space start (a key press is a user gesture too: the mouse is captured from here, within its activation)
-      if (G.state === 'title' || G.state === 'over') { if (m.justPressed('start') && (G.state === 'title' || G.endT > 1.5)) { startRound(); captureMouse(); } return; }
+      if (G.state === 'title' || G.state === 'over') { if (m.justPressed('start') && !settingsBusy() && (G.state === 'title' || G.endT > 1.5)) { startRound(); captureMouse(); } return; }
+      if (c.menu && settingsBusy()) return;
       if (c.menu) { if (G.state === 'play') setPaused(true); else if (G.state === 'paused') { setPaused(false); captureMouse(); } return; }
       if (G.state !== 'play') { intent.moveX = intent.moveZ = intent.fwd = 0; intent.jump = false; return; }
       if (c.lookX || c.lookY) {
@@ -1100,13 +1153,14 @@ async function boot() {
   const _pm = new THREE.Matrix4(), _frustum = new THREE.Frustum(), _dir = new THREE.Vector3();
   const lightView = { position: camera.position, frustum: _frustum, direction: _dir };
   const WISPS = 14;
-  engine.addSystem({
-    lateUpdate(dt) {
+  let cloudT = 0;
+  const worldLate = (dt) => {
       camera.updateMatrixWorld();
       atmo.update(camera.position, dt);
       LOOK.update(dt, camera, atmo.moonDir);
       world.update(camera, atmo.moonDir);
       env.update(dt, G.state === 'title' ? 0 : 1 - G.left / ROUND, cc.position);
+      if (W.clouds) { cloudT += dt; W.clouds.update(camera.position, atmo.moonDir, cloudT); }
       _frustum.setFromProjectionMatrix(_pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
       camera.getWorldDirection(_dir);
       const t = G.time;
@@ -1130,8 +1184,8 @@ async function boot() {
       glows.commit(n);
       bats.update(dt);
       fx.update(dt);
-    },
-  }, 'world');
+  };
+  engine.addSystem({ lateUpdate: worldLate }, 'world');
 
   // edge markers: where on screen a world point is, or (off screen) a spot on an ellipse inside the HUD / thumb-free
   // band toward it, by its bearing from the kid in the camera's frame (0 = ahead / up, + = right; behind = bottom)
@@ -1223,19 +1277,96 @@ async function boot() {
     renderer.render(scene, camera);
     warm.forEach((o, i) => { o.visible = was[i][0]; o.frustumCulled = was[i][1]; });
   }
+  // ---------------------------------------------------------------- bench mode (?bench=1&size=WxH)
+  // The standard harness (window.__sample, src/core/Bench.js) on the title's world, no round started: fixed views for
+  // the smoke test's look gate and for GPU timing. The kid stands at each view's spot; the loop is frozen, so the
+  // world's per-frame visuals (glows, LOOK, env) run once per pose in after(). Nothing here runs in normal play.
+  const bp = readBenchParams(location.search);
+  let harness = null;
+  if (bp.enabled) {
+    hud.root.style.display = 'none';
+    ctl.update(0.4); // the idle pose (once: a pose must render the same image every time)
+    // a view behind the kid at (x, z) facing yaw (0 = north, -z), `back` m behind it at `up` m, looking `ahead` m on
+    const shot = (x, z, yaw, back = 5.4, up = 2.6, ahead = 12, lookUp = 1.1) => (cam) => {
+      const y = heightAt(x, z), fx = -Math.sin(yaw), fz = -Math.cos(yaw), b = back * (cam.aspect < 1 ? 1.35 : 1);
+      cc.teleport(x, y + 0.05, z); player.position.copy(cc.position); player.rotation.y = yaw; camState.facing = yaw;
+      cam.position.set(x - fx * b, y + up * (cam.aspect < 1 ? 1.25 : 1), z - fz * b); cam.up.set(0, 1, 0);
+      cam.lookAt(x + fx * ahead, heightAt(x + fx * ahead, z + fz * ahead) + lookUp, z + fz * ahead);
+    };
+    const FAR = new THREE.Vector3(999, 0, 999);
+    // a camera at (x, z, h over the ground) looking at (tx, tz, th over the ground); hide: the kid out of the way
+    const lookAt = (cam, x, z, h, tx, tz, th, hide) => {
+      if (hide) { cc.teleport(60, heightAt(60, 60) + 0.05, 60); player.position.copy(cc.position); }
+      cam.position.set(x, heightAt(x, z) + h, z); cam.up.set(0, 1, 0); cam.lookAt(tx, heightAt(tx, tz) + th, tz);
+    };
+    const look = (x, z, h, tx, tz, th, hide) => (cam) => lookAt(cam, x, z, h, tx, tz, th, hide);
+    harness = createBenchHarness(engine, {
+      name: 'halloween',
+      poses: {
+        gate: shot(SPAWN[0], SPAWN[1], 0),                          // the opening view: the green, the cottage, the graveyard
+        graveyard: shot(18, -16, Math.atan2(-(35 - 18), -(-38 + 16)), 5, 2.2, 14), // inside the fence toward the crypt
+        village: shot(-6, 24, Math.PI, 6, 2.4, 14, 1.6),          // over the creek toward Porch Row's lit porches
+        house: shot(-12, -6, Math.atan2(-(-22 + 12), -(-23.5 + 6)), 6, 2.0, 18, 3.5), // up the knoll at the haunted house
+        // close-ups for look development (?closeups=1 only: the smoke and perf views stay the four above)
+        ...(params.has('closeups') ? {
+          'cu-wall': look(-1.2, 29.2, 1.5, -1.9, 32, 1.9, true),          // Porch Row's middle cottage, its front wall at 3 m
+          'cu-grave': (cam) => { const g = world.graves[7]; lookAt(cam, g.x + 0.4, g.z + 1.5, 1.0, g.x, g.z, 0.55, true); },
+          'cu-pumpkin': (cam) => { lookAt(cam, lanterns.x[0] + 0.55, lanterns.z[0] + 0.85, 0.55, lanterns.x[0], lanterns.z[0], 0.15, true); },
+          'cu-trunk': (cam) => { const t = world.trees.find((q) => q[2]) || world.trees[0]; lookAt(cam, t[0] + 1.4, t[1] + 1.4, 1.5, t[0], t[1], 1.4, true); },
+          'cu-witch': (cam) => { shot(SPAWN[0], SPAWN[1], Math.PI)(cam); const p = player.position; cam.position.set(p.x + 0.3, p.y + 1.15, p.z + 2.0); cam.lookAt(p.x, p.y + 0.7, p.z); },
+          'cu-fence': look(17.2, -5.6, 1.5, 15.6, -10, 2.0, true),       // the graveyard's south gate: posts, arch, leaves, bars
+          'cu-lantern': (cam) => { const q = world.glowSpots[world.porches[2].halos.lamp]; const g = heightAt(q[0], q[2] - 1.1); lookAt(cam, q[0] - 0.25, q[2] - 1.1, q[1] - g - 0.15, q[0], q[2], q[1] - heightAt(q[0], q[2]), true); },
+          'cu-candy': (cam) => {
+            const x = 3, z = 2, y = heightAt(x, z);
+            candy.reset(); candy.place(x, y + 0.08, z, CANDY_KIND.WRAP); candy.place(x + 0.35, y + 0.08, z + 0.2, CANDY_KIND.CORN); candy.place(x - 0.3, y + 0.08, z - 0.25, CANDY_KIND.WRAP);
+            candy.update(0, FAR, G.time, () => {});
+            lookAt(cam, x + 0.2, z + 1.0, 0.55, x, z, 0.1, true);
+          },
+        } : {}),
+      },
+      after: () => { rig.deactivate(); orbit.deactivate(); rigOn = null; worldLate(0); }, // the rigs off: the pose places the camera
+      // captures hash equal frame to frame: the eye adaptation reset to this view (as play settles to it; held at dt 0),
+      // the volumetric march without jitter or history
+      quiet: () => {
+        if (!postfx) return;
+        if (CLASSIC) postfx.autoExposure = false; // (the remaster's look is measured as played: adapted)
+        postfx.setTimeOfDay(atmo.darkness);
+        if (postfx.volumetric) { postfx.set('volumetric.jitter', false); postfx.set('volumetric.temporal', false); }
+        if (postfx.history) { // TAA: no jitter, and each harness frame resolved from a fresh history (bit-stable)
+          heldStill = true; postfx.set('jitter', false); postfx.history.reset();
+          for (let i = 0; i < 8; i++) postfx.render(0);
+        }
+      },
+      settings: {
+        // cost knobs (perf.mjs --costs switches each true knob off): the desktop path, volumetrics, the ground's dressing
+        'postfx.taa': { get: () => !!(postfx && postfx.aa === 'taa'), set: (v) => { if (postfx && postfx.gbuffer) postfx.set('aa', v ? 'taa' : 'fxaa'); } },
+        'postfx.gbuffer': { get: () => !!(postfx && postfx.gbuffer), set: (v) => { if (!postfx) return; if (!v) { postfx.set('aa', 'fxaa'); postfx.set('gbuffer', false); } else { postfx.set('gbuffer', true); if (TAA) postfx.set('aa', 'taa'); } } },
+        'postfx.volumetric': { get: () => !!(postfx && postfx.volumetric), set: (v) => { if (postfx) postfx.set('volumetric', v ? { maxDistance: 50, steps: 16, intensity: CLASSIC ? 0.07 : 0.1 } : false); } },
+        'world.grass': { get: () => world.tufts.visible, set: (v) => { world.tufts.visible = !!v; } },
+        ...(world.cover ? { 'world.cover': { get: () => world.cover.leaves.visible, set: (v) => { for (const k in world.cover) world.cover[k].visible = !!v; } } } : {}),
+        'world.mist': { get: () => env.mist.mesh.visible, set: (v) => { env.mist.mesh.visible = !!v; } },
+        ...(world.knobs.pools && !LOW && !CLASSIC ? { 'world.pools': world.knobs.pools } : {}),
+        ...(world.knobs.groundNormals ? { 'world.groundNormals': world.knobs.groundNormals } : {}),
+        'postfx.bloom': { get: () => !!(postfx && postfx.get('bloom.enabled')), set: (v) => { if (postfx) postfx.set('bloom.enabled', !!v); } },
+        'postfx.ao': { get: () => !!(postfx && postfx.aoPass && postfx.aoPass.enabled), set: (v) => { if (postfx && postfx.aoPass) postfx.aoPass.enabled = !!v; } },
+      },
+    });
+    if (bp.size) harness.resize(bp.size.w, bp.size.h);
+  }
   const loadMs = Math.round(performance.now() - t0);
   window.__game = {
     THREE, engine, G, cc, ctl, camState, rig, orbit, input, hud, audio, world, dyn, lanterns, ghosts, candy, porches, PORCH, hands, HAND, thief, THIEF, taught, fx, postfx, atmo, physics, player, env,
     potions, secrets, chain, badges, rng, PATCH, pailLight,
-    loadMs, TOUCH, LOW, startRound, toTitle, setPaused, endRound, juice, paceRec, shareScore, RANKS, around,
+    loadMs, TOUCH, LOW, QUALITY, quality, startRound, toTitle, setPaused, endRound, juice, paceRec, shareScore, RANKS, around,
     get pace() { return pace; }, get baseFov() { return baseFov; },
     get touchUI() { return touchUI; },
     /** Test hook: jump the clock (seconds left). */
     setTimeLeft(s) { G.left = s; },
   };
-  console.info(`[halloween] ready in ${loadMs} ms · touch ${TOUCH} · quality ${LOW ? 'low' : 'high'} · ${lanterns.n} lanterns · ${ghosts.list.length} ghosts · ${physics.staticBoxes.length} colliders · pr ${engine.pixelRatio}`);
+  console.info(`[halloween] ready in ${loadMs} ms · touch ${TOUCH} · quality ${QUALITY.tier} (${QUALITY.source}) · ${lanterns.n} lanterns · ${ghosts.list.length} ghosts · ${physics.staticBoxes.length} colliders · pr ${engine.pixelRatio}`);
   engine.start();
   loading.hide(450);
+  if (harness) { harness.setReady(); harness.freeze(); }
 }
 
 /** No page scroll / pinch / double-tap zoom / long-press menus on phones (the CSS does most of it; iOS needs these). */

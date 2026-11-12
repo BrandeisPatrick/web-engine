@@ -91,7 +91,7 @@ function popGeometry() {
  * left in view space, a glossy highlight and a rim, so every sweet reads as a rounded, shiny 3D thing; plus the per-
  * pixel patterns (cpat) from the part's local position.
  */
-function patchCandy(mat) {
+function patchCandy(mat, crisp = false) {
   mat.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float cpat;\nvarying float vPatHw;\nvarying vec3 vLocHw;\nvarying vec3 vNrmHw;\nvarying vec3 vViewHw;')
@@ -130,10 +130,18 @@ function patchCandy(mat) {
     float dif = 0.4 + 0.55 * max( dot( n, L ), 0.0 );
     float spec = pow( max( dot( reflect( - L, n ), v ), 0.0 ), 28.0 );
     float rim = pow( 1.0 - max( dot( n, v ), 0.0 ), 3.0 );
+    ${crisp ? `// (the remaster) cellophane: the wrapper's crinkles bend the normal; a small, sharp highlight, a dimmer body
+    if ( vPatHw > 2.5 ) {
+      vec3 q = p * 140.0;
+      n = normalize( n + 0.22 * vec3( sin( q.y + 2.0 * sin( q.z ) ), sin( q.z * 1.3 + q.x ), sin( q.x * 0.9 + q.y * 1.7 ) ) * ( vPatHw > 3.5 ? 1.6 : 0.7 ) );
+    }
+    dif = 0.3 + 0.55 * max( dot( n, L ), 0.0 );
+    spec = pow( max( dot( reflect( - L, n ), v ), 0.0 ), 90.0 ) * 1.4;
+    rim = pow( 1.0 - max( dot( n, v ), 0.0 ), 4.0 );` : ''}
     diffuseColor.rgb = diffuseColor.rgb * dif + vec3( 0.75 ) * spec + diffuseColor.rgb * rim * 0.3;
   }`);
   };
-  mat.customProgramCacheKey = () => 'hwCandy';
+  mat.customProgramCacheKey = () => (crisp ? 'hwCandyC' : 'hwCandy');
   return mat;
 }
 
@@ -143,7 +151,7 @@ export class Candy {
    *   candy lands on: the ground or a deck, a bridge, a bale under it; default the ground, heightAt), rnd (placement
    *   draws: rng.js rng.candy; default Math.random)
    */
-  constructor({ scene, heightAt, candySpot, floorAt = null, rnd = Math.random }) {
+  constructor({ scene, heightAt, candySpot, floorAt = null, rnd = Math.random, crisp = false }) {
     this.heightAt = heightAt; this.candySpot = candySpot; this.floorAt = floorAt; this.rnd = rnd;
     const f = (k = 1) => new Float32Array(MAX * k);
     this.p = f(3); this.v = f(3); this.age = f(); this.ttl = f(); this.spin = f();
@@ -151,7 +159,8 @@ export class Candy {
     this.kind = new Uint8Array(MAX); this.color = new Uint8Array(MAX); this.delay = f();
     this.fixed = new Uint8Array(MAX); // a fixed pop's spot + 1 (secrets.js), 0 for field candy
     this.count = 0; this.resting = 0;
-    const mat = patchCandy(new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide }));
+    // (crisp: the remaster's cellophane, at a body level that keeps its colour under the clip)
+    const mat = patchCandy(new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color().setScalar(crisp ? 0.95 : 1.2), side: THREE.DoubleSide }), crisp);
     this.meshes = [wrappedGeometry(), cornGeometry(), popGeometry()].map((g, k) => {
       const m = new THREE.InstancedMesh(g, mat, k === 2 ? 8 : MAX);
       m.name = ['candyWrap', 'candyCorn', 'candyPop'][k];

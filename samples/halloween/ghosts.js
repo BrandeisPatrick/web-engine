@@ -124,13 +124,33 @@ vec2 hwWarp( vec2 uv ) {
   return mat;
 }
 
+/**
+ * (the remaster) A sheet you can half see through: the alpha falls toward the silhouette (thin cloth seen edge-on),
+ * the body a little dimmer, the inner glow strongest where the sheet faces the viewer (a lamp inside a lampshade).
+ */
+function sheerEdges(mat) {
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (sh, r) => {
+    if (prev && prev !== THREE.Material.prototype.onBeforeCompile) prev(sh, r);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+  {
+    float hwFace = clamp( abs( dot( normalize( normal ), normalize( vViewPosition ) ) ), 0.0, 1.0 );
+    diffuseColor.a *= mix( 0.3, 1.0, smoothstep( 0.05, 0.6, hwFace ) );
+    diffuseColor.rgb *= 0.82;
+    totalEmissiveRadiance *= 0.55 + 0.6 * hwFace * hwFace;
+  }`);
+  };
+  const prevKey = mat.customProgramCacheKey.bind(mat);
+  mat.customProgramCacheKey = () => `${prevKey()}|sheer`;
+}
+
 export class Ghosts {
   /**
    * @param {object} o  scene, dyn (DynamicsWorld with particles), heightAt, spawns ([x, z][]), count, grid (particles per
    *   side), cloth (mass / shear / bend), light (false: true adds the one point light that follows the ghost nearest the
    *   camera)
    */
-  constructor({ scene, dyn, heightAt, spawns, count = 6, grid = 13, cloth: co = {}, light = false }) {
+  constructor({ scene, dyn, heightAt, spawns, count = 6, grid = 13, cloth: co = {}, light = false, sheer = false }) {
     this.dyn = dyn; this.heightAt = heightAt; this.spawns = spawns;
     // light: one real point light (cold blue) that follows the awake ghost nearest the camera, so a ghost casts its
     // glow on the grass, the stones and the kid (always in the scene: a light count change would recompile shaders)
@@ -168,6 +188,7 @@ export class Ghosts {
         map: tex, emissiveMap: tex, alphaMap: hemTexture(), color: '#f2f4ff', emissive: '#9fb2ff', emissiveIntensity: 0.42, roughness: 0.8, metalness: 0,
         side: THREE.DoubleSide, transparent: true, opacity: 0.86, depthWrite: true, alphaTest: 0.04,
       })), { color: new THREE.Color(0.35, 0.6, 1.1), power: 2.2, share: 0.6, key: 'ghostRim' });
+      if (sheer) sheerEdges(mat);
       // drawn as a 2x finer Catmull-Rom surface through the particles (render/SoftMeshes.js `subdivide`): soft folds, no facets
       const cm = new ClothMesh(dyn.particles, cloth, mat, { subdivide: 2 });
       cm.mesh.castShadow = false; cm.mesh.receiveShadow = false; cm.mesh.renderOrder = 3; cm.mesh.visible = false;

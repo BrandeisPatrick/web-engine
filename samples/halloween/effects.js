@@ -13,6 +13,7 @@ import { ParticleSystem, makeCanvas } from '@vibe/engine/render';
 const GLOW_VS = /* glsl */`
 attribute vec3 iPos;
 attribute vec4 iData; // rgb (linear, premultiplied intensity), size (m)
+uniform vec3 uGlowK; // size scale, intensity scale, falloff power (look())
 varying vec2 vUv;
 varying vec3 vCol;
 void main() {
@@ -20,21 +21,22 @@ void main() {
   vec4 mv = modelViewMatrix * vec4( iPos, 1.0 );
   float d = -mv.z;
   float near = smoothstep( 0.4, 2.2, d );            // fade out right in front of the lens
-  vCol = iData.rgb * near;
+  vCol = iData.rgb * near * uGlowK.y;
+  float sz = iData.w * uGlowK.x;
   // pull the quad toward the eye along the view ray (same spot and size on screen) by 0.45 of its size: a halo sits on
   // the grass, and without this the ground cut its lower half off in a hard straight edge (a boxy glow on phones)
-  float k = max( 0.3, d - iData.w * 0.45 ) / max( d, 1e-3 );
+  float k = max( 0.3, d - sz * 0.45 ) / max( d, 1e-3 );
   mv.xyz *= k;
-  mv.xy += position.xy * iData.w * k;
+  mv.xy += position.xy * sz * k;
   gl_Position = projectionMatrix * mv;
 }`;
 const GLOW_FS = /* glsl */`
+uniform vec3 uGlowK;
 varying vec2 vUv;
 varying vec3 vCol;
 void main() {
   float r = length( vUv ) * 2.0;
-  float a = 1.0 - smoothstep( 0.0, 1.0, r );
-  a *= a;
+  float a = pow( 1.0 - smoothstep( 0.0, 1.0, r ), uGlowK.z );
   gl_FragColor = vec4( vCol * a, 1.0 );
 }`;
 
@@ -49,11 +51,13 @@ export class Glows {
     this.aData = new THREE.InstancedBufferAttribute(this.data, 4).setUsage(THREE.DynamicDrawUsage);
     g.setAttribute('iPos', this.aPos); g.setAttribute('iData', this.aData);
     g.instanceCount = 0;
-    this.material = new THREE.ShaderMaterial({ vertexShader: GLOW_VS, fragmentShader: GLOW_FS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    this.material = new THREE.ShaderMaterial({ uniforms: { uGlowK: { value: new THREE.Vector3(1, 1, 2) } }, vertexShader: GLOW_VS, fragmentShader: GLOW_FS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
     this.mesh = new THREE.Mesh(g, this.material);
     this.mesh.frustumCulled = false; this.mesh.renderOrder = renderOrder; this.mesh.name = name;
     this.geometry = g;
   }
+  /** Every halo's size and intensity scaled, and its falloff power (2: the first look's soft disc; higher: a tighter core). */
+  look(size = 1, gain = 1, power = 2) { this.material.uniforms.uGlowK.value.set(size, gain, power); return this; }
   set(i, x, y, z, size, r, g, b) {
     if (i >= this.max) return;
     const p = i * 3, d = i * 4;

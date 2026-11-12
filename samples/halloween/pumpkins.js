@@ -81,12 +81,12 @@ function faceTexture() {
 }
 
 /** The patch the face is drawn on: a grid over the face window laid on the ribbed front (fuv = face-plane metres). */
-function faceGeometry() {
+function faceGeometry(lift = 0.004) {
   const front = pumpkinFront(R, LOBES, DEPTH), NX = 8, NY = 6, pos = [], nor = [], fuv = [], idx = [];
   for (let j = 0; j <= NY; j++) {
     for (let i = 0; i <= NX; i++) {
       const x = -FACE_X + (2 * FACE_X * i) / NX, y = FACE_Y0 + ((FACE_Y1 - FACE_Y0) * j) / NY, q = front(x, y);
-      pos.push(q[0] + q[3] * 0.004, q[1] + q[4] * 0.004, q[2] + q[5] * 0.004); nor.push(q[3], q[4], q[5]); fuv.push(x, y);
+      pos.push(q[0] + q[3] * lift, q[1] + q[4] * lift, q[2] + q[5] * lift); nor.push(q[3], q[4], q[5]); fuv.push(x, y);
     }
   }
   for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) { const a = j * (NX + 1) + i, b = a + 1, c = a + NX + 1, d = c + 1; idx.push(a, b, d, a, d, c); }
@@ -97,11 +97,11 @@ function faceGeometry() {
   g.setIndex(idx);
   return g;
 }
-function patchFace(mat) {
+function patchFace(mat, hollow = false) {
   const tex = faceTexture();
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.tFaceHw = { value: tex };
-    sh.uniforms.uFaceHw = { value: new THREE.Vector4(1 / (2 * FACE_X), FACE_Y0, 1 / (FACE_Y1 - FACE_Y0), FACE_DEPTH) };
+    sh.uniforms.uFaceHw = { value: new THREE.Vector4(1 / (2 * FACE_X), FACE_Y0, 1 / (FACE_Y1 - FACE_Y0), hollow ? FACE_DEPTH * 1.45 : FACE_DEPTH) };
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nattribute vec2 fuv;\nattribute float faceVar;\nvarying vec2 vFuvHw;\nvarying float vVarHw;\nvarying vec3 vPosHw;\nvarying vec3 vTHw;\nvarying vec3 vBHw;\nvarying vec3 vNHw;')
       .replace('#include <project_vertex>', `#include <project_vertex>
@@ -134,17 +134,23 @@ float hwMask( vec2 p ) {
     vec2 dir = vec2( dot( V, normalize( vTHw ) ), dot( V, normalize( vBHw ) ) ) / vn;
     // march into the cut; where the ray leaves the outline, interpolate the crossing between the two samples
     float hit = 2.0, mPrev = hwMask( vFuvHw );
-    for ( int i = 1; i <= 6; i ++ ) {
-      float m = hwMask( vFuvHw + dir * uFaceHw.w * float( i ) / 6.0 );
-      if ( hit > 1.5 && m < 0.5 ) hit = ( float( i ) - 1.0 + clamp( ( mPrev - 0.5 ) / max( mPrev - m, 1e-3 ), 0.0, 1.0 ) ) / 6.0;
+    for ( int i = 1; i <= ${hollow ? 12 : 6}; i ++ ) {
+      float m = hwMask( vFuvHw + dir * uFaceHw.w * float( i ) / ${hollow ? '12.0' : '6.0'} );
+      if ( hit > 1.5 && m < 0.5 ) hit = ( float( i ) - 1.0 + clamp( ( mPrev - 0.5 ) / max( mPrev - m, 1e-3 ), 0.0, 1.0 ) ) / ${hollow ? '12.0' : '6.0'};
       mPrev = m;
     }
     // the cut wall: flesh, dim near the rind's skin, bright toward the candle; past it the glowing inside
-    diffuseColor.rgb = hit > 1.5 ? vec3( 1.0 ) : vec3( 1.0, 0.62, 0.3 ) * mix( 0.1, 0.5, hit * hit );
+    ${hollow ? `// (the remaster) past the wall the HOLLOW: its far side seen through the opening, lit by a candle low in the
+    // middle (hot and yellow there, deep orange at the edges and up under the lid), the skin's edge a dark line
+    vec2 back = vFuvHw + dir * 0.55;
+    float cand = exp( - dot( back - vec2( 0.0, ${(0.5 * R).toFixed(3)} ), back - vec2( 0.0, ${(0.5 * R).toFixed(3)} ) ) * 26.0 );
+    vec3 hollowC = mix( vec3( 0.75, 0.24, 0.05 ), vec3( 1.0, 0.72, 0.32 ), cand ) * ( 0.55 + 0.6 * cand );
+    float edge = smoothstep( 0.0, 0.12, hit );
+    diffuseColor.rgb = hit > 1.5 ? hollowC : vec3( 1.0, 0.6, 0.27 ) * mix( 0.04, 0.55, hit * hit ) * edge;` : 'diffuseColor.rgb = hit > 1.5 ? vec3( 1.0 ) : vec3( 1.0, 0.62, 0.3 ) * mix( 0.1, 0.5, hit * hit );'}
   }
 #include <color_fragment>`);
   };
-  mat.customProgramCacheKey = () => 'hwLanternFace';
+  mat.customProgramCacheKey = () => (hollow ? 'hwLanternFaceH' : 'hwLanternFace');
   return mat;
 }
 
@@ -217,24 +223,33 @@ function withOrig(geo, piece, hullC) {
 
 export class Lanterns {
   /** @param {object} o  scene, dyn (DynamicsWorld), spots ([x, z][]), heightAt, effects, glows, lights (pool size), low */
-  constructor({ scene, dyn, spots, heightAt, lights = 5 }) {
+  constructor({ scene, dyn, spots, heightAt, lights = 5, remaster = false, skin = remaster }) {
     this.dyn = dyn; this.heightAt = heightAt;
     const n = this.n = spots.length;
     this.x = new Float32Array(n); this.y = new Float32Array(n); this.z = new Float32Array(n); this.yaw = new Float32Array(n);
+    this.shape = new Float32Array(n * 4);
     this.alive = new Uint8Array(n); this.regrow = new Float32Array(n); this.grow = new Float32Array(n); this.flick = new Float32Array(n);
     spots.forEach(([x, z], i) => {
       this.x[i] = x; this.z[i] = z; this.y[i] = heightAt(x, z) - 0.04;
       this.yaw[i] = Math.atan2(-x, 6 - z) + (Math.sin(i * 12.9) * 0.6); // roughly facing the spawn
+      // (the remaster) every lantern its own build: squat, tall or lopsided (a look only: the colliders and the
+      // fracture pieces keep the one hull)
+      const v = (Math.sin(i * 78.233) * 43758.5453) % 1, u = Math.abs(v);
+      this.shape[i * 4] = remaster ? 0.94 + 0.14 * Math.abs(Math.sin(i * 3.7)) : 1;           // width
+      this.shape[i * 4 + 1] = remaster ? (u < 0.33 ? 0.84 : u < 0.66 ? 1.12 : 0.98) : 1;     // height: squat, tall, round
+      this.shape[i * 4 + 2] = remaster ? 0.96 + 0.08 * Math.abs(Math.cos(i * 5.1)) : 1;      // depth
+      this.shape[i * 4 + 3] = remaster && u >= 0.66 ? 0.07 * Math.sign(Math.sin(i * 9.1)) : 0; // a lean (lopsided)
       this.flick[i] = i * 1.37;
     });
     // intact lanterns: body (lit, instanced) + face (unlit HDR, instanced)
     // the body: ribbed, a curved stem and a curly vine; the rind round the carving glows (light through the thin rind)
-    this.bodyMat = patchRibs(patchGlow(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0, emissive: '#ff4a00', emissiveIntensity: 0.12 }), 'hwLanternBody'), LOBES, 0.5);
+    // (the remaster: a deeper orange with a skin, streaks and scars, looks.js patchRibs skin)
+    this.bodyMat = patchRibs(patchGlow(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: remaster ? 0.42 : 0.5, metalness: 0, emissive: '#ff4a00', emissiveIntensity: remaster ? 0.07 : 0.12 }), 'hwLanternBody'), LOBES, 0.5, 'hwRibs', skin ? R : false); // (a number: the skin with a lid's cut)
     const glow = (x, y, z) => 0.015 + 0.3 * Math.exp(-((x / (0.5 * R)) ** 2) - (((y - 0.76 * R) / (0.42 * R)) ** 2)) * smooth(z / (0.6 * R));
-    this.body = new THREE.InstancedMesh(pumpkinGeometry(R, 32, 0, '#ff7a1a', '#5a5a24', { lobes: LOBES, depth: DEPTH, vine: true, glow, seed: 11 }), this.bodyMat, n);
+    this.body = new THREE.InstancedMesh(pumpkinGeometry(R, remaster ? (skin ? 72 : 48) : 32, 0, remaster ? '#e8681c' : '#ff7a1a', '#5a5a24', { lobes: LOBES, depth: DEPTH, vine: true, glow, seed: 11, fine: skin ? 28 : 0 }), this.bodyMat, n);
     this.body.name = 'lanterns'; this.body.castShadow = true; this.body.receiveShadow = true;
-    this.faceMat = patchFace(new THREE.MeshBasicMaterial({ color: '#ffffff', polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
-    const fg = faceGeometry(), fv = new Float32Array(n);
+    this.faceMat = patchFace(new THREE.MeshBasicMaterial({ color: '#ffffff', polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), skin); // (the hollow: desktop)
+    const fg = faceGeometry(skin ? 0.016 : 0.004), fv = new Float32Array(n); // (the smooth body bulges a little past the old rings)
     for (let i = 0; i < n; i++) fv[i] = i % 3;
     fg.setAttribute('faceVar', new THREE.InstancedBufferAttribute(fv, 1));
     this.face = new THREE.InstancedMesh(fg, this.faceMat, n);
@@ -375,8 +390,9 @@ export class Lanterns {
     for (let i = 0; i < this.n; i++) {
       const g = this.alive[i] ? this.grow[i] : 0;
       const sc = g < 1 ? Math.max(0.001, g * (1 + 0.25 * Math.sin(g * Math.PI))) : 1; // a little overshoot as it regrows
-      _q.setFromEuler(_e.set(0, this.yaw[i], 0));
-      _m.compose(_p.set(this.x[i], this.y[i], this.z[i]), _q, _s.set(sc, sc, sc));
+      const S = this.shape, k4 = i * 4;
+      _q.setFromEuler(_e.set(S[k4 + 3], this.yaw[i], S[k4 + 3] * 0.6));
+      _m.compose(_p.set(this.x[i], this.y[i], this.z[i]), _q, _s.set(sc * S[k4], sc * S[k4 + 1], sc * S[k4 + 2]));
       this.body.setMatrixAt(i, _m); this.face.setMatrixAt(i, _m);
       if (this.alive[i] || lightsToo) { P[i * 3] = this.x[i]; P[i * 3 + 1] = this.alive[i] ? this.y[i] + 0.5 : -1000; P[i * 3 + 2] = this.z[i]; }
     }
