@@ -1,0 +1,16 @@
+[
+  {"role": "brick_red", "id": "brick_wall_006"},
+  {"role": "brick_painted", "id": "painted_worn_brick"},
+  {"role": "brick_dark", "id": "brick_wall_10"},
+  {"role": "concrete_panel", "id": "sandstone_blocks_08"},
+  {"role": "concrete_rough", "id": "concrete_panels"},
+  {"role": "stucco_a", "id": "beige_wall_002"},
+  {"role": "stucco_b", "id": "whitewashed_brick"},
+  {"role": "granite", "id": "stone_block_wall"},
+  {"role": "metal_corrugated", "id": "corrugated_iron"},
+  {"role": "roof_tar", "id": "bitumen"},
+  {"role": "grass", "id": "leafy_grass"},
+  {"role": "asphalt_a", "id": "asphalt_02"},
+  {"role": "asphalt_b", "id": "clean_asphalt"},
+  {"role": "sidewalk", "id": "concrete_pavement"}
+]
