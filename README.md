@@ -18,11 +18,15 @@ All of them are at **[brandeispatrick.github.io/web-engine](https://brandeispatr
 
 | Sample | What it shows |
 |---|---|
+| [Night NYC walk](https://brandeispatrick.github.io/web-engine/nyc-night/) | A walk through Manhattan after dark: buildings, street lamps and night lighting |
+| [Miami drive](https://brandeispatrick.github.io/web-engine/miami-drive/) | A drive along the Miami waterfront: assets, driving feel and vehicle physics |
 | [Midnight Candy Run](https://brandeispatrick.github.io/web-engine/halloween/) | The Halloween game: cloth ghosts, fracture, synth audio, touch controls |
-| [Canyon Run](https://brandeispatrick.github.io/web-engine/canyon-run/) | Off-road buggy time trial: terrain, vehicle physics, post-processing |
-| [Procedural city](https://brandeispatrick.github.io/web-engine/city/) | Buildings, roads, traffic, water and tile streaming, with a free-fly camera |
-| [Character](https://brandeispatrick.github.io/web-engine/character/) | Third-person controller, animation, hand IK on ledges, ragdolls |
-| [Physics sandbox](https://brandeispatrick.github.io/web-engine/sandbox/) | Stacks, joints, ragdolls, cloth, ropes, soft bodies, buoyancy, fracture |
+
+What the samples look like, and what changed in the latest release: **[before and after](docs/BEFORE-AFTER.md)**. The live
+site is deployed separately (`npm run deploy`) and may trail this branch.
+
+Each sample has a graphics quality setting (the gear button): **Mac / desktop** (full lighting) or **Phone / tablet**
+(lighter, saves battery). It picks one for your device, remembers your choice, and `?quality=desktop|mobile` forces one.
 
 ## What's inside
 
@@ -48,7 +52,7 @@ git clone https://github.com/BrandeisPatrick/web-engine.git
 cd web-engine
 npm install
 npm run dev     # samples at http://localhost:5190
-npm test        # 31 headless test suites
+npm test        # 35 headless test suites
 ```
 
 Use it in your own game:
@@ -69,7 +73,6 @@ A minimal setup is in [ENGINE.md, "Engine API"](ENGINE.md#engine-api). Each samp
 - [ENGINE.md](ENGINE.md): design notes, the API, measurements and the record of decisions.
 - [CHANGELOG.md](CHANGELOG.md): what changed in each release.
 - [tools/README.md](tools/README.md): the map, terrain and texture bakers.
-- [Roadster](https://github.com/BrandeisPatrick/roadster): the flying-car game this engine was extracted from.
 
 <details>
 <summary><b>Developer notes:</b> scripts, sample flags, tests, source layout</summary>
@@ -79,39 +82,43 @@ A minimal setup is in [ENGINE.md, "Engine API"](ENGINE.md#engine-api). Each samp
 - `npm run types` emits TypeScript declarations into `types/`; `npm run types:check` compiles a strict TypeScript
   consumer against them.
 - `npm run smoke` and `npm run bench` drive the samples in Chrome with Playwright (ENGINE.md, "Measurement protocol").
+- `npm run perf` reduces graphics performance to one score (100 = every pose on its frame budget), compares it with
+  the committed baseline and guards the picture; `bench/README.md` explains the score, the guards and the ratchet,
+  and `bench/LOOP.md` is the runbook for an unattended optimisation loop.
 - `npm run pack:check` lists the package tarball.
-- Installed as a git submodule listed in a game's `workspaces`, the engine resolves as `@vibe/engine` (Roadster does
-  this: `node_modules/@vibe/engine -> engine`).
+- Installed as a git submodule listed in a game's `workspaces`, the engine resolves as `@vibe/engine`
+  (`node_modules/@vibe/engine -> engine`).
 
 ### Sample flags
-Every engine sample exposes `window.__sample` (poses, settings, `run(plan)`) under `?bench=1&size=WxH` (the Halloween
-game exposes `window.__game` instead). They share the render flags in `samples/shared/fx-flags.js`: `?gbuffer=1`,
-`?aa=taa|fxaa|msaa`, `?shadows=pcf|fast|pcss`, `?cascades=2|3|4`, `?ssr=1`, `?volumetric=1`, `?motionblur=1`,
-`?dof=1`, `?lut=warm|bleach`, `?aonormals=gbuffer`, `?fps=60`.
-- **Canyon Run:** `?lamps=1&t=night` lights the canyon with clustered lamps; `?gpuparticles=1` runs the dust devils on
-  the GPU. Without Poly Haven texture sets in its public folder it uses procedural textures.
-- **City:** `?clustered`, `?water=refraction`, `?notraffic`, `?nostream=1`.
-- **Sandbox:** `?scene=stack|joints|chain|ragdoll|car|bench1000|cloth|rope|soft|buoyancy|destructible`; `?worker=1`
-  runs the rigid scenes in a Worker; `?debug=1` draws the solver.
-- **Character:** `node tools/fetch-models.mjs` downloads the CC0 RobotExpressive model (`?model=` loads another);
-  without it a procedural rig is used. K triggers a ragdoll.
+Every sample takes `?quality=desktop|mobile` (the Halloween game also reads the old `low|high`): it overrides the tier
+the gear menu stored and the device's recommendation for that page load (`resolveQuality` in `src/core/Quality.js`,
+the menu is `QualityMenu` in `src/ui/`). The NYC and Miami demos expose `window.__sample` (poses, settings,
+`run(plan)`) under `?bench=1&size=WxH` (the Halloween game exposes `window.__game` instead). Render flags shared by
+the samples are in `samples/shared/fx-flags.js`: `?gbuffer=1`, `?aa=taa|fxaa|msaa`, `?shadows=pcf|fast|pcss`,
+`?cascades=2|3|4`, `?ssr=1`, `?volumetric=1`, `?motionblur=1`, `?dof=1`, `?lut=warm|bleach`, `?aonormals=gbuffer`,
+`?fps=60`.
 - **Halloween:** see [its README](samples/halloween/README.md).
+- The earlier test samples (Canyon Run, the procedural city, Character, the physics sandbox) were removed in favour of
+  the two demos; they are in git history (`git show fc73161:samples/<name>/main.js`).
 
-### Tests (`npm test`, 31 suites)
-- `test/car-sim.mjs`: the Roadster vehicle model and the PhysicsWorld queries, the determinism gate (bit-identical
+### Tests (`npm test`, 35 suites)
+- `test/car-sim.mjs`: the vehicle model (`ROADSTER_SPEC`) and the PhysicsWorld queries, the determinism gate (bit-identical
   since 0.4.0).
 - `test/world-build.mjs`, `world-lights`: the procedural city built headless, its stats, queries and 10 s of traffic.
-- `test/core.mjs`, `assets`, `rigs`, `character-input`, `anim`, `character-sim`: core services, loaders, camera rigs,
-  input, animation and the character controller.
+- `test/core.mjs`, `quality`, `assets`, `rigs`, `character-input`, `anim`, `character-sim`: core services, the quality
+  tiers, loaders, camera rigs, input, animation and the character controller.
 - `test/dyn-*.mjs`, `character-dyn`, `ragdoll`: the dynamics, from shapes and joints to cloth, soft bodies, buoyancy
   and fracture.
 - `test/gpu-particles.mjs`, `clustered`, `shadows`, `postfx-options`, `gbuffer-chunks`, `ssr-ao`, `volumetric`,
   `blur-dof-lut`, `water`: the render pipeline's shaders, options and defaults.
-- `test/browser/` (`smoke`, `bench`, `halloween`) needs Chrome and runs locally. CI (`.github/workflows/ci.yml`,
+- `test/halloween-enemies.mjs`, `halloween-depth`: the Halloween game's rules.
+- `test/browser/` (`smoke`, `bench`, `halloween`) needs Chrome and runs locally; `smoke` and `bench` also take the
+  `-mobile` pages (`nyc-night-mobile`, `miami-drive-mobile`: the same demo on the mobile tier). CI (`.github/workflows/ci.yml`,
   Node 26) runs `npm test`, the build and `types:check`.
 
 ### Source layout
-- `src/core/`: `Engine`, `Profiler`, `Assets`, `Events`, `Clock`, `Entity`, deterministic math, the bench harness.
+- `src/core/`: `Engine`, `Profiler`, `Assets`, `Events`, `Clock`, `Entity`, deterministic math, the bench harness,
+  the quality tiers (`Quality.js`).
 - `src/physics/`: `PhysicsWorld`, `VehicleController`, `CharacterController`, and `dynamics/` (the XPBD solver,
   `Cloth`, `Rope`, `SoftBody`, `Buoyancy`, `FracturedBody`, a Worker client).
 - `src/render/`: `Atmosphere`, `PostFX`, `ClusteredLights`, shadows, `GpuParticleSystem`, instancing / LOD /
