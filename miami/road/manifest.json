@@ -1,0 +1,130 @@
+{
+ "source": "Poly Haven (polyhaven.com), CC0 1.0; diffuse 2k, normal / roughness / displacement 1k",
+ "resolution": "2k",
+ "sets": {
+  "road_asphalt": {
+   "role": "road_asphalt",
+   "id": "asphalt_02_2k",
+   "name": "Asphalt 02",
+   "size": [
+    3,
+    3
+   ],
+   "authors": [
+    "Rob Tuytel"
+   ],
+   "maps": {
+    "Diffuse": "diff.jpg",
+    "nor_gl": "nor_gl.jpg",
+    "Rough": "rough.jpg"
+   },
+   "ktx2Maps": {
+    "Diffuse": {
+     "file": "diff.ktx2",
+     "bytes": 782974,
+     "codec": "etc1s",
+     "srgb": true,
+     "width": 2048,
+     "height": 2048,
+     "levels": 12,
+     "src": "diff.jpg",
+     "srcBytes": 2826992,
+     "psnr": 25.75,
+     "params": "etc1s q160 e2 srgb mips yflip"
+    },
+    "nor_gl": {
+     "file": "nor_gl.ktx2",
+     "bytes": 1308561,
+     "codec": "uastc",
+     "srgb": false,
+     "width": 1024,
+     "height": 1024,
+     "levels": 11,
+     "src": "nor_gl.jpg",
+     "srcBytes": 667125,
+     "psnr": 35.35,
+     "params": "uastc l2 zstd linear normal mips yflip"
+    },
+    "Rough": {
+     "file": "rough.ktx2",
+     "bytes": 190177,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 1024,
+     "height": 1024,
+     "levels": 11,
+     "src": "rough.jpg",
+     "srcBytes": 535795,
+     "psnr": 28.8,
+     "params": "etc1s q160 e2 linear mips yflip"
+    }
+   },
+   "ktx2": true
+  },
+  "bank": {
+   "role": "bank",
+   "id": "coast_sand_rocks_02_2k",
+   "name": "Coast Sand Rocks 02",
+   "size": [
+    15,
+    15
+   ],
+   "authors": [
+    "Rob Tuytel"
+   ],
+   "maps": {
+    "Diffuse": "diff.jpg",
+    "nor_gl": "nor_gl.jpg",
+    "Rough": "rough.jpg"
+   },
+   "ktx2Maps": {
+    "Diffuse": {
+     "file": "diff.ktx2",
+     "bytes": 787021,
+     "codec": "etc1s",
+     "srgb": true,
+     "width": 2048,
+     "height": 2048,
+     "levels": 12,
+     "src": "diff.jpg",
+     "srcBytes": 1346337,
+     "psnr": 35.13,
+     "params": "etc1s q160 e2 srgb mips yflip"
+    },
+    "nor_gl": {
+     "file": "nor_gl.ktx2",
+     "bytes": 1344611,
+     "codec": "uastc",
+     "srgb": false,
+     "width": 1024,
+     "height": 1024,
+     "levels": 11,
+     "src": "nor_gl.jpg",
+     "srcBytes": 714868,
+     "psnr": 34.86,
+     "params": "uastc l2 zstd linear normal mips yflip"
+    },
+    "Rough": {
+     "file": "rough.ktx2",
+     "bytes": 176343,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 1024,
+     "height": 1024,
+     "levels": 11,
+     "src": "rough.jpg",
+     "srcBytes": 315891,
+     "psnr": 37.01,
+     "params": "etc1s q160 e2 linear mips yflip"
+    }
+   },
+   "ktx2": true
+  }
+ },
+ "ktx2": {
+  "tool": "engine/tools/compress-textures.mjs",
+  "encoder": "Basis Universal (ktx2-encoder WASM)",
+  "orientation": "ru",
+  "transcoder": "basis/"
+ }
+}

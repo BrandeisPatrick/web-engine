@@ -1,0 +1,260 @@
+{
+ "source": "Poly Haven (polyhaven.com), CC0 1.0",
+ "resolution": "1k",
+ "sets": {
+  "brick_red": {
+   "role": "brick_red",
+   "id": "brick_wall_006",
+   "name": "Brick Wall 006",
+   "size": [
+    3,
+    3
+   ],
+   "authors": [
+    "Jan Burghardt"
+   ],
+   "maps": {
+    "Rough": "rough.jpg",
+    "nor_gl": "nor_gl.jpg",
+    "AO": "ao.jpg",
+    "Diffuse": "diff.jpg"
+   }
+  },
+  "brick_painted": {
+   "role": "brick_painted",
+   "id": "painted_worn_brick",
+   "name": "Painted Worn Brick",
+   "size": [
+    1.8,
+    1.8
+   ],
+   "authors": [
+    "Dimitrios Savva"
+   ],
+   "maps": {
+    "Diffuse": "diff.jpg",
+    "nor_gl": "nor_gl.jpg",
+    "AO": "ao.jpg",
+    "Rough": "rough.jpg"
+   }
+  },
+  "brick_dark": {
+   "role": "brick_dark",
+   "id": "brick_wall_10",
+   "name": "Brick Wall 10",
+   "size": [
+    1.9,
+    1.9
+   ],
+   "authors": [
+    "Dimitrios Savva"
+   ],
+   "maps": {
+    "Rough": "rough.jpg",
+    "Diffuse": "diff.jpg",
+    "nor_gl": "nor_gl.jpg",
+    "AO": "ao.jpg"
+   }
+  },
+  "concrete_panel": {
+   "role": "concrete_panel",
+   "id": "sandstone_blocks_08",
+   "name": "Sandstone Blocks 08",
+   "size": [
+    3,
+    3
+   ],
+   "authors": [
+    "Rob Tuytel"
+   ],
+   "maps": {
+    "nor_gl": "nor_gl.jpg",
+    "AO": "ao.jpg",
+    "Diffuse": "diff.jpg",
+    "Rough": "rough.jpg"
+   }
+  },
+  "concrete_rough": {
+   "role": "concrete_rough",
+   "id": "concrete_panels",
+   "name": "Concrete Panels",
+   "size": [
+    8,
+    8
+   ],
+   "authors": [
+    "Amal Kumar"
+   ],
+   "maps": {
+    "Rough": "rough.jpg",
+    "Diffuse": "diff.jpg",
+    "nor_gl": "nor_gl.jpg",
+    "AO": "ao.jpg"
+   }
+  },
+  "stucco_a": {
+   "role": "stucco_a",
+   "id": "beige_wall_002",
+   "name": "Beige Wall 002",
+   "size": [
+    3,
+    3
+   ],
+   "authors": [
+    "Dimitrios Savva",
+    "Rico Cilliers"
+   ],
+   "maps": {
+    "Rough": "rough.jpg",
+    "AO": "ao.jpg",
+    "nor_gl": "nor_gl.jpg",
+    "Diffuse": "diff.jpg"
+   }
+  },
+  "granite": {
+   "role": "granite",
+   "id": "stone_block_wall",
+   "name": "Stone Block Wall",
+   "size": [
+    2.1,
+    2.1
+   ],
+   "authors": [
+    "Amal Kumar"
+   ],
+   "maps": {
+    "Rough": "rough.jpg",
+    "Diffuse": "diff.jpg",
+    "nor_gl": "nor_gl.jpg",
+    "AO": "ao.jpg"
+   }
+  },
+  "metal_corrugated": {
+   "role": "metal_corrugated",
+   "id": "corrugated_iron",
+   "name": "Corrugated Iron",
+   "size": [
+    1.12,
+    1.12
+   ],
+   "authors": [
+    "Jenelle van Heerden",
+    "Dimitrios Savva"
+   ],
+   "maps": {
+    "AO": "ao.jpg",
+    "Rough": "rough.jpg",
+    "Diffuse": "diff.jpg",
+    "nor_gl": "nor_gl.jpg"
+   }
+  },
+  "roof_tar": {
+   "role": "roof_tar",
+   "id": "bitumen",
+   "name": "Bitumen",
+   "size": [
+    20,
+    20
+   ],
+   "authors": [
+    "Rob Tuytel"
+   ],
+   "maps": {
+    "AO": "ao.jpg",
+    "Rough": "rough.jpg",
+    "Diffuse": "diff.jpg",
+    "nor_gl": "nor_gl.jpg"
+   }
+  },
+  "grass": {
+   "role": "grass",
+   "id": "leafy_grass",
+   "name": "Leafy Grass",
+   "size": [
+    2,
+    2
+   ],
+   "authors": [
+    "Charlotte Baglioni"
+   ],
+   "maps": {
+    "Rough": "rough.jpg",
+    "AO": "ao.jpg",
+    "Diffuse": "diff.jpg",
+    "nor_gl": "nor_gl.jpg"
+   }
+  },
+  "asphalt_a": {
+   "role": "asphalt_a",
+   "id": "asphalt_02",
+   "name": "Asphalt 02",
+   "size": [
+    3,
+    3
+   ],
+   "authors": [
+    "Rob Tuytel"
+   ],
+   "maps": {
+    "Rough": "rough.jpg",
+    "Diffuse": "diff.jpg",
+    "AO": "ao.jpg",
+    "nor_gl": "nor_gl.jpg"
+   }
+  },
+  "asphalt_b": {
+   "role": "asphalt_b",
+   "id": "clean_asphalt",
+   "name": "Clean Asphalt",
+   "size": [
+    2.1,
+    2.1
+   ],
+   "authors": [
+    "Dimitrios Savva"
+   ],
+   "maps": {
+    "nor_gl": "nor_gl.jpg",
+    "Diffuse": "diff.jpg",
+    "Rough": "rough.jpg",
+    "AO": "ao.jpg"
+   }
+  },
+  "sidewalk": {
+   "role": "sidewalk",
+   "id": "concrete_pavement",
+   "name": "Concrete Pavement",
+   "size": [
+    1.8,
+    1.8
+   ],
+   "authors": [
+    "Charlotte Baglioni"
+   ],
+   "maps": {
+    "Rough": "rough.jpg",
+    "AO": "ao.jpg",
+    "Diffuse": "diff.jpg",
+    "nor_gl": "nor_gl.jpg"
+   }
+  },
+  "stucco_b": {
+   "role": "stucco_b",
+   "id": "whitewashed_brick",
+   "name": "Whitewashed Brick",
+   "size": [
+    2,
+    2
+   ],
+   "authors": [
+    "Charlotte Baglioni"
+   ],
+   "maps": {
+    "Rough": "rough.jpg",
+    "Diffuse": "diff.jpg",
+    "AO": "ao.jpg",
+    "nor_gl": "nor_gl.jpg"
+   }
+  }
+ }
+}
