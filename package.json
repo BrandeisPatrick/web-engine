@@ -1,6 +1,6 @@
 {
   "name": "@vibe/engine",
-  "version": "1.0.0",
+  "version": "1.1.0-beta.1",
   "description": "Browser game engine on Three.js/WebGL2: fixed-step core with services and a CPU/GPU profiler, deterministic pure-JS physics (query hub, vehicle and character controllers, unified XPBD rigid bodies / joints / cloth / ropes / soft bodies / buoyancy / fracture), a measured render pipeline (forward MSAA or G-buffer + TAA, clustered lights, cascaded shadows, SSR, volumetrics, water, motion blur, depth of field, LUTs, GPU particles), animation with IK and ragdolls, input, camera rigs, synth audio, DOM UI widgets and data-driven city worlds (OpenStreetMap + terrain, traffic AI)",
   "repository": {
     "type": "git",
@@ -78,6 +78,7 @@
     "types": "tsc -p tsconfig.types.json",
     "smoke": "node test/browser/smoke.mjs",
     "bench": "node test/browser/bench.mjs",
+    "perf": "node test/browser/perf.mjs",
     "prepack": "npm run types",
     "types:check": "npm run types && tsc -p test/types"
   },
@@ -105,6 +106,9 @@
   },
   "devDependencies": {
     "@types/three": "^0.180.0",
+    "jpeg-js": "^0.4.4",
+    "ktx-parse": "^2.0.0",
+    "ktx2-encoder": "^0.6.0",
     "playwright": "^1.56.1",
     "three": "^0.180.0",
     "typescript": "^5.9.3",

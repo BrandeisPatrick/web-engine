@@ -5,3 +5,7 @@ dist/
 .claude/
 /types/
 /test/browser/out/
+
+# performance ratchet: local images of the baseline and the last run (bench/README.md)
+bench/.golden/
+bench/last.json

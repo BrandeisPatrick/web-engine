@@ -6,7 +6,7 @@ export { MAP_KEYS, assetBase, validateMapData, loadMapData, prepareMapData, find
 export { Terrain, GroundSurface, sampleLevel, drapePolygon, clipConvex, latticeSplit } from './Terrain.js';
 export { RoadNetwork, RBIT, roadStyle, createRoadMaterial, createTactileMaterial, SolidBuf, samplePolyline, quadUp, DEFAULT_DECK_HOLD } from './RoadNetwork.js';
 export {
-  BuildingBuilder, TileBuildingBuilder, NullBuf, GeoBuf, createFacadeMaterials, MODE, enc, tintBytes, tintOf, insetRing, offsetRing, longAxis, UNIT_WINDOW_TRIS, DEFAULT_BUILDING_STYLE,
+  BuildingBuilder, TileBuildingBuilder, NullBuf, GeoBuf, createFacadeMaterials, MODE, enc, tintBytes, tintOf, insetRing, offsetRing, longAxis, UNIT_WINDOW_TRIS, DEFAULT_BUILDING_STYLE, buildingStyle,
 } from './Buildings.js';
 export { FACADE, WIN_RECTS, makeFacadeTextures, PBR, PBR_SETS, GROUND_SETS, loadPbrTextures } from './FacadeTextures.js';
 export { Props } from './Props.js';
@@ -14,7 +14,7 @@ export {
   FM, FURNITURE_META, FURNITURE_TYPES, makeFurnitureGeometry, makeShelterGlassGeometry, makePanelGeometry, makeDecalGeometry,
   createFurnitureMaterial, createPanelMaterial, createShelterGlassMaterial, formatStreetName, buildSignAtlas, DEFAULT_SIGN_STYLE,
 } from './Furniture.js';
-export { PartBuilder, VM, VEHICLE_SPECS, VEHICLE_TYPES, DEFAULT_BUS_LIVERY, makeVehicleGeometry, pickVehicleColor, createVehicleMaterial } from './Vehicles.js';
+export { PartBuilder, VM, VEHICLE_SPECS, VEHICLE_TYPES, VEHICLE_HD_TYPES, DEFAULT_BUS_LIVERY, makeVehicleGeometry, makeVehicleParts, getVehicleAtlas, geometryBytes, pickVehicleColor, createVehicleMaterial } from './Vehicles.js';
 export { Traffic } from './Traffic.js';
 export { TrafficSim, TRAFFIC_TYPES, POSE_STRIDE, buildSignalInfos, playerInfoFrom, typeCounts } from './TrafficSim.js';
 export { buildTreeMeshes, bakeVegImpostors, IMP_VIEWS, impostorView } from './Vegetation.js';

@@ -48,6 +48,7 @@ import { mulberry32, signedArea, sanitizeRing, pointInRing, ringBounds, hashStr,
 import { Traffic } from './Traffic.js';
 import { createWaterMaterial, makeWaterNormalMap, setWaterRefraction as setMaterialRefraction, setWaterSceneTextures, updateWaterRefraction } from './Water.js';
 import { SceneCopy } from '../render/SceneCopy.js';
+import { createMemoryTrim } from '../render/Memory.js';
 import { Waterfront, createGroundMaterial } from './Shore.js';
 import { replaceWithChunks, localizeMeshOrigin } from './MeshChunker.js';
 
@@ -137,7 +138,11 @@ export class MapWorld {
    * @param {object} [o.buildings]  BuildingBuilder options ({ style, baseGrid, detailGrid, lodDist, detailFloors, maxWindows })
    * @param {object} [o.props]  Props options ({ seed, streets, signStyle })
    * @param {object} [o.vegetation]  Vegetation options ({ rules, mix })
-   * @param {object|number|false} [o.traffic]  Traffic options ({ count, seed, busLivery, worker }) or a vehicle count; false = none.
+   * @param {object|number|false} [o.traffic]  Traffic options ({ count, seed, busLivery, worker, mix }) or a vehicle count; false = none.
+   *        mix (opt-in): { typeName: share } fleet shares (TrafficSim typeCounts, e.g. { taxi: 0.3 }); default unchanged
+   *        area (opt-in): { recycleRadius, spawnRadius } m around the camera the fleet is kept in (default 700 / 620)
+   *        hd (opt-in): true | { count = 3, radius = 18, midCount = 8, midRadius = 45, parked = true } nearest cars (moving + parked) at the
+   *        Vehicles.js HD / mid levels (Traffic.js); default off
    *        worker: simulate in a Web Worker (default: browsers with Worker support unless ?noworker=1; Node: in-thread)
    * @param {object} [o.shore]  Waterfront options ({ ferryDock, islandFill, boats, farland })
    * @param {object} [o.chunk]  tile sizes (m) of the final static-mesh tiling ({ buildings: 320, structures: 320, ground: 640 })
@@ -300,7 +305,7 @@ export class MapWorld {
     const TO = this._trafficOpts();
     if (TO) {
       try {
-        this.traffic = new Traffic({ world: this, data, net: this.net, props: this.props, seed: TO.seed ?? 7, count: TO.count, busLivery: TO.busLivery || null, worker: TO.worker });
+        this.traffic = new Traffic({ world: this, data, net: this.net, props: this.props, seed: TO.seed ?? 7, count: TO.count, busLivery: TO.busLivery || null, worker: TO.worker, mix: TO.mix || null, area: TO.area || null, hd: TO.hd || null });
         const tg = this.traffic.build();
         if (tg) this.group.add(tg);
       } catch (e) { console.warn('[MapWorld] traffic failed', e); this.traffic = null; }
@@ -1169,6 +1174,19 @@ diffuseColor.rgb *= (0.85 + 0.3 * texture2D(map, vMapUv * 0.071 + 0.13).g) * mix
       load: async (progress) => { await this.load(progress); if (camera && this.atmo) this.atmo.camera = camera; if (onLoad) await onLoad(this); },
       lateUpdate: (dt) => this.update(dt, camera ? pos.copy(camera.position) : null),
     };
+  }
+
+  /**
+   * Opt-in heap trim for a loaded world (render/Memory.js): frees the road network's build buffers and makes the
+   * static world meshes and big data / compressed textures drop their CPU copies after upload. One-way: do not call
+   * it on a world you still edit, raycast against by mesh or want to survive a lost WebGL context. Returns a system
+   * ({ update(dt), sweep(), releasedBytes }): add it to the engine so streamed tiles are swept as they arrive.
+   * @param {THREE.WebGLRenderer|null} [renderer]
+   * @param {{ interval?: number, minBytes?: number, filter?: (mesh: THREE.Mesh) => boolean }} [o]
+   */
+  trimMemory(renderer = null, o = {}) {
+    if (this.net) { this.net.roadBuf = null; this.net.solid = null; this.net.railBuf = null; this.net.tactile = null; } // build buffers: only read while load() builds the meshes
+    return createMemoryTrim(this.group, { renderer: renderer || this.renderer || null, ...o });
   }
 
   /** PhysicsWorld view of the world (static collider grid + ground query + traffic boxes). */

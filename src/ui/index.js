@@ -21,3 +21,4 @@ export { LoadingScreen } from './LoadingScreen.js';
 import { el, svgEl, polar, arcPath, clamp as domClamp, host, SVGNS } from './dom.js';
 /** DOM / SVG helpers used by the widgets (namespaced to avoid clashing with other layers). */
 export const UIDom = Object.freeze({ el, svgEl, polar, arcPath, clamp: domClamp, host, SVGNS });
+export { QualityMenu } from './QualityMenu.js';

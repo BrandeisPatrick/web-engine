@@ -22,7 +22,8 @@
 // reservations with "don't block the box", deadlock breakers, braking for / never moving into the player
 // (setPlayer: info object or getter), far vehicles recycled out of the camera frustum (setView).
 //
-//   const sim = new TrafficSim({ roads, signals, groundAt, spawn, seed, count });  sim.build();
+//   const sim = new TrafficSim({ roads, signals, groundAt, spawn, seed, count, mix, recycleRadius, spawnRadius });  sim.build();
+//   (mix: typeCounts; recycleRadius 700 / spawnRadius 620 m: the area the fleet is kept in around the camera)
 //   per frame: sim.readSignals(props.signals); sim.setView(x, y, z, pvMatrixElements); sim.setPlayer(info); sim.update(dt);
 //   sim.writePoses(f32) -> POSE_STRIDE floats per vehicle; sim.queryColliders(x, z, r, out); sim.summary()
 import * as THREE from 'three';
@@ -66,9 +67,14 @@ export const TRAFFIC_TYPES = TYPE_DEFS.map(([name, share, amax, pal]) => {
   const s = VEHICLE_SPECS[name];
   return { name, L: s.L, W: s.W, H: s.H, Hc: s.Hc, WB: s.WB, amax, share, pal };
 });
-/** Vehicles per type for a fleet of n (the same split the meshes use). */
-export function typeCounts(n) {
-  const counts = TRAFFIC_TYPES.map((t) => Math.round(t.share * n));
+/**
+ * Vehicles per type for a fleet of n (the same split the meshes use). `mix` (opt-in): { typeName: share } replacing
+ * those types' shares (e.g. { taxi: 0.3 } for a cab-heavy fleet); the shares are renormalised. Without it: unchanged.
+ */
+export function typeCounts(n, mix = null) {
+  let sh = TRAFFIC_TYPES.map((t) => t.share);
+  if (mix) { sh = TRAFFIC_TYPES.map((t) => (Number.isFinite(mix[t.name]) ? Math.max(0, mix[t.name]) : t.share)); const k = 1 / (sh.reduce((a, b) => a + b, 0) || 1); sh = sh.map((v) => v * k); }
+  const counts = TRAFFIC_TYPES.map((t, i) => Math.round(sh[i] * n));
   counts[0] += n - counts.reduce((a, b) => a + b, 0);
   return counts.map((c) => Math.max(0, c));
 }
@@ -299,8 +305,15 @@ export class TrafficSim {
    * @param {{x, z}} [o.spawn]  initial vehicles spread around this point
    * @param {number} [o.seed=7]
    * @param {number} [o.count=250]
+   * @param {Object<string, number>|null} [o.mix]  fleet share per vehicle type, renormalised (null: the default split)
+   * @param {number} [o.recycleRadius]  a vehicle farther than this from the view is recycled (m; default 700)
+   * @param {number} [o.spawnRadius=620]  recycled vehicles reappear within this distance of the view (m)
    */
-  constructor({ roads = [], signals = [], groundAt = null, baked = null, spawn = null, seed = 7, count = 250 } = {}) {
+  constructor({ roads = [], signals = [], groundAt = null, baked = null, spawn = null, seed = 7, count = 250, mix = null, recycleRadius = RECYCLE_R, spawnRadius = 620 } = {}) {
+    // opt-in area (a walking game keeps the fleet close): vehicles beyond recycleRadius (m from the camera) respawn
+    // 110..spawnRadius m away; the initial spread is 14..spawnRadius around the spawn. Defaults: 700 / 620 as before
+    this.recycleR = recycleRadius; this.spawnR = spawnRadius;
+    this.mix = mix || null; // opt-in fleet mix ({ taxi: 0.3, ... }, see typeCounts); null = TRAFFIC_TYPES shares
     this.roads = roads; this.sigInfos = signals; this.groundAt = groundAt; this.baked = baked;
     this.spawn = spawn || { x: 0, z: 0 };
     this.seed = seed;
@@ -923,7 +936,7 @@ export class TrafficSim {
 
   // ================================================================ vehicles
   _buildVehicles() {
-    const counts = typeCounts(this.target), col = new THREE.Color();
+    const counts = typeCounts(this.target, this.mix), col = new THREE.Color();
     TRAFFIC_TYPES.forEach((T, ti) => {
       for (let i = 0; i < counts[ti]; i++) {
         pickVehicleColor(this.rnd, T.pal, col);
@@ -951,7 +964,7 @@ export class TrafficSim {
     for (const v of this.vehicles) {
       let p = null;
       for (let t = 0; t < 6 && !p; t++) {
-        p = this._pickSpawn(sp.x, sp.z, 14, 620, false);
+        p = this._pickSpawn(sp.x, sp.z, 14, this.spawnR, false);
         if (p && (p.x - sp.x) ** 2 + (p.z - sp.z) ** 2 < 16 * 16) p = null;
       }
       if (!p) continue;
@@ -1264,7 +1277,7 @@ export class TrafficSim {
   }
 
   _recycle() {
-    const c = this._cam, R2 = RECYCLE_R * RECYCLE_R;
+    const c = this._cam, R2 = this.recycleR * this.recycleR;
     let budget = 8;
     for (const v of this.vehicles) {
       if (!v.active || budget <= 0) continue;
@@ -1275,7 +1288,7 @@ export class TrafficSim {
       const stuck = v.deadT > 1.5 || v.idleT > 90 || cyc;
       if (!far && !stuck) continue;
       if (!far && this._visible(v.x, v.y, v.z) && v.deadT < 25 && v.idleT < 240 && !(cyc && v.hardT > 15)) continue;
-      const p = this._pickSpawn(c.x, c.z, 110, 620, true);
+      const p = this._pickSpawn(c.x, c.z, 110, this.spawnR, true);
       if (!p) { budget--; continue; }
       this.lanes[v.lane].veh = this.lanes[v.lane].veh.filter((u) => u !== v);
       this._place(v, p);

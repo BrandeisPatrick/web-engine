@@ -16,6 +16,9 @@
 //                spandrels as geometry) + instanced window units (0.12-0.3 m deep reveals, glass pane, sill,
 //                lintel) + fire escapes and balconies; far level = the flat shell with texture windows.
 // Terrain: every footprint stands at the ground height of its LOWEST outline point; walls continue 1 m below.
+// style.storeDressing: false (opt-in) leaves the shop-front signs / awnings to the game.
+// buildingStyle(b, h, area, rnd, ctx, style) (additive, read-only): the style add() picks for a building with the same
+// seeded rnd (game code that dresses the facades, e.g. samples/nyc-night, reproduces the window layout from it).
 import * as THREE from 'three';
 import { FACADE, WIN_RECTS, PBR, PBR_SETS } from './FacadeTextures.js';
 import { signedArea, sanitizeRing, pointInPoly, ringBounds, centroid, clamp, hashStr, mulberry32 } from './geom.js';
@@ -652,6 +655,13 @@ const tb = (rgb, v = 1) => tintBytes(sRGB(rgb[0] * v, rgb[1] * v, rgb[2] * v));
  *   oldProb(xb, zb)       probability that a building at bake-frame (xb, zb) is pre-war masonry
  *   victorianProb(xb, zb) probability that a small pre-war residential building is a painted wooden Victorian
  *   namedRe               building names that hint at a historic (pre-war) building
+ *   storeProb             (opt-in, absent by default) { prewar = 0.85, other = 0.55, curtain = 0.4 }: share of street
+ *                         fronts with a ground-floor shop front (lit glazing, signs, awnings) for pre-war masonry,
+ *                         modern office / residential, and glass curtain walls taller than 20 m; anyType: true
+ *                         also gives other OSM building types (residential, theatre, civic, ...) one (not garages,
+ *                         sheds, parking, industrial)
+ *   storeDressing         (opt-in, absent = true) false: no shop-front sign boards / awnings / blade signs (the random
+ *                         draws stay, so everything else is built exactly as before); for games that dress them
  */
 export const DEFAULT_BUILDING_STYLE = {
   oldProb: () => 0.4,
@@ -659,13 +669,17 @@ export const DEFAULT_BUILDING_STYLE = {
   namedRe: /building|hotel|bank|exchange|hall|church|theat|temple|club|lodge|house|cathedral|mission/i,
 };
 
+/** The style add() picks (see the header): b, h / area (footprint()), rnd = the building's seeded RNG before add() drew from it,
+ * ctx = { xb, zb } (bake frame centroid), S = the builder's style. Consumes the same draws as add(). */
+export function buildingStyle(b, h, area, rnd, ctx, S = DEFAULT_BUILDING_STYLE) { return pickStyle(b, h, area, rnd, ctx, { ...DEFAULT_BUILDING_STYLE, ...(S || {}) }); }
 function pickStyle(b, h, area, rnd, ctx, S = DEFAULT_BUILDING_STYLE) {
+  const SP = S.storeProb || {}; // opt-in shop-front shares (see DEFAULT_BUILDING_STYLE); same random draws either way
   const t = b.t || 'yes', mat = (b.m || '').toLowerCase(), name = String(b.n || '');
   const r1 = rnd(), r2 = rnd(), r3 = rnd();
   const isRes = /^(apartments|residential|house|detached|terrace|dormitory|hostel|semidetached_house)$/.test(t);
   const isOffice = /^(office|commercial|hotel|government|bank|mixed_use|university|public|data_center)$/.test(t);
   const isInd = /^(industrial|warehouse|service|garage|garages|shed|hangar|storage_tank|manufacture|transportation|train_station)$/.test(t);
-  const shop = /^(commercial|retail|mixed_use|yes|hotel|apartments|office)$/.test(t);
+  const shop = (SP.anyType && !/^(garage|garages|shed|roof|carport|parking|industrial|warehouse)$/.test(t)) || /^(commercial|retail|mixed_use|yes|hotel|apartments|office)$/.test(t);
   const st = {
     cat: 'modern', win: FACADE.PUNCHED, store: false, pbr: PBR.CONCRETE_PANEL, tint: tb([0.85, 0.85, 0.83]),
     trimPbr: PBR.STUCCO_B, trimTint: tb([0.9, 0.88, 0.84]), basePbr: -1, baseTint: null,
@@ -724,8 +738,8 @@ function pickStyle(b, h, area, rnd, ctx, S = DEFAULT_BUILDING_STYLE) {
     if (st.win === FACADE.VERTICAL) st.depth = 0.32;
   }
   st.store = shop && h > 3.6 && !b.mh && !b.water && !st.curtain && st.cat !== 'garage' && st.cat !== 'shed' && st.cat !== 'industrial'
-    && (st.prewar || st.cat === 'office' || st.cat === 'res' ? rnd() < (st.prewar ? 0.85 : 0.55) : false);
-  if (st.curtain) st.store = h > 20 && rnd() < 0.4;
+    && (st.prewar || st.cat === 'office' || st.cat === 'res' ? rnd() < (st.prewar ? SP.prewar ?? 0.85 : SP.other ?? 0.55) : false);
+  if (st.curtain) st.store = h > 20 && rnd() < (SP.curtain ?? 0.4);
   if (b.lv > 0 && h / b.lv > 2.6 && h / b.lv < 6) st.floorH = h / b.lv;
   // OSM colour tags
   const tag = parseColour(b.c);
@@ -1014,7 +1028,8 @@ export class BuildingBuilder {
       for (const sg of segInfo) {
         // street height above the base along this wall (signs / awnings / bays never end up under the sidewalk)
         const gl = this.groundAt ? (s) => this.groundAt(sg.f.ax + sg.f.dx * s, sg.f.az + sg.f.dz * s) - base : () => 0;
-        if (sg.street && st.store && mh < 0.5 && floors >= 1 && sg.f.L >= 4) this.storefront(B, sg.f, st, fh, rnd, seed, u0, gl);
+        // style.storeDressing === false (opt-in): same random draws, nothing emitted (a game dresses its own shop fronts)
+        if (sg.street && st.store && mh < 0.5 && floors >= 1 && sg.f.L >= 4) this.storefront(this.style.storeDressing === false ? (this._nullSink || (this._nullSink = new NullBuf())) : B, sg.f, st, fh, rnd, seed, u0, gl);
         if (st.bays && sg.street && sg.f.L >= 4.5 && sg.f.L <= 16 && floors >= 2 && rnd() < 0.85) this.bayWindow(B, sg.f, st, fh, floors, flatTop, seed, gl);
       }
       if (this.nearDetail && detailed && st.fireEscape && floors >= 3) {

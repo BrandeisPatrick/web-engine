@@ -7,7 +7,9 @@
 //   manifest.json: { sets: { <role>: { id, size: [w, h] (metres), maps: { ... }, ktx2?, ktx2Maps? } } }   (optional)
 //
 // API
-//   textureBase() / basisPath()                    default `${BASE_URL}textures/` / `${BASE_URL}basis/`
+//   textureBase() / basisPath()                    default `${BASE_URL}textures/` / `${BASE_URL}basis/` (or
+//                                                  TextureSets.options.base / basisPath when set)
+//   TextureSets.options.manifestIds (opt-in)       arrays read a role's folder from the manifest `id` (own scans per role)
 //   loadTextureManifest(base?)                     -> manifest | null (never throws)
 //   loadTextureSet(id, { renderer, base, manifest, maps?, ktx2? })
 //                                                  -> { map, normalMap, roughnessMap, aoMap?, size } | null
@@ -216,8 +218,9 @@ export function makeWaterNormalTexture(renderer) {
 export { proceduralPbr };
 
 // ------------------------------------------------------------------ manifest + loading
-/** Default texture root: `${import.meta.env.BASE_URL}textures/` under Vite, else `/textures/`. */
+/** Default texture root: TextureSets.options.base when set, else `${import.meta.env.BASE_URL}textures/` under Vite, else `/textures/`. */
 export function textureBase() {
+  if (TextureSets.options.base) return TextureSets.options.base;
   const b = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.BASE_URL) || '/';
   return `${b}textures/`;
 }
@@ -270,7 +273,11 @@ export const TextureSets = {
     ktx2: true,            // use .ktx2 when the manifest lists it (URL ?ktx2=0 / ?nokx overrides)
     arrayKtx2: 'auto',     // texture arrays: 'auto' = per map, whichever of .ktx2 / .jpg is smaller to download
                            // (both end up RGBA8 in the array), true = always .ktx2, false = always .jpg
+    base: null,            // texture root with manifest.json (default `${BASE_URL}textures/`): one sample's own sets,
+                           // e.g. TextureSets.configure({ base: `${BASE_URL}nyc/textures/` }) before MapWorld loads
     basisPath: null,       // transcoder folder (default `${BASE_URL}basis/`)
+    manifestIds: false,    // opt-in: texture arrays take a role's set folder from the manifest's `id` (a game's own scans
+                           // for an engine role) instead of the role's default id; false = as before
     workers: 3,            // RGBA transcode workers for the array path (KTX2Loader keeps its own pool of 4)
     proceduralWorkers: true, // texture arrays: procedural layers generated in module workers (see header), true = up
                            // to 4 (hardwareConcurrency - 1), a number = at most that many, false = on the main thread
@@ -720,7 +727,8 @@ export async function makeTextureArray(renderer, sets, { size = 1024, base = tex
   }
   sets = sets.map((s) => {
     const m = manifest && manifest.sets && manifest.sets[s.role];
-    return { ...s, size: m && m.size ? m.size[0] : s.size, maps: m ? m.maps || {} : null, kx: m && m.ktx2Maps ? m.ktx2Maps : null };
+    const id = TextureSets.options.manifestIds && m && m.id ? m.id : s.id;
+    return { ...s, id, size: m && m.size ? m.size[0] : s.size, maps: m ? m.maps || {} : null, kx: m && m.ktx2Maps ? m.ktx2Maps : null };
   });
   const S = size;
   const A = new Uint8Array(S * S * 4 * L), N = new Uint8Array(S * S * 4 * L);
