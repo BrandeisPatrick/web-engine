@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Vehicle viewer (dev)</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0d0e10; overflow: hidden; font: 12px/1.4 system-ui, sans-serif; color: #ddd; }
+  #ui { position: fixed; left: 10px; top: 10px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+        background: rgba(10, 11, 13, 0.7); padding: 6px 8px; border-radius: 6px; z-index: 2; }
+  #ui select, #ui button, #ui label { font: inherit; color: #ddd; background: #1d1f23; border: 1px solid #333; border-radius: 4px; padding: 2px 6px; }
+  #stats { position: fixed; left: 10px; bottom: 10px; background: rgba(10, 11, 13, 0.7); padding: 4px 8px; border-radius: 6px; white-space: pre; }
+  body.shot #ui, body.shot #stats { display: none; }
+</style>
+</head>
+<body>
+<div id="ui">
+  <select id="type"></select>
+  <select id="time"><option>dusk</option><option>noon</option><option>night</option><option>golden</option></select>
+  <select id="view"><option value="">orbit</option><option>rear34</option><option>front34</option><option>side</option><option>tail</option><option>wheel</option><option>rearwin</option><option>front</option><option>ref</option><option>top</option><option>rear</option></select>
+  <label><input type="checkbox" id="cmp"> LOD 0 beside</label>
+  <label><input type="checkbox" id="spin"> turntable</label>
+  <label><input type="checkbox" id="brake"> brake</label>
+  <select id="paint"><option value="">fleet colour</option><option value="5a1622">maroon</option><option value="eeeeea">white</option><option value="0a0a0c">black</option><option value="a6a9ae">silver</option><option value="1f3f7c">blue</option><option value="f2b705">taxi yellow</option></select>
+</div>
+<div id="stats"></div>
+<script type="module" src="./vehicles.js"></script>
+</body>
+</html>

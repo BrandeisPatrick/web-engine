@@ -36,7 +36,7 @@ self.onmessage = (ev) => {
   if (m.type === 'init') {
     try {
       const t0 = performance.now();
-      sim = new TrafficSim({ roads: m.roads, signals: m.signals, baked: { heights: m.heights, index: m.index }, spawn: m.spawn, seed: m.seed, count: m.count });
+      sim = new TrafficSim({ roads: m.roads, signals: m.signals, baked: { heights: m.heights, index: m.index }, spawn: m.spawn, seed: m.seed, count: m.count, mix: m.mix || null, ...(m.area || {}) });
       sim.build();
       n = sim.vehicles.length * POSE_STRIDE;
       free.push(new Float32Array(n));

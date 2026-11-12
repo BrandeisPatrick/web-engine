@@ -1,5 +1,12 @@
 # Browser game engine — `@vibe/engine` 1.0
 
+> **Note (samples replaced, after 1.0):** the `canyon-run`, `city`, `character` and `sandbox` samples that the
+> measurements and decisions below name were removed when the NYC night walk (`samples/nyc-night/`) and Miami drive
+> (`samples/miami-drive/`) demos replaced them; they live in git history (`main` before the change: commit
+> `fc73161`, e.g. `git show fc73161:samples/canyon-run/main.js`). The Roadster game repository is retired too, so its
+> mentions below are history, not instructions. The measured numbers are left as they were taken. Quality tiers
+> (`src/core/Quality.js`: `desktop` / `mobile`, `resolveQuality`, `QualityMenu` in `src/ui/`) are in `CHANGELOG.md`.
+
 > Design notes, measurements and the record of decisions of `@vibe/engine` (repository `inbrowser-game-engine`): the
 > browser game engine extracted from the Roadster flying-car game and grown, over the 0.5.0 - 1.0.0 phases, into a
 > general engine. Paths written as `engine/src/...` in the older sections are relative to a game that embeds the

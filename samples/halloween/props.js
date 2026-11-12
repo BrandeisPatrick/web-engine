@@ -44,6 +44,18 @@ export function seedOf(x, z, salt = 0) {
 export const rngAt = (x, z, salt = 0) => mulberry32(seedOf(x, z, salt));
 
 // ------------------------------------------------------------------ painting + placing
+/**
+ * Surfaces (the remaster's material scans, looks.js patchSurfaces): every part painted while SURF.k holds a kind
+ * carries it as the vertex attribute `surf`, so the one merged props mesh picks weathered boards, slate, masonry,
+ * lichened stone, bark or rusted iron per part. Builders set SURF.k at their start (and per section) and reset it.
+ */
+export const SURF_KIND = { NONE: 0, WOOD: 1, ROOF: 2, MASONRY: 3, STONE: 4, BARK: 5, IRON: 6 };
+export const SURF = { k: 0 };
+/** Geometry detail switches the remaster sets on desktop (trees: rounder trunks, a third level of branches). */
+export const DETAIL = { trees: false, lamps: false, graves: false };
+/** (DETAIL.graves) Where the carved epitaphs go: { x, y, z, yaw, tilt, roll (the stone's placement), lx, ly, lz (the
+ * panel's centre on the front face, local), w, h (its size), seed }; world.js draws them as one instanced decal. */
+export const EPITAPHS = [];
 const _col = new THREE.Color();
 /** Prepare a primitive for merging: indexed, no uv, normals, a colour attribute (linear, may exceed 1 for glow). */
 export function paint(g, color, scale = 1) {
@@ -55,6 +67,7 @@ export function paint(g, color, scale = 1) {
   const n = g.attributes.position.count, c = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) { c[i * 3] = _col.r * scale; c[i * 3 + 1] = _col.g * scale; c[i * 3 + 2] = _col.b * scale; }
   g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  g.setAttribute('surf', new THREE.BufferAttribute(new Float32Array(n).fill(SURF.k), 1));
   return g;
 }
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
@@ -304,6 +317,7 @@ export class Batch {
     for (const p of this.parts) {
       if (sway && !p.attributes.sway) p.setAttribute('sway', new THREE.BufferAttribute(new Float32Array(p.attributes.position.count * 2), 2));
       if (this.group >= 0 && !p.attributes.grp) p.setAttribute('grp', new THREE.BufferAttribute(new Float32Array(p.attributes.position.count), 1));
+      if (!p.attributes.surf) p.setAttribute('surf', new THREE.BufferAttribute(new Float32Array(p.attributes.position.count), 1));
       // ExtrudeGeometry / RoundedBox groups do not matter once merged into one material
       p.clearGroups();
     }
@@ -365,7 +379,10 @@ export function pumpkinFront(r, lobes = 8, depth = 0.1) {
  */
 export function pumpkinGeometry(r = 0.4, segs = 40, _rows = 0, bodyColor = '#ffffff', stemColor = '#4d6a2a', o = {}) {
   const lobes = o.lobes ?? 8, depth = o.depth ?? 0.1, rnd = mulberry32(o.seed ?? 3);
-  const body = lathe((o.lite ? PUMPKIN_LITE : PUMPKIN_PROFILE).map(([a, b]) => [a * r, b * r]), segs, { mod: (th) => 1 - depth + depth * pumpkinLobe(th, lobes) });
+  // o.fine: the profile resampled through a spline to that many rings (the remaster's smooth bodies)
+  let prof = o.lite ? PUMPKIN_LITE : PUMPKIN_PROFILE;
+  if (o.fine) prof = curve(prof.map(([a, b]) => [a, b, 0]), o.fine, 0.5).map((p) => [Math.max(0, p.x), p.y]);
+  const body = lathe(prof.map(([a, b]) => [a * r, b * r]), segs, { mod: (th) => 1 - depth + depth * pumpkinLobe(th, lobes) });
   paint(body, bodyColor);
   // creases darker, the base darker, the shoulders a touch lighter (hand-painted), a little jitter per vertex
   shade(body, (x, y, z) => {
@@ -476,6 +493,7 @@ const STONE_DARK = '#25212b';
  * and moss. Returns its top (local height).
  */
 export function gravestone(B, { x, y, z, yaw = 0, tilt = 0, roll = 0, kind = 0, w = 0.8, h = 1, d = 0.2, shade = '#6f6b78' }) {
+  SURF.k = SURF_KIND.STONE;
   const r = rngAt(x, z, 11), L = new Parts();
   const stone = (g, a = 0.78, b = 1.12) => vgrad(g, a, b, 0.05, (r() * 1e6) | 0);
   let top = h - 0.05;
@@ -486,7 +504,8 @@ export function gravestone(B, { x, y, z, yaw = 0, tilt = 0, roll = 0, kind = 0, 
     stone(L.add(slab(w, h - 0.1, d, shape, 0.022, (r() * 1e6) | 0), shade, 0, 0.05, 0));
     // an engraving: three lines of an epitaph, or a cross, under a carved arch line
     const ey = 0.05 + (h - 0.1) * 0.62;
-    if (r() < 0.55) for (const [k, ww] of [[0, 0.5], [1, 0.36], [2, 0.44]]) lineOn(L, [[-w * ww / 2, ey - k * 0.09, zf], [w * ww / 2, ey - k * 0.09, zf]], 0.011, STONE_DARK);
+    if (DETAIL.graves) EPITAPHS.push({ x, y, z, yaw, tilt, roll, lx: 0, ly: 0.05 + (h - 0.1) * 0.5, lz: zf + 0.002, w: w * 0.8, h: Math.min(h * 0.62, w * 0.95), seed: (r() * 1e6) | 0 });
+    else if (r() < 0.55) for (const [k, ww] of [[0, 0.5], [1, 0.36], [2, 0.44]]) lineOn(L, [[-w * ww / 2, ey - k * 0.09, zf], [w * ww / 2, ey - k * 0.09, zf]], 0.011, STONE_DARK);
     else { lineOn(L, [[0, ey + 0.12, zf], [0, ey - 0.16, zf]], 0.013, STONE_DARK); lineOn(L, [[-0.09, ey + 0.03, zf], [0.09, ey + 0.03, zf]], 0.013, STONE_DARK); }
     if (shape !== 'shoulder') {
       const ar = w * 0.36, cy = h - 0.05 - w / 2 - 0.02, pts = [];
@@ -540,6 +559,7 @@ export function gravestone(B, { x, y, z, yaw = 0, tilt = 0, roll = 0, kind = 0, 
  * material bends it), seed: the local variation, yaw0: the first limb's heading.
  */
 export function deadTree(B, { x, y, z, h, r, phase, crown, seed = 1, yaw0 = 0, lod = 1, bark = '#3b3036' }) {
+  SURF.k = SURF_KIND.BARK;
   const rnd = mulberry32(seed), parts = [];
   const barkC = new THREE.Color(bark);
   const col = (k) => `#${barkC.clone().multiplyScalar(k).getHexString()}`;
@@ -550,7 +570,7 @@ export function deadTree(B, { x, y, z, h, r, phase, crown, seed = 1, yaw0 = 0, l
   const tw = lean + 1.6 + rnd();
   const tp = curve([[0, -0.3, 0], [Math.cos(tw) * 0.06 * h, h * 0.16, Math.sin(tw) * 0.06 * h], [fork.x * 0.35 - Math.cos(tw) * 0.04 * h, fork.y * 0.5, fork.z * 0.35 - Math.sin(tw) * 0.04 * h], [fork.x * 0.85, fork.y * 0.82, fork.z * 0.85], [fork.x, fork.y, fork.z]], lod ? 8 : 5);
   const wob = rnd() * 10;
-  tube(tp, (t) => r * (1 + 0.9 * Math.pow(Math.max(0, 1 - t * 2.6), 3)) * (1 - 0.32 * t) * (1 + 0.13 * Math.sin(t * 17 + wob) + 0.07 * Math.sin(t * 41 + wob * 2)), lod ? 6 : 5, col(1), [0.55, 1]);
+  tube(tp, (t) => r * (1 + 0.9 * Math.pow(Math.max(0, 1 - t * 2.6), 3)) * (1 - 0.32 * t) * (1 + 0.13 * Math.sin(t * 17 + wob) + 0.07 * Math.sin(t * 41 + wob * 2)), lod ? (DETAIL.trees ? 10 : 6) : 5, col(1), [0.55, 1]);
   // a dark knot hole
   if (lod) {
     const t = 0.4, p = tp[Math.round(t * (tp.length - 1))], a = rnd() * Math.PI * 2;
@@ -568,7 +588,7 @@ export function deadTree(B, { x, y, z, h, r, phase, crown, seed = 1, yaw0 = 0, l
   const branch = (o, dir, len, rad, depth) => {
     const side = new THREE.Vector3().crossVectors(dir, up).normalize();
     if (side.lengthSq() < 0.1) side.set(1, 0, 0);
-    const bendUp = depth >= 2 ? 0.16 : depth === 1 ? 0.02 : -0.08, k1 = (rnd() - 0.5) * 0.9, k2 = (rnd() - 0.5) * 0.9, k3 = (rnd() - 0.5) * 0.5;
+    const bendUp = depth >= 3 ? 0.22 : depth >= 2 ? 0.16 : depth === 1 ? 0.02 : -0.08, k1 = (rnd() - 0.5) * 0.9, k2 = (rnd() - 0.5) * 0.9, k3 = (rnd() - 0.5) * 0.5;
     const p1 = o.clone().addScaledVector(dir, len * 0.3).addScaledVector(side, len * k1 * 0.22).addScaledVector(up, len * k3 * 0.15);
     const p2 = o.clone().addScaledVector(dir, len * 0.58).addScaledVector(up, len * bendUp * 0.7).addScaledVector(side, len * k2 * 0.22);
     const p3 = o.clone().addScaledVector(dir, len * 0.82).addScaledVector(up, len * bendUp).addScaledVector(side, -len * k1 * 0.12);
@@ -593,7 +613,7 @@ export function deadTree(B, { x, y, z, h, r, phase, crown, seed = 1, yaw0 = 0, l
   for (let k = 0; k < 3; k++) {
     const a = yaw0 + (k / 3) * Math.PI * 2 + rnd() * 0.9, el = 0.55 + rnd() * 0.45;
     const dir = new THREE.Vector3(Math.cos(a) * Math.sin(el), Math.cos(el), Math.sin(a) * Math.sin(el)).normalize();
-    branch(fork.clone(), dir, h * (0.42 + rnd() * 0.18), r * 0.62, 2);
+    branch(fork.clone(), dir, h * (0.42 + rnd() * 0.18), r * 0.62, DETAIL.trees && lod ? 3 : 2);
   }
   // wind sway: weight (height / crown)^2, one phase per tree; then into place
   for (const g of parts) {
@@ -612,6 +632,7 @@ const IRON = '#1b1822';
  * out posts and bays (the exits).
  */
 export function ironFence(B, ax, az, bx, bz, groundAt, gap = null) {
+  SURF.k = SURF_KIND.IRON;
   const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(len / 1.2)), dx = (bx - ax) / n, dz = (bz - az) / n, yaw = Math.atan2(dx, dz);
   const L = new Parts();
   for (let i = 0; i <= n; i++) {
@@ -637,6 +658,7 @@ export function ironFence(B, ax, az, bx, bz, groundAt, gap = null) {
 
 /** A stone gate pillar on the ground at (x, y, z): plinth, a panelled shaft, a band, an overhanging cap, a ball finial. */
 export function gatePost(B, x, y, z) {
+  SURF.k = SURF_KIND.MASONRY;
   const r = rngAt(x, z, 5), L = new Parts(), S = '#5a5563';
   const st = (g, a = 0.72, b = 1.1) => vgrad(g, a, b, 0.05, (r() * 1e6) | 0);
   st(L.add(chamferBox(0.7, 0.4, 0.7, 0.04), '#4f4a58', 0, 0.08, 0), 0.6, 0.95);
@@ -661,6 +683,7 @@ export function gatePost(B, x, y, z) {
 
 /** The iron arch over a gate between gate posts at x0..x1 (z, ground y): two bars, scrolls between, a crescent moon. */
 export function gateArch(B, x0, x1, y, z) {
+  SURF.k = SURF_KIND.IRON;
   const L = new Parts(), cx = (x0 + x1) / 2, R = (x1 - x0) / 2;
   L.add(new THREE.TorusGeometry(R, 0.055, 4, 24, Math.PI), IRON, cx, y + 2.3, z);
   L.add(new THREE.TorusGeometry(R - 0.32, 0.04, 4, 22, Math.PI), IRON, cx, y + 2.3, z);
@@ -723,11 +746,13 @@ function windowDressing(L, r, lx, ly, z0, ww, hh, { trim = '#4e3f58', shutter = 
  * frame, the lean ignored) }.
  */
 export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp = 'flame', tower = 0.6 }) {
+  SURF.k = SURF_KIND.WOOD;
   const r = rngAt(x, z, 21), L = new Parts();
   const WALL = '#33293d', WALL2 = '#3d3148', ROOF = '#241c2b', TRIM = '#6b5a78', STONE = '#454050';
   const c = Math.cos(yaw), s = Math.sin(yaw);
   const W = (lx, lz) => [x + lx * c + lz * s, z - lx * s + lz * c];
   // ---- foundation + walls + siding + corner boards (main block)
+  SURF.k = SURF_KIND.WOOD;
   vgrad(L.add(chamferBox(w + 0.3, 0.8, d + 0.3, 0.05), STONE, 0, 0.2, 0), 0.6, 0.95);
   const hx0 = 1.2 - HOLE_W / 2, hx1 = 1.2 + HOLE_W / 2, ht = 0.5 + HOLE_H; // the doorway (door false), from the deck up
   if (door) vgrad(L.add(new THREE.BoxGeometry(w, 5.6, d), WALL, 0, 3.2, 0), 0.75, 1.1);
@@ -749,6 +774,7 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp 
   vgrad(L.add(chamferBox(w + 0.5, 0.28, d + 0.5, 0.04), TRIM, 0, 6.05, 0), 0.8, 1.15);
   L.add(chamferBox(w + 0.12, 0.16, d + 0.12, 0.03), TRIM, 0, 3.4, 0); // the floor band
   // ---- gable roof: ridge along x; two slabs, ragged shingle rows, a ridge cap, gable ends with a round attic window
+  SURF.k = SURF_KIND.ROOF;
   const rh = 3.2, half = d / 2 + 0.6, slope = Math.atan2(rh, half), sl = Math.hypot(rh, half);
   for (const sd of [1, -1]) {
     L.add(chamferBox(w + 1.1, 0.16, sl + 0.1, 0.04), ROOF, 0, 6.2 + rh / 2, sd * half / 2, 0, sd * slope, 0);
@@ -789,6 +815,7 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp 
     L.add(new THREE.BoxGeometry(0.8, 0.06, 0.04), TRIM, gx, 7.1, z0 + gd / 2 + 0.07);
   }
   // ---- the crooked chimney (bricks stacked off true), a cap, and a cowl
+  SURF.k = SURF_KIND.MASONRY;
   let chim;
   {
     let cy = 7.4, ox = w / 2 - 2.0, oz = -0.9, k = 0;
@@ -802,6 +829,7 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp 
     chim = [ox - 0.05 + 0.03 * (cy - 0.6), cy, oz]; // its top (local, after the house's lean)
   }
   // ---- the tower (front left): walls, siding, bands, and a witch-hat roof with a bent tip and a weathervane
+  SURF.k = SURF_KIND.WOOD;
   const TW = 3.2, tx = -w / 2 + 1, tz = d / 2 + tower - TW / 2; // (o.tower: how far it stands out of the front)
   const towerFrom = L.list.length;
   vgrad(L.add(chamferBox(TW + 0.2, 0.8, TW + 0.2, 0.05), STONE, tx, 0.2, tz), 0.6, 0.95);
@@ -834,6 +862,7 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp 
   // the tower leans the other way a touch
   L.bend((px, py, pz) => [px - 0.018 * Math.max(0, py - 0.6), py, pz + 0.008 * Math.max(0, py - 0.6)], towerFrom);
   // ---- windows (front: two floors; the tower), the glow panes in G (light groups)
+  SURF.k = SURF_KIND.WOOD;
   const winF = [[-2.2, 2.2], [3.6, 2.2], [-2.2, 4.6], [1.2, 4.6], [3.6, 4.6]];
   winF.forEach(([lx, ly], i) => windowDressing(L, r, lx, ly, d / 2, 1, 1.3, { crooked: i === 1 || i === 4, boarded: i === 2 }));
   windowDressing(L, r, tx, 7.6, tz + TW / 2, 0.9, 1.2, { crooked: true });
@@ -895,6 +924,7 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp 
   ctx.glow('window', 0.2); win(lean(tx, 4.2) - 0.018 * 3.6, 4.2, tz + TW / 2 + 0.02 + 0.008 * 3.6, 0.8, 1.1, '#ff9a3a', 3);
   ctx.glow('steady', 0);
   const at = (lx, ly, lz) => { const [px, pz2] = W(lx, lz); return [px, y + ly, pz2]; };
+  SURF.k = 0;
   return { lamp: lampG, lampHalo, chimney: at(chim[0], chim[1] + 0.2, chim[2]), at };
 }
 
@@ -908,6 +938,7 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp 
  * light group), crackHalo }.
  */
 export function crypt(B, G, ctx, { x, y, z, door = true }) {
+  SURF.k = SURF_KIND.MASONRY;
   const r = rngAt(x, z, 31), L = new Parts(), STONE = '#58535f', DARK = '#3b3743', LIGHT = '#6a6574';
   const st = (g, a = 0.75, b = 1.12) => vgrad(g, a, b, 0.05, (r() * 1e6) | 0);
   st(L.add(chamferBox(6.2, 0.32, 5.6, 0.05), DARK, 0, 0.1, 0.1), 0.6, 0.9);
@@ -980,6 +1011,7 @@ export function crypt(B, G, ctx, { x, y, z, door = true }) {
  * group through ctx) under a floppy hat with a bent tip. Its arms are at 1.85 m (the crows sit on them).
  */
 export function scarecrow(B, G, ctx, { x, y, z }) {
+  SURF.k = SURF_KIND.NONE;
   const r = rngAt(x, z, 41), L = new Parts(), COAT = '#5a3d6e', STRAW = '#d4ac4f', POST = '#3d2c1e';
   L.add(sweep(curve([[0, -0.2, 0], [0.03, 1.2, 0.01], [-0.02, 2.4, 0]], 6), (t) => 0.075 - 0.02 * t, 6, { caps: [false, 0] }), POST);
   L.add(sweep(curve([[-1.0, 1.84, 0], [0, 1.86, 0], [1.0, 1.83, 0.02]], 5), 0.05, 6, { caps: [true, 0] }), POST);
@@ -1030,6 +1062,7 @@ export function scarecrow(B, G, ctx, { x, y, z }) {
  * brewHalo, emberHalo (halo indices) }.
  */
 export function cauldron(B, G, ctx, { x, y, z }) {
+  SURF.k = SURF_KIND.NONE;
   const r = rngAt(x, z, 51), L = new Parts(), IRONC = '#1d1a23';
   const pot = lathe([[0, 0.12], [0.35, 0.14], [0.72, 0.35], [0.88, 0.7], [0.82, 1.02], [0.66, 1.18], [0.62, 1.22]], 22);
   vgrad(L.add(pot, IRONC), 0.7, 1.35);
@@ -1073,6 +1106,7 @@ export function cauldron(B, G, ctx, { x, y, z }) {
  * barrel and a spiral painted on the ends, two twine bands, a few loose straws.
  */
 export function hayBale(B, { x, y, z, ry = 0 }) {
+  SURF.k = SURF_KIND.NONE;
   const r = rngAt(x, z, 61), L = new Parts(), R = 0.6, H = 0.55;
   const prof = [[0, -H], [0.25, -H], [0.45, -H + 0.005], [R - 0.06, -H + 0.03], [R, -H + 0.16], [R, H - 0.16], [R - 0.06, H - 0.03], [0.45, H - 0.005], [0.25, H], [0, H]];
   const g = lathe(prof, 18, { mod: (th, t) => 1 + 0.02 * Math.sin(th * 9 + t * 7) });
@@ -1106,6 +1140,7 @@ const LAMP_GLASS = '#fff1d2';
 
 /** A small iron candle lantern standing on the ground at (x, y, z): frame, glowing glass, a pyramid roof, a ring. */
 export function candleLantern(B, G, x, y, z, ry = 0) {
+  SURF.k = SURF_KIND.IRON;
   const IR = '#17141c';
   B.add(new THREE.BoxGeometry(0.24, 0.04, 0.24), IR, x, y + 0.02, z, ry);
   for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
@@ -1123,6 +1158,7 @@ export function candleLantern(B, G, x, y, z, ry = 0) {
  * { group, halo }.
  */
 export function jackOLantern(B, G, ctx, { x, y, z, yaw = 0, r = 0.17, kind = 'lamp' }) {
+  SURF.k = SURF_KIND.NONE;
   const body = pumpkinGeometry(r, 14, 0, '#b8581a', '#4a5a22', { lobes: 6, depth: 0.1, seed: (seedOf(x, z) % 89) + 1, lite: true });
   body.deleteAttribute('rib');
   B.push(place(body, x, y, z, yaw));
@@ -1192,12 +1228,15 @@ const COTTAGE_PAL = [
  * extents, for colliders), at(lx, ly, lz) }.
  */
 export function cottage(B, G, ctx, { x, y, z, w = 7, d = 6, yaw = 0, foot = 0.6, doorX = -0.9, deckW = 4.2, deckD = 1.9, palette = 0, stone = false }) {
+  SURF.k = SURF_KIND.WOOD;
   const r = rngAt(x, z, 81), L = new Parts(), P = COTTAGE_PAL[palette % COTTAGE_PAL.length];
   const c = Math.cos(yaw), s = Math.sin(yaw);
   const at = (lx, ly, lz) => [x + lx * c + lz * s, y + ly, z - lx * s + lz * c];
   const FL = 0.3, SILL = FL, WT = 3.15, DW = HOLE_W, DH = HOLE_H, fz = d / 2, hx0 = doorX - DW / 2, hx1 = doorX + DW / 2;
   // ---- footing + walls round the doorway (+ clapboards or rubble courses), corner boards, the eave band
+  SURF.k = SURF_KIND.MASONRY; // (the footing; then the walls)
   vgrad(L.add(chamferBox(w + 0.3, foot + SILL, d + 0.3, 0.05), '#4a4552', 0, (SILL - foot) / 2, 0), 0.55, 0.95);
+  SURF.k = stone ? SURF_KIND.MASONRY : SURF_KIND.WOOD;
   doorwayBlock(L, { w, d, y0: SILL - 0.05, y1: WT, hx0, hx1, ht: SILL + DH, color: stone ? '#4d4757' : P.wall });
   const INK = stone ? '#2e2a36' : '#1b1622', LW = stone ? 0.012 : 0.013;
   for (const [nx, nz, len] of [[0, 1, w], [0, -1, w], [1, 0, d], [-1, 0, d]]) {
@@ -1221,6 +1260,7 @@ export function cottage(B, G, ctx, { x, y, z, w = 7, d = 6, yaw = 0, foot = 0.6,
   for (const [cx, cz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) L.add(chamferBox(0.22, WT - SILL, 0.22, 0.03), P.trim, cx * w / 2, SILL + (WT - SILL) / 2, cz * d / 2);
   vgrad(L.add(chamferBox(w + 0.3, 0.2, d + 0.3, 0.04), P.trim, 0, WT, 0), 0.8, 1.15);
   // ---- gable roof: two slabs, shingle rows in ragged pieces, a ridge cap, gable ends with bargeboards and a round vent
+  SURF.k = SURF_KIND.ROOF;
   const rh = 1.9, half = d / 2 + 0.45, slope = Math.atan2(rh, half), sl = Math.hypot(rh, half), RW = w + 0.8;
   for (const sd of [1, -1]) {
     vgrad(L.add(chamferBox(RW, 0.14, sl + 0.1, 0.04), P.roof, 0, WT + 0.05 + rh / 2, sd * half / 2, 0, sd * slope, 0), 0.85, 1.2);
@@ -1243,13 +1283,28 @@ export function cottage(B, G, ctx, { x, y, z, w = 7, d = 6, yaw = 0, foot = 0.6,
     L.add(new THREE.CircleGeometry(0.26, 12), '#120c14', sx * (w / 2 + 0.035), WT + 0.75, 0, sx * Math.PI / 2);
   }
   // ---- chimney (back slope, toward +x): brick courses, a cap; the residents drop out of it
+  SURF.k = SURF_KIND.MASONRY;
   const chx = w / 2 - 1.2, chz = -d / 4, chTop = WT + rh + 0.75;
   for (let yy = WT + 0.5, k = 0; yy < chTop; yy += 0.4, k++) {
     vgrad(L.add(chamferBox(0.66, 0.4, 0.66, 0.03), k % 2 ? '#4f3238' : '#46302f', chx + (r() - 0.5) * 0.03, yy + 0.2, chz, (r() - 0.5) * 0.06), 0.8, 1.1, 0.08, (r() * 1e6) | 0);
     lineOn(L, [[chx - 0.33, yy + 0.4, chz + 0.332], [chx + 0.33, yy + 0.4, chz + 0.332]], 0.012, '#24161a');
   }
   vgrad(L.add(chamferBox(0.86, 0.12, 0.86, 0.03), '#2b2230', chx, chTop + 0.25, chz), 0.9, 1.2);
+  if (DETAIL.lamps) { // (the remaster) construction: chimney pots, sagging gutters on both eaves, downpipes with a kick
+    SURF.k = SURF_KIND.MASONRY;
+    for (const [ox, hh] of [[-0.17, 0.3], [0.17, 0.24]]) vgrad(L.add(new THREE.CylinderGeometry(0.075, 0.095, hh, 8), '#5a3a32', chx + ox, chTop + 0.31 + hh / 2, chz), 0.7, 1.15);
+    SURF.k = SURF_KIND.IRON;
+    for (const sd of [1, -1]) {
+      const gz = sd * (half - 0.03), gy = WT - 0.02, sag = 0.03 + r() * 0.04, pts = [];
+      for (let k = 0; k <= 6; k++) { const u = k / 6; pts.push([-RW / 2 + 0.05 + (RW - 0.1) * u, gy - sag * Math.sin(u * Math.PI), gz]); }
+      L.push(paint(sweep(pts, 0.05, 6, { caps: [true, true] }), '#2a2428'));
+      const px = sd > 0 ? -RW / 2 + 0.14 : RW / 2 - 0.14, pz = sd * (d / 2 + 0.09);
+      L.push(paint(sweep([[px, gy - 0.02, gz], [px, gy - 0.25, pz], [px, 0.35, pz], [px, 0.12, pz + sd * 0.22]], 0.04, 6, { caps: [false, true] }), '#2a2428'));
+    }
+    SURF.k = SURF_KIND.WOOD;
+  }
   // ---- the doorway's frame: two boards and a lintel (the door leaf swings into the vestibule behind)
+  SURF.k = SURF_KIND.WOOD;
   for (const sx of [-1, 1]) L.add(chamferBox(0.14, DH + 0.1, 0.12, 0.02), P.trim, doorX + sx * (DW / 2 + 0.07), SILL + (DH + 0.1) / 2, fz + 0.04);
   vgrad(L.add(chamferBox(DW + 0.5, 0.16, 0.16, 0.03), P.trim, doorX, SILL + DH + 0.08, fz + 0.05), 0.85, 1.2);
   // ---- windows: one on the front (right of the porch), one on each side, one at the back (dressed; panes glow)
@@ -1300,8 +1355,16 @@ export function cottage(B, G, ctx, { x, y, z, w = 7, d = 6, yaw = 0, foot = 0.6,
     if (windowHalo < 0 && ry === 0) { const h = at(px, py, pz + 0.45); windowHalo = ctx.spot(h[0], h[1], h[2], 1.9, 0.2, 0.11, 0.03, 0.2, window); }
   }
   const lamp = ctx.glow('lamp', 0.1);
-  { const [gx, gy, gz] = at(lx, SILL + 1.82, lz); G.add(new THREE.BoxGeometry(0.13, 0.22, 0.13), LAMP_GLASS, gx, gy, gz, yaw, 0, 0, 1, 1, 1, 4.2); }
-  const lh = at(lx, SILL + 1.82, lz + 0.05), lampHalo = ctx.spot(lh[0], lh[1], lh[2], 2.9, ...LAMP_HALO, 0.1, lamp);
+  // (DETAIL.lamps, the remaster: amber glass that keeps its colour, a small bright flame core as a tight halo, and
+  // muntins over the panes: a lantern, not a white card that clips)
+  { const [gx, gy, gz] = at(lx, SILL + 1.82, lz); G.add(new THREE.BoxGeometry(0.13, 0.22, 0.13), LAMP_GLASS, gx, gy, gz, yaw, 0, 0, 1, 1, 1, DETAIL.lamps ? 0.95 : 4.2); }
+  if (DETAIL.lamps) {
+    const M = new Parts();
+    for (const [ex, ez] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) M.add(new THREE.BoxGeometry(ex ? 0.012 : 0.135, 0.012, ez ? 0.012 : 0.135), '#141016', lx + ex * 0.066, SILL + 1.84, lz + ez * 0.066);
+    for (const [ex, ez] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) M.add(new THREE.BoxGeometry(0.012, 0.22, 0.012), '#141016', lx + ex * 0.066, SILL + 1.82, lz + ez * 0.066);
+    M.into(B, x, y, z, yaw);
+  }
+  const lh = at(lx, SILL + 1.82, lz + 0.05), lampHalo = DETAIL.lamps ? ctx.spot(lh[0], lh[1], lh[2], 0.75, 0.9, 0.62, 0.3, 0.1, lamp) : ctx.spot(lh[0], lh[1], lh[2], 2.9, ...LAMP_HALO, 0.1, lamp);
   doormatGlow(G, { x: m[0], y: m[1], z: m[2], yaw, w: MW, d: MD });
   const mh = at(doorX, FL + 0.35, mz), matHalo = ctx.spot(mh[0], mh[1], mh[2], 2.3, 0.2, 0.16, 0.09, 0.1, lamp);
   const jp = at(doorX + 0.85, FL + 0.95, postZ);
@@ -1318,6 +1381,7 @@ export function cottage(B, G, ctx, { x, y, z, w = 7, d = 6, yaw = 0, foot = 0.6,
 
 /** A doormat w x d lying on the deck at (x, y, z), turned by yaw: a rug with two woven border lines (in B). */
 export function doormat(B, { x, y, z, yaw = 0, rug = '#5a2028', w = 2.2, d = 1.6 }) {
+  SURF.k = SURF_KIND.NONE;
   const L = new Parts();
   L.add(chamferBox(w, 0.025, d, 0.008), rug, 0, 0.012, 0);
   for (const k of [0.32, 0.5]) lineOn(L, [[-w / 2 + k, 0.027, -d / 2 + k], [w / 2 - k, 0.027, -d / 2 + k], [w / 2 - k, 0.027, d / 2 - k], [-w / 2 + k, 0.027, d / 2 - k], [-w / 2 + k, 0.027, -d / 2 + k]], 0.02, '#c9a86a', [0, 1, 0]);
@@ -1325,6 +1389,7 @@ export function doormat(B, { x, y, z, yaw = 0, rug = '#5a2028', w = 2.2, d = 1.6
 }
 /** The doormat's glowing border and pumpkin emblem (into the glow batch G, in its current light group: the lamp's). */
 export function doormatGlow(G, { x, y, z, yaw = 0, w = 2.2, d = 1.6 }) {
+  SURF.k = SURF_KIND.NONE;
   const L = new Parts();
   for (const [ax, az, bx, bz] of [[-1, -1, 1, -1], [1, -1, 1, 1], [1, 1, -1, 1], [-1, 1, -1, -1]]) {
     const cx = ((ax + bx) / 2) * (w / 2 - 0.1), cz = ((az + bz) / 2) * (d / 2 - 0.1), len = ax === bx ? d - 0.14 : w - 0.14;
@@ -1341,6 +1406,7 @@ export function doormatGlow(G, { x, y, z, yaw = 0, w = 2.2, d = 1.6 }) {
  * lantern on an end post at each end (ctx 'flame' light groups). Returns { candles: [[group, halo, x, y, z], ...] }.
  */
 export function bridge(B, G, ctx, { x, y, z0, z1, w = 2.6, bedY }) {
+  SURF.k = SURF_KIND.WOOD;
   const r = rngAt(x, z0, 91), L = new Parts(), WD = '#4b3b30';
   const za = z0 - 0.45, zb = z1 + 0.45, len = zb - za, zc = (za + zb) / 2;
   for (const zz of [z0 + 0.2, z1 - 0.2]) for (const sx of [-1, 1]) {
@@ -1373,6 +1439,7 @@ export function bridge(B, G, ctx, { x, y, z0, z1, w = 2.6, bedY }) {
  * (topY): a dark earth face 0.4 m thick with a course of rounded stones along the lip and a few half-buried lower down.
  */
 export function bankWall(B, { x0, x1, zf, dir, topY, bedY }) {
+  SURF.k = SURF_KIND.STONE;
   const r = rngAt(x0, zf, 101), L = new Parts(), len = x1 - x0, h = topY - bedY + 0.15;
   vgrad(L.add(chamferBox(len + 0.02, h, 0.42, 0.04), '#2e2722', (x0 + x1) / 2, bedY - 0.15 + h / 2, zf - dir * 0.21), 0.45, 0.95, 0.08, (r() * 1e6) | 0);
   for (let xx = x0 + 0.2 + r() * 0.2; xx < x1 - 0.1; xx += 0.42 + r() * 0.25) {
@@ -1388,6 +1455,7 @@ export function bankWall(B, { x0, x1, zf, dir, topY, bedY }) {
 
 /** A clump of reeds and cattails at (x, y, z): thin tapering blades that sway (the tree-sway attribute), brown heads. */
 export function reeds(B, { x, y, z, n = 7, h = 1.1 }) {
+  SURF.k = SURF_KIND.NONE;
   const r = rngAt(x, z, 121), L = new Parts(), phase = (x * 0.37 + z * 0.21) % 6.28;
   for (let k = 0; k < n; k++) {
     const a = r() * 6.28, lean = 0.1 + r() * 0.25, hh = h * (0.6 + r() * 0.6), ox = Math.cos(a) * 0.15 * r(), oz = Math.sin(a) * 0.15 * r();
@@ -1410,6 +1478,7 @@ const lump = (x, y, z, k) => Math.sin(x * 5.1 + k) * Math.sin(y * 3.7 + k * 2.3)
  * leaning a little, with lichen, moss at the foot and a carved spiral on its face (toward yaw).
  */
 export function standingStone(B, { x, y, z, h = 2.2, w = 0.85, d = 0.55, yaw = 0, lean = 0.06 }) {
+  SURF.k = SURF_KIND.STONE;
   const r = rngAt(x, z, 131), L = new Parts(), k0 = r() * 10;
   const g = new THREE.BoxGeometry(w, h, d, 3, 7, 2);
   const P2 = g.attributes.position;
@@ -1437,6 +1506,7 @@ export function standingStone(B, { x, y, z, h = 2.2, w = 0.85, d = 0.55, yaw = 0
  * staggered, twine), loose straws on top. The Bale Yard's stairs are three of them.
  */
 export function baleBlock(B, { x, y, z, w, h, d, course = 0.35, yaw = 0 }) {
+  SURF.k = SURF_KIND.NONE;
   const r = rngAt(x, z, 141), L = new Parts();
   const g = L.add(chamferBox(w, h + 0.1, d, 0.05), '#c69a46', 0, (h + 0.1) / 2 - 0.1, 0);
   const ph = r() * 10;
@@ -1456,6 +1526,7 @@ export function baleBlock(B, { x, y, z, w, h, d, course = 0.35, yaw = 0 }) {
  * a crank, a little shingled roof, a bucket on its rope. Its ring is 1.1 m in radius.
  */
 export function well(B, { x, y, z, yaw = 0 }) {
+  SURF.k = SURF_KIND.MASONRY;
   const r = rngAt(x, z, 151), L = new Parts();
   for (let k = 0; k < 3; k++) {
     const n = 11, rr = 0.92;
@@ -1483,6 +1554,7 @@ export function well(B, { x, y, z, yaw = 0 }) {
  * points along (sin a, cos a)), colour] (painted in the colour of what lies that way), no lettering.
  */
 export function signpost(B, { x, y, z, arms }) {
+  SURF.k = SURF_KIND.WOOD;
   const r = rngAt(x, z, 161), L = new Parts();
   vgrad(L.add(sweep(curve([[0, -0.3, 0], [0.03, 1.2, 0.02], [-0.02, 2.6, 0]], 6), (t) => 0.08 - 0.015 * t, 6, { caps: [false, 0] }), '#3d3029'), 0.7, 1.05);
   L.add(new THREE.ConeGeometry(0.13, 0.18, 4).rotateY(Math.PI / 4), '#2a2230', -0.02, 2.68, 0);
@@ -1504,6 +1576,7 @@ export function signpost(B, { x, y, z, arms }) {
  * perches: [[x, y, z, yaw], ...] }. The trunk's wall is ~0.3 m thick round a 2 m hollow.
  */
 export function hollowOak(B, G, ctx, { x, y, z, open = Math.PI / 4 }) {
+  SURF.k = SURF_KIND.BARK;
   const r = rngAt(x, z, 171), L = new Parts(), BARK = '#54463f', gap = 0.78;
   const bark = (th, t) => 1 + 0.08 * Math.sin(th * 5 + t * 3) + 0.04 * Math.sin(th * 13 + t * 9);
   const OUT = [[1.75, -0.3], [1.5, 0.15], [1.36, 0.6], [1.3, 1.2], [1.25, 2.15]], IN = [[1.02, 2.1], [1.02, 1.2], [1.04, 0.4], [1.08, -0.05]];
@@ -1558,6 +1631,7 @@ export function hollowOak(B, G, ctx, { x, y, z, open = Math.PI / 4 }) {
 
 /** A wooden bench at (x, y, z) facing yaw: two plank seat boards, a backrest, iron legs with scrolls. */
 export function bench(B, { x, y, z, yaw = 0 }) {
+  SURF.k = SURF_KIND.WOOD;
   const L = new Parts();
   for (const zz of [-0.1, 0.1]) vgrad(L.add(chamferBox(1.7, 0.05, 0.17, 0.015), '#5a4536', 0, 0.45, zz), 0.8, 1.1);
   for (const yy of [0.68, 0.86]) L.add(chamferBox(1.7, 0.12, 0.04, 0.015), '#5a4536', 0, yy, -0.24, 0, -0.12, 0);
@@ -1574,6 +1648,7 @@ export function bench(B, { x, y, z, yaw = 0 }) {
  * weathered: they read in the moonlight).
  */
 export function pickets(B, ax, az, bx, bz, groundAt, h = 1.0) {
+  SURF.k = SURF_KIND.WOOD;
   const r = rngAt(ax, az, 181), L = new Parts(), len = Math.hypot(bx - ax, bz - az), dx = (bx - ax) / len, dz = (bz - az) / len, yaw = Math.atan2(dx, dz);
   const n = Math.max(1, Math.round(len / 2));
   for (let i = 0; i <= n; i++) {
@@ -1593,6 +1668,7 @@ export function pickets(B, ax, az, bx, bz, groundAt, h = 1.0) {
 
 /** Flat path stones along the polyline pts ([[x, z], ...]) every ~`step` m on groundAt, tilted to the slope. */
 export function pathStones(B, pts, groundAt, { step = 0.85, spread = 0.7 } = {}) {
+  SURF.k = SURF_KIND.STONE;
   const r = rngAt(pts[0][0], pts[0][1], 191), L = new Parts();
   for (let i = 0; i < pts.length - 1; i++) {
     const [ax, az] = pts[i], [bx, bz] = pts[i + 1], len = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / len, uz = (bz - az) / len;

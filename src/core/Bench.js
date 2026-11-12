@@ -48,6 +48,17 @@
 // resolution is switched off and engine.setPixelRatio(1) + engine.resize() run, so engine.onResize (PostFX) follows.
 // Call it after PostFX is attached to engine.onResize. It leaves engine.adaptive off and the pixel ratio at 1 on
 // purpose (also after resume()): a measured page must not change its resolution.
+// Look: look(scale = 4) -> lookStats(capture(scale)): the tone and palette of the frame as numbers, so a sample's art
+// direction can be held to a target (and gated in the smoke test) instead of judged by eye alone: lumMean / lumMedian /
+// p90 / p99 / lumMax (Rec. 709 luma of the sRGB output, 0..255), under40 / under80 / over160 / over240 (% of pixels),
+// satMean (HSV saturation, 0..1) and hues: % of the frame that is saturated (s > 0.25, v > 0.2) per 30-degree hue bin
+// (red, orange, yellow, lime, green, spring, cyan, azure, blue, violet, magenta, rose; bins under 0.5 % are omitted).
+// The capture is the canvas (the 3D frame after post-processing), without DOM HUD elements.
+// Device report: report({ repeats = 3, frames = 24 }) -> Promise of { name, device: { userAgent, renderer, pixelRatio,
+// screen, memory, cores }, size, poses: [{ pose, ms, fps, drawCalls, triangles, look }] } (ms = the median of
+// `repeats` bench() runs at the size the page is showing), for machines the scripts cannot drive: a phone or a
+// tablet. Loading a sample with ?perfreport=1 runs it once the sample is ready and shows the result in an overlay
+// with a Copy button; the JSON goes into bench/devices/<name>.json (bench/README.md).
 // This is tooling: bench() allocates nothing per frame, capture() reuses its readback buffer (and `into`'s array),
 // run() allocates rows, one capture per pose and a diff histogram per row.
 
@@ -130,6 +141,67 @@ export function readBenchParams(search) {
  * @param {number} [o.dt=0]  seconds passed to renderFn for every harness frame (see header)
  * @param {boolean} [o.global=true]  assign window.__sample
  */
+// ?perfreport=1: run report() and show it (plain DOM, no dependency on the ui layer); the page keeps its last pose
+async function showDeviceReport(h) {
+  if (typeof document === 'undefined') return;
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;inset:auto 8px 8px 8px;z-index:9999;max-height:70vh;overflow:auto;padding:12px 14px;border-radius:12px;background:rgba(10,12,16,.92);color:#e8ecf2;font:12px/1.5 ui-monospace,Menlo,monospace;white-space:pre';
+  box.textContent = 'Measuring…';
+  document.body.appendChild(box);
+  let rep;
+  try { rep = await h.report(); } catch (e) { box.textContent = `Performance report failed: ${e && e.message}`; return; }
+  const lines = [`${rep.name} · ${rep.size.w}x${rep.size.h} @${rep.size.pixelRatio} · ${rep.device.renderer}`, ''];
+  for (const p of rep.poses) lines.push(`${p.pose.padEnd(12)} ${String(p.ms).padStart(7)} ms  ${String(p.fps).padStart(6)} fps  ${p.drawCalls} draws  ${p.triangles} tris`);
+  box.textContent = `${lines.join('\n')}\n\n`;
+  const btn = document.createElement('button');
+  btn.textContent = 'Copy report (JSON)';
+  btn.style.cssText = 'font:inherit;padding:8px 12px;border-radius:8px;border:1px solid #4b5563;background:#1f2937;color:inherit';
+  btn.onclick = async () => {
+    const text = JSON.stringify(rep, null, 2);
+    try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied'; } catch { box.textContent = text; }
+  };
+  box.appendChild(btn);
+  /** @type {any} */ (window).__perfReport = rep;
+}
+
+/** Hue bin names of lookStats().hues, 30 degrees each, centred on the pure hue (red = 345..15 degrees). */
+export const LOOK_HUES = ['red', 'orange', 'yellow', 'lime', 'green', 'spring', 'cyan', 'azure', 'blue', 'violet', 'magenta', 'rose'];
+
+/**
+ * Tone and palette statistics of a capture (see "Look" in the header). Pure: works on any { w, h, scale, data } with
+ * `data` = RGBA box sums as capture() returns them.
+ * @param {{ w: number, h: number, scale: number, data: ArrayLike<number> }} cap
+ * @returns {{ lumMean: number, lumMedian: number, p90: number, p99: number, lumMax: number, under40: number,
+ *   under80: number, over160: number, over240: number, satMean: number, hues: Object<string, number> }}
+ */
+export function lookStats(cap) {
+  const D = cap.data, n = cap.w * cap.h, q = cap.scale * cap.scale;
+  const hist = new Uint32Array(256), hues = new Uint32Array(12);
+  let lumSum = 0, satSum = 0, lumMax = 0;
+  for (let p = 0, k = 0; p < n; p++, k += 4) {
+    const r = D[k] / q, g = D[k + 1] / q, b = D[k + 2] / q;
+    const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    lumSum += lum; if (lum > lumMax) lumMax = lum;
+    hist[Math.min(255, Math.round(lum))]++;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn, sat = mx > 0 ? d / mx : 0;
+    satSum += sat;
+    if (sat > 0.25 && mx > 51 && d > 0) {
+      let hue = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; // 0..6
+      if (hue < 0) hue += 6;
+      hues[Math.round(hue * 2) % 12]++;
+    }
+  }
+  const pct = (lim) => { let acc = 0; for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= lim * n) return v; } return 255; };
+  const share = (lo, hi) => { let c = 0; for (let v = lo; v <= hi; v++) c += hist[v]; return r2(100 * c / n); };
+  const out = {};
+  for (let i = 0; i < 12; i++) { const v = 100 * hues[i] / n; if (v >= 0.5) out[LOOK_HUES[i]] = Math.round(v * 10) / 10; }
+  return {
+    lumMean: r2(lumSum / n), lumMedian: pct(0.5), p90: pct(0.9), p99: pct(0.99), lumMax: r2(lumMax),
+    under40: share(0, 39), under80: share(0, 79), over160: share(161, 255), over240: share(241, 255),
+    satMean: r3(satSum / n), hues: out,
+  };
+}
+
 export function createBenchHarness(engine, o = {}) {
   if (!engine || !engine.renderer) throw new Error('createBenchHarness: engine required');
   const E = engine, R = E.renderer, P = E.profiler;
@@ -156,7 +228,36 @@ export function createBenchHarness(engine, o = {}) {
     frozen: false,
 
     /** Mark the sample loaded: the smoke / bench scripts wait for this. */
-    setReady() { h.ready = true; return h; },
+    setReady() {
+      h.ready = true;
+      if (typeof location !== 'undefined' && /[?&]perfreport=1\b/.test(location.search)) setTimeout(() => showDeviceReport(h), 600);
+      return h;
+    },
+
+    /**
+     * Measure every pose at the current size (see "Device report" in the header).
+     * @param {{ repeats?: number, frames?: number }} [o]
+     */
+    async report({ repeats = 3, frames = 24 } = {}) {
+      const nav = typeof navigator !== 'undefined' ? navigator : /** @type {any} */ ({}), scr = typeof screen !== 'undefined' ? screen : null;
+      const out = {
+        name: h.name, date: new Date().toISOString(),
+        device: { userAgent: nav.userAgent || '', renderer: P.gpuRenderer, pixelRatio: typeof devicePixelRatio === 'number' ? devicePixelRatio : 1,
+          screen: scr ? `${scr.width}x${scr.height}` : '', memory: /** @type {any} */ (nav).deviceMemory ?? null, cores: nav.hardwareConcurrency ?? null },
+        query: typeof location !== 'undefined' ? location.search : '', size: null, poses: [],
+      };
+      for (const id of h.poses) {
+        h.pose(id); await h.settle();
+        const runs = [];
+        for (let i = 0; i < repeats; i++) runs.push(h.bench(frames));
+        runs.sort((a, b) => a - b);
+        const ms = runs[runs.length >> 1], info = h.info();
+        out.size = info.size;
+        out.poses.push({ pose: id, ms: r2(ms), fps: r2(1000 / ms), drawCalls: info.drawCalls, triangles: info.triangles, look: h.look(8) });
+        await new Promise((res) => setTimeout(res, 0));
+      }
+      return out;
+    },
 
     /** Stop the engine's rAF loop so nothing moves between harness calls. */
     freeze() { if (!h.frozen) { E.stop(); h.frozen = true; } return h; },
@@ -267,6 +368,9 @@ export function createBenchHarness(engine, o = {}) {
       for (let s = 0; s <= top; s++) { acc += hist[s]; if (acc >= lim) { p99 = s; break; } }
       return { meanAbs: r4(sum / q / n), p99: r3(p99 / q), max: r3(max / q), pctOver2: r3(100 * over2 / n), pctOver8: r3(100 * over8 / n) };
     },
+
+    /** Tone and palette of the current pose's frame: lookStats(capture(scale)) (see "Look" in the header). */
+    look(scale = 4) { return lookStats(h.capture(scale)); },
 
     /**
      * Set a registered knob.

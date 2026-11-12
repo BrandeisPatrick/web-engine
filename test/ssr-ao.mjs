@@ -71,7 +71,7 @@ cam.position.set(3, 2, 10); cam.lookAt(0, 1, 0); cam.updateMatrixWorld();
 const hist = new CameraHistory(cam);
 const gbStub = { normal: new THREE.Texture() };
 {
-  const want = { scale: 0.5, maxPixels: Infinity, steps: 24, refine: 4, maxDistance: 80, thickness: 0.4, thicknessScale: 0, maxRoughness: 0.5, edgeFade: 0.1, jitter: false, metalTint: true, source: 'current' };
+  const want = { scale: 0.5, maxPixels: Infinity, steps: 24, refine: 4, maxDistance: 80, thickness: 0.4, thicknessScale: 0, maxRoughness: 0.5, edgeFade: 0.1, jitter: false, metalTint: true, source: 'current', denoise: 0 };
   check('SSR_DEFAULTS: exactly the documented keys', Object.keys(SSR_DEFAULTS).join() === Object.keys(want).join(), Object.keys(SSR_DEFAULTS).join());
   for (const k in want) check(`SSR_DEFAULTS.${k} = ${String(want[k])}`, Object.is(SSR_DEFAULTS[k], want[k]), String(SSR_DEFAULTS[k]));
   check('SSR_DEFAULTS frozen', Object.isFrozen(SSR_DEFAULTS));

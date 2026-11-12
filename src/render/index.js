@@ -26,7 +26,7 @@ export {
 } from './shadowKernel.js';
 export { makeCloudTexture, sampleCloud, makeFlareTextures } from './skyTextures.js';
 export {
-  textureBase, basisPath, loadTextureManifest, loadTextureSet, makeTextureArray, proceduralPbr, TextureSets, ktx2Support,
+  textureBase, basisPath, loadTextureManifest, sharedTextureManifest, manifestListsSet, loadTextureSet, makeTextureArray, proceduralPbr, TextureSets, ktx2Support,
   makeAsphaltTexture, makePavingTexture, makeConcreteTexture, makeGroundTexture, makeGrassTexture, makeWaterNormalTexture,
   makeCanvas, paintCanvas, finishTexture, makeDataArrayTexture, freeAfterUpload,
 } from './TextureSets.js';
@@ -48,6 +48,8 @@ export { GpuParticleSystem, GpuParticleStaging } from './GpuParticles.js';
 export { DEFAULT_RINGS, impostorViews, bakeImpostors, createImpostorMaterial, ImpostorBatch } from './Impostors.js';
 export { createTimeUniforms, updateTimeUniforms, windSway, ditherFade, applyPatches, makeDepthMaterial, GLSL_IGN, GLSL_HASH } from './MaterialPatches.js';
 export { InstancedPool } from './InstancedPool.js';
+// CPU copies of GPU data (opt-in, one-way): static geometry arrays and data / compressed texture pixels after upload
+export { releaseStaticGeometry, releaseTextureData, createMemoryTrim } from './Memory.js';
 export { LODGroup } from './LODGroup.js';
 export { ChunkCuller } from './Culling.js';
 export { DecalTrail } from './Decals.js';

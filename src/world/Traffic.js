@@ -15,9 +15,18 @@
 // head/tail/brake lamps scaled by darkness). Instances are re-packed every frame (_present): near-cascade casters
 // first, then the rest of the view, then far-cascade-only casters, so the main pass and each shadow cascade draw only
 // a prefix (engine ShadowPasses.shadowCount) instead of all vehicles in every pass. Headlight beams at night.
+// Opt-in detail rings (`hd: { count, radius, midCount, midRadius, parked, shadowProxy }`, Vehicles.js lod 'hd' / 'mid'):
+// the nearest `count` cars within `radius` m are drawn from one HD InstancedMesh per type (two draws: opaque + blended
+// glass), the next nearest `midCount` within `midRadius` from one mid mesh per type (one draw), the rest from their
+// LOD-0 slot; picks use a hysteresis band (a car already in a ring keeps it to radius x 1.15 / 1.1 and wins ties), so
+// the swap never flickers. With `parked` (default true) Props' parked cars get the same two rings: hidden in its
+// BatchedMesh, drawn here with its parked look. Ring meshes write G-buffer velocity (per-vehicle previous matrices,
+// ENGINE_GBUFFER_INSTANCE_PREV); with `shadowProxy` (default) they do not cast: a LOD-0 body per ring instance does.
+// refreshHD(cameraPosition) re-picks immediately (frozen loops, bench captures). Without the option nothing changes.
 import * as THREE from 'three';
-import { makeVehicleGeometry, VEHICLE_SPECS, createVehicleMaterial } from './Vehicles.js';
+import { makeVehicleGeometry, VEHICLE_SPECS, VEHICLE_HD_TYPES, createVehicleMaterial } from './Vehicles.js';
 import { shadowCount, shadowFrustum } from './ShadowPasses.js';
+import { releaseStaticGeometry } from '../render/Memory.js';
 import { TrafficSim, TRAFFIC_TYPES, POSE_STRIDE, buildSignalInfos, playerInfoFrom, vehicleSlices } from './TrafficSim.js';
 
 const TYPES = TRAFFIC_TYPES;
@@ -64,7 +73,7 @@ export function trafficWorkerDefault() {
  * Traffic paint / lamp material tweaks (vehicles.js builds the base): brighter brake lamps, police light bars
  * flashing red / blue alternately, and glass that reflects the sky environment more strongly.
  */
-function patchTrafficMaterial(m) {
+function patchTrafficMaterial(m, key = 'roadster-vehicle-traffic-1') {
   const tu = { uTimeT: { value: 0 } };
   const prev = m.onBeforeCompile;
   m.onBeforeCompile = (sh, r) => {
@@ -80,8 +89,33 @@ function patchTrafficMaterial(m) {
       .replace('varying vec3 vLampE; varying vec3 vSurf;', 'varying vec3 vLampE; varying vec3 vSurf; varying float vGlassK;')
       .replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.indirectSpecular *= 1.0 + 1.6 * vGlassK;');
   };
-  m.customProgramCacheKey = () => 'roadster-vehicle-traffic-1';
+  m.customProgramCacheKey = () => key;
   m.userData.tu = tu;
+  return m;
+}
+
+/**
+ * Parked HD / mid cars keep Props' parked look (Props.js patchParkedMaterial: the same shader lines): no lit lamps,
+ * tail lenses glinting red at night, a police light bar idling red / blue. Uniforms copied from props.parkedMat.
+ */
+function patchParkedHD(m, key) {
+  const pu = { uDarkP: { value: 0 }, uTimeP: { value: 0 } };
+  const prev = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    prev(sh, r);
+    Object.assign(sh.uniforms, pu);
+    sh.vertexShader = sh.vertexShader
+      .replace('uniform float uDark;', 'uniform float uDark; uniform float uDarkP; uniform float uTimeP;')
+      .replace('vLampE = vec3( 0.0 );', `vLampE = vec3( 0.0 );
+if ( aLamp > 1.5 && aLamp < 2.5 ) vLampE = vec3( 1.0, 0.02, 0.01 ) * ( 0.02 + uDarkP * 0.16 );
+else if ( aLamp > 4.5 ) {
+  float ph = sin( uTimeP * 3.3 );
+  float on = aLamp < 5.5 ? smoothstep( 0.2, 0.7, ph ) : smoothstep( 0.2, 0.7, -ph );
+  vLampE = ( aLamp < 5.5 ? vec3( 1.0, 0.04, 0.03 ) : vec3( 0.06, 0.2, 1.0 ) ) * on * ( 0.6 + uDarkP * 3.0 );
+}`);
+  };
+  m.customProgramCacheKey = () => key;
+  m.userData.pu = pu;
   return m;
 }
 
@@ -98,8 +132,17 @@ export class Traffic {
    * @param {THREE.Camera} [o.camera] for out-of-view respawns (also: setCamera, world.camera)
    * @param {{lower?: object, stripe?: object}} [o.busLivery] bus colours (Vehicles.js DEFAULT_BUS_LIVERY)
    * @param {boolean} [o.worker] simulate in a Web Worker (default trafficWorkerDefault())
+   * @param {object|null} [o.mix] opt-in fleet shares { typeName: share } (TrafficSim typeCounts); null = the default fleet
+   * @param {object|null} [o.area] opt-in { recycleRadius, spawnRadius } (m, TrafficSim); null = 700 / 620
+   * @param {object|boolean|null} [o.hd] opt-in detailed cars near the camera: true or { count = 3, radius = 18,
+   *        midCount = 8, midRadius = 45, parked = true, shadowProxy = true, releaseCpu = true } (also read from
+   *        world.opts.traffic.hd); null = off. releaseCpu: the shared ring geometry drops its CPU arrays after upload
    */
-  constructor({ world, data, net, props, seed = 7, count, camera, busLivery = null, worker } = {}) {
+  constructor({ world, data, net, props, seed = 7, count, camera, busLivery = null, worker, mix = null, area = null, hd } = {}) {
+    const wh = hd ?? (world && world.opts && world.opts.traffic && typeof world.opts.traffic === 'object' ? world.opts.traffic.hd : null);
+    this.hd = wh ? { count: 3, radius: 18, midCount: 8, midRadius: 45, parked: true, shadowProxy: true, releaseCpu: true, ...(wh === true ? {} : wh) } : null;
+    this.area = area || null; // opt-in { recycleRadius, spawnRadius } (TrafficSim), handed to the worker's sim too
+    this.mix = mix || null; // opt-in fleet mix (TrafficSim typeCounts), handed to the worker's sim too
     this.world = world; this.data = data; this.net = net; this.props = props; this.seed = seed;
     this.busLivery = busLivery;
     const wo = world && world.opts ? world.opts.traffic : undefined;
@@ -141,7 +184,7 @@ export class Traffic {
       signals: buildSignalInfos({ data: this.data, net: this.net, props: this.props }),
       groundAt: W && W.getGroundHeight ? (x, z, y) => W.getGroundHeight(x, z, y) : null,
       spawn: W && W.getSpawn ? W.getSpawn().position : { x: 0, z: 0 },
-      seed: this.seed, count: this.target,
+      seed: this.seed, count: this.target, mix: this.mix, ...(this.area || {}),
     });
     if (!sim.build()) { this.sim = null; return null; }
     this.count = sim.count;
@@ -199,7 +242,7 @@ export class Traffic {
       const bk = sim.baked;
       // the worker gets its own copy of the baked heights (the main-thread sim keeps its graph as the fallback)
       const heights = bk.heights.slice(), index = bk.index.slice();
-      worker.postMessage({ type: 'init', roads: sim.roads, signals: sim.sigInfos, heights, index, spawn: { x: sim.spawn.x, z: sim.spawn.z }, seed: sim.seed, count: sim.target, n: N },
+      worker.postMessage({ type: 'init', roads: sim.roads, signals: sim.sigInfos, heights, index, spawn: { x: sim.spawn.x, z: sim.spawn.z }, seed: sim.seed, count: sim.target, mix: sim.mix, area: this.area, n: N },
         [heights.buffer, index.buffer]);
     });
   }
@@ -256,6 +299,11 @@ export class Traffic {
     }
     this.material.userData.u.uDark.value = Math.min(1, Math.max(0, (darkness - 0.12) / 0.45));
     this._lightT = (this._lightT || 0) + dt; this.material.userData.tu.uTimeT.value = this._lightT;
+    if (this.materialHD) for (const m of [this.materialHD, this.glassHD]) { m.userData.u.uDark.value = this.material.userData.u.uDark.value; m.userData.tu.uTimeT.value = this._lightT; }
+    if (this.parkedMatHD) { // follow Props' parked glint / idle flash uniforms
+      const src = this.props && this.props.parkedMat && this.props.parkedMat.userData.pu;
+      if (src) for (const m of [this.parkedMatHD, this.parkedGlassHD]) { m.userData.pu.uDarkP.value = src.uDarkP.value; m.userData.pu.uTimeP.value = src.uTimeP.value; }
+    }
     S.readSignals(this.props && this.props.signals); // the phase the bulbs show this frame
     const src = this._player || (this.world && this.world.player) || null;
     const info = src ? playerInfoFrom(src, this._plInfo) : null;
@@ -315,6 +363,217 @@ export class Traffic {
       this.meshes.push(mesh);
       this.group.add(mesh);
     });
+    if (this.hd) this._buildHD(counts);
+  }
+
+  // ================================================================ opt-in HD / mid cars near the camera
+  _buildHD(counts) {
+    const H = this.hd, hdTypes = new Set(VEHICLE_HD_TYPES), N = this.sim.vehicles.length;
+    // G-buffer velocity from the previous instance matrices (slots are repacked, so prev is kept per vehicle)
+    const vel = (m) => { m.defines = { ...(m.defines || {}), ENGINE_GBUFFER_INSTANCE_PREV: '' }; return m; };
+    this.materialHD = vel(patchTrafficMaterial(createVehicleMaterial({ brake: true, hd: true }), 'roadster-vehicle-traffic-hd-1'));
+    this.glassHD = vel(patchTrafficMaterial(createVehicleMaterial({ brake: true, glass: true, hd: true }), 'roadster-vehicle-traffic-hdg-1'));
+    if (!H.shadowProxy) this.materialHD.shadowSide = THREE.DoubleSide; // open shells: cast from both faces
+    // ring meshes are built lazily, the first time a car of their type is about to enter the ring (one build per frame);
+    // a type that never comes near costs nothing. _ringOk: types that may get rings; capacities per type.
+    this._ringOk = TYPES.map((T, ti) => !!(counts[ti] && hdTypes.has(T.name)));
+    this._cap = TYPES.map((T, ti) => [Math.min(H.count, counts[ti]), Math.min(H.midCount, counts[ti])]);
+    this.hdMeshes = TYPES.map(() => null); this.midMeshes = TYPES.map(() => null);
+    this._proxies = new Map(); // type -> LOD-0 shadow caster (moving + parked)
+    this._geos = new Map(); // `${type}:${lod}` -> the shared packed geometry (one copy for moving and parked meshes)
+    this._hdSel = new Uint8Array(N); this._hdPrev = new Uint8Array(N); this._hdDist = new Float64Array(N);
+    const K = Math.max(H.count, H.midCount, 1);
+    this._rkD = new Float64Array(K); this._rkI = new Int32Array(K);
+    this._pm16 = new Float32Array(N * 16); this._pmOK = new Uint8Array(N);
+    this._builds = 0;
+    // parked cars (Props' BatchedMesh): the nearest swapped for HD / mid copies drawn here, with Props' parked look
+    const PP = H.parked && this.props && this.props.parked;
+    if (PP && PP.typeNames) {
+      this.parkedMatHD = patchParkedHD(createVehicleMaterial({ brake: false, lamps: false, hd: true }), 'roadster-vehicle-parked-hd-1');
+      this.parkedGlassHD = patchParkedHD(createVehicleMaterial({ brake: false, lamps: false, glass: true, hd: true }), 'roadster-vehicle-parked-hdg-1');
+      if (!H.shadowProxy) this.parkedMatHD.shadowSide = THREE.DoubleSide;
+      const n0 = PP.ids.length;
+      this._pk = { P: PP, ok: PP.typeNames.map((nm) => hdTypes.has(nm)), sel: new Uint8Array(n0), prev: new Uint8Array(n0), dist: new Float64Array(n0), hd: new Map(), mid: new Map(), m: new THREE.Matrix4(), c: new THREE.Color() };
+    }
+  }
+
+  /** Ring mesh for (type, lod) on demand: null while this frame's build budget is spent. */
+  _ensure(store, key, name, lod, cap, mats, label, brake, velocity) {
+    let m = store instanceof Map ? store.get(key) : store[key];
+    if (m || !cap) return m || null;
+    const gk = `${name}:${lod}`;
+    if (!this._geos.has(gk)) { if (this._builds >= 1) return null; this._builds++; }
+    m = this._hdMesh(name, lod, cap, mats, label, brake, velocity);
+    if (store instanceof Map) store.set(key, m); else store[key] = m;
+    return m;
+  }
+
+  _hdMesh(name, lod, cap, mats, label, brake, velocity) {
+    const H = this.hd, gk = `${name}:${lod}`;
+    let shared = this._geos.get(gk);
+    if (!shared) { shared = makeVehicleGeometry(name, { lod }); this._geos.set(gk, shared); }
+    // a view: the shared vertex / index buffers (one GPU copy) + this mesh's own per-instance attributes
+    const geo = new THREE.BufferGeometry();
+    geo.index = shared.index; for (const k in shared.attributes) geo.attributes[k] = shared.attributes[k];
+    geo.groups = shared.groups; geo.boundingBox = shared.boundingBox; geo.boundingSphere = shared.boundingSphere; geo.userData = shared.userData;
+    if (brake) { const b = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1); b.setUsage(THREE.DynamicDrawUsage); geo.setAttribute('aBrake', b); }
+    if (velocity) { const p = new THREE.InstancedBufferAttribute(new Float32Array(cap * 16), 16); p.setUsage(THREE.DynamicDrawUsage); geo.setAttribute('instancePrevMatrix', p); }
+    const mesh = new THREE.InstancedMesh(geo, mats, cap);
+    mesh.name = label; mesh.count = 0; mesh.frustumCulled = false; mesh.castShadow = !H.shadowProxy; mesh.receiveShadow = true;
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.setColorAt(0, new THREE.Color(1, 1, 1)); mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+    mesh.userData.tris = shared.userData.tris;
+    this.group.add(mesh);
+    // the shared vertex arrays leave the JS heap after their upload (render/Memory.js; per-instance data stays)
+    if (H.releaseCpu) releaseStaticGeometry(mesh);
+    if (H.shadowProxy && !this._proxies.has(name)) {
+      if (!this.proxyMat) { // invisible in the view, casts in every shadow pass
+        const pm = this.proxyMat = createVehicleMaterial({ brake: false, lamps: false });
+        pm.colorWrite = false; pm.depthWrite = false; pm.shadowSide = THREE.DoubleSide;
+      }
+      const px = new THREE.InstancedMesh(makeVehicleGeometry(name), this.proxyMat, 2 * (H.count + H.midCount));
+      px.name = `traffic-hd-shadow-${name}`; px.count = 0; px.frustumCulled = false; px.castShadow = true; px.receiveShadow = false;
+      px.instanceMatrix.setUsage(THREE.DynamicDrawUsage); px.renderOrder = -1;
+      this._proxies.set(name, px); this.group.add(px);
+    }
+    return mesh;
+  }
+
+  /** Build every ring mesh now (moving + parked, types in this fleet), e.g. behind a loading screen: no first-use hitch. */
+  prepareHD() {
+    if (!this.hd || !this.sim) return;
+    const b = this._builds; this._builds = -1e9;
+    TYPES.forEach((T, ti) => {
+      if (!this._ringOk[ti]) return;
+      this._ensure(this.hdMeshes, ti, T.name, 'hd', this._cap[ti][0], [this.materialHD, this.glassHD], `traffic-hd-${T.name}`, true, true);
+      this._ensure(this.midMeshes, ti, T.name, 'mid', this._cap[ti][1], this.materialHD, `traffic-mid-${T.name}`, true, true);
+    });
+    const K = this._pk;
+    if (K) for (const nm of new Set(K.P.typeNames)) if (VEHICLE_HD_TYPES.includes(nm)) {
+      this._ensure(K.hd, nm, nm, 'hd', this.hd.count, [this.parkedMatHD, this.parkedGlassHD], `parked-hd-${nm}`, false, false);
+      this._ensure(K.mid, nm, nm, 'mid', this.hd.midCount, this.parkedMatHD, `parked-mid-${nm}`, false, false);
+    }
+    this._builds = b;
+  }
+
+  /** Nearest `K` of the candidates (dist < Infinity, not taken by a nearer ring) within R into sel (= id); hysteresis. */
+  _ring(dist, prev, sel, id, K, R, rk, kk) {
+    const D = this._rkD, I = this._rkI;
+    let n = 0;
+    for (let i = 0; i < dist.length; i++) {
+      const d = dist[i];
+      if (sel[i] || !(d < Infinity)) continue;
+      const was = prev[i] && prev[i] <= id; // in this ring (or a nearer one) last time: a wider radius, a nearer key
+      if (d > (was ? R * rk : R)) continue;
+      const key = was ? d * kk : d;
+      if (n < K) { D[n] = key; I[n] = i; n++; } else {
+        let w = 0; for (let k = 1; k < n; k++) if (D[k] > D[w]) w = k;
+        if (key < D[w]) { D[w] = key; I[w] = i; }
+      }
+    }
+    for (let k = 0; k < n; k++) sel[I[k]] = id;
+  }
+
+  /** Rings for the moving fleet from the last presented poses: 1 = HD, 2 = mid, 0 = LOD 0 (_hdSel). */
+  _pickHD() {
+    const H = this.hd, V = this.sim.vehicles, P = this.pp, A = this.act, cam = this._cam, dist = this._hdDist;
+    this._hdPrev.set(this._hdSel); this._hdSel.fill(0);
+    for (let i = 0; i < V.length; i++) {
+      const q = i * 6;
+      dist[i] = A[i] && this._ringOk[V[i].type] ? Math.hypot(P[q] - cam.x, P[q + 1] - cam.y, P[q + 2] - cam.z) : Infinity;
+    }
+    const sel = this._hdSel;
+    this._ring(dist, this._hdPrev, sel, 1, H.count, H.radius, 1.15, 0.87);
+    this._ring(dist, this._hdPrev, sel, 2, H.midCount, H.midRadius, 1.1, 0.9);
+    for (let i = 0; i < V.length; i++) { // the ring's mesh for this type (built now, or next frame: then LOD 0 meanwhile)
+      if (!sel[i]) continue;
+      const ti = V[i].type, nm = TYPES[ti].name;
+      const m = sel[i] === 1 ? this._ensure(this.hdMeshes, ti, nm, 'hd', this._cap[ti][0], [this.materialHD, this.glassHD], `traffic-hd-${nm}`, true, true)
+        : this._ensure(this.midMeshes, ti, nm, 'mid', this._cap[ti][1], this.materialHD, `traffic-mid-${nm}`, true, true);
+      if (!m) sel[i] = 0;
+    }
+  }
+
+  _presentHD() {
+    const V = this.sim.vehicles, P = this.pp, sel = this._hdSel, A = this.act, PM = this._pm16, OK = this._pmOK;
+    for (const m of this.hdMeshes) if (m) m.count = 0;
+    for (const m of this.midMeshes) if (m) m.count = 0;
+    for (const m of this._proxies.values()) m.count = 0;
+    for (let i = 0; i < V.length; i++) {
+      const v = V[i], mesh = sel[i] && A[i] ? (sel[i] === 1 ? this.hdMeshes : this.midMeshes)[v.type] : null;
+      if (!mesh) { OK[i] = 0; continue; }
+      const k = mesh.count++, q = i * 6, E = mesh.instanceMatrix.array, e = k * 16;
+      const yaw = P[q + 3], pitch = P[q + 4], ca = Math.cos(pitch), sa = Math.sin(pitch), cy = Math.cos(yaw), sy = Math.sin(yaw);
+      E[e] = cy; E[e + 1] = 0; E[e + 2] = -sy; E[e + 3] = 0;
+      E[e + 4] = sy * sa; E[e + 5] = ca; E[e + 6] = cy * sa; E[e + 7] = 0;
+      E[e + 8] = ca * sy; E[e + 9] = -sa; E[e + 10] = ca * cy; E[e + 11] = 0;
+      E[e + 12] = P[q]; E[e + 13] = P[q + 1]; E[e + 14] = P[q + 2]; E[e + 15] = 1;
+      const pv = mesh.geometry.attributes.instancePrevMatrix.array;
+      for (let j = 0; j < 16; j++) { pv[e + j] = OK[i] ? PM[i * 16 + j] : E[e + j]; PM[i * 16 + j] = E[e + j]; }
+      OK[i] = 1;
+      mesh.geometry.attributes.aBrake.array[k] = P[q + 5];
+      const c = mesh.instanceColor.array; c[k * 3] = v.rgb[0]; c[k * 3 + 1] = v.rgb[1]; c[k * 3 + 2] = v.rgb[2];
+      const px = this._proxies.get(TYPES[v.type].name);
+      if (px) { const pe = px.count++ * 16, PE = px.instanceMatrix.array; for (let j = 0; j < 16; j++) PE[pe + j] = E[e + j]; }
+    }
+    for (const m of [...this.hdMeshes, ...this.midMeshes]) if (m && m.count) {
+      m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true;
+      m.geometry.attributes.aBrake.needsUpdate = true; m.geometry.attributes.instancePrevMatrix.needsUpdate = true;
+    }
+  }
+
+  /** Parked cars: the nearest (hysteresis) are hidden in Props' batch and drawn from the HD / mid meshes here. */
+  _parkedHD() {
+    const K = this._pk;
+    if (K) {
+      const H = this.hd, { P, sel, prev, dist } = K, cam = this._cam, n0 = P.ids.length, names = P.typeNames;
+      prev.set(sel); sel.fill(0);
+      for (let i = 0; i < n0; i++) dist[i] = K.ok[P.type[i]] ? Math.hypot(P.x[i] - cam.x, P.y[i] - cam.y, P.z[i] - cam.z) : Infinity;
+      this._ring(dist, prev, sel, 1, H.count, H.radius, 1.15, 0.87);
+      this._ring(dist, prev, sel, 2, H.midCount, H.midRadius, 1.1, 0.9);
+      for (let i = 0; i < n0; i++) if (sel[i]) {
+        const nm = names[P.type[i]];
+        const m = sel[i] === 1 ? this._ensure(K.hd, nm, nm, 'hd', H.count, [this.parkedMatHD, this.parkedGlassHD], `parked-hd-${nm}`, false, false)
+          : this._ensure(K.mid, nm, nm, 'mid', H.midCount, this.parkedMatHD, `parked-mid-${nm}`, false, false);
+        if (!m) sel[i] = 0;
+      }
+      for (const m of K.hd.values()) m.count = 0;
+      for (const m of K.mid.values()) m.count = 0;
+      for (let i = 0; i < n0; i++) {
+        // Props keeps its own near / far state (st); give a car back only if Props would draw it
+        if (!!sel[i] !== !!prev[i]) { if (sel[i]) P.mesh.setVisibleAt(P.ids[i], false); else if (P.st[i] >= 0) P.mesh.setVisibleAt(P.ids[i], true); }
+        if (!sel[i]) continue;
+        const nm = names[P.type[i]], mesh = (sel[i] === 1 ? K.hd : K.mid).get(nm), j = mesh.count++;
+        P.mesh.getMatrixAt(P.ids[i], K.m); mesh.setMatrixAt(j, K.m);
+        P.mesh.getColorAt(P.ids[i], K.c); mesh.setColorAt(j, K.c);
+        const px = this._proxies.get(nm);
+        if (px && px.count < px.instanceMatrix.count) px.setMatrixAt(px.count++, K.m);
+      }
+      for (const m of [...K.hd.values(), ...K.mid.values()]) if (m.count) { m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; }
+    }
+    for (const px of this._proxies.values()) if (px.count) px.instanceMatrix.needsUpdate = true;
+  }
+
+  /**
+   * Re-pick and redraw the HD / mid rings (moving and parked) for a camera at `cameraPosition` now, from the poses
+   * already presented: for frozen loops / bench captures, where update() does not run after the camera moved.
+   * @param {THREE.Vector3|{x:number,y:number,z:number}} [cameraPosition]
+   */
+  refreshHD(cameraPosition) {
+    if (!this.hd || !this.sim) return;
+    if (cameraPosition) this._cam.set(cameraPosition.x, cameraPosition.y, cameraPosition.z);
+    // (a worker snapshot handed back to the worker since is detached: fall back to the newest poses)
+    const src = this._lastSrc && this._lastSrc.length ? this._lastSrc : this.mode === 'worker' && this.snap ? this.snap : this.poses;
+    this._present(src, src === this._lastSrc ? this._lastExt || 0 : 0);
+  }
+
+  /** Instances and triangles drawn by the HD / mid rings this frame (moving, parked; shadow proxies). */
+  hdStats() {
+    const sum = (ms) => { let n = 0, t = 0; for (const m of ms) if (m) { n += m.count; t += m.count * (m.userData.tris || 0); } return [n, t]; };
+    const K = this._pk, [hd, hdT] = sum(this.hdMeshes || []), [mid, midT] = sum(this.midMeshes || []);
+    const [phd, phdT] = K ? sum(K.hd.values()) : [0, 0], [pmid, pmidT] = K ? sum(K.mid.values()) : [0, 0];
+    let proxyT = 0; for (const p of (this._proxies || new Map()).values()) proxyT += p.count * p.geometry.userData.tris;
+    return { hd, mid, parkedHd: phd, parkedMid: pmid, tris: hdT + midT + phdT + pmidT, shadowProxyTris: proxyT };
   }
 
   // ================================================================ headlight beams (night, near the camera)
@@ -426,6 +685,7 @@ export class Traffic {
    */
   _present(src, ext) {
     if (!src) return;
+    this._lastSrc = src; this._lastExt = ext;
     const W = this.world, A = W && W.atmo;
     const near = A && A.sun && A.sun.castShadow ? A.sun : null, far = A && A.sunFar && A.sunFar.castShadow ? A.sunFar : null;
     const fN = near ? shadowFrustum(near, this._fN || (this._fN = new THREE.Frustum())) : null;
@@ -442,6 +702,9 @@ export class Traffic {
     const L = A && A.lightDir, Ly = L ? Math.max(0.05, L.y) : 1, sl = Math.min(90, 4 / Ly) * 0.5;
     const V = this.sim.vehicles, P = this.pp, act = this.act, TN = this._tierN, TI = this._tierIdx;
     TN.fill(0);
+    this._builds = 0;
+    if (this.hd) this._pickHD(); // from the last presented poses: the same set is skipped below and drawn HD after
+    const hdSel = this.hd ? this._hdSel : null;
     // frustum planes as flat arrays (0: near cascade, 24: view, 48: far cascade): inlined sphere tests
     const FP = this._fp || (this._fp = new Float64Array(72));
     if (fN) loadPlanes(fN, FP, 0);
@@ -461,6 +724,7 @@ export class Traffic {
       P[q] = x; P[q + 1] = y; P[q + 2] = z; P[q + 3] = yaw; P[q + 4] = pitch; P[q + 5] = src[o + 5];
       act[i] = 1;
       if (!this.meshes[v.type]) continue;
+      if (hdSel && hdSel[i]) continue; // drawn by the HD mesh (selection of the previous frame's poses)
       let t;
       if (!fV) t = 0; // no camera: every vehicle in every pass
       else {
@@ -505,6 +769,7 @@ export class Traffic {
       const ab = mesh.geometry.attributes.aBrake; ab.clearUpdateRanges(); ab.addUpdateRange(0, n); ab.needsUpdate = true;
       if (col) { mesh.instanceColor.clearUpdateRanges(); mesh.instanceColor.addUpdateRange(0, n * 3); mesh.instanceColor.needsUpdate = true; }
     }
+    if (this.hd) { this._presentHD(); this._parkedHD(); }
   }
 
   // ================================================================ colliders
@@ -560,6 +825,10 @@ export class Traffic {
     if (this.worker) { this.worker.terminate(); this.worker = null; }
     this.mode = 'main';
     for (const m of this.meshes) if (m) { m.geometry.dispose(); m.dispose && m.dispose(); }
+    const extra = [...(this.hdMeshes || []), ...(this.midMeshes || []), ...(this._proxies ? this._proxies.values() : []), ...(this._pk ? [...this._pk.hd.values(), ...this._pk.mid.values()] : [])];
+    for (const m of extra) if (m) { m.geometry.dispose(); m.dispose && m.dispose(); }
+    if (this._pk) { const P = this._pk.P; for (let i = 0; i < this._pk.sel.length; i++) if (this._pk.sel[i] && P.st[i] >= 0) P.mesh.setVisibleAt(P.ids[i], true); }
+    for (const m of [this.materialHD, this.glassHD, this.parkedMatHD, this.parkedGlassHD, this.proxyMat]) if (m) m.dispose();
     if (this.beams) { this.beams.geometry.dispose(); this.beams.material.dispose(); this.pools.geometry.dispose(); this.pools.material.dispose(); }
     if (this.material) this.material.dispose();
     if (this.group && this.group.parent) this.group.parent.remove(this.group);

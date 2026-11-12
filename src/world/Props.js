@@ -495,7 +495,8 @@ export class Props {
     const gids = geos.map(([a, b]) => [cars.addGeometry(a), cars.addGeometry(b)]);
     const col = new THREE.Color();
     const _qp = new THREE.Quaternion(), XA = new THREE.Vector3(1, 0, 0);
-    const P = this.parked = { mesh: cars, ids: new Int32Array(n), type: new Uint8Array(n), x: new Float32Array(n), y: new Float32Array(n), z: new Float32Array(n), st: new Int8Array(n).fill(-2), gids };
+    // typeNames: type index -> vehicle type (read by Traffic's opt-in HD swap of the nearest parked cars)
+    const P = this.parked = { mesh: cars, ids: new Int32Array(n), type: new Uint8Array(n), x: new Float32Array(n), y: new Float32Array(n), z: new Float32Array(n), st: new Int8Array(n).fill(-2), gids, typeNames: types };
     C.forEach(([x, z, fx, fz], i) => {
       let r = rnd() * wsum, ti = 0; while (ti < PARKED.length - 1 && r > PARKED[ti][1]) { r -= PARKED[ti][1]; ti++; }
       const spec = VEHICLE_SPECS[types[ti]];

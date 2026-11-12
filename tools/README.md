@@ -3,8 +3,9 @@
 Parameterised Node CLIs (Node >= 18, no npm deps except `compress-textures.mjs`) that produce the world data contracts MapWorld loads
 (see ../../ENGINE.md, "Data contracts"). Every tool takes `--help`, `--dry-run` (prints the plan, makes no requests and
 writes nothing), `--refresh` (ignore caches), `--out`, `--cache` and `--config <file.json>` (same keys as the flags;
-flags win). Defaults are the Roadster San Francisco bake; each tool also exports an async function with the same
-options in camelCase, which the game's thin wrappers in `../../tools/` call with explicit SF arguments.
+flags win). The defaults are the San Francisco bake of Roadster, the game the engine was extracted from (that repository
+is retired: pass explicit `--lat` / `--lon` and paths for a new bake, as in the NYC example below); each tool also
+exports an async function with the same options in camelCase, for a game's own scripts to call.
 
 | Tool | Output | Main flags (defaults) | Function |
 |---|---|---|---|
@@ -13,7 +14,7 @@ options in camelCase, which the game's thin wrappers in `../../tools/` call with
 | `bake-farland.mjs` | farland.json (distant relief ring) | `--city ... [--lat --lon] --half 24000 --cell 250 --zoom 11 --sea -5` | `bakeFarland(opts)` |
 | `fetch-textures.mjs` | PBR texture sets + manifest.json + CREDITS.md | `--sets textures.default.json --out public/textures --res 1k [--ktx2]` | `fetchTextures(opts)` |
 | `compress-textures.mjs` | `<id>/*.ktx2` (Basis Universal: ETC1S albedo / rough / AO, UASTC + Zstd normals, mips, Y-flipped) + manifest `ktx2Maps`; copies three's Basis transcoder | `--dir public/textures --sets a,b --quality 160 --effort 2 --uastc-level 2 --rdo 0 --uastc id/map --etc1s map --jobs 8 --basis public/basis --basis-only --force` (Node >= 20.6; npm: `ktx2-encoder`, `jpeg-js`, `ktx-parse`) | `compressTextures(opts)`, `copyTranscoder(dest)` |
-| `fetch-models.mjs` | sample character model (RobotExpressive.glb, CC0, three.js r180 examples) + CREDITS.md into `samples/character/models/` (gitignored) | `--out samples/character/models [--refresh] [--dry-run]` | `fetchModels(opts)` |
+| `fetch-models.mjs` | the CC0 RobotExpressive.glb (three.js r180 examples) + CREDITS.md. Its default `--out` is the removed character sample's folder (historical): pass `--out` | `--out <dir> [--refresh] [--dry-run]` | `fetchModels(opts)` |
 
 ```bash
 node engine/tools/bake-map.mjs --lat 40.7128 --lon -74.006 --size 1500 --bridge-ext 0,0 --out maps/nyc/city.json --dry-run

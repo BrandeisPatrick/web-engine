@@ -73,13 +73,23 @@
 // depth taps (the march stops at the first hit), `refine` depth taps and 1 colour tap on a hit, +1 colour tap (own
 // colour) with metalTint where metalness > 0: at the defaults at most 2 + 1 + 24 + 4 + 2 = 33 taps; a pixel rejected
 // in step 1 or 3 costs 1-2 reads. The depth taps are full-resolution texelFetches along a line (no hierarchical depth).
+// Denoise (`denoise`, default 0 = off: the pass and its output are exactly as above). With denoise = r > 0 the traced
+// texture goes through a separable depth- and normal-aware blur (two more passes at the output size, 9 taps each) and
+// `texture` is the blurred result. The radius is r output texels at maxRoughness, falling to 0.35 r on a mirror
+// (roughness 0): a stand-in for the roughness lobe, and what turns the per-pixel hit / miss speckle of a normal-mapped
+// glossy surface (wet asphalt: every pixel's mirror ray lands somewhere else) into a soft streak. Rgb and weight are
+// premultiplied, so the blur averages hits and misses correctly. A tap contributes by a Gaussian of its offset times
+// exp(-|z - zc| / (0.05 + 0.02 zc)) times max(0, N.Nc)^8 with z, N the tap's own full-resolution depth and G-buffer
+// normal (so a reflection never bleeds from the road onto the kerb face or a car); pixels that wrote no G-buffer
+// normal pass through. Cost: 2 x (1 + 9 x 3) reads per output pixel.
 // Limitations:
 //   - jitter does not integrate under this TAA: the TAA_SSR hook composites the SAME SSR texel into all 9 taps, so the
 //     clip box gets no variance from the reflection and the history is clipped to the current frame's hit / miss
 //     every frame; wherever hit / miss depends on the sample phase the speckle is permanent (seen on Canyon Run's
 //     gantry pillar; solid with jitter off). Jitter needs a temporal filter of this pass's own (later); off by default.
-//   - no roughness blur: the hit colour is one bilinear tap, so a glossy surface reflects as sharply as a mirror up
-//     to the roughness fade (the "mirror look" at roughness >= 0.3); a roughness-driven blur is a later item.
+//   - no roughness blur in the trace: the hit colour is one bilinear tap, so without `denoise` a glossy surface
+//     reflects as sharply as a mirror up to the roughness fade (the "mirror look" at roughness >= 0.3); `denoise`
+//     blurs by roughness in screen space, not by the distance to the hit (no hit distance is stored).
 //   - metalTint is a heuristic (step 6): the right fix is F0 (albedo luminance) in the G-buffer (0.9.0).
 //   - 8-bit octahedral normals are quantised by up to ~0.7 deg, which turns the mirror ray by up to twice that (about
 //     0.5 m of wander at 40 m, up to ~1 m): a faint waviness in reflections on flat floors.
@@ -108,6 +118,7 @@ import { GBUFFER_GLSL_DECODE } from '../GBuffer.js';
  * @property {boolean} [jitter] per-pixel, per-frame march start (needs a temporal filter TAA does not provide)
  * @property {boolean} [metalTint] tint reflections on metals by the pixel's own colour
  * @property {string} [source] 'current' (this frame's scene colour; 'history' reserved)
+ * @property {number} [denoise] blur radius in output texels at maxRoughness, [0, 16]; 0 = off (no extra passes)
  */
 
 /**
@@ -127,6 +138,7 @@ export const SSR_DEFAULTS = Object.freeze({
   jitter: false,
   metalTint: true,
   source: 'current',
+  denoise: 0,
 });
 
 /** Accepted `source` values ('history', the reprojected previous TAA output, is reserved). */
@@ -263,6 +275,49 @@ const SSRShader = {
     }`,
 };
 
+// Separable bilateral blur of the traced texture (see "Denoise" in the header). uDir = one output texel along the axis.
+const SSRBlurShader = {
+  fragmentShader: /* glsl */`
+    uniform sampler2D tSsr; // the traced (or half-blurred) reflections, premultiplied
+    uniform highp sampler2D tDepth;
+    uniform sampler2D tNormal;
+    uniform vec2 uRes; // full-resolution size (px) of tDepth / tNormal
+    uniform vec2 uDir; // one output texel along the blur axis (uv)
+    uniform float uNear, uFar, uRadius, uMaxRoughness;
+    varying vec2 vUv;
+
+    ${GBUFFER_GLSL_DECODE}
+
+    float linearDepth( float d ) { return uNear * uFar / ( uFar - ( uFar - uNear ) * d ); }
+
+    void main() {
+      vec4 c = texture2D( tSsr, vUv );
+      ivec2 mx = ivec2( uRes ) - 1;
+      ivec2 ip = min( ivec2( vUv * uRes ), mx );
+      vec4 gb = texelFetch( tNormal, ip, 0 );
+      int flags = engineGbFlags( gb.a );
+      if ( ( flags & ENGINE_GB_WROTE ) == 0 || ( flags & ENGINE_GB_HAS_NORMAL ) == 0 ) { gl_FragColor = c; return; }
+      float zc = linearDepth( texelFetch( tDepth, ip, 0 ).x );
+      vec3 nc = engineOctDecode( gb.rg );
+      float r = uRadius * mix( 0.35, 1.0, clamp( gb.b / uMaxRoughness, 0.0, 1.0 ) );
+      float zk = 1.0 / ( 0.05 + 0.02 * zc );
+      vec4 sum = c; float wsum = 1.0;
+      for ( int i = - 4; i <= 4; i ++ ) {
+        if ( i == 0 ) continue;
+        float t = float( i ) * 0.25; // -1 .. 1 across the radius
+        vec2 uv = vUv + uDir * ( t * r );
+        if ( uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0 ) continue;
+        ivec2 tp = min( ivec2( uv * uRes ), mx );
+        vec4 g = texelFetch( tNormal, tp, 0 );
+        float z = linearDepth( texelFetch( tDepth, tp, 0 ).x );
+        float nd = max( dot( nc, engineOctDecode( g.rg ) ), 0.0 ); nd *= nd; nd *= nd; nd *= nd;
+        float w = exp( - 2.0 * t * t ) * exp( - abs( z - zc ) * zk ) * nd;
+        sum += texture2D( tSsr, uv ) * w; wsum += w;
+      }
+      gl_FragColor = sum / wsum;
+    }`,
+};
+
 export class SSRPass extends Pass {
   /**
    * @param {THREE.PerspectiveCamera} camera the scene camera (its projection is jittered under TAA, like the depth)
@@ -292,6 +347,8 @@ export class SSRPass extends Pass {
     this._jitter = !!opt.jitter;
     this._metalTint = !!opt.metalTint;
     this._source = checkSource(opt.source);
+    this._denoise = checkRange(opt.denoise, 'denoise', 0, 16);
+    this._blurRts = null; this._blurMat = null; this._blurQuad = null; // built on first use (denoise > 0)
     this._w = 1; this._h = 1; // drawing-buffer size of the last setSize
     this._rt = new THREE.WebGLRenderTarget(1, 1, {
       type: THREE.HalfFloatType, format: THREE.RGBAFormat, depthBuffer: false, stencilBuffer: false,
@@ -320,7 +377,10 @@ export class SSRPass extends Pass {
   }
 
   /** The reflections of the last render: RGBA16F, premultiplied (rgb = radiance * weight, a = weight). */
-  get texture() { return this._rt.texture; }
+  get texture() { return this._denoise > 0 && this._blurRts !== null ? this._blurRts[1].texture : this._rt.texture; }
+  /** Blur radius in output texels at maxRoughness, [0, 16]; 0 = off (no extra passes, `texture` is the trace). */
+  get denoise() { return this._denoise; }
+  set denoise(v) { this._denoise = checkRange(v, 'denoise', 0, 16); if (this._denoise > 0) this._ensureBlur(); }
 
   /** Output size as a fraction of the drawing buffer, (0, 1] (resizes at once). */
   get scale() { return this._scale; }
@@ -377,6 +437,30 @@ export class SSRPass extends Pass {
     }
     this._rt.setSize(w, h);
     this.material.uniforms.uRes.value.set(Math.max(1, width), Math.max(1, height));
+    if (this._blurRts !== null) { this._blurRts[0].setSize(w, h); this._blurRts[1].setSize(w, h); this._blurMat.uniforms.uRes.value.set(Math.max(1, width), Math.max(1, height)); }
+  }
+
+  _ensureBlur() {
+    if (this._blurRts !== null) return;
+    const mk = (name) => {
+      const rt = new THREE.WebGLRenderTarget(this._rt.width, this._rt.height, {
+        type: THREE.HalfFloatType, format: THREE.RGBAFormat, depthBuffer: false, stencilBuffer: false,
+        minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false,
+      });
+      rt.texture.name = name; return rt;
+    };
+    this._blurRts = [mk('SSRBlurH'), mk('SSR')];
+    this._blurMat = new THREE.ShaderMaterial({
+      name: 'PostFXSSRBlur',
+      uniforms: {
+        tSsr: { value: null }, tDepth: { value: null }, tNormal: { value: null },
+        uRes: { value: this.material.uniforms.uRes.value.clone() }, uDir: { value: new THREE.Vector2() },
+        uNear: { value: 0.1 }, uFar: { value: 1000 }, uRadius: { value: 0 }, uMaxRoughness: { value: 1 },
+      },
+      vertexShader: SSRShader.vertexShader, fragmentShader: SSRBlurShader.fragmentShader,
+      blending: THREE.NoBlending, depthTest: false, depthWrite: false,
+    });
+    this._blurQuad = new FullScreenQuad(this._blurMat);
   }
 
   render(renderer, writeBuffer, readBuffer) {
@@ -401,12 +485,26 @@ export class SSRPass extends Pass {
     u.uFrame.value = h !== null ? h.uniforms.uFrame.value : 0;
     renderer.setRenderTarget(this._rt);
     this._quad.render(renderer);
+    if (this._denoise > 0) {
+      this._ensureBlur();
+      const b = this._blurMat.uniforms, rts = this._blurRts, w = this._rt.width, ht = this._rt.height;
+      b.tDepth.value = depth; b.tNormal.value = gb.normal;
+      if (b.uNear.value !== cam.near) b.uNear.value = cam.near;
+      if (b.uFar.value !== cam.far) b.uFar.value = cam.far;
+      if (b.uRadius.value !== this._denoise) b.uRadius.value = this._denoise;
+      if (b.uMaxRoughness.value !== this._maxRoughness) b.uMaxRoughness.value = this._maxRoughness;
+      b.tSsr.value = this._rt.texture; b.uDir.value.set(1 / w, 0);
+      renderer.setRenderTarget(rts[0]); this._blurQuad.render(renderer);
+      b.tSsr.value = rts[0].texture; b.uDir.value.set(0, 1 / ht);
+      renderer.setRenderTarget(rts[1]); this._blurQuad.render(renderer);
+    }
   }
 
   dispose() {
     this._rt.dispose();
     this.material.dispose();
     this._quad.dispose();
+    if (this._blurRts !== null) { this._blurRts[0].dispose(); this._blurRts[1].dispose(); this._blurMat.dispose(); this._blurQuad.dispose(); }
   }
 
   _syncDefines() {

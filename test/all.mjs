@@ -12,6 +12,13 @@ const SUITES = [
   { file: 'world-build.mjs', shim: true },
   { file: 'world-lights.mjs', shim: true },
   { file: 'core.mjs' },
+  { file: 'look-stats.mjs' },
+  { file: 'memory.mjs' },
+  { file: 'texture-manifest.mjs' },
+  // world: the high-detail vehicle level (lod 'hd'), with LOD 0 / 1 pinned byte-identical
+  { file: 'vehicles-hd.mjs', shim: true },
+  // quality tiers (desktop / mobile): device recommendation, ?quality= / stored precedence, preset merge
+  { file: 'quality.mjs' },
   { file: 'assets.mjs' },
   { file: 'rigs.mjs' },
   { file: 'character-input.mjs' },
@@ -48,6 +55,10 @@ const SUITES = [
   // depth and replay rules (potions.js, chain.js, secrets.js, badges.js, rng.js)
   { file: 'halloween-enemies.mjs', shim: true },
   { file: 'halloween-depth.mjs', shim: true },
+  // the Miami drive sample: its road-car spec (samples/miami-drive/spec.js) on the VehicleController
+  { file: 'miami-car.mjs' },
+  // the NYC night walk sample's engine options: traffic fleet mix and the spawn area (TrafficSim)
+  { file: 'nyc-traffic-mix.mjs' },
 ];
 let failed = 0, ran = 0;
 const t0 = performance.now();

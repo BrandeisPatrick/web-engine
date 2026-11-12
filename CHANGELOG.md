@@ -1,6 +1,126 @@
 # Changelog
 
-## Unreleased — Halloween 2026
+## Unreleased
+- `world/Shore.js` reads its texture sets from the shared texture root (`textureBase()`, so `TextureSets.options.base`
+  applies) and no longer requests a set the root's `manifest.json` does not list: a game that ships its own sets gets
+  no 404 per map (the two city demos logged eight each), and the procedural stand-in is used at once. Without a
+  manifest the maps are tried as before. `sharedTextureManifest(base)` (one request per root per page, used by
+  `loadPbrTextures` and the shore) and `manifestListsSet(manifest, id)` are exported from `@vibe/engine/render`;
+  `test/texture-manifest.mjs`. The rendered frames are unchanged (pixel differences at load-to-load noise).
+- `samples/index.html` declares an empty icon (no favicon 404).
+- `test/vehicles-hd.mjs`: the build-time check is a blow-up guard (1500 ms), not a machine-speed limit.
+
+## 1.1.0-beta.1 — 2026-11-12 — NYC and Miami demos, quality tiers, asset detail
+A pre-release from the `feat/nyc-miami-demos` branch. Before / after captures: `docs/BEFORE-AFTER.md`. Known open
+point: the two city demos' desktop tier misses its 12 ms frame budget at 3024x1964 (15-19 ms on an Apple M4); the
+mobile tier, memory and download sizes are inside every budget (`npm run perf`). This release also carries the
+"Halloween 2026" section below, which had not been released.
+- High-detail vehicles (`src/world/Vehicles.js`): `makeVehicleGeometry(type, { lod: 'hd' | 'mid' })` for the eight car
+  types. `'hd'` (36-40 k triangles): the same profiles as LOD 0 resampled into a smooth body with deliberate hard
+  edges and shut lines, recessed head and tail lamp units with ribbed cells, a grille, mirrors, handles, wipers,
+  blended glass over a modelled interior, tyres with tread and three rim designs over discs and calipers, a floor pan
+  and exhaust. `'mid'` (8-9 k): the same body at fewer stations, opaque glass, no interior. One shared, indexed,
+  packed geometry per type and level (about 1.5 MB / 0.4 MB), built on first use. `makeVehicleParts(type, { lod })`
+  returns body, glass, interior, the four wheels and calipers and their pivots for a drivable car;
+  `createVehicleMaterial({ hd, glass, envIntensity })`; `getVehicleAtlas()` (plates, tyre lettering, tread, paint
+  flake, lens patterns, generated once). LOD 0 and LOD 1 are byte-identical (pinned in `test/vehicles-hd.mjs`).
+- `Traffic` / `MapWorld({ traffic })`: opt-in `hd: { count, radius, midCount, midRadius, parked, shadowProxy }` draws
+  the nearest moving and parked cars at the high-detail level and a second ring at the mid level, with hysteresis,
+  G-buffer velocity for TAA and low-poly shadow proxies; `traffic.refreshHD(position)`, `prepareHD()`, `hdStats()`.
+  Also opt-in: `mix` (fleet share per vehicle type) and `area` (recycle / spawn radii, for denser streets from the
+  same fleet).
+- `src/render/Memory.js` (`releaseStaticGeometry`, `releaseTextureData`, `createMemoryTrim`) and
+  `world.trimMemory(renderer)`: opt-in, one-way release of CPU copies after upload (static vertex arrays, the
+  per-vertex arrays of instanced shapes, data and compressed texture pixels, the road network's build buffers).
+  Tested in `test/memory.mjs`.
+- `Buildings.js`: `buildingStyle(...)` (the style a building resolves to, for code that dresses the engine's facades),
+  `style.storeProb` and `style.storeDressing: false`; all default to the previous output.
+- `TextureSets.options.base` and `options.manifestIds` (a sample's own texture folder, and its own scan per role).
+- KTX2 texture compression runs in this repository: `ktx2-encoder`, `jpeg-js` and `ktx-parse` are devDependencies
+  (`tools/compress-textures.mjs`); the Miami demo ships compressed sets beside the JPG fallbacks.
+- Night NYC walk (`samples/nyc-night`): Midtown baked from OpenStreetMap at late dusk (`?t=night` for full night);
+  a damp street surface with scanned asphalt, cracks, seams, patches, worn paint, granite kerbs, manholes, plates and
+  tree pits; photoscanned street furniture (hydrants, cans, garbage-bag piles, barriers); facades with scanned
+  masonry, grime, graded light, sparse lit windows, window frames and air-conditioners placed from the real window
+  layout; shop fronts, shutters and lobbies as geometry; tower crowns and rooftop plant; original LED screens and
+  neon as clustered lights; lamp cones and haze halos; steam; a walker (first and third person) and pedestrians.
+- Miami drive (`samples/miami-drive`): South Beach baked from OpenStreetMap at dusk (`?t=13` for daylight); a dune
+  road with a 2k scanned surface, a parallax bank, stones, shrubs, grass and detailed palms; 2,001 buildings built
+  from their footprints as Art Deco hotels, mid-century slabs, towers and shops with recessed windows, balconies,
+  lobbies, signs and weathered stucco; a calibrated dusk sky with procedural cumulus; the hero car (the Khronos
+  "Car Concept" sample model, CC-BY 4.0, on the desktop tier; a generated sedan on phones) on the engine's
+  `VehicleController` with a tested road-car spec (`test/miami-car.mjs`), a live reflection probe, synth engine
+  sound, skid marks, smoke, knockable props and a minimap HUD.
+- The look gate: `npm run smoke` fails a sample pose whose tone or palette leaves its limits (low-key exposure,
+  nothing clipped, one hue family), measured by `window.__sample.look()`.
+- Performance ratchet: `npm run perf` (`test/browser/perf.mjs`) measures every sample view (page x quality tier at a
+  fixed size, `bench/budgets.json`) and reduces the result to one score, 100 x the geometric mean of frame budget /
+  measured ms over every pose; it compares with the committed `bench/baseline/<machine>.json`, guards the picture
+  (golden images of the baseline, load-to-load noise calibrated), the draw-call / triangle / heap / asset counters and
+  the run's own noise, and records kept, accepted and dropped changes in `bench/LOG.md`. `--costs` adds the pixel share
+  of the frame and the cost of every on / off knob. `bench/README.md` documents it; `bench/LOOP.md` is the runbook for
+  an optimisation loop.
+- Bench harness (`src/core/Bench.js`): `look()` / `lookStats(capture)` (tone and palette statistics of a frame:
+  luminance mean / median / percentiles, shares of dark and bright pixels, mean saturation, saturated share per hue),
+  gated per page and pose in `npm run smoke`; `report()` and `?perfreport=1` (an on-device measurement of every pose
+  with a copyable JSON result, for phones and tablets).
+- `SSRPass`: opt-in `denoise` (a separable depth- and normal-aware blur of the reflection buffer, radius by roughness;
+  default 0 = off, output unchanged).
+- Samples replaced: the four test samples `canyon-run`, `city`, `character` and `sandbox` are removed (they are in
+  git history: `main` at fc73161). Two demos take their place: `samples/nyc-night/` ("Night NYC walk": buildings and
+  night lighting) and `samples/miami-drive/` ("Miami drive": assets, driving feel and physics). `samples/halloween/`
+  (Midnight Candy Run) stays. `vite.config.js`, `samples/index.html`, the browser smoke / bench scripts and
+  `bench/release-sweep.js` list the three; the smoke script also runs `nyc-night-mobile`, `miami-drive-mobile` and
+  `halloween-mobile` (the same page with `?quality=mobile`), and reports the Halloween game (no bench harness:
+  `window.__game`) as loaded-and-skipped, failing on console errors.
+- Quality tiers (`src/core/Quality.js`, exported from `@vibe/engine/core`): two presets, `desktop` (Macs, laptops and
+  desktops with a real GPU) and `mobile` (phones and tablets), as plain option groups a sample spreads into Engine /
+  Atmosphere / PostFX / MapWorld (`QUALITY_TIERS`, `tierSettings(tier, overrides)` deep-merges without touching the
+  presets, `defineTier(tier, patch)` adds a game's own keys). `recommendTier()` picks from the device (phone or tablet
+  user agent, an iPad reporting a Mac, a coarse multi-touch screen, a software or weak integrated GPU, 4 GB or 4 cores
+  and below: mobile). `resolveQuality()` takes `?quality=desktop|mobile` (legacy `high` / `low` map to them), else the
+  stored choice (`storeTier`, localStorage `vibe.quality` or a game's own key), else the recommendation. Node-safe:
+  it checks `window` before `localStorage`, so Node 22+ prints no ExperimentalWarning. Tested in `test/quality.mjs`.
+- `QualityMenu` (`src/ui/QualityMenu.js`, exported from `@vibe/engine/ui`): a settings gear and panel listing both
+  tiers, the device's pick tagged "Recommended"; a change stores the tier and reloads (or calls `onChange`);
+  `addRow(label, control)` for a game's own settings.
+- Midnight Candy Run uses the tiers: its light look (`LOW`) is the mobile tier, picked by `resolveQuality` (phones and
+  tablets as before; `?quality=low|high` still work), and the title's gear / the pause screen's GRAPHICS button open
+  the quality panel, centred over the screen, never during play. The look of each tier is unchanged.
+- Midnight Candy Run look remaster (no rule, balance, layout, collider or pickup change; `?look=classic` keeps the
+  first look): a cool, desaturated moonlit night with a violet lean where the lanterns, windows and candy are the
+  saturated accents, exposure kept off the clip (a 384 px procedural moon with maria and craters, smaller halos with a
+  tighter core, lit windows that show a room); CC0 Poly Haven ground scans (grass, leaf litter, the lane's gravel) on
+  the terrain with normal maps on desktop (`samples/public/halloween/CREDITS.md`, 5.4 MB, phones load 435 KB of 512 px
+  albedo); pools of light from the porch lamps and the gate's candles on the ground and facades (desktop); a
+  two-layer tree line at 4x the resolution; denser, drier grass; weathered prop grain; desktop on the G-buffer path
+  with TAA; quieter HUD pills. `?bench=1` builds the world without a round and exposes the bench harness
+  (`window.__sample`: gate, graveyard, village, house), and the smoke test gates its look (`PAGE_LOOK.halloween`).
+- Midnight Candy Run remaster, round 2 (objects; same rules): CC0 material scans on the props (boards, slate,
+  masonry, lichened stone, bark; normal maps on desktop) chosen per part by a `surf` vertex attribute (props.js SURF,
+  looks.js patchSurfaces), rust on the iron; pumpkins with a skin (streaks, scars, a waxy sheen) and finer decor
+  pumpkins; candy in cellophane with crinkles and a small sharp highlight; trees with rounder trunks and a third level
+  of branches (desktop); clumped grass, leaf drifts against fences, walls, graves and trunks, twigs, mushrooms, stones
+  along the lane, puddles (ground cover, instanced); sample-side cumulus puffs with a silver rim toward the moon
+  (`samples/halloween/clouds.js`); ghost sheets thinner at the silhouette; a contact shadow under the kid. Desktop adds
+  5.8 MB of scans, phones 0.58 MB; the phones' frame time is unchanged (props without the procedural detail fetch).
+  `?bench=1&closeups=1` adds look-development close-ups (not in the smoke / perf views).
+- Midnight Candy Run remaster, round 3: the cumulus billboards are off by default (`?clouds=1`; the sky shader's
+  cover is back to 0.36). Desktop under its 12 ms budget at 3024x1964 (gate 14.6 -> 11.8 ms): grass and the small
+  dressing fold away with distance, the ground's normal maps and second sample only within ~30 m (normals at 2x
+  anisotropy), the lamp pools limited to the 3 nearest, AO at 0.4 MP; the bench registers cost knobs for
+  `perf.mjs --costs` (G-buffer / TAA, volumetrics, grass, cover, mist, pools, ground normals, bloom, AO). Objects
+  (desktop unless noted): smooth jack-o'-lanterns (a spline-resampled profile, ~3.4k triangles) each with its own
+  build (squat, tall, lopsided), carved faces that show the lit hollow through a deeper cut, a lid seam; smoother decor
+  pumpkins; carved epitaphs on the slab gravestones (R.I.P., names and dates, a winged skull, a willow; one
+  instanced decal); porch lamps as lanterns with muntins and a small flame core (both tiers); chimney pots, sagging
+  gutters and downpipes on the cottages; slate rows follow the roof's slope (the east cottage); a faint sky fill on
+  boards and masonry facing away from the moon; per-part material kinds on the witch (weave on cloth, strands on the
+  braids). Phones: frame time equal to the classic look within 0.02 ms.
+- The Roadster repository is retired: the README no longer links it, and `tools/README.md` marks its San Francisco
+  defaults as historical. Older entries below that mention Roadster or the removed samples are kept as they were.
+
+## Halloween 2026 (first released in 1.1.0-beta.1)
 Phone touch options for the input layer, all opt-in (without them the touch controls are placed and behave exactly as
 in 1.0.0), driven by the new Halloween game sample (`samples/halloween/`, "Midnight Candy Run").
 - `TouchControls`: `safeArea: true` measures every offset from `env(safe-area-inset-*)` (notch, home indicator);

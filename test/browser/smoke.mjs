@@ -3,74 +3,65 @@
 // /<page>/?bench=1&size=1280x720&nofx=0 (plus PAGE_QUERY), waits for window.__sample.ready (90 s), then per pose:
 // pose(id), settle(), two capture(4) calls (separate tasks) must hash equal (one retry: the first frame after a pose
 // may still adapt), and info() is recorded. Every page step runs under a 90 s watchdog; a page that reloads after it
-// was ready is waited out and the pose redone once. A page without a harness yet (it loads and sets a legacy global
-// such as window.__canyon) or without a page on this server is SKIPPED, not failed. On macOS a SwiftShader renderer
-// (no GPU) fails. Exit code 1 on any failure. `city-clustered` is the city page again, at night with every lamp in
-// range lit through ClusteredLights (one pose, plus in-page checks: cluster lights in view, no failed program, no
-// black frame), so a GLSL error in the clustered chunks shows up here.
+// was ready is waited out and the pose redone once. A page without a harness (it loads and sets a legacy global such
+// as window.__game, the Halloween game's play-mode state: under ?bench=1 it builds its world and exposes the harness)
+// or without a page on this server is SKIPPED, not failed: it still fails on a console error while loading. On macOS a SwiftShader renderer (no GPU) fails. Exit code 1 on any failure. The
+// `-mobile` pages are the same sample on the mobile quality tier (`?quality=mobile`, core/Quality.js).
 //
-//   node test/browser/smoke.mjs                        # canyon-run, city, character, sandbox, city-clustered, canyon-night, city-water,
-//                                                      # sandbox-cloth / rope / soft / buoyancy / destructible
-//   node test/browser/smoke.mjs city --headed --size=1600x900 [--config=other.vite.config.js]
+//   node test/browser/smoke.mjs                        # nyc-night, miami-drive, halloween and their -mobile variants
+//   node test/browser/smoke.mjs nyc-night --headed --size=1600x900 [--config=other.vite.config.js] [--no-look]
 import {
   defaultSize, repoRoot, legacyGlobals, readyTimeoutMs, parseArgs, parseSize, startVite, resolvePage, launchChrome,
   watchErrors, loadSample, evalStep, withTimeout, onSignals, formatTable,
 } from './playwright.config.mjs';
 
-// extra query per page: the city without traffic or tile streaming (async tile builds could land between captures)
+// extra query per page (the desktop pages pin their tier too, so a stored choice in the profile cannot change them)
 const PAGE_QUERY = {
-  city: 'notraffic&nostream=1', sandbox: 'scene=stack', 'city-clustered': 'notraffic&nostream=1&clustered&t=night',
-  // 0.8.0: the canyon at night with the clustered lamp field and the GPU dust devils; the city's water refraction (needs a
-  // single-sampled scene target: the G-buffer path, with FXAA rather than TAA, whose captures are never hash-stable) at the shore
-  'canyon-night': 'lamps=1&gpuparticles=1&t=night', 'city-water': 'notraffic&nostream=1&water=refraction&gbuffer=1&aa=fxaa',
-  // 0.9.0: the sandbox's particle / soft-body / buoyancy / fracture scenes (in-thread; two poses each)
-  'sandbox-cloth': 'scene=cloth', 'sandbox-rope': 'scene=rope', 'sandbox-soft': 'scene=soft', 'sandbox-buoyancy': 'scene=buoyancy', 'sandbox-destructible': 'scene=destructible',
+  'nyc-night': 'quality=desktop', 'nyc-night-mobile': 'quality=mobile',
+  'miami-drive': 'quality=desktop', 'miami-drive-mobile': 'quality=mobile',
+  halloween: 'quality=desktop', 'halloween-mobile': 'quality=mobile',
 };
 // pages that are another page with a different query, and the poses they run (default: all)
-const PAGE_PATH = {
-  'city-clustered': 'city', 'canyon-night': 'canyon-run', 'city-water': 'city',
-  'sandbox-cloth': 'sandbox', 'sandbox-rope': 'sandbox', 'sandbox-soft': 'sandbox', 'sandbox-buoyancy': 'sandbox', 'sandbox-destructible': 'sandbox',
-};
-const PAGE_POSES = { 'city-clustered': ['street'], 'canyon-night': ['night-lamps', 'devils'], 'city-water': ['shore'] };
+const PAGE_PATH = { 'nyc-night-mobile': 'nyc-night', 'miami-drive-mobile': 'miami-drive', 'halloween-mobile': 'halloween' };
+const PAGE_POSES = {};
 // in-page checks after each pose: a failure message or ''
-const PAGE_CHECK = {
-  'city-clustered': () => {
-    const C = window.__city, w = C && C.world, cl = w && w.clustered;
-    if (!cl) return 'world.clustered missing (fell back to the PointLight pool)';
-    if (w.props.lightPool.mode !== 'clustered') return `lamp mode ${w.props.lightPool.mode}`;
-    if (!(w.atmo.darkness > 0.3)) return `not night (darkness ${w.atmo.darkness})`;
-    if (!(cl.count > 0 && cl.stats.lights > 0)) return `no cluster lights (count ${cl.count}, in view ${cl.stats.lights})`;
-    const bad = C.engine.renderer.info.programs.filter((p) => p.diagnostics && !p.diagnostics.runnable).length;
-    if (bad) return `${bad} program(s) failed to compile`;
-    const cap = window.__sample.capture(4);
-    let sum = 0;
-    for (let i = 0; i < cap.data.length; i += 4) sum += Math.max(cap.data[i], cap.data[i + 1], cap.data[i + 2]);
-    const mean = sum / (cap.data.length / 4) / (cap.scale * cap.scale);
-    return mean < 1 ? `black frame (mean brightest channel ${mean.toFixed(2)} / 255)` : '';
-  },
-  'canyon-night': () => {
-    const C = window.__canyon;
-    if (!C || !C.lamps) return 'window.__canyon.lamps missing (lamp field not built)';
-    if (!(C.atmo.darkness > 0.3)) return `not night (darkness ${C.atmo.darkness})`;
-    if (!(C.lamps.clustered && C.lamps.clustered.count > 0)) return 'no cluster lights';
-    if (!(C.devils && C.devils.gpu)) return 'devils are not on the GPU particle system';
-    const bad = C.engine.renderer.info.programs.filter((p) => p.diagnostics && !p.diagnostics.runnable).length;
-    return bad ? `${bad} program(s) failed to compile` : '';
-  },
-  'city-water': () => {
-    const C = window.__city, w = C && C.world;
-    if (!w || !w.sceneCopy) return 'world.sceneCopy missing (water refraction not built)';
-    if (!w.sceneCopy.valid) return 'scene copy invalid (multisampled or depth-less scene target)';
-    const bad = C.engine.renderer.info.programs.filter((p) => p.diagnostics && !p.diagnostics.runnable).length;
-    return bad ? `${bad} program(s) failed to compile` : '';
+const PAGE_CHECK = {};
+// The look gate: tone and palette limits per page and pose, checked on window.__sample.look() (core/Bench.js
+// lookStats; --no-look skips it). The numbers come from the reference frame the samples are art-directed to (a low-key
+// dusk road: mean luminance 37 / 255, 64 % of pixels under 40, nothing over 180, mean saturation 0.34, the only
+// saturated hues red and orange): exposure that keeps blacks black and never clips a light source, and one hue family
+// plus at most a small accent. A limit is [min, max]; `palette` = hues that may be saturated, `off` = the largest
+// share of the frame (%) saturated in any other hue. A `-mobile` page uses its base page's limits.
+const WARM = ['red', 'orange', 'yellow', 'rose'];
+const LOW_KEY = { lumMean: [26, 50], under40: [50, 100], over160: [0, 0.6], over240: [0, 0.05], satMean: [0.2, 0.44], palette: WARM, off: 3 };
+const PAGE_LOOK = {
+  // Midnight Candy Run's remaster: a moonlit blue-grey-violet night, the lanterns and windows its only warm colour
+  halloween: { default: { lumMean: [24, 48], under40: [50, 100], over160: [0, 1.5], over240: [0, 0.1], satMean: [0, 0.48], palette: ['blue', 'azure', 'violet', 'red', 'orange', 'yellow'], off: 4 } },
+  'miami-drive': { default: LOW_KEY, strip: { lumMean: [26, 60], under40: [40, 100], over160: [0, 2], over240: [0, 0.1], satMean: [0.2, 0.46], palette: WARM, off: 8 } },
+  'nyc-night': {
+    default: { lumMean: [22, 48], under40: [50, 100], over160: [0, 1.5], over240: [0, 0.1], satMean: [0.15, 0.42], palette: WARM, off: 6 },
+    square: { lumMean: [26, 62], under40: [38, 100], over160: [0, 4], over240: [0, 0.3], satMean: [0.15, 0.46], palette: WARM, off: 12 },
   },
 };
+function lookFailure(look, lim) {
+  const bad = [];
+  for (const k of ['lumMean', 'under40', 'over160', 'over240', 'satMean']) {
+    if (lim[k] && (look[k] < lim[k][0] || look[k] > lim[k][1])) bad.push(`${k} ${look[k]} outside ${lim[k][0]}..${lim[k][1]}`);
+  }
+  if (lim.palette) {
+    let off = 0; const which = [];
+    for (const h in look.hues) if (!lim.palette.includes(h)) { off += look.hues[h]; which.push(`${h} ${look.hues[h]}`); }
+    if (off > lim.off) bad.push(`${off.toFixed(1)} % of the frame saturated outside ${lim.palette.join('/')} (max ${lim.off}: ${which.join(', ')})`);
+  }
+  return bad.join('; ');
+}
 const STEP_MS = 90000;
 
 const args = parseArgs();
-const pages = args._.length ? args._ : args.pages ? String(args.pages).split(',') : ['canyon-run', 'city', 'character', 'sandbox', 'city-clustered', 'canyon-night', 'city-water', 'sandbox-cloth', 'sandbox-rope', 'sandbox-soft', 'sandbox-buoyancy', 'sandbox-destructible'];
+const pages = args._.length ? args._ : args.pages ? String(args.pages).split(',') : ['nyc-night', 'nyc-night-mobile', 'miami-drive', 'miami-drive-mobile', 'halloween', 'halloween-mobile'];
 const size = parseSize(args.size || defaultSize);
 const headless = !args.headed;
+const NO_LOOK = !!args['no-look'];
 const mac = process.platform === 'darwin';
 
 const pageRows = [], poseRows = [], failures = [];
@@ -130,6 +121,15 @@ try {
               row.renderer = info.renderer;
               if (!ok) failures.push(`${id}/${pose}: captures differ (${stable})`);
               if (PAGE_CHECK[id]) { const msg = await step(PAGE_CHECK[id], undefined, `check ${pose}`); if (msg) failures.push(`${id}/${pose}: ${msg}`); }
+              const lk = !NO_LOOK && PAGE_LOOK[PAGE_PATH[id] || id];
+              if (lk) {
+                const look = await step(() => (window.__sample.look ? window.__sample.look(4) : null), undefined, `look ${pose}`);
+                if (look) {
+                  pr.lum = look.lumMean; pr.sat = look.satMean; pr.over160 = look.over160;
+                  const msg = lookFailure(look, lk[pose] || lk.default);
+                  if (msg) failures.push(`${id}/${pose}: look: ${msg}`);
+                }
+              }
               break;
             }
           } catch (e) {
@@ -166,7 +166,7 @@ try {
 }
 
 console.log(`\n${formatTable(pageRows, ['page', 'path', 'status', 'load_s', 'poses', 'renderer', 'note'])}`);
-if (poseRows.length) console.log(`\n${formatTable(poseRows, ['page', 'pose', 'hash', 'stable', 'draws', 'tris', 'size'])}`);
+if (poseRows.length) console.log(`\n${formatTable(poseRows, ['page', 'pose', 'hash', 'stable', 'draws', 'tris', 'size', 'lum', 'sat', 'over160'])}`);
 if (failures.length) {
   console.log(`\n${failures.length} failure(s):`);
   for (const f of failures) console.log(`  - ${f}`);

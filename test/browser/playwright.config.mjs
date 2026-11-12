@@ -23,7 +23,7 @@ export const vitePort = 5199;
 export const defaultSize = '1280x720';
 /** Default canvas of bench.mjs: the 14-inch MacBook Pro pixel count, the engine's measurement protocol. */
 export const benchSize = '3024x1964';
-/** How long a page may take to report window.__sample.ready (the city builds a procedural city, Canyon Run bakes impostors). */
+/** How long a page may take to report window.__sample.ready (the demos build city blocks and load glTF assets first). */
 export const readyTimeoutMs = 90000;
 
 const mac = process.platform === 'darwin';
@@ -42,8 +42,8 @@ export const headlessArgs = [
 /** Headed Chrome for GPU numbers: ANGLE on Metal on macOS, vsync and the frame-rate limit left alone. */
 export const headedArgs = [...(mac ? ['--use-angle=metal'] : []), '--ignore-gpu-blocklist', '--enable-precise-memory-info', ...unthrottled];
 
-/** Globals the samples set before the bench harness existed: a page with one of these but no __sample is SKIPPED. */
-export const legacyGlobals = ['__canyon', '__city', '__character', '__sandbox'];
+/** Globals of pages without the bench harness (the Halloween game's window.__game): one of these but no __sample is SKIPPED. */
+export const legacyGlobals = ['__game'];
 
 /** Console errors to ignore, matched against the message text and its source URL. */
 export const ignoreConsole = [/\/favicon\.ico\b/];
@@ -167,7 +167,7 @@ async function fetchHtml(url) {
 /**
  * URL path of sample page `id` on this server, or null when it has none. Tries `/<id>/` and `/<id>` (a page must
  * answer 200 with HTML that differs from the SPA fallback served for unknown paths), then `/` when the Vite root
- * itself is the sample's folder (the single-sample layout, where Canyon Run is the root page).
+ * itself is the sample's folder (the single-sample layout, where one sample is the root page).
  * @param {{ server: import('vite').ViteDevServer, base: string }} vite
  * @param {string} id
  * @returns {Promise<string|null>}

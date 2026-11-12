@@ -34,8 +34,9 @@
 // to scale),
 // the gate's two iron leaves swing, and perches lists where the crows sit.
 import * as THREE from 'three';
-import { makeCanvas, mulberry32, applyPatches, makeDepthMaterial } from '@vibe/engine/render';
-import { patchDetail, patchGrass, patchRibs } from './looks.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { makeCanvas, mulberry32, applyPatches, makeDepthMaterial, pfbm } from '@vibe/engine/render';
+import { patchDetail, patchGrass, patchRibs, patchGround, patchPools, patchSurfaces, patchFold, POOLS, LAMP_POOLS } from './looks.js';
 import { Batch, pumpkinGeometry, pumpkinLeafGeometry } from './props.js';
 import * as P from './props.js';
 import * as V from './village.js';
@@ -238,8 +239,13 @@ function glowGroup(G, kind, amt = 1) {
   return G.group;
 }
 
-/** Moon disc with maria and a soft limb, plus a separate glow texture. */
-function moonTextures() {
+/**
+ * Moon disc with maria and a soft limb, plus a separate glow texture. Classic: a cream disc with a lilac halo; else
+ * (the remaster) a 384 px disc with fbm maria, rayed craters with a lit rim and a shaded floor, limb darkening, and a
+ * small neutral halo.
+ */
+function moonTextures(classic = true) {
+  if (!classic) return moonTexturesHD();
   const S = 256, c = makeCanvas(S), g = c.getContext('2d'), rnd = mulberry32(31);
   const R = S * 0.46;
   const gr = g.createRadialGradient(S * 0.46, S * 0.44, R * 0.1, S / 2, S / 2, R);
@@ -259,6 +265,238 @@ function moonTextures() {
   g2.fillStyle = h; g2.fillRect(0, 0, 128, 128);
   const halo = new THREE.CanvasTexture(c2); halo.colorSpace = THREE.SRGBColorSpace;
   return { disc, halo };
+}
+
+function moonTexturesHD() {
+  const S = 384, c = makeCanvas(S), g = c.getContext('2d'), rnd = mulberry32(31), R = S * 0.46;
+  const img = g.createImageData(S, S), d = img.data;
+  // craters: [x, y, r] in disc units (-1..1)
+  const cr = [];
+  for (let k = 0; k < 90; k++) { const a = rnd() * Math.PI * 2, q = Math.sqrt(rnd()) * 0.95; cr.push([Math.cos(a) * q, Math.sin(a) * q, k < 8 ? 0.06 + rnd() * 0.08 : 0.012 + rnd() * 0.04]); }
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const u = (x + 0.5 - S / 2) / R, v = (y + 0.5 - S / 2) / R, r2 = u * u + v * v, i = (y * S + x) * 4;
+    if (r2 > 1) { d[i + 3] = 0; continue; }
+    const mu = Math.sqrt(1 - r2);
+    // maria: broad dark seas (fbm), highlands brighter and grainier
+    const m = pfbm(u * 0.5 + 0.5, v * 0.5 + 0.5, 3, 5, 7, 0.55), mare = smooth((m - 0.42) / 0.3);
+    let l = 0.9 - 0.17 * mare + 0.07 * (pfbm(u * 0.5 + 0.5, v * 0.5 + 0.5, 24, 3, 13, 0.5) - 0.5);
+    for (const [cx, cy, rr] of cr) { // a shaded floor, a lit rim toward the upper left, faint rays off the big ones
+      const dx = u - cx, dy = v - cy, q = Math.hypot(dx, dy) / rr;
+      if (q < 1) l -= 0.035 * (1 - q) + 0.035 * Math.max(0, (dx + dy) / rr) * (1 - q);
+      else if (q < 1.25) l += 0.06 * (1.25 - q) / 0.25 * Math.max(0, -(dx + dy) / (q * rr) + 0.3);
+      else if (rr > 0.06 && q < 4) l += 0.012 * Math.max(0, Math.cos(Math.atan2(dy, dx) * 9 + cx * 40)) * (4 - q) / 3;
+    }
+    l *= 0.55 + 0.45 * Math.pow(mu, 0.5); // limb darkening
+    const a = Math.min(1, (1 - Math.sqrt(r2)) * R * 0.8); // an anti-aliased edge
+    d[i] = 255 * Math.min(1, l * 0.98); d[i + 1] = 255 * Math.min(1, l * 0.97); d[i + 2] = 255 * Math.min(1, l * 0.93); d[i + 3] = 255 * a;
+  }
+  g.putImageData(img, 0, 0);
+  const disc = new THREE.CanvasTexture(c); disc.colorSpace = THREE.SRGBColorSpace; disc.anisotropy = 4;
+  const c2 = makeCanvas(128), g2 = c2.getContext('2d');
+  const h = g2.createRadialGradient(64, 64, 0, 64, 64, 64);
+  h.addColorStop(0, 'rgba(225,230,240,0.5)'); h.addColorStop(0.24, 'rgba(190,200,220,0.16)'); h.addColorStop(0.55, 'rgba(150,160,190,0.04)'); h.addColorStop(1, 'rgba(0,0,0,0)');
+  g2.fillStyle = h; g2.fillRect(0, 0, 128, 128);
+  const halo = new THREE.CanvasTexture(c2); halo.colorSpace = THREE.SRGBColorSpace;
+  return { disc, halo };
+}
+
+/**
+ * (the remaster) Carved epitaphs on the slab gravestones: one instanced decal over a 4 x 2 atlas of panels (R.I.P.,
+ * invented names and dates, a winged skull, a weeping willow, a cross, a lamb, an urn), each drawn as a groove (dark)
+ * over a lit lower lip (light), so the letters read cut into the stone under the moon; lit like the stone.
+ */
+function epitaphs(list, low) {
+  const S = low ? 128 : 256, c = makeCanvas(S * 4, S * 2), g = c.getContext('2d'), rnd = mulberry32(1313);
+  g.clearRect(0, 0, S * 4, S * 2);
+  const NAMES = ['E. HOLLOWAY', 'MARTHA GRIMM', 'SILAS CROW', 'ADA WICK', 'J. BLACKTHORN', 'O. MOURNE', 'ELIAS VANE', 'R. GLOOM'];
+  const carve = (k, draw) => {
+    const ox = (k % 4) * S, oy = Math.floor(k / 4) * S;
+    for (const [dy, col] of [[S * 0.012, 'rgba(200,196,210,0.55)'], [0, 'rgba(10,9,14,0.9)']]) { // the lit lower lip, then the groove
+      g.save(); g.translate(ox, oy + dy); g.fillStyle = col; g.strokeStyle = col; g.lineWidth = S * 0.018; g.lineCap = 'round'; draw(g); g.restore();
+    }
+  };
+  for (let k = 0; k < 8; k++) {
+    const yr = 1780 + Math.floor(rnd() * 90), age = 9 + Math.floor(rnd() * 70), name = NAMES[k], motif = k % 4;
+    carve(k, (q) => {
+      q.textAlign = 'center'; q.textBaseline = 'middle';
+      // the motif at the top
+      const cx = S / 2, my = S * 0.2;
+      if (motif === 0) { q.font = `700 ${S * 0.14}px Georgia, serif`; q.fillText('R.I.P.', cx, my); }
+      else if (motif === 1) { // a winged skull
+        q.beginPath(); q.ellipse(cx, my, S * 0.07, S * 0.075, 0, 0, Math.PI * 2); q.stroke();
+        for (const s of [-1, 1]) { q.beginPath(); q.moveTo(cx + s * S * 0.08, my); q.quadraticCurveTo(cx + s * S * 0.2, my - S * 0.08, cx + s * S * 0.3, my - S * 0.02); q.quadraticCurveTo(cx + s * S * 0.2, my + S * 0.02, cx + s * S * 0.08, my + S * 0.03); q.stroke(); }
+        q.fillRect(cx - S * 0.04, my - S * 0.01, S * 0.025, S * 0.025); q.fillRect(cx + S * 0.015, my - S * 0.01, S * 0.025, S * 0.025);
+      } else if (motif === 2) { // a weeping willow over an urn
+        q.beginPath(); q.moveTo(cx, my + S * 0.1); q.lineTo(cx, my - S * 0.08); q.stroke();
+        for (let i = -4; i <= 4; i++) { q.beginPath(); q.moveTo(cx, my - S * 0.08); q.quadraticCurveTo(cx + i * S * 0.035, my - S * 0.1, cx + i * S * 0.04, my + S * 0.06); q.stroke(); }
+      } else { q.beginPath(); q.moveTo(cx, my - S * 0.1); q.lineTo(cx, my + S * 0.1); q.moveTo(cx - S * 0.06, my - S * 0.03); q.lineTo(cx + S * 0.06, my - S * 0.03); q.stroke(); }
+      q.font = `600 ${S * 0.085}px Georgia, serif`; q.fillText(name, cx, S * 0.46);
+      q.font = `${S * 0.07}px Georgia, serif`; q.fillText(`${yr} \u2013 ${yr + age}`, cx, S * 0.6);
+      q.font = `italic ${S * 0.06}px Georgia, serif`; q.fillText(['REST IN PEACE', 'GONE BUT NOT FORGOTTEN', 'ASLEEP', 'BELOVED'][k % 4], cx, S * 0.76);
+    });
+  }
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = low ? 2 : 8;
+  const geo = new THREE.PlaneGeometry(1, 1);
+  const cell = new Float32Array(list.length);
+  const mat = new THREE.MeshStandardMaterial({ map: tex, transparent: true, depthWrite: false, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float cell;')
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\n\tvMapUv = ( uv + vec2( mod( cell, 4.0 ), 1.0 - floor( cell / 4.0 ) ) ) * vec2( 0.25, 0.5 );');
+  };
+  mat.customProgramCacheKey = () => 'hwEpitaph';
+  const m = new THREE.InstancedMesh(geo, mat, list.length);
+  const q = new THREE.Quaternion(), e = new THREE.Euler(), off = new THREE.Vector3();
+  list.forEach((t, i) => {
+    q.setFromEuler(e.set(t.tilt, t.yaw, t.roll, 'YXZ'));
+    off.set(t.lx, t.ly, t.lz).applyQuaternion(q);
+    m.setMatrixAt(i, _m.compose(_p.set(t.x + off.x, t.y + off.y, t.z + off.z), q, _s.set(t.w, t.h, 1)));
+    cell[i] = t.seed % 8;
+  });
+  geo.setAttribute('cell', new THREE.InstancedBufferAttribute(cell, 1));
+  m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere();
+  m.name = 'epitaphs'; m.receiveShadow = true;
+  return m;
+}
+
+/**
+ * (the remaster) Ground cover, instanced (one draw each): fallen leaves (curled, in drifts against the picket and iron
+ * fences, the cottages' walls, the graves and the trunks, a thin scatter elsewhere), twigs, mushroom clusters by trunks
+ * and graves, stones along the lane's edges, and a few puddles in the lane (a glossy dark film: the moon and the
+ * lanterns glint in them). Lambert / standard, no shadow casting; phones get about a third.
+ */
+function groundCover(scene, physics, low, R, trees, graves) {
+  const k = low ? 0.2 : 1, tmp = [], tint = new THREE.Color();
+  const clear = (x, z, r = 0.05) => { tmp.length = 0; return physics.queryColliders(x, z, r, tmp).length === 0; };
+  const okGround = (x, z) => Math.abs(x) < PLAY + 4 && Math.abs(z) < PLAY + 4 && !(z > CREEK.z0 - 0.3 && z < CREEK.z1 + 0.3);
+  const out = {};
+  // ---- leaves: a curled, lobed leaf (6 triangles), brown / rust / dull ochre
+  {
+    const L = new THREE.BufferGeometry();
+    const P = [0, 0.01, -0.06, 0.03, 0.02, -0.02, 0.025, 0.012, 0.03, 0, 0.004, 0.06, -0.025, 0.012, 0.03, -0.03, 0.02, -0.02, 0, 0.016, 0];
+    L.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    L.setIndex([6, 0, 1, 6, 1, 2, 6, 2, 3, 6, 3, 4, 6, 4, 5, 6, 5, 0]);
+    L.computeVertexNormals();
+    const n = Math.round(7000 * k), m = new THREE.InstancedMesh(L, patchFold(new THREE.MeshLambertMaterial({ side: THREE.DoubleSide }), 16, 26), n);
+    m.name = 'leafLitter';
+    const anchors = [];
+    // drift lines: the outer picket fence, the graveyard's iron fence, Porch Row's fence, around cottages and graves
+    for (let t = -PLAY; t <= PLAY; t += 0.5) for (const [x, z, nx, nz] of [[t, -PLAY, 0, 1], [t, PLAY, 0, -1], [-PLAY, t, 1, 0], [PLAY, t, -1, 0]]) anchors.push([x, z, nx, nz, 0.7]);
+    const G = GRAVEYARD;
+    for (let t = 0; t <= 1; t += 0.02) {
+      const x = G.x0 + (G.x1 - G.x0) * t, z = G.z0 + (G.z1 - G.z0) * t;
+      anchors.push([x, G.z1, 0, 1, 0.5], [x, G.z1, 0, -1, 0.5], [x, G.z0, 0, 1, 0.5], [G.x0, z, -1, 0, 0.5], [G.x0, z, 1, 0, 0.5], [G.x1, z, -1, 0, 0.5]);
+    }
+    for (const [a, b] of ROW_FENCE.stretches) for (let x = a; x <= b; x += 0.4) anchors.push([x, ROW_FENCE.z, 0, -1, 0.5], [x, ROW_FENCE.z, 0, 1, 0.4]);
+    for (const p of PORCHES) for (let a = 0; a < 6.28; a += 0.3) anchors.push([p.x + Math.cos(a) * (p.haunted ? 7 : 4.4), p.z + Math.sin(a) * (p.haunted ? 6 : 3.8), Math.cos(a), Math.sin(a), 0.7]);
+    for (const g of graves) for (let a = 0; a < 6.28; a += 1.2) anchors.push([g.x + Math.cos(a) * 0.5, g.z + Math.sin(a) * 0.35, Math.cos(a), Math.sin(a), 0.3]);
+    for (const t of trees) for (let a = 0; a < 6.28; a += 0.9) anchors.push([t.x + Math.cos(a) * 0.5, t.z + Math.sin(a) * 0.5, Math.cos(a), Math.sin(a), 0.8]);
+    let c = 0;
+    for (let tries = 0; c < n && tries < n * 4; tries++) {
+      let x, z;
+      if (R() < 0.75) { // a drift: piled against its anchor, thinning outward
+        const A = anchors[Math.floor(R() * anchors.length)], d = Math.pow(R(), 2.2) * A[4] + 0.06, s = (R() - 0.5) * 0.8;
+        x = A[0] + A[2] * d - A[3] * s; z = A[1] + A[3] * d + A[2] * s;
+      } else { x = (R() * 2 - 1) * (PLAY + 2); z = (R() * 2 - 1) * (PLAY + 2); }
+      if (!okGround(x, z) || !clear(x, z, 0.02)) continue;
+      const sc = 1.1 + R() * 1.4;
+      _q.setFromEuler(_e.set((R() - 0.5) * 0.9, R() * 6.28, (R() - 0.5) * 0.9));
+      m.setMatrixAt(c, _m.compose(_p.set(x, heightAt(x, z) + 0.012 + R() * 0.02, z), _q, _s.set(sc, sc, sc)));
+      const v = R();
+      tint.setRGB(...(v < 0.4 ? [0.2, 0.09, 0.035] : v < 0.7 ? [0.26, 0.16, 0.06] : v < 0.9 ? [0.13, 0.08, 0.05] : [0.3, 0.12, 0.04])).multiplyScalar(1.1 + R() * 0.6);
+      m.setColorAt(c, tint); c++;
+    }
+    m.count = c; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; m.computeBoundingSphere();
+    m.receiveShadow = true;
+    scene.add(m); out.leaves = m;
+  }
+  // ---- twigs: thin bent sticks (a 3-segment tube)
+  if (!low) {
+    const pts = [[-0.22, 0, 0], [-0.05, 0.015, 0.02], [0.08, 0.01, -0.01], [0.24, 0, 0.03]];
+    const g = P.sweep(pts, 0.008, 4);
+    const n = 700, m = new THREE.InstancedMesh(g, patchFold(new THREE.MeshLambertMaterial({ color: '#2a2018' }), 14, 22), n);
+    m.name = 'twigs';
+    let c = 0;
+    for (let tries = 0; c < n && tries < n * 4; tries++) {
+      const t = R() < 0.6 ? trees[Math.floor(R() * trees.length)] : null;
+      const x = t ? t.x + (R() - 0.5) * 7 : (R() * 2 - 1) * PLAY, z = t ? t.z + (R() - 0.5) * 7 : (R() * 2 - 1) * PLAY;
+      if (!okGround(x, z) || !clear(x, z, 0.1)) continue;
+      const sc = 0.6 + R() * 1.4;
+      _q.setFromEuler(_e.set(0, R() * 6.28, (R() - 0.5) * 0.15));
+      m.setMatrixAt(c++, _m.compose(_p.set(x, heightAt(x, z) + 0.01, z), _q, _s.set(sc, 1, sc)));
+    }
+    m.count = c; m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); m.receiveShadow = true;
+    scene.add(m); out.twigs = m;
+  }
+  // ---- mushrooms: a pale cap on a stem, in little clusters at trunks and graves
+  {
+    const cap = new THREE.SphereGeometry(0.045, 8, 4, 0, 6.2832, 0, 1.4).scale(1, 0.55, 1).translate(0, 0.06, 0);
+    const stem = new THREE.CylinderGeometry(0.009, 0.013, 0.065, 5).translate(0, 0.032, 0);
+    const shade = (g, c) => { const a = new Float32Array(g.attributes.position.count * 3); for (let i = 0; i < a.length; i += 3) { a[i] = c[0]; a[i + 1] = c[1]; a[i + 2] = c[2]; } g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g; };
+    const g = mergeGeometries([shade(cap, [0.55, 0.42, 0.3]), shade(stem, [0.75, 0.7, 0.6])]);
+    const n = Math.round(260 * k), m = new THREE.InstancedMesh(g, patchFold(new THREE.MeshLambertMaterial({ vertexColors: true }), 18, 28), n);
+    m.name = 'mushrooms';
+    let c = 0;
+    const spots = [...trees.map((t) => [t.x, t.z, 0.55]), ...graves.map((q) => [q.x, q.z, 0.45])];
+    for (let tries = 0; c < n && tries < n * 6; tries++) {
+      const S0 = spots[Math.floor(R() * spots.length)];
+      for (let j = 0, nj = 2 + Math.floor(R() * 4); j < nj && c < n; j++) {
+        const a = R() * 6.28, d = S0[2] + R() * 0.4, x = S0[0] + Math.cos(a) * d, z = S0[1] + Math.sin(a) * d;
+        if (!okGround(x, z) || !clear(x, z, 0.03)) continue;
+        const sc = 0.5 + R() * 1.1;
+        _q.setFromEuler(_e.set((R() - 0.5) * 0.3, R() * 6.28, (R() - 0.5) * 0.3));
+        m.setMatrixAt(c, _m.compose(_p.set(x, heightAt(x, z) - 0.005, z), _q, _s.set(sc, sc * (0.8 + R() * 0.5), sc)));
+        m.setColorAt(c, tint.setScalar(0.7 + R() * 0.5)); c++;
+      }
+    }
+    m.count = c; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; m.computeBoundingSphere(); m.receiveShadow = true;
+    scene.add(m); out.mushrooms = m;
+  }
+  // ---- stones along the lane's edges: flattened, irregular, grey-brown
+  {
+    const g = new THREE.IcosahedronGeometry(0.1, 0);
+    { const P = g.attributes.position.array, rr = mulberry32(5); for (let i = 0; i < P.length; i++) P[i] *= 0.75 + rr() * 0.5; g.computeVertexNormals(); }
+    const n = Math.round(900 * k), m = new THREE.InstancedMesh(g, patchFold(new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9 }), 26, 40), n);
+    m.name = 'laneStones';
+    const segs = [];
+    for (const Lp of PATHS) for (let i = 0; i < Lp.length - 1; i++) segs.push([Lp[i][0], Lp[i][1], Lp[i + 1][0], Lp[i + 1][1]]);
+    let c = 0;
+    for (let tries = 0; c < n && tries < n * 4; tries++) {
+      const S0 = segs[Math.floor(R() * segs.length)], f = R(), dx = S0[2] - S0[0], dz = S0[3] - S0[1], l = Math.hypot(dx, dz) || 1;
+      const side = R() < 0.5 ? -1 : 1, off = 1.45 + R() * 0.7;
+      const x = S0[0] + dx * f - (dz / l) * off * side, z = S0[1] + dz * f + (dx / l) * off * side;
+      if (!okGround(x, z) || !clear(x, z, 0.1)) continue;
+      const sc = 0.4 + Math.pow(R(), 2) * 1.6;
+      _q.setFromEuler(_e.set(R() * 6.28, R() * 6.28, R() * 6.28));
+      m.setMatrixAt(c, _m.compose(_p.set(x, heightAt(x, z) + 0.01 * sc, z), _q, _s.set(sc, sc * 0.45, sc)));
+      m.setColorAt(c, tint.setRGB(0.2, 0.19, 0.18).multiplyScalar(0.7 + R() * 0.6)); c++;
+    }
+    m.count = c; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; m.computeBoundingSphere(); m.receiveShadow = true;
+    scene.add(m); out.stones = m;
+  }
+  // ---- puddles in the lane: a dark, glossy film (irregular discs, one mesh)
+  if (!low) {
+    const parts = [], rr = mulberry32(31);
+    const spots = [[2.6, -6], [-9, 10.5], [24, -2], [-30, 28], [8, 28.5], [30, 28], [-40, -6], [12, 46]];
+    for (const [x0, z0] of spots) {
+      let best = null;
+      for (let t = 0; t < 40 && !best; t++) { const x = x0 + (rr() - 0.5) * 6, z = z0 + (rr() - 0.5) * 6; if (pathDist(x, z) < 0.6 && clear(x, z, 0.5)) best = [x, z]; }
+      if (!best) continue;
+      const N = 18, rx = 0.5 + rr() * 0.6, rz = 0.3 + rr() * 0.4, P = [best[0], heightAt(best[0], best[1]) + 0.02, best[1]], ix = [];
+      for (let i = 0; i < N; i++) {
+        const a = (i / N) * 6.2832, w = 0.75 + 0.35 * Math.sin(a * 3 + rr() * 6) * rr(), x = best[0] + Math.cos(a) * rx * w, z = best[1] + Math.sin(a) * rz * w;
+        P.push(x, heightAt(x, z) + 0.02, z);
+        ix.push(0, 1 + ((i + 1) % N), 1 + i);
+      }
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex(ix); g.computeVertexNormals();
+      parts.push(g);
+    }
+    if (parts.length) {
+      const m = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshStandardMaterial({ color: '#0b0c10', roughness: 0.06, metalness: 0.0, envMapIntensity: 1.6, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
+      m.name = 'puddles'; m.receiveShadow = true;
+      scene.add(m); out.puddles = m;
+    }
+  }
+  return out;
 }
 
 /** Tree-line silhouettes for the horizon ring (alpha only; tiles 4x around). */
@@ -288,6 +526,52 @@ function skylineTexture() {
   g.lineWidth = 3; for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + 0.4; g.beginPath(); g.moveTo(305, H - 58); g.lineTo(305 + Math.cos(a) * 24, H - 58 + Math.sin(a) * 24); g.stroke(); }
   const t = new THREE.CanvasTexture(c);
   t.wrapS = THREE.RepeatWrapping; t.repeat.set(4, 1);
+  return t;
+}
+
+/**
+ * (the remaster) A tree line at 4x the old resolution: bare trees with fine, irregular twigs (five levels, tapering,
+ * kinked branches, a few spruces and a church for the skyline), a ground line with bumps, crisp at any size through
+ * mipmaps. `layer` 0 is the far line (small trees, dense), 1 a nearer, sparser one with bigger crowns.
+ */
+function skylineTextureHD(layer, low) {
+  const W = low ? 2048 : 4096, H = low ? 256 : 512, k = H / 128, c = makeCanvas(W, H), g = c.getContext('2d'), rnd = mulberry32(layer ? 77 : 5);
+  g.clearRect(0, 0, W, H);
+  g.fillStyle = '#fff'; g.strokeStyle = '#fff'; g.lineCap = 'round'; g.lineJoin = 'round';
+  const ground = (x) => H - (layer ? 10 : 16) * k - (layer ? 6 : 10) * k * Math.sin(x * 0.012 / k + layer * 2) - 5 * k * Math.sin(x * 0.041 / k + 1) - 1.5 * k * Math.sin(x * 0.23 / k);
+  g.beginPath(); g.moveTo(0, H);
+  for (let x = 0; x <= W; x += 4) g.lineTo(x, ground(x));
+  g.lineTo(W, H); g.closePath(); g.fill();
+  const branch = (x, y, len, a, w, depth) => {
+    // a kinked limb: two segments with a small bend, tapering
+    const bend = (rnd() - 0.5) * 0.5, mx = x + Math.sin(a) * len * 0.5, my = y - Math.cos(a) * len * 0.5;
+    const x1 = mx + Math.sin(a + bend) * len * 0.5, y1 = my - Math.cos(a + bend) * len * 0.5;
+    g.lineWidth = Math.max(0.6, w); g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(mx, my, x1, y1); g.stroke();
+    if (depth <= 0) return;
+    const n = depth > 3 ? 2 + (rnd() < 0.5 ? 1 : 0) : 2 + (rnd() < 0.3 ? 1 : 0);
+    for (let j = 0; j < n; j++) branch(x1, y1, len * (0.5 + rnd() * 0.25), a + bend + (rnd() - 0.5) * 1.5, w * 0.62, depth - 1);
+    if (depth < 3 && rnd() < 0.5) branch(mx, my, len * 0.35, a + (rnd() < 0.5 ? -1 : 1) * (0.6 + rnd() * 0.6), w * 0.5, depth - 2); // a side twig
+  };
+  const spruce = (x, y, h) => {
+    g.beginPath(); g.moveTo(x, y - h);
+    for (let t = 0; t <= 1.0001; t += 0.1) { const yy = y - h + h * t, ww = h * 0.22 * t * (0.75 + 0.25 * Math.sin(t * 31)); g.lineTo(x + ww, yy); g.lineTo(x + ww * 0.55, yy + h * 0.03); }
+    for (let t = 1; t >= 0; t -= 0.1) { const yy = y - h + h * t, ww = h * 0.22 * t * (0.75 + 0.25 * Math.cos(t * 29)); g.lineTo(x - ww * 0.55, yy + h * 0.03); g.lineTo(x - ww, yy); }
+    g.closePath(); g.fill();
+  };
+  const step = layer ? [26, 60] : [10, 24];
+  for (let x = 6 * k; x < W; x += (step[0] + rnd() * step[1]) * k / 2) {
+    if (rnd() < 0.15) continue;
+    const base = ground(x) + 2 * k;
+    if (rnd() < (layer ? 0.12 : 0.22)) { spruce(x, base, (layer ? 44 : 22 + rnd() * 18) * k * (0.7 + rnd() * 0.5)); continue; }
+    const s = (layer ? 1.7 : 1) * (0.6 + rnd() * 0.6) * k;
+    branch(x, base, (12 + rnd() * 16) * s, (rnd() - 0.5) * 0.25, (2.2 + rnd() * 1.6) * s, 5);
+  }
+  if (!layer) { // a distant church spire
+    const cx = W * 0.6, b = ground(cx);
+    g.fillRect(cx - 7 * k, b - 60 * k, 14 * k, 62 * k); g.beginPath(); g.moveTo(cx - 9 * k, b - 60 * k); g.lineTo(cx, b - 98 * k); g.lineTo(cx + 9 * k, b - 60 * k); g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = THREE.RepeatWrapping; t.repeat.set(layer ? 3 : 4, 1); t.anisotropy = 8;
   return t;
 }
 
@@ -327,7 +611,7 @@ const swayPatch = {
  * The glow material reads its light group's level (uGlowLv[grp], default 1) into the vertex colour; one group (tintGroup
  * x: its index, -1 none) is also tinted by `tint` (the cauldron's brew: potions.js cycles its colour).
  */
-function patchGlowGroups(mat, levels, tint, tintGroup) {
+function patchGlowGroups(mat, levels, tint, tintGroup, interior = null) {
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uGlowLv = { value: levels };
     sh.uniforms.uGlowTint = { value: tint };
@@ -335,8 +619,28 @@ function patchGlowGroups(mat, levels, tint, tintGroup) {
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>\nattribute float grp;\nuniform float uGlowLv[ ${GLOW.MAX} ];\nuniform vec3 uGlowTint;\nuniform vec2 uGlowTintG;`)
       .replace('#include <color_vertex>', '#include <color_vertex>\n\tvColor.rgb *= uGlowLv[ int( grp + 0.5 ) ];\n\tif ( abs( grp - uGlowTintG.x ) < 0.5 ) vColor.rgb *= uGlowTint;');
+    if (!interior) return;
+    // (the remaster) a lit window shows a room, not a flat card: brighter low where the lamp stands, a dim warm
+    // ceiling, a curtain drawn to one side and a dark shape (a chair, a cupboard) on the floor, per window from its
+    // light group's centre (uWinC: xyz, w > 0.5 for a window) and a hash of the group
+    sh.uniforms.uWinC = { value: interior };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', `#include <common>\nuniform vec4 uWinC[ ${GLOW.MAX} ];\nvarying vec4 vWinD;`)
+      .replace('#include <color_vertex>', '#include <color_vertex>\n\t{ vec4 wc = uWinC[ int( grp + 0.5 ) ]; vWinD = vec4( ( modelMatrix * vec4( position, 1.0 ) ).xyz - wc.xyz, wc.w > 0.5 ? grp + 1.0 : 0.0 ); }');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec4 vWinD;')
+      .replace('#include <color_fragment>', `#include <color_fragment>
+  if ( vWinD.w > 0.5 ) {
+    float hsh = fract( sin( vWinD.w * 12.9898 ) * 43758.5453 ), side = hsh < 0.5 ? - 1.0 : 1.0;
+    float h = dot( vWinD.xz, normalize( vec2( 0.7071, 0.7071 ) + 1e-4 ) ) * side + 0.15 * ( hsh - 0.5 ); // across the pane
+    float y = vWinD.y;
+    float room = mix( 0.42, 1.0, smoothstep( 0.55, - 0.35, y ) );                       // lamp-lit low, a dim ceiling
+    room *= mix( 1.0, 0.5, smoothstep( 0.1, 0.32, h ) );                                 // a curtain to one side
+    room *= 1.0 - 0.55 * smoothstep( - 0.05, - 0.2, y ) * smoothstep( 0.12, - 0.04, abs( h + 0.12 ) ); // a dark shape
+    diffuseColor.rgb *= room * vec3( 1.0, 0.92, 0.82 );
+  }`);
   };
-  mat.customProgramCacheKey = () => 'hwGlowGroups';
+  mat.customProgramCacheKey = () => (interior ? 'hwGlowGroupsI' : 'hwGlowGroups');
   return mat;
 }
 
@@ -347,6 +651,7 @@ function patchGlowGroups(mat, levels, tint, tintGroup) {
  * hinge by WIND.gate[k].z, so the gate swings in the gusts (and its shadow with it) at no draw call.
  */
 function gateLeaves(B, hinges, width) {
+  P.SURF.k = P.SURF_KIND.IRON;
   const IRON = '#1a1720';
   hinges.forEach(([hx, hy, hz], k) => {
     const L = new Batch();
@@ -369,6 +674,7 @@ function gateLeaves(B, hinges, width) {
       B.parts.push(g);
     }
   });
+  P.SURF.k = 0;
 }
 
 
@@ -496,8 +802,59 @@ function terrainGrid(N) {
 }
 
 // ------------------------------------------------------------------ build
-export function buildWorld({ scene, physics, low }) {
+/** A scan's mean colour (linear), once: patchGround / patchSurfaces divide by it (a uniform, not a mip lookup). */
+function scanMean(img) {
+  const c = makeCanvas(16), g = c.getContext('2d'); g.drawImage(img, 0, 0, 16, 16);
+  const d = g.getImageData(0, 0, 16, 16).data, m = [0, 0, 0], lin = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  for (let i = 0; i < d.length; i += 4) for (let j = 0; j < 3; j++) m[j] += lin(d[i + j]);
+  return new THREE.Vector3(m[0] / 256, m[1] / 256, m[2] / 256);
+}
+
+/**
+ * The remaster's ground scans (CC0, Poly Haven; samples/public/halloween/ground/, CREDITS.md there): grass, leaf litter
+ * and the lane's gravel. Desktop: 1k albedo + normal maps; phones: the 512 px albedo only. Resolves the sets for
+ * buildWorld's `ground` (patchGround), loaded before the world is built so its first frame has them.
+ */
+export async function loadGroundSets(base, { low = false, anisotropy = 8 } = {}) {
+  const L = new THREE.TextureLoader();
+  const tex = async (file, srgb) => {
+    const t = await L.loadAsync(base + file);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = srgb ? anisotropy : Math.min(2, anisotropy); // (normals: 2x is plenty)
+    t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+    return t;
+  };
+  const mean = scanMean;
+  const set = async (id, size) => {
+    const map = await tex(`${id}-diff${low ? '-512' : ''}.jpg`, true);
+    return { map, mean: mean(map.image), normal: low ? null : await tex(`${id}-nor.jpg`, false), scale: 1 / size };
+  };
+  const [grass, litter, gravel] = await Promise.all([set('forrest_ground_01', 2), set('forest_leaves_02', 3), set('rocky_trail', 2)]);
+  return { grass, litter, gravel };
+}
+
+/**
+ * The remaster's material scans for the props (CC0, Poly Haven; samples/public/halloween/props/): weathered boards,
+ * slate, coursed masonry, lichened stone, bark, in props.js SURF_KIND order (looks.js patchSurfaces). Desktop: 1k
+ * albedo + normal; phones: the 512 px albedo. `hue`: how much of each scan's own colour shows over the paint.
+ */
+export async function loadPropSets(base, { low = false, anisotropy = 8 } = {}) {
+  const L = new THREE.TextureLoader();
+  const tex = async (file, srgb) => {
+    const t = await L.loadAsync(base + file);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = srgb ? anisotropy : Math.min(2, anisotropy); // (normals: 2x is plenty)
+    t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+    return t;
+  };
+  const set = async (id, size, hue) => {
+    const map = await tex(`${id}-diff${low ? '-512' : ''}.jpg`, true);
+    return { map, mean: scanMean(map.image), normal: low ? null : await tex(`${id}-nor.jpg`, false), scale: 1 / size, hue };
+  };
+  return Promise.all([set('green_rough_planks', 1.5, 0.22), set('roof_slates_02', 3, 0.3), set('old_stone_wall', 2, 0.35), set('lichen_rock', 2, 0.55), set('bark_brown_02', 1.2, 0.45)]);
+}
+
+export function buildWorld({ scene, physics, low, classic = true, ground = null, surfaces = null }) {
   const rnd = mulberry32(2026);
+  P.SURF.k = 0;
   physics.setHeightfield(heightAt);
   const B = new Batch(), G = new Batch();
   // halos the game draws every frame over static glowing props: [x, y, z, size, r, g, b, flicker 0..1, light group]
@@ -508,7 +865,7 @@ export function buildWorld({ scene, physics, low }) {
   // ---- terrain
   const tg = terrainGrid(low ? 96 : 140);
   {
-    const p = tg.attributes.position, c = new Float32Array(p.count * 3);
+    const p = tg.attributes.position, c = new Float32Array(p.count * 3), gm = new Float32Array(p.count * 2);
     const grass = new THREE.Color('#24331f'), grass2 = new THREE.Color('#2f3a1f'), dirt = new THREE.Color('#4a3729'), soil = new THREE.Color('#2a2a2c'), hill = new THREE.Color('#1d2420'), patch = new THREE.Color('#3a3420');
     const bed = new THREE.Color('#1e1a19'), mud = new THREE.Color('#2a2420'), dry = new THREE.Color('#38371f');
     const tmp = new THREE.Color();
@@ -519,27 +876,41 @@ export function buildWorld({ scene, physics, low }) {
       tmp.copy(grass).lerp(grass2, n);
       const kh = knollH(x, z);
       if (kh > 0) tmp.lerp(dry, 0.45 * (kh / KNOLL.h) * (0.6 + 0.4 * n));
-      if (inGraveyard(x, z, 2)) tmp.lerp(soil, 0.55 * smooth(1 - Math.max(0, Math.max(GRAVEYARD.x0 - x, x - GRAVEYARD.x1, GRAVEYARD.z0 - z, z - GRAVEYARD.z1)) / 2));
-      if (inPatch(x, z, 2)) tmp.lerp(patch, 0.45);
+      // (gm: the ground scans' mask, patchGround: x gravel, y leaf litter; the rest is grass)
+      let gx = 0, gy = kh > 0 ? 0.55 * (kh / KNOLL.h) : 0.18 * n;
+      if (inGraveyard(x, z, 2)) {
+        const w = smooth(1 - Math.max(0, Math.max(GRAVEYARD.x0 - x, x - GRAVEYARD.x1, GRAVEYARD.z0 - z, z - GRAVEYARD.z1)) / 2);
+        tmp.lerp(soil, 0.55 * w); gy = Math.max(gy, 0.8 * w);
+      }
+      if (inPatch(x, z, 2)) { tmp.lerp(patch, 0.45); gy = Math.max(gy, 0.6); }
       const pd = pathDist(x, z);
-      if (pd < 1.7) tmp.lerp(dirt, smooth((1.7 - pd) / 0.8));
+      if (pd < 1.7) { const w = smooth((1.7 - pd) / 0.8); tmp.lerp(dirt, w); gx = w; }
       const ce = Math.min(z - CREEK.z0, CREEK.z1 - z);
-      if (ce > -1.2) tmp.lerp(ce > 0.05 ? bed : mud, ce > 0.05 ? 0.92 : 0.5 * smooth((ce + 1.2) / 1.2));
+      if (ce > -1.2) { tmp.lerp(ce > 0.05 ? bed : mud, ce > 0.05 ? 0.92 : 0.5 * smooth((ce + 1.2) / 1.2)); gx = Math.max(gx, ce > 0.05 ? 1 : 0.6 * smooth((ce + 1.2) / 1.2)); }
       const r = Math.max(Math.abs(x), Math.abs(z));
-      if (r > PLAY) tmp.lerp(hill, smooth((r - PLAY) / 8));
+      if (r > PLAY) { tmp.lerp(hill, smooth((r - PLAY) / 8)); gy = Math.max(gy, 0.7 * smooth((r - PLAY) / 8)); }
+      gm[i * 2] = gx; gm[i * 2 + 1] = gy;
       c[i * 3] = tmp.r; c[i * 3 + 1] = tmp.g; c[i * 3 + 2] = tmp.b;
     }
     tg.setAttribute('color', new THREE.BufferAttribute(c, 3));
+    if (ground) tg.setAttribute('gmask', new THREE.BufferAttribute(gm, 2));
     tg.computeVertexNormals();
   }
   // world-space grain + broad clumps (looks.js), and dew: damp patches catch the low moon as a soft sheen
-  const terrainMat = patchDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }), { scale: 0.9, amount: 0.5, broad: 0.6, dew: 1, spec: 0.15 });
+  let terrainMat = patchDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }), ground ? { scale: 0.9, amount: 0.18, broad: 0.6, dew: low ? 0 : 1, spec: 0.2, lite: low ? 'none' : false } : { scale: 0.9, amount: 0.5, broad: 0.6, dew: 1, spec: 0.15 });
+  // the remaster: the CC0 ground scans over the vertex colours (looks.js patchGround; normal maps on desktop)
+  // (phones: one grass sample, no normal maps and no lamp pools: the mobile tier's frame time stays where it was)
+  if (ground) terrainMat = patchGround(terrainMat, ground, { normal: !low, strength: 1.2, hue: 0.45, breakup: !low });
+  // (a variant without the normal maps, for the bench's cost knob; built on first use)
+  const terrainFlat = ground && !low ? () => patchGround(patchDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }), { scale: 0.9, amount: 0.18, broad: 0.6, dew: 1, spec: 0.2 }), ground, { normal: false, hue: 0.45 }) : null;
+  if (!classic && !low) terrainMat = patchPools(terrainMat);
   const terrain = new THREE.Mesh(tg, terrainMat);
   terrain.name = 'terrain'; terrain.receiveShadow = true;
   scene.add(terrain);
 
   // ---- graveyard: stones in rows, an aisle up the middle, the crypt at the back, an iron fence with a gate
   const graves = [];
+  P.DETAIL.graves = !classic && !low; P.EPITAPHS.length = 0; // (the carved epitaphs: desktop; phones keep the engraved lines)
   for (let zz = GRAVEYARD.z1 - 4.5; zz > GRAVEYARD.z0 + 2.5; zz -= 3.6) {
     for (let xx = GRAVEYARD.x0 + 2.5; xx < GRAVEYARD.x1 - 2; xx += 3.1) {
       const x = xx + (rnd() - 0.5) * 0.9, z = zz + (rnd() - 0.5) * 0.7;
@@ -550,6 +921,8 @@ export function buildWorld({ scene, physics, low }) {
       graves.push(gravestone(B, x, z, kind, rnd, physics));
     }
   }
+  P.DETAIL.graves = false;
+  if (!classic && P.EPITAPHS.length) scene.add(epitaphs(P.EPITAPHS, low));
   const v1 = v1Trees(rnd, low, graves); // the stream's next draws, as v1 made them (planted below where they still fit)
   const G0 = GRAVEYARD, X = G0.exits, inGap = (v, g) => v > g[0] && v < g[1];
   P.ironFence(B, G0.x0, G0.z1, G0.x1, G0.z1, heightAt, (x, z) => Math.abs(z - G0.z1) < 0.3 && (inGap(x, X.s) || inGap(x, X.se)));
@@ -587,9 +960,11 @@ export function buildWorld({ scene, physics, low }) {
   P.gateArch(B, G0.gate[0], G0.gate[1], heightAt(16, G0.z1), G0.z1);
   // candle lanterns at the foot of the gate posts, on their outer sides (the path between them stays clear): warm points
   // framing the way in (glow geometry + a halo each)
+  const gateSpots = [];
   for (const gx of G0.gate) {
     const x = gx + (gx < 16 ? -0.62 : 0.62), z = G0.z1 + 0.42, y = heightAt(x, z), gl = glowGroup(G, GLOW.FLAME, 1);
     P.candleLantern(B, G, x, y, z, gx < 16 ? 0.3 : -0.4);
+    gateSpots.push(glowSpots.length);
     glowSpots.push([x, y + 0.2, z, 1.7, 0.55, 0.26, 0.07, 1, gl]);
   }
   G.group = 0;
@@ -597,6 +972,7 @@ export function buildWorld({ scene, physics, low }) {
   Object.assign(SECRETS.crypt, { door: cr.door, group: cr.crack, halo: cr.crackHalo });
 
   // ---- the village (village.js): the porches, the creek and its bridges, the hollow, the Bale Yard, the oak ...
+  P.DETAIL.lamps = !classic;
   for (const p of PORCHES) {
     if (p.haunted) V.hauntedPorch(B, G, ctx, physics, heightAt, p, HOUSE);
     else V.porchCottage(B, G, ctx, physics, heightAt, p);
@@ -629,6 +1005,18 @@ export function buildWorld({ scene, physics, low }) {
   }
   POP_SPOTS[0][2] = heightAt(POP_SPOTS[0][0], POP_SPOTS[0][1]); POP_SPOTS[1][2] = BALE_TIERS[2].top;
 
+  // (the remaster) pools of light under the porch lamps and the gate's candle lanterns (looks.js patchPools on the
+  // terrain and the props): [glow spot, r, g, b (linear x intensity), radius]; their level follows the spot's group
+  const pools = classic || low ? [] : [
+    ...PORCHES.map((p) => [p.halos.lamp, 2.2, 1.25, 0.55, 7.5]),
+    ...gateSpots.map((k) => [k, 1.4, 0.62, 0.22, 4]),
+  ].slice(0, LAMP_POOLS);
+  // (each frame halos() passes only the 4 nearest the camera within reach to the shaders: the loop runs per pixel)
+  const poolPos = pools.map(([k, , , , rad]) => { const q = glowSpots[k]; return [q[0], q[1] + 0.25, q[2], rad]; });
+  const POOL_LIVE = 3, poolOrder = pools.map((_, i) => i), poolD = new Float32Array(pools.length);
+  let poolsOn = pools.length > 0;
+  POOLS.n.value = Math.min(POOL_LIVE, pools.length);
+
   // ---- dead trees: the v1 trees that stand clear of the v2 map, then new ones in the open (their own stream)
   const treeClear = (x, z) => Math.abs(x) < PLAY - 2 && Math.abs(z) < PLAY - 2 && pathDist(x, z) > 3.2
     && !(z > CREEK.z0 - 2.6 && z < CREEK.z1 + 2.6) && !inPatch(x, z, 1) && Math.hypot(x, z - 6) > 9
@@ -650,7 +1038,9 @@ export function buildWorld({ scene, physics, low }) {
       trees.push({ x, z, s, bark: R() < 0.5 ? '#3a2f36' : '#463a3e', h: (2.4 + R() * 1.6) * s, yaw0: R() * 6.28, lod: 1 });
     }
   }
+  P.DETAIL.trees = !classic && !low; // (the remaster on desktop: rounder trunks, a third level of branches)
   for (const t of trees) plantTree(B, physics, t);
+  P.DETAIL.trees = false;
 
   // ---- outer picket fence + its colliders
   const F = PLAY;
@@ -667,7 +1057,11 @@ export function buildWorld({ scene, physics, low }) {
   // ---- merged static meshes
   // stone / bark / wood grain in world space (looks.js), contact shading + moss baked into the colours at the ground;
   // the trees sway in the wind (swayPatch), and their shadows with them (the shadow caster carries the same patch)
-  const propMat = applyPatches(patchDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0.02 }), { scale: 1.7, amount: 0.62, broad: 0.32, streak: 0.55 }), [swayPatch]);
+  // (the remaster: stronger grain, blotches and streaks: weathered boards, stained stone, bark)
+  const propMat = applyPatches(patchDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0.02 }), classic ? { scale: 1.7, amount: 0.62, broad: 0.32, streak: 0.55 } : { scale: 2.1, amount: surfaces ? 0.5 : 0.78, broad: 0.5, streak: surfaces ? 0.4 : 0.8, lite: low && surfaces ? 'none' : false }), [swayPatch]);
+  if (!classic && !low) patchPools(propMat);
+  // the remaster: boards, slate, masonry, lichened stone, bark and rust per part (looks.js patchSurfaces)
+  if (surfaces) patchSurfaces(propMat, surfaces, { normal: !low, strength: 1.3 });
   // one mesh (main pass + shadow pass: two draws). Measured: four tiles (quadrants) drew 6 more calls at the spawn,
   // where they all meet, than they saved elsewhere; Batch.build's `split` is there for a larger map
   const props = B.build(propMat, 'props', heightAt, true);
@@ -677,7 +1071,9 @@ export function buildWorld({ scene, physics, low }) {
   const glowLevels = new Float32Array(GLOW.MAX).fill(1);
   // (a vec2 uniform: a plain { value: number } stores a boxed double; the brew's group is set once, below)
   const glowTint = new THREE.Vector3(1, 1, 1), glowTintG = { value: new THREE.Vector2(CAULDRON.brew, 0) };
-  const glowMat = patchGlowGroups(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }), glowLevels, glowTint, glowTintG);
+  const winC = classic ? null : Array.from({ length: GLOW.MAX }, () => new THREE.Vector4());
+  const glowMat = patchGlowGroups(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }), glowLevels, glowTint, glowTintG, winC);
+  if (!classic) glowMat.color.setScalar(0.72); // (the remaster: the glowing parts under the clip, so they keep their colour)
   const glow = G.build(glowMat, 'glow');
   scene.add(glow);
   // each light group's centre (its glowing parts' mean position: a window dims as the camera comes near it, halos())
@@ -686,6 +1082,7 @@ export function buildWorld({ scene, physics, low }) {
     const GP = glow.geometry.attributes.position.array, GR = glow.geometry.attributes.grp.array, cnt = new Float32Array(GLOW.MAX);
     for (let i = 0; i < GR.length; i++) { const k = Math.round(GR[i]); groupPos[k * 3] += GP[i * 3]; groupPos[k * 3 + 1] += GP[i * 3 + 1]; groupPos[k * 3 + 2] += GP[i * 3 + 2]; cnt[k]++; }
     for (let k = 0; k < GLOW.MAX; k++) if (cnt[k]) for (let j = 0; j < 3; j++) groupPos[k * 3 + j] /= cnt[k];
+    if (winC) for (let k = 0; k < glowGroups.length; k++) winC[k].set(groupPos[k * 3], groupPos[k * 3 + 1], groupPos[k * 3 + 2], glowGroups[k][0] === GLOW.WINDOW ? 1 : 0);
   }
   const water = V.creekWater(CREEK, heightAt, WIND.time);
   scene.add(water);
@@ -708,8 +1105,8 @@ export function buildWorld({ scene, physics, low }) {
       decor.push([x, z, 0.55 + rnd() * 0.7, rnd() * 6.28, rnd()]);
     }
   }
-  const pg = pumpkinGeometry(0.4, 15, 0, '#ffffff', '#4d6a2a', { lobes: 5, depth: 0.12, seed: 5, lite: true });
-  const pMat = patchRibs(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0 }), 5, 0.45);
+  const pg = classic || low ? pumpkinGeometry(0.4, 15, 0, '#ffffff', '#4d6a2a', { lobes: 5, depth: 0.12, seed: 5, lite: true }) : pumpkinGeometry(0.4, 40, 0, '#ffffff', '#4d6a2a', { lobes: 5, depth: 0.12, seed: 5, fine: 16 });
+  const pMat = patchRibs(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: classic ? 0.6 : 0.5, metalness: 0 }), 5, 0.45, 'hwRibs', !classic && !low);
   const pumpkins = new THREE.InstancedMesh(pg, pMat, decor.length);
   pumpkins.name = 'decorPumpkins'; pumpkins.castShadow = false; pumpkins.receiveShadow = true;
   const leafGeo = pumpkinLeafGeometry(0.34);
@@ -735,10 +1132,13 @@ export function buildWorld({ scene, physics, low }) {
   // ---- grass tufts (crossed blades, instanced): not on the lane, in the patch, in the creek or under a building
   let tufts = null;
   {
-    const count = low ? 2400 : 7000;
+    const count = low ? 2400 : classic ? 7000 : 12000; // (the remaster: denser on desktop)
     const blade = [], shade = [];
-    for (let k = 0; k < 5; k++) { // five thin blades leaning out from the centre
-      const a = k * 1.2566 + 0.3, ca = Math.cos(a), sa = Math.sin(a), w = 0.022, lean = 0.1 + (k % 2) * 0.06, h = 0.26 + (k % 3) * 0.07;
+    // five thin blades leaning out from the centre (the remaster on desktop: a clump of eleven, tall and short)
+    const BL = classic || low ? 5 : 11;
+    for (let k = 0; k < BL; k++) {
+      const a = k * (6.2832 / BL) * (BL > 5 ? 2.0 : 1) + 0.3 + (BL > 5 ? (k % 3) * 0.4 : 0), ca = Math.cos(a), sa = Math.sin(a);
+      const w = BL > 5 ? 0.014 + (k % 4) * 0.004 : 0.022, lean = BL > 5 ? 0.04 + (k % 4) * 0.05 : 0.1 + (k % 2) * 0.06, h = BL > 5 ? 0.16 + ((k * 7) % 5) * 0.06 : 0.26 + (k % 3) * 0.07;
       blade.push(-sa * w + ca * 0.03, 0, ca * w + sa * 0.03, sa * w + ca * 0.03, 0, -ca * w + sa * 0.03, ca * lean, h, sa * lean);
       shade.push(0.32, 0.36, 0.42, 0.32, 0.36, 0.42, 1.25, 1.3, 1.15); // dark roots, tips catching the moon
     }
@@ -749,7 +1149,7 @@ export function buildWorld({ scene, physics, low }) {
     const n = g.attributes.normal; for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0); // lit like the ground
     // swaying in the wind (looks.js: the tips move, the roots stay)
     // Lambert: no specular (up-facing blade normals caught the low moon as white glints), and cheaper per fragment
-    tufts = new THREE.InstancedMesh(g, patchGrass(new THREE.MeshLambertMaterial({ color: '#3d5a2c', vertexColors: true, side: THREE.DoubleSide })), count);
+    tufts = new THREE.InstancedMesh(g, patchGrass(new THREE.MeshLambertMaterial({ color: '#3d5a2c', vertexColors: true, side: THREE.DoubleSide }), classic || low ? null : [24, 38]), count);
     tufts.name = 'grass';
     let n2 = 0;
     const _c0 = [];
@@ -761,7 +1161,8 @@ export function buildWorld({ scene, physics, low }) {
         const s = 0.6 + R() * 0.9;
         _q.setFromEuler(_e.set((R() - 0.5) * 0.3, R() * 6.28, 0));
         tufts.setMatrixAt(n2, _m.compose(_p.set(x, heightAt(x, z) - 0.02, z), _q, _s.set(s, s * (0.8 + R() * 0.9), s)));
-        tint.setHSL(0.22 + R() * 0.1, 0.45, 0.2 + R() * 0.12); tufts.setColorAt(n2, tint);
+        if (classic) tint.setHSL(0.22 + R() * 0.1, 0.45, 0.2 + R() * 0.12); else tint.setHSL(0.17 + R() * 0.12, 0.22 + R() * 0.12, 0.3 + R() * 0.16); // (remaster: dry, moonlit)
+        tufts.setColorAt(n2, tint);
         n2++;
       }
     };
@@ -773,12 +1174,16 @@ export function buildWorld({ scene, physics, low }) {
     tufts.receiveShadow = true;
     scene.add(tufts);
   }
+  // (the remaster) ground cover: leaf drifts against fences, walls, graves and trunks, fallen twigs, mushrooms, stones
+  // along the lane's edges, puddles in the lane (fewer of everything on phones, nothing cast into the shadow maps)
+  const cover = classic ? null : groundCover(scene, physics, low, mulberry32(777), trees, graves);
 
   // ---- sky dressing: moon billboard + halo, horizon silhouettes (depth-less: the post fog sees sky there)
   // the moon: its disc over its additive halo in one quad (premultiplied: out = disc + halo * (1 - a) + sky * (1 - a),
   // what the halo drawn additively and the disc alpha-blended over it gave); moonColor.disc / .halo tint them
-  const moonTex = moonTextures();
-  const moonColor = { disc: new THREE.Color(1.6, 1.5, 1.3), halo: new THREE.Color(1.2, 1.1, 1.3) };
+  const moonTex = moonTextures(classic);
+  // (the remaster keeps the disc under the clip: its maria and craters stay visible, the halo small and neutral)
+  const moonColor = classic ? { disc: new THREE.Color(1.6, 1.5, 1.3), halo: new THREE.Color(1.2, 1.1, 1.3) } : { disc: new THREE.Color(0.52, 0.52, 0.51), halo: new THREE.Color(0.4, 0.42, 0.48) };
   const moonMat = new THREE.ShaderMaterial({
     uniforms: { tDisc: { value: moonTex.disc }, tHalo: { value: moonTex.halo }, uDisc: { value: moonColor.disc }, uHalo: { value: moonColor.halo }, uK: { value: MOON_HALO } },
     vertexShader: /* glsl */`
@@ -805,9 +1210,20 @@ export function buildWorld({ scene, physics, low }) {
   scene.add(moon);
   const sky = new THREE.Mesh(new THREE.CylinderGeometry(300, 300, 56, 48, 1, true).translate(0, 12, 0),
     // a touch lighter than black: the far tree line sits in the night haze, behind the fogged hills
-    new THREE.MeshBasicMaterial({ color: '#0e0919', alphaMap: skylineTexture(), transparent: true, depthWrite: false, side: THREE.BackSide, fog: false }));
+    new THREE.MeshBasicMaterial({ color: classic ? '#0e0919' : '#0a0b0f', alphaMap: skylineTexture(), transparent: true, depthWrite: false, side: THREE.BackSide, fog: false }));
   sky.name = 'skyline'; sky.renderOrder = 2; sky.frustumCulled = false;
   scene.add(sky);
+  // the remaster: the far line crisp at 4x the resolution and lighter (night haze), a second, nearer and darker line
+  // over it (its own seed: bigger crowns, a few spruces; desktop): depth in two layers with the haze between them
+  let sky2 = null;
+  if (!classic) sky.material.alphaMap = skylineTextureHD(0, low);
+  if (!classic) sky.material.color.set('#15171e');
+  if (!classic && !low) { // (phones: the far line only; a second transparent ring is overdraw across the whole sky)
+    sky2 = new THREE.Mesh(new THREE.CylinderGeometry(240, 240, 46, 64, 1, true).translate(0, 8, 0),
+      new THREE.MeshBasicMaterial({ color: '#08090c', alphaMap: skylineTextureHD(1, low), transparent: true, depthWrite: false, side: THREE.BackSide, fog: false }));
+    sky2.name = 'skyline2'; sky2.renderOrder = 3; sky2.frustumCulled = false;
+    scene.add(sky2);
+  }
   const _moonDir = new THREE.Vector3();
 
 
@@ -903,7 +1319,15 @@ export function buildWorld({ scene, physics, low }) {
   const bankAt = (x) => Math.max(heightAt(x, C.z0 - 0.05), heightAt(x, C.z1 + 0.05));
 
   self = {
-    terrain, props, glow, pumpkins, leaves, tufts, moon, moonColor, sky, water, lanternSpots, ghostSpawns, graves, candySpot, heightAt, glowSpots, beacons,
+    terrain, props, glow, pumpkins, leaves, tufts, cover,
+    /** Bench cost knobs (main.js registers them): the lamp pools, the ground's normal maps. */
+    knobs: {
+      pools: { get: () => poolsOn, set: (on) => { poolsOn = !!on && pools.length > 0; if (!poolsOn) POOLS.n.value = 0; } },
+      groundNormals: terrainFlat && {
+        get: () => terrain.material === terrainMat,
+        set: (on) => { if (!terrainFlat.m) terrainFlat.m = terrainFlat(); terrain.material = on ? terrainMat : terrainFlat.m; },
+      },
+    }, moon, moonColor, sky, water, lanternSpots, ghostSpawns, graves, candySpot, heightAt, glowSpots, beacons,
     /** Light groups ([kind, flicker amount], see GLOW) and their levels (glowLevels: set per frame by the game; 1). */
     glowGroups: groups, glowLevels, gate, perches,
     /** The tinted light group's colour, on its glow parts and its halos (the cauldron's brew: potions.js sets it per
@@ -930,6 +1354,17 @@ export function buildWorld({ scene, physics, low }) {
         const dx = groupPos[k * 3] - c.x, dy = groupPos[k * 3 + 1] - c.y, dz = groupPos[k * 3 + 2] - c.z, d2 = dx * dx + dy * dy + dz * dz;
         if (d2 < 256) L[k] *= 0.45 + 0.55 * smooth((Math.sqrt(d2) - 4) / 12);
       }
+      if (poolsOn) {
+        for (let i = 0; i < pools.length; i++) { const q = poolPos[i]; poolD[i] = Math.hypot(q[0] - c.x, q[2] - c.z) - q[3]; }
+        poolOrder.sort((a, b) => poolD[a] - poolD[b]);
+        let n = 0;
+        for (let j = 0; j < poolOrder.length && n < POOL_LIVE; j++) {
+          const i = poolOrder[j]; if (poolD[i] > 45) break;
+          const P0 = pools[i], q = poolPos[i], f = L[GS[P0[0]][8]];
+          POOLS.pos.value[n].set(q[0], q[1], q[2], q[3]); POOLS.col.value[n].set(P0[1] * f, P0[2] * f, P0[3] * f); n++;
+        }
+        POOLS.n.value = n;
+      }
       const T = glowTint, tg = glowTintG.value.x; // (the tinted group's halos take its tint too: the brew's colour)
       for (let k = 0; k < GS.length; k++) {
         const q = GS[k], f = L[q[8]];
@@ -943,10 +1378,11 @@ export function buildWorld({ scene, physics, low }) {
       const cp = camera.position;
       _camP.copy(cp);
       _moonDir.copy(moonDir).normalize();
-      const D = 420, R = 30;
+      const D = 420, R = classic ? 30 : 24; // (the remaster: a smaller moon, its craters still read)
       moon.position.copy(cp).addScaledVector(_moonDir, D);
       moon.lookAt(cp); moon.scale.setScalar(R * MOON_HALO); // the quad holds the halo; the disc is 1 / MOON_HALO of it
       sky.position.set(cp.x, 0, cp.z);
+      if (sky2) sky2.position.set(cp.x, 0, cp.z);
       water.material.uniforms.uMoon.value.copy(_moonDir);
     },
   };
