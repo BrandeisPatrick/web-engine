@@ -30,6 +30,30 @@ layerOf('vehicle'); // reserve bit 24 for traffic so masks are stable across run
 layerOf('rigid');   // bit 25: DynamicsWorld bodies bridged into this world (attachToPhysicsWorld)
 
 const EMPTY_OPTS = Object.freeze({});
+
+/** @typedef {number[]|{ x: number, y: number, z: number }} Vec3Like  [x, y, z] or a THREE.Vector3 */
+/**
+ * @typedef {object} StaticBoxSpec  addStaticBox's object form: `min` + `max` corners, or `center` + `size`
+ * @property {Vec3Like} [min]  lowest corner (with `max`)
+ * @property {Vec3Like} [max]  highest corner (with `min`)
+ * @property {Vec3Like} [center]  box centre (with `size`)
+ * @property {Vec3Like} [size]  full extents [w, h, d], as BoxGeometry(w, h, d) (with `center`)
+ * @property {number|string} [kind=0]  collision layer / tag (layerOf)
+ */
+const comp = (v, i) => (Array.isArray(v) ? v[i] : i === 0 ? v.x : i === 1 ? v.y : v.z);
+/** StaticBoxSpec -> [minX, minY, minZ, maxX, maxY, maxZ] (+ .kind). Throws on a spec with neither form. */
+function boxFromSpec(o) {
+  const out = /** @type {number[] & { kind: number|string }} */ (/** @type {any} */ ([0, 0, 0, 0, 0, 0]));
+  out.kind = o.kind ?? 0;
+  if (o.min && o.max) {
+    for (let i = 0; i < 3; i++) { out[i] = +comp(o.min, i); out[i + 3] = +comp(o.max, i); }
+  } else if (o.center && o.size) {
+    for (let i = 0; i < 3; i++) { const c = +comp(o.center, i), h = +comp(o.size, i) / 2; out[i] = c - h; out[i + 3] = c + h; }
+  } else {
+    throw new TypeError('PhysicsWorld.addStaticBox: pass { min: [x, y, z], max: [x, y, z] } or { center: [x, y, z], size: [w, h, d] } (or the 7 numbers minX, minY, maxX, maxY, minZ, maxZ, kind)');
+  }
+  return out;
+}
 const makeHit = () => ({ distance: 0, point: new Vector3(), normal: new Vector3(), box: null, kind: null, ground: false });
 const _o = new Vector3(), _d = new Vector3(), _c = new Vector3(), _cp = new Vector3(), _n = new Vector3(), _bn = new Vector3();
 
@@ -62,8 +86,46 @@ export class PhysicsWorld {
   }
 
   // ---- static colliders ------------------------------------------------------------------------------
-  /** Add a static axis-aligned box; returns its index (-1 if degenerate). */
-  addStaticBox(minX, minY, maxX, maxY, minZ, maxZ, kind = 0) { return this.grid.add(minX, minY, maxX, maxY, minZ, maxZ, kind); }
+  /**
+   * Add a static axis-aligned box; returns its index (-1 if degenerate). Two forms:
+   *
+   *   physics.addStaticBox({ min: [x0, y0, z0], max: [x1, y1, z1], kind: 'wall' });   // corners (arrays or {x, y, z})
+   *   physics.addStaticBox({ center: [x, y, z], size: [w, h, d] });                    // like a BoxGeometry(w, h, d) at center
+   *   physics.addStaticBox(minX, minY, maxX, maxY, minZ, maxZ, kind);                   // positional: note the order
+   *
+   * `kind` (number 0..23 or a string, default 0) picks the collision layer (layerOf) and is reported by queries.
+   * @overload
+   * @param {StaticBoxSpec} box
+   * @returns {number}
+   */
+  /**
+   * @overload
+   * @param {number} minX
+   * @param {number} minY
+   * @param {number} maxX
+   * @param {number} maxY
+   * @param {number} minZ
+   * @param {number} maxZ
+   * @param {number|string} [kind=0]
+   * @returns {number}
+   */
+  /**
+   * @param {StaticBoxSpec|number} minX
+   * @param {number} [minY]
+   * @param {number} [maxX]
+   * @param {number} [maxY]
+   * @param {number} [minZ]
+   * @param {number} [maxZ]
+   * @param {number|string} [kind=0]
+   * @returns {number}
+   */
+  addStaticBox(minX, minY, maxX, maxY, minZ, maxZ, kind = 0) {
+    if (minX !== null && typeof minX === 'object') {
+      const b = boxFromSpec(minX);
+      return this.grid.add(b[0], b[1], b[3], b[4], b[2], b[5], b.kind);
+    }
+    return this.grid.add(minX, minY, maxX, maxY, minZ, maxZ, kind);
+  }
   /** All static boxes (shared objects: read only). */
   get staticBoxes() { return this.grid.boxes; }
   /** Static boxes whose XZ footprint is within r of (x,z). Clears and fills `out`. */

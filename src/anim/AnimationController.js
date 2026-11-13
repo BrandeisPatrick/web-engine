@@ -80,16 +80,53 @@ function trackOf(clip, bone, prop) {
   return null;
 }
 
+/**
+ * The error for a state whose clip name is not in `clips`: lists the clip names there are, and suggests the one that
+ * ends with the requested name when exactly one does (glTF exports often prefix the armature: 'Armature|Walk').
+ */
+function missingClipMessage(state, want, clips) {
+  const names = (clips || []).map((c) => c && c.name).filter((n) => typeof n === 'string');
+  const w = String(want).toLowerCase();
+  const near = names.filter((n) => n.toLowerCase().endsWith(w) || n.toLowerCase().endsWith(`_${w}`));
+  const hint = near.length === 1 ? ` Did you mean '${near[0]}'?` : '';
+  return `AnimationController: state '${state}': clip '${want}' not found.${hint} `
+    + `Clips (${names.length}): ${names.length ? names.map((n) => `'${n}'`).join(', ') : '(none: pass gltf.animations)'}`;
+}
+
+/**
+ * @typedef {object} AnimationStateSpec  one state: a clip and how it plays (see the header)
+ * @property {string|THREE.AnimationClip} clip  a clip NAME from `clips` (e.g. 'HumanArmature|Man_Walk'), or the clip
+ * @property {boolean} [loop=true]
+ * @property {number} [speed=1]  time scale (< 0 plays backwards)
+ * @property {boolean} [clamp=true]  false: a finished one-shot drops to weight 0 (three.js' raw behaviour)
+ * @property {string|((state: string, controller: AnimationController) => void)|null} [onEnd]  one-shots: node to
+ *   play (or a function to call) when it finishes
+ * @property {Array<{ at: number, name: string }>|null} [markers]  normalized times [0, 1) that emit 'marker' events
+ */
+/**
+ * @typedef {object} BlendTreeSpec  a 1D blend tree over states, driven by setParam(param, value)
+ * @property {'1d'} [type='1d']
+ * @property {string} param  parameter name (setParam)
+ * @property {Array<{ at: number, state: string }>} points  param value -> state name (blended linearly between)
+ * @property {boolean} [sync=false]  match the members' phase (walk / run cycles)
+ */
+/**
+ * @typedef {object} AnimationControllerOptions
+ * @property {Object<string, AnimationStateSpec>} [states]  states by name
+ * @property {Object<string, BlendTreeSpec>} [trees]  blend trees by name (names share one space with states)
+ * @property {Object<string, number>} [transitions]  crossfade seconds keyed 'default', 'from->to', '*->to', 'from->*'
+ *   (default { default: 0.2 })
+ * @property {boolean|{ bone?: string, xz?: boolean, y?: boolean, yaw?: boolean }} [rootMotion=false]
+ * @property {Events|null} [events]  emitter for 'end' / 'loop' / 'marker' (default: a new Events)
+ */
+
 export class AnimationController {
   /**
+   * A clip name that `clips` does not have throws an Error listing the clip names it does have.
    * @param {THREE.Object3D} root  mixer root (the character)
-   * @param {THREE.AnimationClip[]} clips
-   * @param {object} o
-   * @param {object} o.states  { name: { clip, loop, speed, clamp, onEnd, markers } } (see header)
-   * @param {object} [o.trees]  { name: { type: '1d', param, points: [{ at, state }], sync } }
-   * @param {object} [o.transitions={ default: 0.2 }]  crossfade seconds keyed 'from->to', '*->to', 'from->*'
-   * @param {object|boolean} [o.rootMotion=false]  { bone: 'Hips', xz: true, y: false, yaw: false } (true = these)
-   * @param {Events} [o.events]  emitter for 'end' / 'loop' / 'marker' (default: a new Events)
+   * @param {THREE.AnimationClip[]} clips  e.g. gltf.animations
+   * @param {AnimationControllerOptions} [o]  states: { name: { clip: 'ClipName', loop, speed, clamp, onEnd, markers } },
+   *   trees: { name: { type: '1d', param, points: [{ at, state }], sync } }, transitions, rootMotion, events
    */
   constructor(root, clips, { states = {}, trees = {}, transitions = { default: 0.2 }, rootMotion = false, events = null } = {}) {
     this.root = root;
@@ -145,7 +182,7 @@ export class AnimationController {
 
   _addState(name, spec, clips, used) {
     const src = typeof spec.clip === 'string' ? THREE.AnimationClip.findByName(clips, spec.clip) : spec.clip;
-    if (!src) throw new Error(`AnimationController: state '${name}': clip '${spec.clip}' not found`);
+    if (!src) throw new Error(missingClipMessage(name, spec.clip, clips));
     const rmOn = this.rootMotion.enabled;
     const posT = rmOn ? trackOf(src, this.rootMotion.bone, 'position') : null;
     const quatT = rmOn && this.rootMotion.yaw ? trackOf(src, this.rootMotion.bone, 'quaternion') : null;
@@ -258,7 +295,7 @@ export class AnimationController {
    */
   play(name, o = NO_OPTS) {
     const node = this.states[name] || this.trees[name];
-    if (!node) { console.warn(`AnimationController: no state or tree '${name}'`); return this; }
+    if (!node) { console.warn(`AnimationController: no state or tree '${name}' (states: ${Object.keys(this.states).join(', ') || 'none'}; trees: ${Object.keys(this.trees).join(', ') || 'none'})`); return this; }
     const cur = this._current, nodes = this._nodes;
     if (node === cur) {
       if (!node.isTree && node.ended) this._restart(node);

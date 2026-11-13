@@ -63,6 +63,9 @@ const SUITES = [
   { file: 'miami-car.mjs' },
   // the NYC night walk sample's engine options: traffic fleet mix and the spawn area (TrafficSim)
   { file: 'nyc-traffic-mix.mjs' },
+  // agent usability: ROAD_CAR_SPEC, loadTextureSet role keys / warnings, missing-clip errors, addStaticBox object
+  // forms, NearestLights from the render layer, PoseInterpolator
+  { file: 'agent-usability.mjs' },
   // the docs (README.md, ENGINE.md, AGENTS.md, docs/HOWTO.md) name only paths, links and exports that exist
   { file: 'docs.mjs' },
 ];

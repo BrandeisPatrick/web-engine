@@ -35,6 +35,11 @@ export {
 export { buildMipChain, dataTextureFromMips, fillTransparent, dilateRGB } from './MipChain.js';
 // asset loaders for the core Assets registry (glTF + KTX2 / Draco / meshopt, textures, HDR, .cube LUTs)
 export { registerRenderLoaders, parseCubeLUT, disposeInstance } from './loaders.js';
+/** @typedef {import('./loaders.js').GltfAsset} GltfAsset  the value of a 'gltf' asset (assets.get) */
+/** @typedef {import('./TextureSets.js').TextureSetResult} TextureSetResult  loadTextureSet's result */
+/** @typedef {import('./TextureSets.js').TextureSetOptions} TextureSetOptions  loadTextureSet's options */
+/** @typedef {import('./TextureSets.js').TextureManifest} TextureManifest  a texture root's manifest.json */
+/** @typedef {import('./Atmosphere.js').AtmosphereOptions} AtmosphereOptions */
 // debug lines for a DynamicsWorld / DynamicsClient (shapes, contacts, joints)
 export { PhysicsDebug } from './PhysicsDebug.js';
 // 0.9.0: meshes over the dynamics world's particles (cloth, rope, soft bodies) and fractured bodies' pieces
@@ -45,6 +50,9 @@ export {
   ClusteredLights, installClusteredChunks, applyClustered, syncClustered, setMaterialClustered, clusteredUniforms,
   CLUSTERED_DEFINE, MAX_PER_CELL,
 } from './ClusteredLights.js';
+// a small pool of real PointLights (or the clustered list) fed from many light positions: lamps, lanterns, windows
+// (also exported from the world layer, where it used to live)
+export { NearestLights } from './NearestLights.js';
 // GPU-simulated particles (0.7.0): the CPU ParticleSystem's API over GPUComputationRenderer ping-pong textures
 export { GpuParticleSystem, GpuParticleStaging } from './GpuParticles.js';
 export { DEFAULT_RINGS, impostorViews, bakeImpostors, createImpostorMaterial, ImpostorBatch } from './Impostors.js';

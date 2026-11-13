@@ -217,6 +217,29 @@ const STATIC = BODY.STATIC, KINEMATIC = BODY.KINEMATIC, DYNAMIC = BODY.DYNAMIC;
 const ASLEEP = FLAG.ASLEEP, NO_GRAVITY = FLAG.NO_GRAVITY;
 const P_PINNED = PFLAG.PINNED, P_NO_GRAVITY = PFLAG.NO_GRAVITY;
 const TYPE_OF = Object.freeze({ static: STATIC, kinematic: KINEMATIC, dynamic: DYNAMIC });
+
+/** @typedef {number[]|{ x: number, y: number, z: number }} DynVec3  [x, y, z] or a THREE.Vector3 */
+/** @typedef {number[]|{ x: number, y: number, z: number, w: number }} DynQuat  [x, y, z, w] or a THREE.Quaternion */
+/**
+ * @typedef {object} AddBodyOptions  DynamicsWorld.addBody options (see the file header)
+ * @property {{ type: number, aabb: Function, [key: string]: any }} shape  a shape from the shape helpers: boxShape(hx,
+ *   hy, hz) (HALF extents), sphereShape(r), capsuleShape(r, halfHeight), convexShape(points), compoundShape(...),
+ *   trimeshShape(...) (static only)
+ * @property {'dynamic'|'static'|'kinematic'|number} [type='dynamic']  or a BODY.* number
+ * @property {DynVec3} [position=[0, 0, 0]]  body origin = the shape's centre
+ * @property {DynQuat} [quaternion=[0, 0, 0, 1]]
+ * @property {number} [mass]  kg; default density * shape volume
+ * @property {number} [density=1000]  kg/m^3 (water); a wooden crate ~ 60-600
+ * @property {number} [friction=0.6]
+ * @property {number} [restitution=0.1]
+ * @property {number} [linearDamping=0.01]
+ * @property {number} [angularDamping=0.05]
+ * @property {number} [layer=1]  collision layer bits
+ * @property {number} [mask=-1]  layers it collides with
+ * @property {string|number} [kind='rigid']  tag returned by kindOf(id)
+ * @property {any} [userData=null]
+ * @property {boolean} [noGravity=false]
+ */
 const DEFAULT_SLEEP = Object.freeze({ linear: 0.05, angular: 0.05, time: 0.5 });
 const EMPTY_OPTS = Object.freeze({});
 const MAX_WAKE_PASSES = 16;
@@ -706,8 +729,13 @@ export class DynamicsWorld {
   }
 
   // ---- bodies ------------------------------------------------------------------------------------------------------
-  /** Add a body; returns its id. See the header for the options. */
-  addBody(o = {}) {
+  /**
+   * Add a body; returns its id (read its pose with getPose(id, mesh.position, mesh.quaternion)).
+   *   const id = world.addBody({ shape: boxShape(0.35, 0.35, 0.35), position: [0, 1, 0], density: 60 });
+   * @param {AddBodyOptions} o
+   * @returns {number}
+   */
+  addBody(o = /** @type {AddBodyOptions} */ ({})) {
     const shape = o.shape;
     if (!shape || typeof shape.aabb !== 'function') throw new TypeError('DynamicsWorld.addBody: a shapes.js shape is required');
     const t = typeof o.type === 'number' ? o.type : TYPE_OF[o.type ?? 'dynamic'];

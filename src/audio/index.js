@@ -5,3 +5,4 @@ export { PositionalAudio, AudioListener3D, Emitter as AudioEmitter } from './Pos
 export { CityAmbience } from './Ambience.js';
 export { VehicleAudio } from './VehicleAudio.js';
 export { registerAudioLoader, SamplePlayer } from './Samples.js';
+/** @typedef {import('./VehicleAudio.js').VehicleAudioState} VehicleAudioState  what VehicleAudio.update reads */

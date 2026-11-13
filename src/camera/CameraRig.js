@@ -232,7 +232,14 @@ export class CameraRig {
   get occlusion() { return this.collision.occlusion; }
   set occlusion(on) { this.collision.occlusion = !!on; }
 
-  /** Follow an Object3D (or anything with matrixWorld); stateGetter returns e.g. { velocity, mode }. */
+  /**
+   * Follow an Object3D (or anything with matrixWorld). `stateGetter` is called every update and returns the plain
+   * state object the rig reads (ChaseRig: ChaseTargetState; ThirdPersonRig: { facing }); a non-function is used as the
+   * state itself. Keep returning the same object and update its fields (no allocation per frame):
+   *   const state = { velocity: car.velocity, speedKmh: 0, grounded: true };  rig.setTarget(carMesh, () => state);
+   * @param {THREE.Object3D} object3d
+   * @param {(() => object)|object|null} [stateGetter]
+   */
   setTarget(object3d, stateGetter) {
     this.target = object3d;
     this.getState = typeof stateGetter === 'function' ? stateGetter : () => stateGetter;
