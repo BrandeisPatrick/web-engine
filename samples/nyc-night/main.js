@@ -91,6 +91,9 @@ async function boot() {
   });
   const { scene, camera, renderer } = engine;
   TextureSets.configure({ base: `${NYC}${NY.textures}/`, manifestIds: true }); // the roles' folders: texture-sets.json ids (walls.js)
+  // desktop: the tier's anisotropy (8, not the GPU's 16x: grazing street canyons at 3024x1964); mobile keeps the GPU
+  // maximum, the look its image guard holds (and it is inside its budget)
+  if (DESK) TextureSets.configure({ maxAnisotropy: S.textures.anisotropy });
 
   // ---------------------------------------------------------------- the city
   let clustered = null;

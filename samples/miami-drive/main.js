@@ -136,6 +136,9 @@ async function boot() {
   // the demo's texture sets (Poly Haven, CC0) live in public/miami/textures (~20 MB of JPGs); phones read an empty
   // manifest (textures-lite: every layer procedural, nothing to download) and fetch only the beach sand (~2 MB)
   TextureSets.configure({ base: MOBILE ? `${BASE}miami/textures-lite/` : `${BASE}miami/textures/`, basisPath: `${BASE}miami/basis/` }); // KTX2 maps (tools/compress-textures.mjs); the transcoder lives with the demo
+  // desktop: the tier's anisotropy (8, not the GPU's 16x: grazing roads at 3024x1964); mobile keeps the GPU maximum,
+  // the look its image guard holds (and it is inside its budget)
+  if (!MOBILE) TextureSets.configure({ maxAnisotropy: QS.textures.anisotropy });
   const tParam = params.get('t');
   const timeOfDay = tParam == null ? 'dusk' : Number.isFinite(+tParam) ? +tParam : tParam;
 

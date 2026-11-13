@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- `TextureSets.options.maxAnisotropy` caps the texture arrays and `loadTextureSet` maps (unset = the GPU maximum, as
+  before); the two city demos pass the desktop tier's `textures.anisotropy` (8): 16x on grazing streets costs GPU time.
 - Atmosphere `shadows: { skipUnlit: true }` (on in both quality tiers; Halloween passes the tier's): the directional
   light loop skips RE_Direct where the light is black at the pixel (cascade lights, full shadow), which adds exactly 0
   there; `installSkipUnlitChunk` (`render/shadowSkipUnlit.js`), `test/skip-unlit.mjs`. Off, the shaders are unchanged.

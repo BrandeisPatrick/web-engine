@@ -3,28 +3,28 @@
   "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
   "chrome": "157.0.8103.38",
   "updated": "2026-11-12",
-  "commit": "54a7635",
+  "commit": "422e484",
   "frames": 24,
   "repeats": 5,
-  "score": 139.9,
+  "score": 140.6,
   "views": {
     "nyc-night": {
       "size": "3024x1964",
       "tier": "desktop",
       "heapMB": 280.2,
       "assetMB": 21.3,
-      "loadMs": 2692,
+      "loadMs": 2670,
       "poses": {
         "avenue": {
-          "ms": 16.92,
-          "spread": 0.013,
+          "ms": 16.55,
+          "spread": 0.003,
           "drawCalls": 212,
           "triangles": 1062458,
           "textures": 129,
           "programs": 115,
-          "hash": "d2d69213",
+          "hash": "32caffa2",
           "imageNoise": {
-            "meanAbs": 0.006,
+            "meanAbs": 0.011,
             "pctOver8": 0
           },
           "look": {
@@ -33,7 +33,7 @@
             "p90": 64,
             "p99": 133,
             "lumMax": 251.36,
-            "under40": 71.48,
+            "under40": 71.5,
             "under80": 94.81,
             "over160": 0.29,
             "over240": 0,
@@ -45,16 +45,16 @@
           }
         },
         "square": {
-          "ms": 17.01,
+          "ms": 16.59,
           "spread": 0.004,
           "drawCalls": 244,
           "triangles": 1166681,
           "textures": 130,
           "programs": 117,
-          "hash": "a0dd6503",
+          "hash": "99b72a4d",
           "imageNoise": {
-            "meanAbs": 0.043,
-            "pctOver8": 0.04
+            "meanAbs": 0,
+            "pctOver8": 0
           },
           "look": {
             "lumMean": 29.72,
@@ -63,7 +63,7 @@
             "p99": 133,
             "lumMax": 236.16,
             "under40": 76.44,
-            "under80": 95.92,
+            "under80": 95.93,
             "over160": 0.69,
             "over240": 0,
             "satMean": 0.335,
@@ -74,19 +74,19 @@
           }
         },
         "sidewalk": {
-          "ms": 18.48,
-          "spread": 0.007,
+          "ms": 18.09,
+          "spread": 0.003,
           "drawCalls": 226,
           "triangles": 1126074,
           "textures": 133,
           "programs": 118,
-          "hash": "cae83ca5",
+          "hash": "bd9bb7da",
           "imageNoise": {
             "meanAbs": 0,
             "pctOver8": 0
           },
           "look": {
-            "lumMean": 31.28,
+            "lumMean": 31.29,
             "lumMedian": 22,
             "p90": 70,
             "p99": 146,
@@ -109,18 +109,18 @@
       "tier": "mobile",
       "heapMB": 247.2,
       "assetMB": 8.68,
-      "loadMs": 2468,
+      "loadMs": 2455,
       "poses": {
         "avenue": {
           "ms": 3.41,
-          "spread": 0.017,
+          "spread": 0.006,
           "drawCalls": 182,
           "triangles": 799052,
           "textures": 87,
           "programs": 109,
-          "hash": "d092510e",
+          "hash": "2327a946",
           "imageNoise": {
-            "meanAbs": 0.005,
+            "meanAbs": 0.009,
             "pctOver8": 0
           },
           "look": {
@@ -130,7 +130,7 @@
             "p99": 112,
             "lumMax": 182.64,
             "under40": 79.99,
-            "under80": 97.09,
+            "under80": 97.1,
             "over160": 0.02,
             "over240": 0,
             "satMean": 0.317,
@@ -141,8 +141,8 @@
           }
         },
         "square": {
-          "ms": 3.61,
-          "spread": 0.003,
+          "ms": 3.6,
+          "spread": 0.001,
           "drawCalls": 200,
           "triangles": 863512,
           "textures": 88,
@@ -170,8 +170,8 @@
           }
         },
         "sidewalk": {
-          "ms": 3.64,
-          "spread": 0.002,
+          "ms": 3.63,
+          "spread": 0.005,
           "drawCalls": 185,
           "triangles": 864941,
           "textures": 91,
@@ -205,18 +205,18 @@
       "tier": "desktop",
       "heapMB": 235.2,
       "assetMB": 28.2,
-      "loadMs": 4524,
+      "loadMs": 4470,
       "poses": {
         "chase": {
-          "ms": 17.05,
-          "spread": 0.002,
+          "ms": 16.93,
+          "spread": 0.005,
           "drawCalls": 203,
           "triangles": 1396220,
           "textures": 132,
           "programs": 173,
-          "hash": "cf18cacf",
+          "hash": "71997bb8",
           "imageNoise": {
-            "meanAbs": 0.009,
+            "meanAbs": 0.01,
             "pctOver8": 0.05
           },
           "look": {
@@ -225,7 +225,7 @@
             "p90": 75,
             "p99": 99,
             "lumMax": 223.88,
-            "under40": 67.2,
+            "under40": 67.19,
             "under80": 92.06,
             "over160": 0.05,
             "over240": 0,
@@ -237,13 +237,13 @@
           }
         },
         "strip": {
-          "ms": 14.28,
-          "spread": 0.003,
+          "ms": 13.95,
+          "spread": 0.004,
           "drawCalls": 214,
           "triangles": 1496134,
           "textures": 133,
           "programs": 183,
-          "hash": "c1e07185",
+          "hash": "d61880ed",
           "imageNoise": {
             "meanAbs": 0.004,
             "pctOver8": 0
@@ -254,7 +254,7 @@
             "p90": 73,
             "p99": 151,
             "lumMax": 229.53,
-            "under40": 69,
+            "under40": 69.01,
             "under80": 92.47,
             "over160": 0.66,
             "over240": 0,
@@ -266,23 +266,23 @@
           }
         },
         "beach": {
-          "ms": 10.2,
-          "spread": 0.006,
+          "ms": 9.99,
+          "spread": 0.004,
           "drawCalls": 138,
           "triangles": 701246,
           "textures": 133,
           "programs": 183,
-          "hash": "c7737dec",
+          "hash": "0a0ddb08",
           "imageNoise": {
             "meanAbs": 0,
             "pctOver8": 0
           },
           "look": {
-            "lumMean": 35.67,
+            "lumMean": 35.68,
             "lumMedian": 21,
             "p90": 85,
             "p99": 107,
-            "lumMax": 199.95,
+            "lumMax": 200.32,
             "under40": 64.91,
             "under80": 87.38,
             "over160": 0.07,
@@ -295,13 +295,13 @@
           }
         },
         "car": {
-          "ms": 16.3,
-          "spread": 0.002,
+          "ms": 16.28,
+          "spread": 0.004,
           "drawCalls": 187,
           "triangles": 1264202,
           "textures": 133,
           "programs": 183,
-          "hash": "135e13e2",
+          "hash": "d086e0e3",
           "imageNoise": {
             "meanAbs": 0,
             "pctOver8": 0
@@ -330,16 +330,16 @@
       "tier": "mobile",
       "heapMB": 162.1,
       "assetMB": 3.65,
-      "loadMs": 3228,
+      "loadMs": 3256,
       "poses": {
         "chase": {
-          "ms": 2.75,
+          "ms": 2.76,
           "spread": 0.014,
           "drawCalls": 150,
           "triangles": 736853,
           "textures": 75,
           "programs": 114,
-          "hash": "4ffe9f9d",
+          "hash": "174f856c",
           "imageNoise": {
             "meanAbs": 0.005,
             "pctOver8": 0
@@ -362,13 +362,13 @@
           }
         },
         "strip": {
-          "ms": 2.72,
-          "spread": 0.006,
+          "ms": 2.71,
+          "spread": 0.003,
           "drawCalls": 163,
           "triangles": 854136,
           "textures": 75,
           "programs": 118,
-          "hash": "956460b6",
+          "hash": "7f1b86ad",
           "imageNoise": {
             "meanAbs": 0.001,
             "pctOver8": 0
@@ -391,8 +391,8 @@
           }
         },
         "beach": {
-          "ms": 1.78,
-          "spread": 0.005,
+          "ms": 1.8,
+          "spread": 0.012,
           "drawCalls": 133,
           "triangles": 566176,
           "textures": 75,
@@ -420,13 +420,13 @@
           }
         },
         "car": {
-          "ms": 2.62,
-          "spread": 0.006,
+          "ms": 2.63,
+          "spread": 0.002,
           "drawCalls": 140,
           "triangles": 686843,
           "textures": 75,
           "programs": 118,
-          "hash": "9c8b16f5",
+          "hash": "349f1c30",
           "imageNoise": {
             "meanAbs": 0,
             "pctOver8": 0

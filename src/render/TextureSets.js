@@ -10,6 +10,8 @@
 //   textureBase() / basisPath()                    default `${BASE_URL}textures/` / `${BASE_URL}basis/` (or
 //                                                  TextureSets.options.base / basisPath when set)
 //   TextureSets.options.manifestIds (opt-in)       arrays read a role's folder from the manifest `id` (own scans per role)
+//   TextureSets.options.maxAnisotropy (opt-in)     caps the anisotropy of the texture arrays and loadTextureSet maps
+//                                                  (unset = the GPU maximum, as before; e.g. a tier's textures.anisotropy)
 //   loadTextureManifest(base?)                     -> manifest | null (never throws)
 //   loadTextureSet(id, { renderer, base, manifest, maps?, ktx2? })
 //                                                  -> { map, normalMap, roughnessMap, aoMap?, size } | null
@@ -100,14 +102,25 @@ export function paintCanvas(c, fn) {
 /** Release the CPU copy of a DataTexture / DataArrayTexture once it is on the GPU. */
 export function freeAfterUpload(t) { t.onUpdate = () => { t.image.data = null; t.onUpdate = null; }; return t; }
 
-/** RGBA8 DataArrayTexture (size x size x layers), repeat-wrapped, mipmapped, max anisotropy. */
+/**
+ * Anisotropy of the PBR families (texture arrays, loadTextureSet maps): the GPU maximum, capped by
+ * TextureSets.options.maxAnisotropy when set; 4 without a renderer.
+ * @param {import('three').WebGLRenderer|null} renderer
+ */
+function pbrAnisotropy(renderer) {
+  if (!renderer) return 4;
+  const max = renderer.capabilities.getMaxAnisotropy(), cap = TextureSets.options.maxAnisotropy;
+  return cap > 0 ? Math.min(cap, max) : max;
+}
+
+/** RGBA8 DataArrayTexture (size x size x layers), repeat-wrapped, mipmapped, max anisotropy (see pbrAnisotropy). */
 export function makeDataArrayTexture(data, size, layers, srgb, renderer, { free = true } = {}) {
   const t = new THREE.DataArrayTexture(data, size, size, layers);
   t.format = THREE.RGBAFormat; t.type = THREE.UnsignedByteType;
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter;
   t.generateMipmaps = true;
-  t.anisotropy = renderer ? renderer.capabilities.getMaxAnisotropy() : 4;
+  t.anisotropy = pbrAnisotropy(renderer);
   t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
   t.needsUpdate = true;
   return free ? freeAfterUpload(t) : t;
@@ -305,6 +318,11 @@ export const TextureSets = {
                            // Worker (Node / tests) or a failing worker = the previous in-thread path. URL
                            // ?procworkers=0 / =N overrides it (A/B in the browser without code changes)
     log: true,             // one summary console line per load wave
+    /** @type {number|null} */
+    maxAnisotropy: null,   // cap on the anisotropy of the texture arrays and loadTextureSet maps (min with the GPU
+                           // maximum), e.g. a quality tier's textures.anisotropy: 16x at grazing angles costs GPU time
+                           // at high resolutions. null = the GPU maximum, as before. Set it before the textures are
+                           // created; the canvas painters keep finishTexture's own cap (8)
   },
   stats: null,
   /** Merge loader options (see above). */
@@ -678,8 +696,9 @@ function procJob(kind, seed, tint, prio) {
 /**
  * Load one set as plain THREE textures: `.ktx2` CompressedTextures when the manifest lists them and the renderer has a
  * compressed format (see KTX2 notes above), otherwise browser-decoded JPGs (TextureLoader, flipY). Repeat-wrapped, max
- * anisotropy, sRGB albedo / linear data. `maps`: which of map / normalMap / roughnessMap / aoMap to fetch. With a
- * manifest, a set id it does not list resolves to null without fetching. Returns null when the albedo is missing.
+ * anisotropy (capped by TextureSets.options.maxAnisotropy when set), sRGB albedo / linear data. `maps`: which of
+ * map / normalMap / roughnessMap / aoMap to fetch. With a manifest, a set id it does not list resolves to null without
+ * fetching. Returns null when the albedo is missing.
  * `ktx2: false` forces the JPGs for this call. Never throws.
  * @param {string} id
  * @param {{ renderer?: import('three').WebGLRenderer|null, base?: string, manifest?: object|null, maps?: string[], defaultSize?: number, ktx2?: boolean }} [o]
@@ -692,7 +711,7 @@ export async function loadTextureSet(id, { renderer = null, base = textureBase()
   const finish = (t, srgb) => {
     t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.anisotropy = renderer ? renderer.capabilities.getMaxAnisotropy() : 4;
+    t.anisotropy = pbrAnisotropy(renderer);
     t.needsUpdate = true;
     return t;
   };
