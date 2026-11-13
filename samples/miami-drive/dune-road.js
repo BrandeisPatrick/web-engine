@@ -256,27 +256,42 @@ vec2 bankUv = vec2(0.0);`)
       .replace('#include <map_fragment>', `
 float roadK = 1.0 - step(0.5, vZone), gravK = step(0.5, vZone) * (1.0 - step(1.5, vZone));
 float dRd = vRd.x, zRd = vRd.y;
+// each zone's work below runs only where its weight is non-zero; a texture read inside such a branch would get
+// undefined implicit derivatives where a 2x2 quad straddles two zones (wrong-mip speckles), so the uv derivatives are
+// taken here, outside every branch, and the branched reads pass them to textureGrad scaled as their uv is
+vec2 gx = dFdx(vRd), gy = dFdy(vRd);
+#ifndef ROADSCAN
 #ifdef USE_MAP
 vec4 sampledDiffuseColor = texture2D(map, vec2(dRd, zRd) / 6.0);
 #else
 vec4 sampledDiffuseColor = vec4(vec3(0.3), 1.0);
 #endif
+#endif
 float dRough = 0.88;
 {
   float ad = abs(dRd);
-  // the asphalt's edge crumbles into the shoulder: a ragged boundary 0.2-0.6 m inside the geometric edge
-  float rag = dn(vec2(zRd * 1.7, dRd * 3.0)) * 0.4 + dn(vec2(zRd * 6.0, dRd)) * 0.2;
-  float aspK = roadK * (1.0 - smoothstep(3.0 - rag, 3.15 - rag, ad));
-  // ---- asphalt
+  float aa = fwidth(dRd) * 0.8 + 0.004;   // (outside the branches: a derivative)
+  float bankK = 1.0 - roadK - gravK;
+  float aspK = 0.0;
+  if (roadK > 0.0) {
+    // the asphalt's edge crumbles into the shoulder: a ragged boundary 0.2-0.6 m inside the geometric edge
+    float rag = dn(vec2(zRd * 1.7, dRd * 3.0)) * 0.4 + dn(vec2(zRd * 6.0, dRd)) * 0.2;
+    aspK = roadK * (1.0 - smoothstep(3.0 - rag, 3.15 - rag, ad));
+  }
+  // ---- asphalt (asp / rAsp / cPaint only ever count multiplied by aspK)
+  vec3 asp = vec3(0.0); float rAsp = 0.0;
+  if (aspK > 0.0) {
+#ifndef ROADSCAN
   float agg = dfbm(vec2(dRd, zRd) * 3.0);
-  vec3 asp = vec3(0.15, 0.125, 0.11) * (0.75 + 0.5 * agg) * mix(vec3(1.0), sampledDiffuseColor.rgb * 2.2, 0.35);
+  asp = vec3(0.15, 0.125, 0.11) * (0.75 + 0.5 * agg) * mix(vec3(1.0), sampledDiffuseColor.rgb * 2.2, 0.35);
+#endif
 #ifdef ROADSCAN
   // the 2k scan at its 3 m tile, a 0.9 m detail octave (holds from 1 m) and a 25 m macro variation (holds from afar)
-  vec3 a3 = texture2D(uAspD, vec2(dRd, zRd) / 3.0).rgb, a1 = vec3(0.3);
-  if (uDetail > 0.5) a1 = texture2D(uAspD, vec2(zRd, -dRd) / 0.9).rgb;
+  vec3 a3 = textureGrad(uAspD, vec2(dRd, zRd) / 3.0, gx / 3.0, gy / 3.0).rgb, a1 = vec3(0.3);
+  if (uDetail > 0.5) a1 = textureGrad(uAspD, vec2(zRd, -dRd) / 0.9, vec2(gx.y, -gx.x) / 0.9, vec2(gy.y, -gy.x) / 0.9).rgb;
   float macro = dfbm(vec2(dRd, zRd) / 25.0);
   asp = a3 * (0.7 + 0.6 * dot(a1, vec3(0.333)) / 0.3) * (0.8 + 0.4 * macro) * vec3(0.92, 0.88, 0.84);
-  float ar = texture2D(uAspR, vec2(dRd, zRd) / 3.0).r;
+  float ar = textureGrad(uAspR, vec2(dRd, zRd) / 3.0, gx / 3.0, gy / 3.0).r;
 #else
   float ar = 0.9;
 #endif
@@ -288,7 +303,6 @@ float dRough = 0.88;
   asp = mix(asp, asp * 0.6, patchR);
   float crack = 1.0 - smoothstep(0.0, 0.025, abs(dn(vec2(dRd * 1.3, zRd * 0.35)) - 0.5) - 0.002);
   asp *= 1.0 - 0.35 * crack * smoothstep(0.4, 0.7, dfbm(vec2(dRd, zRd) * 0.5));
-  float aa = fwidth(dRd) * 0.8 + 0.004;
   float seamX = abs(abs(dRd + 0.15 * sin(zRd * 0.07)) - 1.75) , seamZ = abs(fract(zRd / 11.0 + 0.1 * dn(vec2(dRd, 3.0))) - 0.5) * 11.0;
   float seam = max(1.0 - smoothstep(0.03, 0.03 + aa * 2.0, seamX), (1.0 - smoothstep(0.025, 0.025 + aa * 2.0, seamZ)) * step(ad, 3.2)) * step(0.35, dn(vec2(zRd * 0.05, dRd * 0.2)));
   asp = mix(asp, vec3(0.025, 0.022, 0.02), seam * 0.85);
@@ -296,7 +310,7 @@ float dRough = 0.88;
   float lane = ad - 1.68, track = 1.0 - smoothstep(0.25, 0.55, abs(abs(lane) - 0.8));
   track *= 0.7 + 0.3 * dn(vec2(zRd * 0.2, dRd));
   asp *= 1.0 - 0.12 * track;
-  float rAsp = mix(mix(0.82, 0.95, ar), 0.42, track * 0.85);
+  rAsp = mix(mix(0.82, 0.95, ar), 0.42, track * 0.85);
   rAsp = mix(rAsp, 0.66, patchR); rAsp = mix(rAsp, 0.35, seam);
   // the double yellow: thick paint, worn through to the aggregate in places, broken into lengths with gaps
   float wear = smoothstep(0.25, 0.7, dfbm(vec2(dRd * 4.0, zRd * 0.9)));
@@ -306,40 +320,56 @@ float dRough = 0.88;
   float broken = smoothstep(0.3, 0.42, dn(vec2(zRd * 0.09, dRd > 0.0 ? 1.0 : 7.0)));
   float yl = (1.0 - smoothstep(0.05 - aa, 0.05 + aa, abs(ad - 0.11))) * (0.3 + 0.65 * wear) * broken;
   asp = mix(asp, vec3(0.5, 0.35, 0.08), yl); rAsp = mix(rAsp, 0.6, yl); cPaint = yl;
+  }
   // ---- gravel shoulder (and where the asphalt has crumbled)
+  float gK = gravK + roadK - aspK;   // gravel where the asphalt has gone
+  vec3 grav = vec3(0.0); float rGrav = 0.9;
+#ifdef SCAN
+  // the rubble runs on 3-4 m past the shoulder before the soil takes over (wider on the dune side)
+  float spill = 0.0;
+  if (bankK > 0.0) spill = bankK * (1.0 - smoothstep(5.6, dRd > 0.0 ? 9.5 : 7.5, ad + 1.2 * dn(vec2(zRd * 0.15, dRd))));
+  vec3 gRaw = vec3(0.0);   // one read of the gravel scan, for the shoulder and the spill
+  if (gK > 0.0 || spill > 0.0) {
+    gRaw = textureGrad(uScanDiff, vec2(dRd, zRd) / 1.5, gx / 1.5, gy / 1.5).rgb;
+    if (gK > 0.0) {
+      grav = mix(vec3(dot(gRaw, vec3(0.3, 0.55, 0.15))), gRaw, 0.55) * vec3(0.82, 0.8, 0.76);   // the coral scan muted toward limestone grey
+      rGrav = textureGrad(uScanRough, vec2(dRd, zRd) / 1.5, gx / 1.5, gy / 1.5).r;
+    }
+  }
+#else
   vec2 gp = vec2(dRd, zRd) * 9.0;
   float peb = smoothstep(0.55, 0.75, dn(gp)) * (0.6 + 0.4 * dn(gp * 2.7));
-  vec3 grav = vec3(0.09, 0.08, 0.07) + vec3(0.16, 0.14, 0.12) * peb;
-  float rGrav = 0.9;
-#ifdef SCAN
-  grav = texture2D(uScanDiff, vec2(dRd, zRd) / 1.5).rgb;
-  grav = mix(vec3(dot(grav, vec3(0.3, 0.55, 0.15))), grav, 0.55) * vec3(0.82, 0.8, 0.76);   // the coral scan muted toward limestone grey
-  rGrav = texture2D(uScanRough, vec2(dRd, zRd) / 1.5).r;
+  grav = vec3(0.09, 0.08, 0.07) + vec3(0.16, 0.14, 0.12) * peb;
 #endif
-  float gK = gravK + roadK - aspK;   // gravel where the asphalt has gone
   vec3 col = aspK * asp + gK * grav + (1.0 - roadK - gravK) * vec3(1.0);
   dRough = aspK * rAsp + gK * rGrav + (1.0 - roadK - gravK) * 0.92;
   diffuseColor.rgb *= col;
   // dirt / sand blown over the edges of the asphalt
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.22, 0.19, 0.15), aspK * smoothstep(2.4, 3.1, ad) * 0.45);
-  float bankK = 1.0 - roadK - gravK;
-  float gv = dfbm(vec2(dRd, zRd) * 0.4);
-  diffuseColor.rgb *= mix(vec3(1.0), vec3(0.8, 0.85, 0.7) + 0.4 * gv, bankK);
+  if (bankK > 0.0) {
+    float gv = dfbm(vec2(dRd, zRd) * 0.4);
+    diffuseColor.rgb *= mix(vec3(1.0), vec3(0.8, 0.85, 0.7) + 0.4 * gv, bankK);
+  }
   cAsp = aspK; cGrav = gK;
 #ifdef SCAN
-  vec3 bs = texture2D(uScanDiff, vec2(dRd, zRd) / 4.0).rgb;
-  diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * (0.45 + 1.1 * bs), bankK * 0.85);
+  if (bankK > 0.0) {
+    vec3 bs = textureGrad(uScanDiff, vec2(dRd, zRd) / 4.0, gx / 4.0, gy / 4.0).rgb;
+    diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * (0.45 + 1.1 * bs), bankK * 0.85);
+  }
 #ifdef BANKSCAN
+  vec3 q0 = dFdx(-vViewPosition), q1 = dFdy(-vViewPosition);   // (outside the branch: derivatives)
   // the bank / dune face: a sand-and-rock scan with parallax relief (4 steps along the view ray in tangent space)
   if (bankK > 0.0) {
     float pxK = uPx * (1.0 - smoothstep(22.0, 30.0, length(vViewPosition)));   // relief only where it can be seen
-    vec3 q0 = dFdx(-vViewPosition), q1 = dFdy(-vViewPosition); vec2 s0 = dFdx(vRd), s1 = dFdy(vRd);
+    vec2 s0 = gx, s1 = gy;
     vec3 Nn = normalize(vNormal), q1p = cross(q1, Nn), q0p = cross(Nn, q0);
     vec3 T = q1p * s0.x + q0p * s1.x, B = q1p * s0.y + q0p * s1.y;
     float sc = inversesqrt(max(max(dot(T, T), dot(B, B)), 1e-12)); T *= sc; B *= sc;
     vec3 V = normalize(vViewPosition);
     vec2 dir = vec2(dot(V, T), dot(V, B)) / max(dot(V, Nn), 0.25);
     vec2 uv0 = vec2(dRd, zRd) / 4.5, pStep = -dir * 0.12 / 4.5 / 3.0;   // 12 cm of relief, 3 steps, within 30 m
+    // (these reads keep their implicit derivatives, as before the zones were branched: this block always was inside
+    // this branch, and the marched uv's own derivatives pick the mip the relief was tuned with)
     float hz = 1.0, h = texture2D(uBnkH, uv0).r; vec2 uv = uv0;
     for (int i = 0; i < 3; i++) { if (h >= hz || pxK < 0.5) break; hz -= 0.3333; uv += pStep; h = texture2D(uBnkH, uv).r; }
     bankUv = uv;
@@ -349,14 +379,14 @@ float dRough = 0.88;
     cBank = bankK;
   }
 #endif
-  // the rubble runs on 3-4 m past the shoulder before the soil takes over (wider on the dune side)
-  float spill = bankK * (1.0 - smoothstep(5.6, dRd > 0.0 ? 9.5 : 7.5, ad + 1.2 * dn(vec2(zRd * 0.15, dRd))));
-  diffuseColor.rgb = mix(diffuseColor.rgb, texture2D(uScanDiff, vec2(dRd, zRd) / 1.5).rgb * vec3(0.85, 0.8, 0.75), spill);
+  if (spill > 0.0) diffuseColor.rgb = mix(diffuseColor.rgb, gRaw * vec3(0.85, 0.8, 0.75), spill);
   cGrav = max(cGrav, spill); cBank *= 1.0 - spill;
   scanK = 1.0;
   // the ground under dense grass: darker and tinted (thatch, humus), so tufts do not sit on bright dirt
-  float gDen = smoothstep(0.35, 0.75, grassDensity(dRd, zRd)) * (1.0 - roadK) * step(3.8, ad);
-  diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.62, 0.6, 0.48), gDen * 0.8);
+  if (roadK < 1.0 && ad >= 3.8) {   // (where (1 - roadK) * step(3.8, ad) is non-zero)
+    float gDen = smoothstep(0.35, 0.75, grassDensity(dRd, zRd)) * (1.0 - roadK) * step(3.8, ad);
+    diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.62, 0.6, 0.48), gDen * 0.8);
+  }
   // dusk only: the scans carry real albedo; lift the corridor so it reads like the reference's roadside in low light
   diffuseColor.rgb *= mix(1.0, mix(1.65, 2.1, 1.0 - roadK), uDusk);
 #endif
@@ -370,21 +400,27 @@ float dRough = 0.88;
 #ifdef SCAN
 {
   // per-zone tangent-space normals: asphalt (two scales, flattened on the tracks), gravel, bank (parallax uv)
-  vec3 nG = texture2D(uScanNor, vec2(dRd, zRd) / 1.5).xyz * 2.0 - 1.0;
-  vec3 mapN = nG * cGrav;
+  // (each zone's normal read only where its weight is non-zero, with the map stage's gradients: see there)
+  vec3 mapN = vec3(0.0);
+  if (cGrav > 0.0) {
+    vec3 nG = textureGrad(uScanNor, vec2(dRd, zRd) / 1.5, gx / 1.5, gy / 1.5).xyz * 2.0 - 1.0;
+    mapN = nG * cGrav;
+  }
 #ifdef ROADSCAN
-  vec3 nA = texture2D(uAspN, vec2(dRd, zRd) / 3.0).xyz * 2.0 - 1.0;
-  if (uDetail > 0.5) { vec3 nA1 = texture2D(uAspN, vec2(zRd, -dRd) / 0.9).xyz * 2.0 - 1.0; nA.xy = nA.xy + nA1.yx * vec2(1.0, -1.0) * 0.6; }
+  if (cAsp > 0.0) {
+  vec3 nA = textureGrad(uAspN, vec2(dRd, zRd) / 3.0, gx / 3.0, gy / 3.0).xyz * 2.0 - 1.0;
+  if (uDetail > 0.5) { vec3 nA1 = textureGrad(uAspN, vec2(zRd, -dRd) / 0.9, vec2(gx.y, -gx.x) / 0.9, vec2(gy.y, -gy.x) / 0.9).xyz * 2.0 - 1.0; nA.xy = nA.xy + nA1.yx * vec2(1.0, -1.0) * 0.6; }
   float lane2 = abs(dRd) - 1.68, track2 = 1.0 - smoothstep(0.25, 0.55, abs(abs(lane2) - 0.8));
   nA.xy *= 1.0 - 0.6 * track2;
   // the paint's thickness: flatter on the line, a ridge at its edges
   nA.xy = mix(nA.xy, vec2(0.0), cPaint * 0.7);
   mapN += nA * cAsp;
+  }
 #else
   mapN += vec3(0.0, 0.0, 1.0) * cAsp;
 #endif
 #ifdef BANKSCAN
-  mapN += (texture2D(uBnkN, bankUv).xyz * 2.0 - 1.0) * cBank;
+  if (cBank > 0.0) mapN += (textureGrad(uBnkN, bankUv, gx / 4.5, gy / 4.5).xyz * 2.0 - 1.0) * cBank;
 #endif
   mapN += vec3(0.0, 0.0, 1.0) * max(0.0, 1.0 - cAsp - cGrav - cBank);
   mapN.xy *= normalScale;

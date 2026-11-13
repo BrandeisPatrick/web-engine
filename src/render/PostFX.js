@@ -48,6 +48,24 @@
 //   texture units WebGL2 guarantees; the TAA pass uses 6 with tSSR.
 //   Passes that need the G-buffer (SSR, MotionBlur, ao.normals 'gbuffer') are rebuilt from their kept options whenever
 //   the G-buffer is (re)built and torn down with it: `ssr` / `motionBlur` report the effective state.
+// renderScale (s in [0.5, 1], default 1; option, set('renderScale', s) / get): temporal upscaling. In effect only while
+// TAA is (else 1, the request kept, as ssr.interval): the scene / G-buffer target, exposure metering, AO, SSR, the
+// volumetric pass and the camera jitter (history.begin) run at the internal size round(drawing buffer x s)
+// (internalWidth / internalHeight, onInternalResize(w, h) for the ClusteredLights tile mapping and SceneCopy); the TAA
+// resolve upscales to the drawing buffer (TAAPass "Upscaling", define TAA_UPSCALE) and everything after it (motion
+// blur, DoF, bloom, final pass, flare) runs at the output size. Passes after TAA that read the internal depth /
+// G-buffer map their texel fetches (FINAL_UPSCALE: closestDepth; MB_UPSCALE: the velocity pass; DOF_UPSCALE: prefilter
+// and composite); reads by uv (fog, aoAt, the volume upsample, tSSR) need nothing. At 1 no define is set and every
+// shader text is the one before renderScale (test/render-scale.mjs pins them). Sizes, decided: AO keeps its absolute
+// pixel budget (maxPixels binds at the city demos' sizes down to s 0.67, so their AO is unchanged); SSR and volumetric
+// keep their scale OF THE INTERNAL size (not compensated: their absolute resolution falls with s, which is part of the
+// saving and of the measured difference); bloom, flare scale (setFlareScale(H)), grain, dither and the final pass's
+// uRes are output pixels. Every change of the effective scale or size restarts the history. Measured on the city demos'
+// desktop poses (2268x1473 output, M4, converged captures against scale 1): s 0.87 saves 1.0-1.4 ms (0.5 on miami
+// beach), 0.75 1.9-2.9 ms (1.2); but the image differs beyond the perf guard on nyc-night's square and sidewalk (0.38 /
+// 0.53 mean / 255 at 0.87, capture(8)) and the per-pixel flicker at rest rises 8-64 % at every scale tried, so the
+// demos stay at 1 (CHANGELOG). Engine adaptive resolution could drive renderScale instead of the pixel ratio (the
+// output size and the history stay put); not done.
 // Then the Atmosphere's lens-flare overlay. Anti-aliasing (`aa`, see resolveAA): 'auto' = forward: 4x MSAA on the
 // scene target by day (alpha-to-coverage foliage, thin bridge cables), FXAA inside the final pass once it is dark or
 // the drawing buffer is larger than msaaMaxPixels; G-buffer: TAA. 'msaa' | 'fxaa' fixed ('msaa' falls back to FXAA
@@ -75,7 +93,9 @@
 // absent pass); CPU submission only, and performance.now() is coarsened to 0.1 ms without cross-origin isolation).
 // 0.8.0 options, all off by default, validated like `taa` (unknown keys / bad values throw, naming the option):
 //   ssr: false | true | { scale 0.5, maxPixels Infinity, steps 24, refine 4, maxDistance 80, thickness 0.4,
-//     maxRoughness 0.7, edgeFade 0.1, jitter true, metalTint true, source 'current' } (SSR_DEFAULTS; needs gbuffer)
+//     maxRoughness 0.7, edgeFade 0.1, jitter true, metalTint true, source 'current', denoise 0, interval 1 }
+//     (SSR_DEFAULTS; needs gbuffer). interval n > 1 (trace every n-th frame, the TAA composite reprojects the reused
+//     buffer) is in effect only while TAA composites SSR: without TAA the pass traces every frame (the request kept)
 //   volumetric: false | true | { scale 0.25, maxPixels Infinity, steps 16, maxDistance 400, g 0.55, density 1,
 //     temporal true, blend 0.9, jitter true (VOLUMETRIC_DEFAULTS), intensity 1 (final pass) } (needs an atmosphere)
 //   motionBlur: 0 | strength | { strength 1, maxBlur 24, tileSize 20, samples 8, shutter 0 } (MOTION_BLUR_DEFAULTS;
@@ -83,7 +103,7 @@
 //   dof: null | true | { focusDistance 12, focalLength 50, fStop 2, sensorHeight 24, maxCoC 12, scale 0.5,
 //     samples 24, nearBlur true, stableDepth false } (DOF_DEFAULTS)
 //   lut: null | { texture: Data3DTexture, size, strength 1 } (the Assets 'lut' value works as it is)
-// set() paths (unknown paths throw): 'aa', 'gbuffer', 'jitter', 'timing', 'ao.enabled', 'ao.normals',
+// set() paths (unknown paths throw): 'aa', 'gbuffer', 'jitter', 'renderScale', 'timing', 'ao.enabled', 'ao.normals',
 //   'bloom.enabled', 'taa.<option>', 'ssr' (false | true | options), 'ssr.<option>', 'volumetric' (false | true |
 //   options), 'volumetric.<option>' (incl. 'volumetric.intensity'), 'motionBlur' (strength: 0 removes the pass; or
 //   options), 'motionBlur.<option>' ('strength' 0 removes it too), 'dof' (null | true | options), 'dof.<option>',
@@ -366,6 +386,14 @@ export const FINAL_SHADER = {
     }`,
 };
 
+// The final pass under upscaling (FINAL_UPSCALE, renderScale < 1): the depth is the internal size, the pass the output
+// size. Every depth / AO / volume read but one is by vUv or textureSize already; closestDepth()'s texel fetches go from
+// gl_FragCoord to the internal texel under this pixel. Derived text, so the scale-1 text stays as it was.
+const FINAL_CLOSEST_AT = 'ivec2 p = ivec2( gl_FragCoord.xy ), mx = textureSize( tDepth, 0 ) - 1;';
+/** @internal */
+export const FINAL_UPSCALE_FRAGMENT = replaceOnce(FINAL_SHADER.fragmentShader, FINAL_CLOSEST_AT,
+  'ivec2 mx = textureSize( tDepth, 0 ) - 1, p = min( ivec2( vUv * vec2( mx + 1 ) ), mx );');
+
 class FinalPass extends Pass {
   constructor(fx) {
     super();
@@ -386,6 +414,7 @@ class FinalPass extends Pass {
     this._ssr = false; // FINAL_SSR defined (an enabled SSR pass, TAA off)
     this._vol = false; // FINAL_VOLUMETRIC defined (an enabled volumetric pass)
     this._lut = false; // FINAL_LUT defined (fx.lutOptions set)
+    this._up = false; // FINAL_UPSCALE (fx renderScale in effect < 1): FINAL_UPSCALE_FRAGMENT
   }
   setSize(w, h) { this.material.uniforms.uRes.value.set(w, h); }
   render(renderer, writeBuffer, readBuffer) {
@@ -395,6 +424,13 @@ class FinalPass extends Pass {
     const closest = taa && fx.history.jitter && fx.taaOptions.stableDepth !== false; // no jitter: depth is stable
     const sp = fx.ssrPass, ssr = sp !== null && sp.enabled && !taa; // under TAA the TAA pass composites SSR (TAA_SSR)
     const vp = fx.volumetricPass, vol = vp !== null && vp.enabled, lo = fx.lutOptions, lut = lo.texture !== null;
+    const ups = fx._scaleOn;
+    if (ups !== this._up) {
+      this._up = ups;
+      this.material.fragmentShader = ups ? FINAL_UPSCALE_FRAGMENT : FINAL_SHADER.fragmentShader;
+      if (ups) this.material.defines.FINAL_UPSCALE = 1; else delete this.material.defines.FINAL_UPSCALE;
+      this.material.needsUpdate = true;
+    }
     // defines, not branches: nothing extra in the modes that do not need them; one cached program per combination
     if (up !== this._aoUp || hasSky !== this._sky || closest !== this._closest || ssr !== this._ssr || vol !== this._vol || lut !== this._lut) {
       this._aoUp = up; this._sky = hasSky; this._closest = closest; this._ssr = ssr; this._vol = vol; this._lut = lut;
@@ -512,6 +548,7 @@ const RANGES = {
   ssr: {
     scale: [0, 1, true], maxPixels: [1, Infinity], steps: [1, 128, false, false, true], refine: [0, 16, false, false, true],
     maxDistance: [0, 1e5, true], thickness: [0, 1e5, true], maxRoughness: [0, 1, true], edgeFade: [0, 0.5],
+    interval: [1, 4, false, false, true],
   },
   volumetric: {
     scale: [0, 1, true], maxPixels: [1, Infinity], steps: [1, 128, false, false, true], maxDistance: [0, Infinity, true],
@@ -527,7 +564,7 @@ const RANGES = {
   },
 };
 // counts that must be whole numbers (a group without RANGES for the key: numbers >= 0)
-const INTEGER_KEYS = new Set(['steps', 'refine', 'samples', 'tileSize']);
+const INTEGER_KEYS = new Set(['steps', 'refine', 'samples', 'tileSize', 'interval']);
 // why a pass needs the G-buffer (the constructor / set() error messages)
 const NEEDS_GBUFFER = {
   ssr: 'SSR marches the depth with the G-buffer normals and roughness',
@@ -609,8 +646,8 @@ export class PostFX {
    * @param {THREE.PerspectiveCamera} camera
    * @param {object} [o] atmosphere (an Atmosphere, or null), width/height (CSS px), pixelRatio, samples (MSAA,
    *   default 4), msaa, msaaMaxPixels, lateClear, compactHDR, grade, ao, bloom, fog, fogFarFade, fogMinSkyElevation,
-   *   autoExposure, fogColor, fogParams, gbuffer, aa, taa, jitter, jitterPattern, timing; 0.8.0 (all off by
-   *   default): ssr, volumetric, motionBlur, dof, lut, ao.normals (see header)
+   *   autoExposure, fogColor, fogParams, gbuffer, aa, taa, jitter, jitterPattern, renderScale (1), timing; 0.8.0
+   *   (all off by default): ssr, volumetric, motionBlur, dof, lut, ao.normals (see header)
    */
   constructor(renderer, scene, camera, o = {}) {
     this.renderer = renderer; this.scene = scene; this.camera = camera;
@@ -649,6 +686,14 @@ export class PostFX {
     for (const k in o.taa || {}) this._setTaaOption(k, o.taa[k]); // validated: unknown keys / values throw
     /** Sub-pixel camera jitter while TAA is on. */
     this.jitter = o.jitter ?? true;
+    this._renderScale = checkRenderScale(o.renderScale ?? 1); // requested; in effect only under TAA (_syncScale)
+    this._scaleOn = false; // renderScale in effect < 1: internal passes at _iw x _ih, the TAA resolve upscales
+    /**
+     * Called with (width, height) whenever the internal size changes (renderScale, TAA on / off, setSize): the scene
+     * target's size, for helpers that map gl_FragCoord of the scene pass (ClusteredLights.setSize, SceneCopy).
+     * @type {((width: number, height: number) => void) | null}
+     */
+    this.onInternalResize = null;
     this.jitterPattern = o.jitterPattern ?? 'halton16';
     /** Per-pass CPU ms in `timings` (render loop run pass by pass; off: composer.render, nothing measured). */
     this.timing = !!o.timing;
@@ -705,6 +750,7 @@ export class PostFX {
 
     const W = Math.max(1, Math.floor(this.width * this.pixelRatio)), H = Math.max(1, Math.floor(this.height * this.pixelRatio));
     this._W = W; this._H = H; // drawing-buffer size, for msaaMaxPixels
+    this._iw = W; this._ih = H; // internal size: the scene / G-buffer, exposure, AO, SSR, volumetric, jitter
     this.composer = new EffectComposer(renderer, this._makeSceneTarget());
 
     this.renderPass = new ScenePass(scene, camera, this);
@@ -746,6 +792,11 @@ export class PostFX {
    * the scene colour.
    */
   get colorSource() { return this._source(this.composer.readBuffer).texture; }
+  /** renderScale in effect: the requested one while TAA is on, else 1 (get('renderScale') reads the request). */
+  get renderScaleInEffect() { return this._scaleOn ? this._renderScale : 1; }
+  /** Internal size (px): the scene / G-buffer and the passes before TAA (the drawing buffer at renderScale 1). */
+  get internalWidth() { return this._iw; }
+  get internalHeight() { return this._ih; }
   /** SSR in the pipeline (effective: false while the G-buffer is off, whatever was requested). */
   get ssr() { return this.ssrPass !== null; }
   /** Volumetric sun in-scatter in the pipeline. */
@@ -762,11 +813,18 @@ export class PostFX {
     this.width = w; this.height = h; this.pixelRatio = pixelRatio;
     const W = Math.max(1, Math.floor(w * pixelRatio)), H = Math.max(1, Math.floor(h * pixelRatio));
     this._W = W; this._H = H;
-    if (this.gbuffer) this.gbuffer.setSize(W, H); // before the composer resizes its target (see _bindGBuffer)
-    this.composer.setSize(W, H);
-    if (this.gbuffer) this._bindGBuffer();
+    const c = this.composer, gb = this.gbuffer;
+    if (gb) { // at its internal size, kept out of the composer's resize (it resizes readBuffer; the spare instead)
+      gb.setSize(this._scaleOn ? scaled(W, this._renderScale) : W, this._scaleOn ? scaled(H, this._renderScale) : H);
+      c.renderTarget2 = c.readBuffer = this._spare;
+    }
+    c.setSize(W, H); // every pass at the output size, the TAA history reset ...
+    if (gb) this._bindGBuffer();
+    // ... so _applyAA -> _syncScale applies the internal size anew (all of it if it was in effect; nothing at scale 1)
+    if (this._scaleOn) this._iw = -1; else { this._iw = W; this._ih = H; }
     this._applyAA(this._aaDark); // msaaMaxPixels: the new size may change 'auto' (a no-op while it is Infinity)
     if (this.atmo && this.atmo.setFlareScale) this.atmo.setFlareScale(H);
+    if (this.onInternalResize) this.onInternalResize(this._iw, this._ih);
   }
 
   setEnabled(on) {
@@ -814,6 +872,7 @@ export class PostFX {
     }
     this.uniforms.uFXAA.value = r.fxaa ? 1 : 0;
     if (this.taaPass) this.taaPass.enabled = r.taa; // a re-enabled TAA notices the frames it skipped (fresh history)
+    this._syncScale();
     this._syncSsrJitter();
     if (this.history) this.history.jitter = r.taa && this.jitter;
     if (r.forced && !this._warnedForced) {
@@ -905,17 +964,17 @@ export class PostFX {
   }
 
   /**
-   * Runtime knob by path, for harness settings: 'aa' (setAA), 'gbuffer' (setGBuffer), 'jitter', 'timing',
-   * 'ao.enabled', 'ao.normals' ('depth' | 'gbuffer'), 'bloom.enabled', 'taa.<option>' (blend, sharpen, gamma, clamp,
-   * filter, historyFormat, stableDepth, reject, velocityFirst, snap), 'ssr' / 'volumetric' (false | true | options),
-   * 'ssr.<option>', 'volumetric.<option>' (incl. intensity), 'motionBlur' (strength, 0 removes the pass, or options),
-   * 'motionBlur.<option>', 'dof' (null | true | options), 'dof.<option>', 'lut' (null | { texture, size, strength }),
-   * 'lut.strength'. An options object replaces the group's options, omitted keys at their defaults (so
+   * Runtime knob by path, for harness settings: 'aa' (setAA), 'gbuffer' (setGBuffer), 'jitter', 'renderScale',
+   * 'timing', 'ao.enabled', 'ao.normals' ('depth' | 'gbuffer'), 'bloom.enabled', 'taa.<option>' (blend, sharpen, gamma,
+   * clamp, filter, historyFormat, stableDepth, reject, velocityFirst, snap), 'ssr' / 'volumetric' (false | true |
+   * options), 'ssr.<option>', 'volumetric.<option>' (incl. intensity), 'motionBlur' (strength, 0 removes the pass, or
+   * options), 'motionBlur.<option>', 'dof' (null | true | options), 'dof.<option>', 'lut' (null | { texture, size,
+   * strength }), 'lut.strength'. An options object replaces the group's options, omitted keys at their defaults (so
    * set('motionBlur', { maxBlur: 16 }) also sets strength 1); true keeps them. Unknown paths and bad values throw
    * (nothing changes); creating SSR / motion blur / ao.normals 'gbuffer' without the G-buffer throws, a volumetric pass
    * without an atmosphere too. Option paths of an absent pass are kept for when it is created. Removed passes are
-   * disposed. Value paths of live passes (e.g. 'ssr.steps', 'lut.strength') do no object allocation (at most one
-   * boxed double per call, V8's).
+   * disposed. Value paths of live passes (e.g. 'ssr.steps', 'lut.strength') do no object allocation (at most one boxed
+   * double per call, V8's).
    * @param {string} path
    * @param {*} value
    */
@@ -924,6 +983,7 @@ export class PostFX {
       case 'aa': return this.setAA(value);
       case 'gbuffer': return this.setGBuffer(value);
       case 'jitter': this.jitter = !!value; this._applyAA(); break;
+      case 'renderScale': this._renderScale = checkRenderScale(value); this._syncScale(); break;
       case 'ao.enabled': this.aoPass.enabled = !!value; break;
       case 'ao.normals':
         checkOption(value, AO_NORMALS, 'ao.normals');
@@ -975,6 +1035,7 @@ export class PostFX {
       case 'aa': return this.aa;
       case 'gbuffer': return this.gbuffer !== null;
       case 'jitter': return this.jitter;
+      case 'renderScale': return this._renderScale;
       case 'timing': return this.timing;
       case 'ao.enabled': return this.aoPass.enabled;
       case 'ao.normals': return this._aoNormals;
@@ -1024,9 +1085,9 @@ export class PostFX {
     }
     const mbStrength = group === 'motionBlur' && key === 'strength';
     if (mbStrength && v > 0 && this.gbuffer === null) throw needsGBuffer('motionBlur');
-    const pass = this._pass(group), ssrJitter = group === 'ssr' && key === 'jitter';
-    // intensity is the final pass's (_syncFrame); motion-blur strength 0 removes the pass instead; ssr.jitter is a
-    // request (_syncSsrJitter)
+    const pass = this._pass(group), ssrJitter = group === 'ssr' && (key === 'jitter' || key === 'interval');
+    // intensity is the final pass's (_syncFrame); motion-blur strength 0 removes the pass instead; ssr.jitter and
+    // ssr.interval are requests (_syncSsrJitter)
     if (pass !== null && key !== 'intensity' && !(mbStrength && v === 0) && !ssrJitter) this._applyOption(pass, key, v);
     this._options(group)[key] = v;
     if (mbStrength) this._syncPasses(); // 0 removes the pass, > 0 creates it
@@ -1034,17 +1095,51 @@ export class PostFX {
   }
 
   // SSR's per-frame march jitter only pays off while TAA integrates it (else the start moves every frame: shimmer):
-  // in effect = the request && TAA on. Called where TAA toggles (_applyAA) and where SSR options / the pass change.
+  // in effect = the request && TAA on. The reuse interval likewise: only the TAA composite reprojects a reused
+  // buffer (the final pass reads it at the pixel), so without TAA it is 1. Called where TAA toggles (_applyAA) and
+  // where SSR options / the pass change.
   _syncSsrJitter() {
     const p = this.ssrPass;
     if (p === null) return;
-    const j = this.ssrOptions.jitter && this.taaPass !== null && this.taaPass.enabled;
+    const taa = this.taaPass !== null && this.taaPass.enabled;
+    const j = this.ssrOptions.jitter && taa, n = taa ? this.ssrOptions.interval : 1;
     if (p.jitter !== j) p.jitter = j;
+    if (p.interval !== n) p.interval = n;
+  }
+
+  // renderScale in effect = the request while TAA is on, else 1 (the request is kept), as _syncSsrJitter. Below 1 the
+  // internal size (_iw x _ih = the drawing buffer x s, rounded) holds the G-buffer and the passes before TAA, the TAA
+  // resolve upscales to the drawing buffer, and the passes after it map their depth / G-buffer reads (setUpscale).
+  // Applies a change of state or size only (a no-op at scale 1 throughout); every change restarts the history.
+  _syncScale() {
+    const taa = this.taaPass !== null && this.taaPass.enabled, s = taa ? this._renderScale : 1, on = s < 1;
+    const W = this._W, H = this._H, w = on ? scaled(W, s) : W, h = on ? scaled(H, s) : H;
+    if (on === this._scaleOn && w === this._iw && h === this._ih) return;
+    this._scaleOn = on; this._iw = w; this._ih = h;
+    if (this.gbuffer !== null) this.gbuffer.setSize(w, h);
+    this.aoPass.setSize(w, h);
+    for (const g of ['ssr', 'volumetric', 'motionBlur', 'dof']) {
+      const p = this._pass(g);
+      if (p !== null) this._scalePass(g, p);
+    }
+    if (this.taaPass !== null) this.taaPass.setUpscale(on ? w : 0, h);
+    if (this.history !== null) this.history.reset();
+    if (this.onInternalResize) this.onInternalResize(w, h);
+  }
+
+  // a 0.8.0 pass to the current internal size: SSR and volumetric at it, motion blur / DoF mapping their reads to it
+  _scalePass(group, p) {
+    const on = this._scaleOn;
+    switch (group) {
+      case 'ssr': case 'volumetric': p.setSize(this._iw, this._ih); break;
+      case 'motionBlur': p.setUpscale(on ? this._iw : 0, this._ih); break;
+      default: p.setUpscale(on);
+    }
   }
 
   // push a whole option set to a live pass with every intermediate state valid. DoF: the lens rule (focusDistance *
   // 1000 > focalLength) holds for the old and the new pair, so a shorter focal length goes before the focus distance,
-  // a longer one after it. Skipped: intensity (the final pass's) and ssr.jitter (_syncSsrJitter).
+  // a longer one after it. Skipped: intensity (the final pass's), ssr.jitter and ssr.interval (_syncSsrJitter).
   _applyAll(group, pass, opts) {
     const dof = group === 'dof';
     if (dof) {
@@ -1054,7 +1149,8 @@ export class PostFX {
       if (longer) this._applyOption(pass, 'focalLength', opts.focalLength);
     }
     for (const k in opts) {
-      if (k === 'intensity' || (group === 'ssr' && k === 'jitter') || (dof && (k === 'focusDistance' || k === 'focalLength'))) continue;
+      if (k === 'intensity' || (group === 'ssr' && (k === 'jitter' || k === 'interval'))
+        || (dof && (k === 'focusDistance' || k === 'focalLength'))) continue;
       this._applyOption(pass, k, opts[k]);
     }
   }
@@ -1176,9 +1272,12 @@ export class PostFX {
     let p = null;
     if (on) {
       switch (group) {
-        case 'ssr': // jitter as in effect now (_syncSsrJitter)
-          p = new SSRPass(this.camera, this.history, this.gbuffer, { ...this.ssrOptions, jitter: this.ssrOptions.jitter && this.taaPass !== null && this.taaPass.enabled });
+        case 'ssr': { // jitter / interval as in effect now (_syncSsrJitter)
+          const taa = this.taaPass !== null && this.taaPass.enabled;
+          const o = { ...this.ssrOptions, jitter: this.ssrOptions.jitter && taa, interval: taa ? this.ssrOptions.interval : 1 };
+          p = new SSRPass(this.camera, this.history, this.gbuffer, o);
           break;
+        }
         case 'volumetric': { // intensity is the final pass's (the pass rejects unknown keys)
           const vo = { ...this.volumetricOptions };
           delete vo.intensity;
@@ -1189,6 +1288,7 @@ export class PostFX {
         default: p = new SourceDoFPass(this, this.camera, this.dofOptions);
       }
       this._placePass(p, group);
+      if (this._scaleOn) this._scalePass(group, p);
     } else {
       this.composer.removePass(cur);
       this._passKeys.delete(cur);
@@ -1267,7 +1367,11 @@ export class PostFX {
     const timed = this.timing, t0 = timed ? performance.now() : 0, h = this.history, gb = this.gbuffer;
     this.camera.updateMatrixWorld();
     if (gb !== null && this.composer.readBuffer !== gb.target) this._bindGBuffer();
-    if (h !== null) h.begin(this._W, this._H); // jitter (TAA): every pass up to Final sees the jittered camera
+    if (h !== null) h.begin(this._iw, this._ih); // jitter (TAA, internal px): every pass up to Final sees it
+    // a TAA history reset (reset(), setSize, a harness holding TAA fresh) also restarts a reused SSR buffer, so the
+    // fresh resolve composites this frame's own trace
+    const taa = this.taaPass, sp = this.ssrPass;
+    if (sp !== null && taa !== null && taa.resetPending && sp.interval > 1) sp.reset();
     this._syncFrame(dt);
     const info = r.info, ar = info.autoReset;
     info.autoReset = false; info.reset();
@@ -1434,6 +1538,16 @@ function validateOption(group, key, value) {
   return value;
 }
 
+// the internal size of a drawing-buffer dimension at renderScale s
+const scaled = (n, s) => Math.max(1, Math.round(n * s));
+
+function checkRenderScale(v) {
+  if (typeof v !== 'number' || !Number.isFinite(v) || v < 0.5 || v > 1) {
+    throw new Error(`[PostFX] renderScale: expected a number in [0.5, 1], got ${show(v)}`);
+  }
+  return v;
+}
+
 const show = (v) => (typeof v === 'string' ? `'${v}'` : String(v));
 
 // DoF: a thin lens focuses only beyond its focal length (DoFPass's own rule, checked before the pass exists)
@@ -1448,6 +1562,13 @@ function needsGBuffer(what) {
 
 function noAtmosphere() {
   return new Error('[PostFX] volumetric needs an atmosphere (the sun direction, colour and shadow cascades it marches)');
+}
+
+// text with `from` replaced by `to`, exactly once (a derived shader text must not silently miss its anchor)
+function replaceOnce(text, from, to) {
+  const i = text.indexOf(from);
+  if (i < 0 || text.indexOf(from, i + 1) >= 0) throw new Error(`[PostFX] shader anchor not found once: ${from}`);
+  return text.slice(0, i) + to + text.slice(i + from.length);
 }
 
 function checkOption(v, allowed, what) {

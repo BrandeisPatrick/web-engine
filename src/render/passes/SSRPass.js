@@ -62,13 +62,15 @@
 // maxPixels Infinity (pixel budget, as AOPass), steps 24, refine 4, maxDistance 80 (m), thickness 0.4 (m),
 // thicknessScale 0 (m of band per m of depth: a fixed 0.4 m band flickers with the sample phase on far grazing ground
 // while the camera moves), maxRoughness 0.5, edgeFade 0.1, jitter false (see Limitations), metalTint true, source
-// 'current' (this frame's scene colour; 'history' is reserved and throws for now).
+// 'current' (this frame's scene colour; 'history' is reserved and throws for now), denoise 0 (see Denoise), interval 1
+// (see Reuse).
 // Uniforms: tColor, tDepth, tNormal, uProj, uProjInv, uRes (full-resolution size), uNear, uFar, uMaxDistance,
 // uThickness, uThicknessScale, uMaxRoughness, uEdgeFade, uFrame (copied from history.uniforms.uFrame). Defines:
 // SSR_STEPS, SSR_REFINE (values), SSR_JITTER, SSR_METAL_TINT (present when on).
 // API: new SSRPass(camera, history, gbuffer, opts); render(renderer, writeBuffer, readBuffer) (readBuffer.texture = the
-// HDR scene colour, readBuffer.depthTexture = its depth); setSize(w, h) (drawing-buffer pixels); reset() (no state:
-// no-op); texture; dispose(); camera / history / gbuffer are plain properties (reassign after a rebuild).
+// HDR scene colour, readBuffer.depthTexture = its depth); setSize(w, h) (drawing-buffer pixels); reset() (the next
+// render traces; only matters with interval > 1); texture; age, tracedJitter (Reuse); dispose(); camera / history /
+// gbuffer are plain properties (reassign after a rebuild).
 // Cost: reads per output pixel that passes step 1: normal 1, depth 1, 1 depth tap at the march start, up to `steps`
 // depth taps (the march stops at the first hit), `refine` depth taps and 1 colour tap on a hit, +1 colour tap (own
 // colour) with metalTint where metalness > 0: at the defaults at most 2 + 1 + 24 + 4 + 2 = 33 taps; a pixel rejected
@@ -81,7 +83,25 @@
 // premultiplied, so the blur averages hits and misses correctly. A tap contributes by a Gaussian of its offset times
 // exp(-|z - zc| / (0.05 + 0.02 zc)) times max(0, N.Nc)^8 with z, N the tap's own full-resolution depth and G-buffer
 // normal (so a reflection never bleeds from the road onto the kerb face or a car); pixels that wrote no G-buffer
-// normal pass through. Cost: 2 x (1 + 9 x 3) reads per output pixel.
+// normal pass through. Cost: 2 x (1 + 9 x 3) reads per output pixel, but where the centre and all eight taps of the
+// traced texture are exactly 0 (no reflection within reach: rough walls, sky) the output is 0 whatever the weights,
+// so the taps are read first and the depth / normal reads skipped there (2 x (2 + 8) reads; same output; elsewhere
+// up to 8 more reads of the traced texture, cache hits).
+// Reuse (`interval`, default 1 = trace every frame, the output exactly as above). With interval n > 1 the trace and the
+// denoise run on every n-th frame of a run of consecutive CameraHistory frames, and render() draws nothing on the
+// frames between: `texture` keeps the buffer, `age` counts the frames since it was traced and `tracedJitter` holds the
+// camera jitter of that frame. Only the TAA composite reprojects a reused buffer (TAAPass TAA_SSR_REUSE: each pixel
+// reads it where its surface was `age` frames ago, by its G-buffer velocity, plus the jitter change), so PostFX keeps
+// interval 1 in effect while TAA is off. A trace is forced whenever the buffer could show another view: no history, a
+// fresh history (cut, pose, reset), a skipped frame, reset() (PostFX calls it when TAA's history restarts), setSize,
+// any option change. So a held view (the bench captures) and the first frame after a pose are always this frame's own
+// trace, and the composite on a traced frame reads at the pixel, as with interval 1. Measured (2268x1473, the city
+// demos, alternating in-page A/B): trace about 0.4 ms, denoise 0.6 ms, composite 0.1 ms at nyc-night's settings;
+// interval 2 saves 0.3-0.5 ms a frame on average, the static captures unchanged. In motion the reused frame shows the
+// reflection one frame late where the reflected content moves differently from the surface (parallax: wet street
+// highlights when walking forward, a car's hood edge), up to ~30-80 / 255 on a few pixels, and reflections near
+// silhouettes take the neighbour's velocity bilinearly; the TAA blend averages it with the traced frames. Trace and
+// denoise now cost every other frame, so frame times alternate by that much.
 // Limitations:
 //   - jitter does not integrate under this TAA: the TAA_SSR hook composites the SAME SSR texel into all 9 taps, so the
 //     clip box gets no variance from the reflection and the history is clipped to the current frame's hit / miss
@@ -119,6 +139,7 @@ import { GBUFFER_GLSL_DECODE } from '../GBuffer.js';
  * @property {boolean} [metalTint] tint reflections on metals by the pixel's own colour
  * @property {string} [source] 'current' (this frame's scene colour; 'history' reserved)
  * @property {number} [denoise] blur radius in output texels at maxRoughness, [0, 16]; 0 = off (no extra passes)
+ * @property {number} [interval] trace (and denoise) every n-th frame, integer 1..4; 1 = every frame (see "Reuse")
  */
 
 /**
@@ -139,6 +160,7 @@ export const SSR_DEFAULTS = Object.freeze({
   metalTint: true,
   source: 'current',
   denoise: 0,
+  interval: 1,
 });
 
 /** Accepted `source` values ('history', the reprojected previous TAA output, is reserved). */
@@ -297,14 +319,26 @@ const SSRBlurShader = {
       vec4 gb = texelFetch( tNormal, ip, 0 );
       int flags = engineGbFlags( gb.a );
       if ( ( flags & ENGINE_GB_WROTE ) == 0 || ( flags & ENGINE_GB_HAS_NORMAL ) == 0 ) { gl_FragColor = c; return; }
+      float r = uRadius * mix( 0.35, 1.0, clamp( gb.b / uMaxRoughness, 0.0, 1.0 ) );
+      // the taps' reflections first (the small texture): where they and the centre are all exactly 0 the result is 0
+      // whatever the weights, so the depth / normal reads are skipped (the tap positions need the centre's
+      // roughness). The taps are read again below (cache hits): an array of the eight cost more than it saved.
+      bool lit = any( notEqual( c, vec4( 0.0 ) ) );
+      if ( ! lit ) for ( int i = - 4; i <= 4; i ++ ) {
+        if ( i == 0 ) continue;
+        float t = float( i ) * 0.25; // -1 .. 1 across the radius
+        vec2 uv = vUv + uDir * ( t * r );
+        if ( uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0 ) continue;
+        if ( any( notEqual( texture2D( tSsr, uv ), vec4( 0.0 ) ) ) ) { lit = true; break; }
+      }
+      if ( ! lit ) { gl_FragColor = vec4( 0.0 ); return; }
       float zc = linearDepth( texelFetch( tDepth, ip, 0 ).x );
       vec3 nc = engineOctDecode( gb.rg );
-      float r = uRadius * mix( 0.35, 1.0, clamp( gb.b / uMaxRoughness, 0.0, 1.0 ) );
       float zk = 1.0 / ( 0.05 + 0.02 * zc );
       vec4 sum = c; float wsum = 1.0;
       for ( int i = - 4; i <= 4; i ++ ) {
         if ( i == 0 ) continue;
-        float t = float( i ) * 0.25; // -1 .. 1 across the radius
+        float t = float( i ) * 0.25;
         vec2 uv = vUv + uDir * ( t * r );
         if ( uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0 ) continue;
         ivec2 tp = min( ivec2( uv * uRes ), mx );
@@ -348,6 +382,12 @@ export class SSRPass extends Pass {
     this._metalTint = !!opt.metalTint;
     this._source = checkSource(opt.source);
     this._denoise = checkRange(opt.denoise, 'denoise', 0, 16);
+    this._interval = checkInt(opt.interval, 'interval', 1, 4);
+    // reuse state (see "Reuse" in the header): frames since the buffer was traced, the history frame of the last
+    // render, a forced trace on the next render, and the jitter (px) the buffer was traced with
+    this._age = 0; this._lastFrame = -2; this._stale = true;
+    /** Camera jitter (pixels) of the frame the current buffer was traced in (CameraHistory uJitter then). */
+    this.tracedJitter = new THREE.Vector2();
     this._blurRts = null; this._blurMat = null; this._blurQuad = null; // built on first use (denoise > 0)
     this._w = 1; this._h = 1; // drawing-buffer size of the last setSize
     this._rt = new THREE.WebGLRenderTarget(1, 1, {
@@ -380,7 +420,16 @@ export class SSRPass extends Pass {
   get texture() { return this._denoise > 0 && this._blurRts !== null ? this._blurRts[1].texture : this._rt.texture; }
   /** Blur radius in output texels at maxRoughness, [0, 16]; 0 = off (no extra passes, `texture` is the trace). */
   get denoise() { return this._denoise; }
-  set denoise(v) { this._denoise = checkRange(v, 'denoise', 0, 16); if (this._denoise > 0) this._ensureBlur(); }
+  set denoise(v) {
+    this._stale = true;
+    this._denoise = checkRange(v, 'denoise', 0, 16);
+    if (this._denoise > 0) this._ensureBlur();
+  }
+  /** Trace (and denoise) every n-th frame, integer 1..4; the frames between reuse the buffer (see "Reuse"). */
+  get interval() { return this._interval; }
+  set interval(v) { this._interval = checkInt(v, 'interval', 1, 4); this._stale = true; }
+  /** Frames since `texture` was traced: 0 on a frame that traced (always with interval 1). */
+  get age() { return this._age; }
 
   /** Output size as a fraction of the drawing buffer, (0, 1] (resizes at once). */
   get scale() { return this._scale; }
@@ -390,39 +439,55 @@ export class SSRPass extends Pass {
   set maxPixels(v) { this._maxPixels = checkRange(v ?? Infinity, 'maxPixels', 1, Infinity); this.setSize(this._w, this._h); }
   /** March samples per ray, integer 1..128 (define SSR_STEPS). */
   get steps() { return this._steps; }
-  set steps(v) { this._steps = checkInt(v, 'steps', 1, 128); this._syncDefines(); }
+  set steps(v) { this._stale = true; this._steps = checkInt(v, 'steps', 1, 128); this._syncDefines(); }
   /** Bisection steps after a hit, integer 0..16 (define SSR_REFINE). */
   get refine() { return this._refine; }
-  set refine(v) { this._refine = checkInt(v, 'refine', 0, 16); this._syncDefines(); }
+  set refine(v) { this._stale = true; this._refine = checkInt(v, 'refine', 0, 16); this._syncDefines(); }
   // The uniform options go to their uniforms here, not in render(): writing a double into a `{ value }` uniform boxes
   // a new heap number in V8 (the shared { value } shape holds every type), so render() writes only what changed.
   /** Ray length in view space (m). */
   get maxDistance() { return this._maxDistance; }
-  set maxDistance(v) { this.material.uniforms.uMaxDistance.value = this._maxDistance = checkRange(v, 'maxDistance', 0, 1e5, true); }
+  set maxDistance(v) {
+    this._stale = true;
+    this.material.uniforms.uMaxDistance.value = this._maxDistance = checkRange(v, 'maxDistance', 0, 1e5, true);
+  }
   /** A sample hits when the ray is behind the scene depth by less than this (m). */
   get thickness() { return this._thickness; }
-  set thickness(v) { this.material.uniforms.uThickness.value = this._thickness = checkRange(v, 'thickness', 0, 1e5, true); }
+  set thickness(v) {
+    this._stale = true;
+    this.material.uniforms.uThickness.value = this._thickness = checkRange(v, 'thickness', 0, 1e5, true);
+  }
   /** Band growth per metre of the surface's depth (m / m): band = thickness + depth * thicknessScale. */
   get thicknessScale() { return this._thicknessScale; }
-  set thicknessScale(v) { this.material.uniforms.uThicknessScale.value = this._thicknessScale = checkRange(v, 'thicknessScale', 0, 1); }
+  set thicknessScale(v) {
+    this._stale = true;
+    this.material.uniforms.uThicknessScale.value = this._thicknessScale = checkRange(v, 'thicknessScale', 0, 1);
+  }
   /** Weight 0 at and above this roughness, fading in over 0.2 below it. */
   get maxRoughness() { return this._maxRoughness; }
-  set maxRoughness(v) { this.material.uniforms.uMaxRoughness.value = this._maxRoughness = checkRange(v, 'maxRoughness', 0, 1, true); }
+  set maxRoughness(v) {
+    this._stale = true;
+    this.material.uniforms.uMaxRoughness.value = this._maxRoughness = checkRange(v, 'maxRoughness', 0, 1, true);
+  }
   /** Fraction of the screen over which hits fade out toward the borders (0: no fade). */
   get edgeFade() { return this._edgeFade; }
-  set edgeFade(v) { this._edgeFade = checkRange(v, 'edgeFade', 0, 0.5); this.material.uniforms.uEdgeFade.value = edgeFadeUniform(this._edgeFade); }
+  set edgeFade(v) {
+    this._stale = true;
+    this._edgeFade = checkRange(v, 'edgeFade', 0, 0.5);
+    this.material.uniforms.uEdgeFade.value = edgeFadeUniform(this._edgeFade);
+  }
   /** Per-pixel, per-frame march start (define SSR_JITTER). Off by default: TAA does not integrate it (see the header). */
   get jitter() { return this._jitter; }
-  set jitter(v) { this._jitter = !!v; this._syncDefines(); }
+  set jitter(v) { this._jitter = !!v; this._stale = true; this._syncDefines(); }
   /** Tint reflections on metals by the pixel's own normalised colour (define SSR_METAL_TINT). */
   get metalTint() { return this._metalTint; }
-  set metalTint(v) { this._metalTint = !!v; this._syncDefines(); }
+  set metalTint(v) { this._metalTint = !!v; this._stale = true; this._syncDefines(); }
   /** Colour the reflections sample: 'current' (this frame's scene colour); 'history' is reserved. */
   get source() { return this._source; }
   set source(v) { this._source = checkSource(v); }
 
-  /** No temporal state of its own (the jitter follows history.uniforms.uFrame): kept for symmetry with TAAPass. */
-  reset() {}
+  /** The next render traces (with interval > 1 the buffer is otherwise reused; teleport, camera cut, TAA reset). */
+  reset() { this._stale = true; }
 
   /**
    * @param {number} width drawing-buffer width (px)
@@ -430,6 +495,7 @@ export class SSRPass extends Pass {
    */
   setSize(width, height) {
     this._w = width; this._h = height;
+    this._stale = true;
     let w = Math.max(1, Math.round(width * this._scale)), h = Math.max(1, Math.round(height * this._scale));
     if (w * h > this._maxPixels) { // over the budget: the largest uniform scale that fits, floored (as AOPass)
       const s = Math.sqrt(this._maxPixels / (width * height));
@@ -464,7 +530,17 @@ export class SSRPass extends Pass {
   }
 
   render(renderer, writeBuffer, readBuffer) {
-    const gb = this.gbuffer, depth = readBuffer.depthTexture;
+    const gb = this.gbuffer, depth = readBuffer.depthTexture, h = this.history;
+    // reuse (interval > 1): trace only on the n-th frame of a run of consecutive history frames, and whenever the
+    // buffer could hold another view (a fresh history after a cut / pose, a skipped frame, reset(), a resize, an
+    // option change), so a held or freshly posed view always composites this frame's own trace
+    const f = h !== null ? h.uniforms.uFrame.value : 0;
+    const trace = this._interval === 1 || this._stale || h === null || h.fresh || f !== this._lastFrame + 1
+      || this._age + 1 >= this._interval;
+    this._lastFrame = f;
+    if (!trace) { this._age++; return; }
+    this._age = 0; this._stale = false;
+    if (h !== null) this.tracedJitter.copy(h.uniforms.uJitter.value); else this.tracedJitter.set(0, 0);
     if (gb === null || !depth) { // nothing to trace: an empty (no-op) composite
       renderer.getClearColor(this._clear);
       const ca = renderer.getClearAlpha();
@@ -474,7 +550,7 @@ export class SSRPass extends Pass {
       renderer.setClearColor(this._clear, ca);
       return;
     }
-    const u = this.material.uniforms, cam = this.camera, h = this.history;
+    const u = this.material.uniforms, cam = this.camera;
     u.tColor.value = readBuffer.texture; // source 'current'
     u.tDepth.value = depth;
     u.tNormal.value = gb.normal;

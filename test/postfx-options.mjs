@@ -453,6 +453,9 @@ const keysOf = (fx) => fx.composer.passes.map((p) => fx._passKeys.get(p)).join()
   check('final shader: one block per hook (SSR 2, volumetric 4, LUT 2)', (fFrag.match(/#ifdef FINAL_SSR\n/g) || []).length === 2
     && (fFrag.match(/#ifdef FINAL_VOLUMETRIC\n/g) || []).length === 4 && (fFrag.match(/#ifdef FINAL_LUT\n/g) || []).length === 2);
   check('TAA shader: 3 TAA_SSR blocks', (tFrag.match(/#ifdef TAA_SSR\n/g) || []).length === 3);
+  check('TAA_SSR_REUSE: nested in the TAA_SSR fetch block, reads at the reprojected uv, else the plain fetch',
+    /#ifdef TAA_SSR\n\s*#ifdef TAA_SSR_REUSE\n[\s\S]*vec4 ssrC = texture2D\( tSSR, vUv - sv \* uSsrAge \+ uSsrShift \);\n\s*#else\n\s*vec4 ssrC = texture2D\( tSSR, vUv \);\n\s*#endif/.test(tFrag)
+    && tFrag.includes('vec2 sv = ( engineGbFlags( sg.a ) & ENGINE_GB_WROTE ) != 0 ? texelFetch( tVelocity, ip, 0 ).rg : vec2( 0.0 );'));
   check('final shader carries SSR_COMPOSITE_GLSL and LUT_GLSL', fFrag.includes(SSR_COMPOSITE_GLSL) && fFrag.includes(LUT_GLSL.trim()) && tFrag.includes(SSR_COMPOSITE_GLSL));
   const at = (t) => fFrag.indexOf(t);
   const iSsr = at('col = engineSsrComposite( col, texture2D( tSSR, vUv ) );'), iAO = at('if ( uHasAO > 0.5 ) {'), iFetch = at('else col = texture2D( tColor, vUv ).rgb;');
@@ -692,6 +695,42 @@ const keysOf = (fx) => fx.composer.passes.map((p) => fx._passKeys.get(p)).join()
   check("ssr.jitter false: stays off under TAA", s.ssrPass.jitter === false && s.get('ssr.jitter') === false);
   s.set('ssr.jitter', true);
   check("ssr.jitter true under TAA: on", s.ssrPass.jitter === true);
+
+  // ssr.interval (buffer reuse): a request, in effect only while TAA composites SSR (it reprojects the reused buffer)
+  check('ssr.interval: 1 by default', s.ssrPass.interval === 1 && s.get('ssr.interval') === 1);
+  s.set('ssr.interval', 2);
+  check('ssr.interval 2 under TAA: in effect', s.ssrPass.interval === 2 && s.get('ssr.interval') === 2);
+  check('ssr.interval: bad values throw, naming the option', throws(() => s.set('ssr.interval', 0), /ssr\.interval/) && throws(() => s.set('ssr.interval', 5), /ssr\.interval/)
+    && throws(() => s.set('ssr.interval', 1.5), /ssr\.interval/) && s.get('ssr.interval') === 2);
+  s.render(0);
+  check('TAA_SSR_REUSE with interval > 1', 'TAA_SSR_REUSE' in s.taaPass.material.defines && 'TAA_SSR' in s.taaPass.material.defines);
+  s.set('aa', 'fxaa');
+  check("aa 'fxaa': interval 1 in effect, request kept", s.ssrPass.interval === 1 && s.get('ssr.interval') === 2);
+  s.set('ssr', false); s.set('ssr', true);
+  check('SSR created under FXAA: interval 1 in effect', s.ssrPass.interval === 1);
+  s.set('aa', 'taa');
+  check('TAA back on: interval 2 again', s.ssrPass.interval === 2);
+  s.set('ssr', { interval: 3 }); s.set('ssr', false); s.set('ssr', true);
+  check("set('ssr', { interval: 3 }) then recreated under TAA: 3", s.ssrPass.interval === 3);
+  { // a TAA history reset restarts a reused buffer: the next render traces
+    const sp2 = s.ssrPass;
+    s.render(0); s.render(0); s.render(0); // T . . (interval 3: age 2 after the third)
+    const before = sp2.age;
+    s.taaPass.reset(); s.render(0);
+    check('taaPass.reset(): the SSR pass traces on the next render (age 0)', before > 0 && sp2.age === 0 && s.taaPass.resetPending === false);
+    s.render(0);
+    check('…and reuses after it', sp2.age === 1);
+    s.setSize(320, 200); s.render(0);
+    check('setSize: traces (age 0)', sp2.age === 0);
+    const tu = s.taaPass.material.uniforms;
+    check('traced frame: uSsrAge 0, uSsrShift 0', tu.uSsrAge.value === 0 && tu.uSsrShift.value.x === 0 && tu.uSsrShift.value.y === 0);
+    s.render(0);
+    const j = s.history.uniforms.uJitter.value, tj = sp2.tracedJitter, tw = s.taaPass._w, th = s.taaPass._h;
+    check('reused frame: uSsrAge 1, uSsrShift = (jitter - traced jitter) / size',
+      tu.uSsrAge.value === 1 && tu.uSsrShift.value.x === (j.x - tj.x) / tw && tu.uSsrShift.value.y === (j.y - tj.y) / th && !j.equals(tj));
+  }
+  s.set('ssr.interval', 1); s.render(0);
+  check('interval back to 1: TAA_SSR_REUSE dropped', !('TAA_SSR_REUSE' in s.taaPass.material.defines) && s.ssrPass.interval === 1);
 
   // a throw leaves nothing staged; motionBlur options replace (strength back to 1); messages quote strings
   check("set('volumetric', options) without an atmosphere: throws, nothing staged", throws(() => gfx.set('volumetric', { steps: 8 }), /needs an atmosphere/) && gfx._next === null && gfx.volumetricOptions.steps === 16);

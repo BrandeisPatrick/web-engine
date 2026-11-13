@@ -19,6 +19,8 @@ export function mulberry32(a) {
 }
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+/** The night the bench page shows (the date its first golden images were recorded). */
+export const BENCH_SEED = 20261113;
 /** YYYYMMDD of a Date (local time). */
 export const dayNumber = (d) => d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
 /** "NOV 1" for 20261101; null when n is not a plausible date. */
@@ -33,7 +35,9 @@ export function dayLabel(n) {
  */
 export function patchFor(search = '', now = new Date()) {
   const today = dayNumber(now);
-  let seed = today;
+  // the bench page (?bench=1, src/core/Bench.js) lays out one fixed night, whatever the date: its captures are held
+  // against golden images (npm run perf), and the candy moved to another night's spots each day
+  let seed = /(?:^|[?&])bench=(?!0(?:&|$))[^&]*/.test(search) ? BENCH_SEED : today;
   const m = /(?:^|[?&])seed=(\d{1,10})(?:&|$)/.exec(search);
   if (m) { const n = Number(m[1]); if (n > 0 && n < 4294967296) seed = n; }
   const label = dayLabel(seed) || `#${seed}`;

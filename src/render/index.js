@@ -18,6 +18,8 @@ export { SceneCopy } from './SceneCopy.js';
 export { BloomPass } from './passes/BloomPass.js';
 export { ExposurePass } from './passes/ExposurePass.js';
 export { installCascadeShadowChunk, cascadeShadowChunkText, installedCascades, MAX_CASCADES } from './shadowCascade.js';
+// directional lights black at the pixel (cascade lights, full shadow) skip their BRDF: Atmosphere shadows.skipUnlit
+export { installSkipUnlitChunk, skipUnlitInstalled, SKIP_UNLIT_CALL } from './shadowSkipUnlit.js';
 // directional shadow kernels: 'pcf' (three's), 'fast' (5 hardware-compare taps), 'pcss' (blocker search + penumbra disc);
 // Atmosphere.setShadowKernel wires them for the sun cascades (2-4, shadowCascade.js)
 export {

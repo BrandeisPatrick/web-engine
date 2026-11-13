@@ -54,10 +54,12 @@ const Q = resolveQuality({
   storageKey: 'vibe.quality.nyc',
   overrides: {
     desktop: {
-      engine: { maxPixelRatio: 2, adaptiveResolution: true },
-      shadows: { cascades: 2, kernel: 'fast', nearMapSize: 2048 },
-      postfx: { ssr: { scale: 0.4, steps: 22, refine: 4, maxDistance: 120, thickness: 0.6, maxRoughness: 0.45, edgeFade: 0.2, jitter: false, denoise: 5 }, volumetric: { scale: 0.25, steps: 12, maxDistance: 220, intensity: 1, density: 1 } },
-      lights: { clustered: true, clusteredRange: 200 },
+      engine: { maxPixelRatio: 1.5, adaptiveResolution: true }, // 2268x1473 on a 14" Retina, as miami-drive: native 3024x1964 is 16.5-18 ms, this 10.7-11.6
+      shadows: { cascades: 2, kernel: 'fast', nearMapSize: 2048, farInterval: 8 }, // far map every 8th frame
+      postfx: { ssr: { scale: 0.4, steps: 22, refine: 4, maxDistance: 120, thickness: 0.6, maxRoughness: 0.45, edgeFade: 0.2, jitter: false, denoise: 5, interval: 2 }, volumetric: { scale: 0.25, steps: 12, maxDistance: 220, intensity: 1, density: 1 } },
+      // cutoff: each point light ends, faded, where it stops showing (ClusteredLights): 0.45 ms a frame on square and
+      // sidewalk for <= 0.012 / 255 mean (0.01 would save 0.1 ms more and take a soft far highlight off the pavement)
+      lights: { clustered: true, clusteredRange: 200, cutoff: 0.0025 },
       world: { streamRadius: 900, traffic: 110, trafficHd: { count: 3, radius: 18, midCount: 10, midRadius: 50, parked: true } },
       nyc: { pedestrians: 16, signRange: 150, cars: 16, steam: 1, textures: 'textures', pbrSize: 1024, maxScreens: 90, gpuParticles: true },
     },
@@ -91,12 +93,15 @@ async function boot() {
   });
   const { scene, camera, renderer } = engine;
   TextureSets.configure({ base: `${NYC}${NY.textures}/`, manifestIds: true }); // the roles' folders: texture-sets.json ids (walls.js)
+  // desktop: the tier's anisotropy (8, not the GPU's 16x: grazing street canyons at 3024x1964); mobile keeps the GPU
+  // maximum, the look its image guard holds (and it is inside its budget)
+  if (DESK) TextureSets.configure({ maxAnisotropy: S.textures.anisotropy });
 
   // ---------------------------------------------------------------- the city
   let clustered = null;
   if (S.lights.clustered) {
     installClusteredChunks();
-    clustered = new ClusteredLights({ maxLights: 1024, zFar: 420 });
+    clustered = new ClusteredLights({ maxLights: 1024, zFar: 420, cutoff: S.lights.cutoff || 0 });
   }
   const world = new MapWorld({
     scene, renderer,
@@ -195,7 +200,7 @@ async function boot() {
   { const LP = world.props && world.props.lightPool; if (LP) { LP.color.setRGB(1.0, 0.62, 0.3).multiplyScalar(DESK ? 2.6 : 1.8); LP.reach = 15; LP._fresh = true; for (const l of LP.lights || []) { l.color.copy(LP.color); l.distance = 15; } } }
   // facade light (facades.js), roof lines and wall clutter (rooftops.js), light in the air (airglow.js)
   const westAz = (NYC_SUN.azimuthStart + NYC_SUN.azimuthSpan * Math.min(1.15, (DUSK_HOURS - NYC_SUN.rise) / (NYC_SUN.set - NYC_SUN.rise))) * DEG;
-  const facadeGrade = gradeFacades({ world, west: { x: Math.sin(westAz), z: -Math.cos(westAz) }, lamps: DESK ? 12 : 8, skyGain: NIGHT ? 0.3 : 1, canyon: DESK ? [0.32, 1.25] : [0.5, 1.25] });
+  const facadeGrade = gradeFacades({ world, west: { x: Math.sin(westAz), z: -Math.cos(westAz) }, lamps: 4, skyGain: NIGHT ? 0.3 : 1, canyon: DESK ? [0.32, 1.25] : [0.5, 1.25] });
   // wall relief in the dusk light, grime, curtains (walls.js; mobile: no streaks under the sills)
   const walls = params.has('nowalls') ? null : dressWalls({ world, west: { x: Math.sin(westAz), z: -Math.cos(westAz) }, sills: DESK }); // A/B: ?nowalls
   const roofs = buildRooftops({ world, scene, center: SQUARE, skip: crowns.crowned, facades: signs.facades, max: DESK ? 900 : 450, ac: 0 }); // window AC units: windowkit.js (real window layout)
@@ -293,8 +298,14 @@ async function boot() {
     if (heldStill && postfx && postfx.taaPass) postfx.taaPass._reset = true; // bench / smoke captures (see quiet)
     if (postfx) postfx.render(dt); else { renderer.render(sc, cam); world.atmo.renderFlare(renderer, cam); }
   };
-  engine.onResize = (w, h, pr) => { if (postfx) postfx.setSize(w, h, pr); world.setSize(w, h, pr); };
-  { const { width, height } = engine.size; world.setSize(width, height, engine.pixelRatio); }
+  // the clustered light grid and the scene copy map gl_FragCoord of the scene target: its size is PostFX's internal
+  // size (the drawing buffer x renderScale under TAA), which PostFX reports on every change
+  engine.onResize = (w, h, pr) => { if (postfx) postfx.setSize(w, h, pr); else world.setSize(w, h, pr); };
+  if (postfx) {
+    postfx.onInternalResize = (w, h) => world.setSize(w, h, 1);
+    postfx.onInternalResize(postfx.internalWidth, postfx.internalHeight);
+  }
+  else { const { width, height } = engine.size; world.setSize(width, height, engine.pixelRatio); }
 
   // traffic signals: one light per (junction, phase group) at the mean of its heads, coloured by the phase the bulbs show
   const signalLights = [];
@@ -415,6 +426,9 @@ async function boot() {
   engine.addSystem({
     lateUpdate(dt) {
       time += dt;
+      // the near map on the frames between the far map's (Atmosphere: far on its even frames), never both in one frame:
+      // the phase the bench's live frames run (with both maps on the same frames it read ~0.7 ms more per frame)
+      shadowFrame = (world.atmo._frame & 1) ^ 1;
       camera.updateMatrixWorld();
       updateSignage(signs, time);
       facadeGrade.update(camera); air.update(camera);
@@ -525,6 +539,26 @@ async function boot() {
     }
     return best;
   })();
+  // bench frames as played (Bench.js `live`): what a play frame renders differently from a held one. Of the play
+  // loop's systems, kept: world.update (the atmosphere's cascade schedule, far map on even frames; lamps, signals, the
+  // clustered light list and its upload, ExtraLights' writes included), signage, facade grade, air glow, the GPU steam
+  // step, car contact shadows, the city environment. Left out: player / input and the camera rig (the camera stays at
+  // the pose), traffic, boats and streaming (held: they move vehicles and tiles), pedestrians (a crowd simulation
+  // that walks skinned people around), the heap trim (heap tooling on a timer) and the HUD (DOM). end() puts back what
+  // the frames moved, as after() left it (after() itself is not idempotent: refreshHD, the steam's spawn accumulators).
+  let shownT = 0, liveT = 0, steamAcc = null, atmoF = 0, shadowF = 0; // shownT: the world time after()'s last update
+  // showed; atmoF: the atmosphere's frame count then (its far-cascade schedule); shadowF: renderFn's near-map count
+  const _lp = new THREE.Vector3();
+  const worldStep = (dt) => { // world.update with the traffic, the boats and the streamer held
+    const T = world.traffic, tu = T && T.update, St = world.streamer, B = world.waterfront && world.waterfront.boats, bu = B && B.update;
+    if (T) T.update = () => {};
+    if (B) B.update = () => {};
+    world.streamer = null;
+    world.update(dt, _lp.copy(engine.camera.position));
+    world.streamer = St;
+    if (T) T.update = tu;
+    if (B) B.update = bu;
+  };
   const harness = createBenchHarness(engine, {
     name: 'nyc-night',
     poses: {
@@ -578,7 +612,9 @@ async function boot() {
       facadeGrade.update(cam, true); air.update(cam);
       pinEnv();
       const su = world.atmo.sky.material.uniforms; su.uTime.value = 0; su.uCloudOffset.value.set(0.13, 0.41);
+      shownT = world.time;
       world.time = 0;
+      steamAcc = steam.vents.map((v) => v.acc);
       steam.preroll(4, cam);
       if (peds) peds.scatter(cam.position.x, cam.position.z, 4711);
       if (player.entity.visible && peds) peds.update(0, player.entity.position.x, player.entity.position.z);
@@ -612,6 +648,51 @@ async function boot() {
         // the current (un-jittered) frame as its output, bit-stable
         postfx.render(0);
       }
+    },
+    live: {
+      begin() { // what quiet() holds, as in play: TAA and the volumetric march jittered and accumulating, eye adaptation
+        heldStill = false; liveT = 12.5; world.time = shownT; atmoF = world.atmo._frame; // the clocks go on from what after() shows
+        // every run and load the same schedule (Bench.js: a fixed phase): the near map on the frames between the far
+        // map's (in play the two counters run in lockstep from whatever phase the load left)
+        shadowF = shadowFrame; shadowFrame = atmoF & 1;
+        if (postfx) postfx.autoExposure = true;
+        if (postfx && postfx.history) postfx.set('jitter', true);
+        if (postfx && postfx.volumetric) { postfx.set('volumetric.jitter', true); postfx.set('volumetric.temporal', true); }
+      },
+      frame(dt) {
+        const cam = engine.camera;
+        worldStep(dt);
+        liveT += dt;
+        updateSignage(signs, liveT);
+        facadeGrade.update(cam); air.update(cam);
+        steam.update(dt, cam);
+        if (carShadows) carShadows.update(cam.position);
+        pinEnv();
+      },
+      end() {
+        const cam = engine.camera;
+        updateSignage(signs, 12.5);
+        // as after()'s three updates (dt 0, at the shown time): signals, lamps, trees, water, the light list, the cascades' schedule
+        world.time = shownT; world.atmo._frame = atmoF - 3;
+        for (let i = 0; i < 3; i++) worldStep(0);
+        world.time = 0;
+        const su = world.atmo.sky.material.uniforms; su.uTime.value = 0; su.uCloudOffset.value.set(0.13, 0.41);
+        facadeGrade.update(cam, true); air.update(cam);
+        if (carShadows) carShadows.update(cam.position);
+        if (steamAcc) steam.vents.forEach((v, i) => { v.acc = steamAcc[i]; });
+        steam.preroll(4, cam); // the same pre-roll as after()'s (seeded, from the same accumulators)
+        shadowFrame = shadowF;
+      },
+    },
+    // converged captures (Bench.converged): TAA jittered and accumulating from a reset history (the jitter pattern
+    // and a reused SSR buffer restart), everything else as quiet() holds it; quiet() afterwards holds the frame again
+    converge: {
+      begin() {
+        if (!postfx || !postfx.history) return;
+        heldStill = false;
+        postfx.set('jitter', true);
+        postfx.history.reset(); postfx.taaPass.reset();
+      },
     },
     settings: {
       'postfx.ssr': { get: () => !!(postfx && postfx.ssr), set: (v) => { if (postfx && postfx.gbuffer) postfx.set('ssr', v ? S.postfx.ssr || true : false); } },

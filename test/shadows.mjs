@@ -207,6 +207,26 @@ for (let n = 2; n <= 4; n++) {
   check(`${n} cascades: a time change re-renders every map`, a.cascadeLights.slice(1).every((l) => l.shadow.needsUpdate));
 }
 
+// farInterval (2 cascades): the far map every farInterval-th frame; above 2 a box 0.1 half sizes off refits at once
+{
+  const a = headless({ cascades: 2, farInterval: 8 }), p = new THREE.Vector3(0, 2, 0), log = [];
+  for (let f = 0; f < 17; f++) {
+    for (const l of a.cascadeLights) l.shadow.needsUpdate = false;
+    a.update(p, 1 / 60);
+    log.push(a.cascadeLights[1].shadow.needsUpdate ? 1 : 0);
+  }
+  check('farInterval 8: the far map on the first (dirty) frame, then every 8th (frame count 8, 16)',
+    log.join('') === '10000001000000010', log.join(''));
+  for (const l of a.cascadeLights) l.shadow.needsUpdate = false;
+  p.x += 0.05 * 260; a.update(p, 1 / 60); // 0.05 half sizes: not yet
+  const small = a.cascadeLights[1].shadow.needsUpdate;
+  p.x += 0.1 * 260; a.update(p, 1 / 60); // 0.15 half sizes off the fitted box: refits now
+  check('farInterval 8: a box 0.1 half sizes off refits at once, a smaller move waits',
+    !small && a.cascadeLights[1].shadow.needsUpdate);
+  const d = headless({ cascades: 2 });
+  check('farInterval default 2 (the even frames: the schedule above)', d.shadowOpts.farInterval === 2);
+}
+
 // boxes by camera height (hysteresis 70 / 200 up, 50 / 160 down); middle boxes step with the far box
 {
   const a = headless({ cascades: 4 }), p = new THREE.Vector3(0, 2, 0);

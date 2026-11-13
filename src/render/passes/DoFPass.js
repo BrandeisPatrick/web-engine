@@ -241,6 +241,30 @@ const COMPOSITE_FRAG = /* glsl */`
     gl_FragColor = vec4( col * ( 1.0 - nf.a ) + nf.rgb, c.a );
   }`;
 
+// under upscaling (DOF_UPSCALE, PostFX renderScale < 1) the depth is the internal size, the colour the output size:
+// every depth fetch reads the internal texel under the output texel (dofIn). Derived texts: the plain ones stay.
+const DOF_IN_GLSL = /* glsl */`
+  ivec2 dofIn( ivec2 p ) {
+    ivec2 ds = textureSize( tDepth, 0 );
+    return min( ivec2( ( vec2( p ) + 0.5 ) * vec2( ds ) / vec2( textureSize( tColor, 0 ) ) ), ds - 1 );
+  }
+  void main() {`;
+function derive(text, reps) {
+  return reps.reduce((t, [a, b]) => {
+    if (!t.includes(a)) throw new Error(`[DoFPass] shader anchor not found: ${a}`);
+    return t.split(a).join(b);
+  }, text);
+}
+const PREFILTER_UPSCALE_FRAG = derive(PREFILTER_FRAG, [
+  ['\n  void main() {', DOF_IN_GLSL],
+  ...['i0', 'p1', 'p2', 'i1'].map((t) => [`texelFetch( tDepth, ${t}, 0 )`, `texelFetch( tDepth, dofIn( ${t} ), 0 )`]),
+]);
+const COMPOSITE_UPSCALE_FRAG = derive(COMPOSITE_FRAG, [
+  ['\n  void main() {', DOF_IN_GLSL],
+  ['float d = texelFetch( tDepth, ip, 0 ).x;', 'ivec2 dp = dofIn( ip ); float d = texelFetch( tDepth, dp, 0 ).x;'],
+  ['clamp( ip + ivec2(', 'clamp( dp + ivec2('],
+]);
+
 const KEYS = Object.keys(DOF_DEFAULTS);
 
 /**
@@ -280,6 +304,7 @@ export class DoFPass extends Pass {
     this._nearDefined = null; // DOF_NEAR defined in the composite, synced in render()
     this._stableDefined = null; // DOF_STABLE_DEPTH defined in the composite, synced in render()
     this._w = 1; this._h = 1;
+    this._up = false; // DOF_UPSCALE: depth at an internal size (setUpscale)
     this._tile = 1;
 
     const rgba = { type: THREE.HalfFloatType, depthBuffer: false, stencilBuffer: false, generateMipmaps: false };
@@ -412,6 +437,24 @@ export class DoFPass extends Pass {
     this._draw(renderer, this._far, this._farMat);
     this._draw(renderer, this._out, this._compositeMat);
     renderer.autoClear = ac;
+  }
+
+  /**
+   * The depth is at an internal size below the output size (PostFX renderScale < 1): true switches the prefilter and
+   * composite to the texts that map each output texel to the internal depth texel under it.
+   * @param {boolean} on
+   */
+  setUpscale(on) {
+    on = !!on;
+    if (on === this._up) return;
+    this._up = on;
+    const mats = [[this._prefilterMat, PREFILTER_FRAG, PREFILTER_UPSCALE_FRAG],
+      [this._compositeMat, COMPOSITE_FRAG, COMPOSITE_UPSCALE_FRAG]];
+    for (const [m, plain, up] of mats) {
+      m.fragmentShader = on ? up : plain;
+      if (on) m.defines.DOF_UPSCALE = 1; else delete m.defines.DOF_UPSCALE;
+      m.needsUpdate = true;
+    }
   }
 
   // one draw into a cleared target (autoClear is off around the pass: see the header)

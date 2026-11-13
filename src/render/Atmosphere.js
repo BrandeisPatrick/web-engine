@@ -9,7 +9,7 @@
 //   const atmo = new Atmosphere({ scene, renderer, camera?, timeOfDay: 'golden' | hours,
 //                                 shadows: { cascades: 2, near: 45, far: [260, 420, 650], kernel: 'pcf' }, ...tunings });
 //   shadows.cascades 1 | 2 | 3 | 4: the sun light (near cascade) + black shadow-only lights sunMid (3+), sunMid2 (4)
-//   and sunFar (always the farthest); shadows.kernel 'pcf' | 'fast' | 'pcss' (DEFAULT_SHADOWS)
+//   and sunFar (always the farthest); shadows.kernel 'pcf' | 'fast' | 'pcss'; shadows.skipUnlit (DEFAULT_SHADOWS)
 //   (legacy: new Atmosphere(scene, renderer, opts) followed by atmo.build())
 //   atmo.update(cameraPos, dt?)    per frame: sky follows the camera, clouds drift, cascades + flare follow
 //   atmo.setTimeOfDay(hoursOrPreset) / atmo.setTime(hours)
@@ -32,6 +32,7 @@ import { Lensflare, LensflareElement } from 'three/addons/objects/Lensflare.js';
 import { clamp, smoothstep } from './noise.js';
 import { makeCloudTexture, sampleCloud, makeFlareTextures } from './skyTextures.js';
 import { installCascadeShadowChunk, MAX_CASCADES } from './shadowCascade.js';
+import { installSkipUnlitChunk } from './shadowSkipUnlit.js';
 import {
   SHADOW_KERNELS, installFastShadowChunk, installPcssShadowChunk, createShadowDepthTexture, attachShadowDepth, setFastShadowMaps,
   setPcssShadowParams, applyShadowKernel,
@@ -281,11 +282,17 @@ const DEFAULT_SHADOWS = {
   nearRadius: 2.0, midRadius: 1.7, farRadius: 1.4,
   lead: 0.45, farLead: 0.55, // boxes lead the camera's view direction by this fraction of their half size (middle: farLead)
   farMaxY: 40,            // far (and middle) box centre height cap (m)
+  farInterval: 2,         // 2 cascades: the far map re-renders every farInterval-th frame, when its box steps and,
+                          // above 2, when its box is 0.1 half sizes off; 2 = every other frame. The city demos use 8
+                          // (0.3-0.6 ms a frame on nyc-night): the far map holds the static city; moving casters in it
+                          // (traffic beyond the near map) update at 60 / farInterval Hz
   kernel: 'pcf',          // 'fast': 5 hardware-compare taps per lookup instead of three's 17; 'pcss': contact-hardening
                           // soft shadows (setShadowKernel, shadowKernel.js)
   lightSize: 0.5,         // 'pcss': angular diameter of the sun (degrees): penumbra width per metre of caster distance
   maxPenumbra: 24,        // 'pcss': widest penumbra in near-map texels (the same width in metres on the other maps)
   temporalNoise: false,   // 'pcss': re-seed the per-pixel sample rotation every frame (with dt > 0), for TAA to average
+  skipUnlit: false,       // skip the BRDF of a directional light that is black at the pixel (cascade lights, full
+                          // shadow): the same picture, less shading (global chunk patch, shadowSkipUnlit.js)
 };
 
 export class Atmosphere {
@@ -297,7 +304,9 @@ export class Atmosphere {
    * @param {THREE.Camera} [o.camera]  cascades lead its view direction; lens flare
    * @param {number|string} [o.timeOfDay='golden']  hours 0..24 or a preset name (timePresets)
    * @param {object} [o.shadows]  { cascades: 1|2|3|4, near (m), far (m or [m by height step]), mid, kernel:
-   *        'pcf'|'fast'|'pcss', lightSize, maxPenumbra, ... } see DEFAULT_SHADOWS
+   *        'pcf'|'fast'|'pcss', lightSize, maxPenumbra, skipUnlit, ... } see DEFAULT_SHADOWS. skipUnlit (default
+   *        false): installs the global skip-unlit chunk patch here, before any material compiles; once installed it
+   *        applies to every lit material on the page
    * @param {boolean} [o.build]  build immediately (default true for the options form, false for the legacy form)
    */
   constructor(o = {}, legacyRenderer, legacyOpts) {
@@ -313,6 +322,7 @@ export class Atmosphere {
     this.cascaded = want > 1 && CASCADES;
     // cascades in use: 3 / 4 upgrade the global chunk patch (2 keeps its 0.6.0 text); 1 when unavailable / off
     this.cascadeCount = !this.cascaded ? 1 : want > 2 && installCascadeShadowChunk(want) ? want : 2;
+    if (sh.skipUnlit) installSkipUnlitChunk(); // chunk text is not in three's program key: before any material compiles
     this.cascadeLights = []; // shadow-casting sun lights in three's shadow order: near, middle..., far (build)
     this.shadowKernel = 'pcf'; // kernel in effect; build() selects sh.kernel through setShadowKernel
     const t = opts.timeOfDay ?? 'golden';
@@ -865,11 +875,12 @@ export class Atmosphere {
       else if (idx > 0 && cam.y < down[idx - 1]) idx--;
       if (steps[idx] !== this._farHalf) { this._farHalf = steps[idx]; this._setBox(this.sunFar, this._farHalf); this._setMidBoxes(idx); this._farDirty = true; }
       // maps beyond the near one re-render round-robin (each is consistent with its own matrix in between), all of
-      // them when dirty: 2 cascades: far on even frames; 3: middle on odd, far on even frames; 4: middle on odd
-      // frames, second middle and far on alternate even frames (one map besides the near one per frame). With 3+, a
-      // map whose box centre is 0.3 half sizes off (teleport, pose) refits at once (2 keeps the 0.6.0 schedule).
+      // them when dirty: 2 cascades: far on every farInterval-th frame (default 2: the even frames); 3: middle on odd,
+      // far on even frames; 4: middle on odd frames, second middle and far on alternate even frames (one map besides
+      // the near one per frame). With 3+, a map whose box centre is 0.3 half sizes off (teleport, pose) refits at once
+      // (2 keeps the 0.6.0 schedule).
       const L = this.cascadeLights, n = L.length, f = this._frame, dirty = this._farDirty;
-      const yCap = Math.min(cam.y, sh.farMaxY), farLead = sh.farLead;
+      const yCap = Math.min(cam.y, sh.farMaxY), farLead = sh.farLead, fi = Math.max(1, sh.farInterval | 0 || 2);
       let py = cam.y, ph = this.nearHalf, pl = sh.lead; // previous box: centre height, half size, lead
       for (let j = 1; j < n; j++) {
         const light = L[j], h = light.userData.half, off = h * farLead;
@@ -882,8 +893,13 @@ export class Atmosphere {
           py = y; ph = h; pl = farLead;
         }
         const x = cam.x + fx * off, z = cam.z + fz * off;
-        let due = dirty || (n === 2 ? (f & 1) === 0 : j === 1 ? (f & 1) === 1 : n === 3 ? (f & 1) === 0 : (f & 3) === (j === 2 ? 0 : 2));
-        if (!due && n > 2 && light.target.position.distanceToSquared(_focus.set(x, y, z)) > (0.3 * h) ** 2) due = true;
+        let due = dirty
+          || (n === 2 ? f % fi === 0 : j === 1 ? (f & 1) === 1 : n === 3 ? (f & 1) === 0
+            : (f & 3) === (j === 2 ? 0 : 2));
+        // with 3+ maps, or a slower far map (farInterval > 2), a box 0.3 (0.1) half sizes off refits at once (a pose, a
+        // quick turn of the view: the boxes lead the view direction), not frames late
+        const off2 = !due && (n > 2 || fi > 2) ? light.target.position.distanceToSquared(_focus.set(x, y, z)) : 0;
+        if (off2 > ((n > 2 ? 0.3 : 0.1) * h) ** 2) due = true;
         if (!due) continue;
         this._fitCascade(light, x, y, z, h);
         light.shadow.needsUpdate = true;

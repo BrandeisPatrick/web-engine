@@ -39,8 +39,12 @@ const Q = resolveQuality({
   overrides: {
     desktop: {
       engine: { maxPixelRatio: 1.5 }, // 2268x1473 on a 14" Retina under TAA: see the bench table (native 3024x1964 is ~18 ms)
-      shadows: { cascades: 2, kernel: 'fast' },
-      postfx: { gbuffer: true, aa: 'taa', ssr: { scale: 0.4, steps: 20, maxRoughness: 0.55, maxDistance: 90, thickness: 0.5, jitter: false, denoise: 4 }, volumetric: { scale: 0.25, steps: 12, intensity: 0.55, density: 1.2 }, motionBlur: { strength: 0.45, samples: 6, maxBlur: 16 } },
+      // far map every 4th frame (Atmosphere farInterval), not nyc-night's 8th: under the dusk sun the shadows of
+      // traffic beyond the near map show, and at 7.5 Hz they would trail their cars by up to ~1.8 m
+      shadows: { cascades: 2, kernel: 'fast', farInterval: 4 },
+      postfx: { gbuffer: true, aa: 'taa', ssr: { scale: 0.4, steps: 20, maxRoughness: 0.55, maxDistance: 90, thickness: 0.5, jitter: false, denoise: 4, interval: 2 }, volumetric: { scale: 0.25, steps: 12, intensity: 0.55, density: 1.2 }, motionBlur: { strength: 0.45, samples: 6, maxBlur: 16 } },
+      // no lights.cutoff here (ClusteredLights): at 0.01 and above it takes a street lamp's highlight off the car's
+      // roof (chase), and at 0.0025, where the picture holds, it saves nothing measurable
       lights: { clustered: true, clusteredRange: 85 },
       world: { streamRadius: 800, traffic: 70, trafficHd: { count: 3, radius: 22, midCount: 10, midRadius: 60, parked: true } },
       car: { lod: 'high' },
@@ -136,6 +140,9 @@ async function boot() {
   // the demo's texture sets (Poly Haven, CC0) live in public/miami/textures (~20 MB of JPGs); phones read an empty
   // manifest (textures-lite: every layer procedural, nothing to download) and fetch only the beach sand (~2 MB)
   TextureSets.configure({ base: MOBILE ? `${BASE}miami/textures-lite/` : `${BASE}miami/textures/`, basisPath: `${BASE}miami/basis/` }); // KTX2 maps (tools/compress-textures.mjs); the transcoder lives with the demo
+  // desktop: the tier's anisotropy (8, not the GPU's 16x: grazing roads at 3024x1964); mobile keeps the GPU maximum,
+  // the look its image guard holds (and it is inside its budget)
+  if (!MOBILE) TextureSets.configure({ maxAnisotropy: QS.textures.anisotropy });
   const tParam = params.get('t');
   const timeOfDay = tParam == null ? 'dusk' : Number.isFinite(+tParam) ? +tParam : tParam;
 
@@ -241,8 +248,14 @@ async function boot() {
     if (postfx) postfx.render(dt); else { renderer.render(sc, cam); atmo.renderFlare(renderer, cam); }
     if (!hold.still && (++probeFrame & 3) === 0) car.updateProbe(1); // after the main pass (its shadow maps are this frame's); a face every 4th frame (a full cube in 24 frames)
   };
-  engine.onResize = (w, h, pr) => { if (postfx) postfx.setSize(w, h, pr); world.setSize(w, h, pr); };
-  world.setSize(engine.size.width, engine.size.height, engine.pixelRatio);
+  // the clustered light grid and the scene copy map gl_FragCoord of the scene target: its size is PostFX's internal
+  // size (the drawing buffer x renderScale under TAA), which PostFX reports on every change
+  engine.onResize = (w, h, pr) => { if (postfx) postfx.setSize(w, h, pr); else world.setSize(w, h, pr); };
+  if (postfx) {
+    postfx.onInternalResize = (w, h) => world.setSize(w, h, 1);
+    postfx.onInternalResize(postfx.internalWidth, postfx.internalHeight);
+  }
+  else world.setSize(engine.size.width, engine.size.height, engine.pixelRatio);
 
   // ---------------------------------------------------------------- the car
   const car = new HeroCar({ scene, renderer, physics, model: W.model, lights: extra, lod: QS.car.lod, effects: QS.effects.particles, postfx, atmosphere: atmo });
@@ -431,7 +444,9 @@ async function boot() {
   renderer.compile(scene, camera);
   const loadMs = Math.round(performance.now() - t0);
   memTrim.sweep();
-  const harness = makeHarness({ engine, world, atmo, postfx, car, props, rig, placeCar, plugin, spawn, ramps, physics, extra, input, hud, hold, streets, QS, START, sky, roadside, nearPalms });
+  // the harness's live frames start renderFn's frame counters at a fixed phase and put them back afterwards
+  const cadence = { get: () => [shadowFrame, probeFrame, casterT], set: (c) => { [shadowFrame, probeFrame, casterT] = c; } };
+  const harness = makeHarness({ engine, world, atmo, postfx, car, props, rig, placeCar, plugin, spawn, ramps, physics, extra, input, hud, hold, streets, QS, START, sky, roadside, nearPalms, cadence });
   // a resumed loop after bench poses: TAA / volumetric jitter back on
   engine.addSystem({ lateUpdate() { if (hold.still && !harness.frozen) { hold.still = false; if (postfx && postfx.history) postfx.set('jitter', true); if (postfx && postfx.volumetric) { postfx.set('volumetric.jitter', true); postfx.set('volumetric.temporal', true); } } } }, 'unhold');
   window.__miami = { THREE, engine, world, atmo, postfx, car, props, rig, input, audio, hud, plugin, quality: Q, loadMs, physics, ramps, extra, resetToRoad, placeCar, streets };
@@ -488,7 +503,7 @@ function buildStreetIndex(roads) {
   return { nearest, at: (x, z) => { const r = nearest(x, z, 30); return r ? r.name : null; } };
 }
 
-function makeHarness({ engine, world, atmo, postfx, car, props, rig, placeCar, plugin, spawn, ramps, physics, extra, input, hud, hold, streets, QS, START, sky, roadside, nearPalms }) {
+function makeHarness({ engine, world, atmo, postfx, car, props, rig, placeCar, plugin, spawn, ramps, physics, extra, input, hud, hold, streets, QS, START, sky, roadside, nearPalms, cadence }) {
   const { camera } = engine;
   // the reference shot: on Ocean Drive, behind the car, looking along the street towards the glow
   const S = spawn.position, h0 = spawn.headingRad;
@@ -506,6 +521,32 @@ function makeHarness({ engine, world, atmo, postfx, car, props, rig, placeCar, p
     if (d < md) { md = d; mq = s; }
   }
   let posed = '';
+  // bench frames as played (Bench.js `live`): what a play frame renders differently from a held one. Of the play
+  // loop's systems, kept: world.update (the atmosphere's cascade schedule, far map on even frames; lamps, the neon
+  // plugin's lights, the clustered light list and its upload), the dusk sky, the near palms' wind, the roadside's
+  // impostors, the props' instance matrices, and in renderFn the car's probe (a face every 4th frame) with hold.still
+  // off. Left out: input, the car (physics and its visual update: wheels, lamps, dust and exhaust particles, random
+  // and cleared for captures), the camera rig (the camera stays at the pose), traffic, the bay's boats and streaming
+  // (held: they move vehicles and tiles), motion blur and water refraction (switched by speed and camera distance:
+  // constant here), the heap trim (heap tooling on a timer), HUD and audio. The roadside's wind clock stays (dt 0): it
+  // is private to roadside.js, so it could not be put back for the next capture, and it only moves a uniform. end()
+  // puts back what the frames moved, as after() left it (after() itself is not idempotent: refreshHD; and the neon
+  // clock only ever adds).
+  // shownT / neonT: the world / neon times after()'s last update showed; palmT: the palms' wind clock; atmoF: the
+  // atmosphere's frame count (its far-cascade schedule: a map still flagged when the probe pass runs is rendered there,
+  // without the car; after() always leaves one flagged); cad / face: renderFn's frame counters and the probe's next face
+  let shownT = 0, neonT = 0, palmT = 0, atmoF = 0, cad = null, face = 0;
+  const _lp = new THREE.Vector3();
+  const worldStep = (dt) => { // world.update with the traffic, the boats and the streamer held
+    const T = world.traffic, tu = T && T.update, St = world.streamer, B = world.waterfront && world.waterfront.boats, bu = B && B.update;
+    if (T) T.update = () => {};
+    if (B) B.update = () => {};
+    world.streamer = null;
+    world.update(dt, _lp.copy(camera.position));
+    world.streamer = St;
+    if (T) T.update = tu;
+    if (B) B.update = bu;
+  };
   const poses = {
     // the reference shot: on the Dune Road at the start, behind the car, 2.2 m up and 7.6 m back, 45 deg fov, pitched down, the road
     // rising to its crest against the afterglow
@@ -571,6 +612,7 @@ function makeHarness({ engine, world, atmo, postfx, car, props, rig, placeCar, p
       car.updateProbe(6);
       if (plugin.refractionAt) plugin.refractionAt(cam.position);
       const su = atmo.sky.material.uniforms; su.uTime.value = 0; su.uCloudOffset.value.set(0.13, 0.41);
+      shownT = world.time; neonT = plugin.time;
       world.time = 0;
       if (world.mat && world.mat.water && world.mat.water.userData.u) world.mat.water.userData.u.uTime.value = 0;
       props.render();
@@ -589,6 +631,47 @@ function makeHarness({ engine, world, atmo, postfx, car, props, rig, placeCar, p
         postfx.render(0);
       }
       void posed;
+    },
+    // converged captures (Bench.converged): TAA jittered and accumulating from a reset history (the jitter pattern
+    // and a reused SSR buffer restart), everything else as quiet() holds it; quiet() afterwards holds the frame again
+    converge: {
+      begin: () => {
+        if (!postfx || !postfx.history) return;
+        hold.still = false;
+        postfx.set('jitter', true);
+        postfx.history.reset(); postfx.taaPass.reset();
+      },
+    },
+    live: {
+      begin: () => { // what quiet() holds, as in play: TAA and the volumetric march jittered and accumulating, the probe
+        hold.still = false; world.time = shownT; atmoF = atmo._frame; // the clocks go on from what after() shows
+        if (postfx && postfx.history) postfx.set('jitter', true);
+        if (postfx && postfx.volumetric) { postfx.set('volumetric.jitter', true); postfx.set('volumetric.temporal', true); }
+        if (postfx && postfx.ssr) postfx.set('ssr.jitter', QS.postfx.ssr.jitter !== false);
+        if (nearPalms) palmT = nearPalms.fade.uTime.value;
+        // every run and load the same schedule (Bench.js: a fixed phase): the near map and the probe counted from the
+        // far map's frame parity, the casters' 60-frame re-sync outside the run
+        cad = cadence.get(); cadence.set([atmoF & 1, atmoF & 1, 0]); face = car.probe ? car.probe.face : 0;
+      },
+      frame: (dt) => {
+        worldStep(dt);
+        if (sky) sky.update(camera);
+        if (nearPalms) nearPalms.update(camera, dt);
+        if (roadside) roadside.update(camera, atmo.darkness, 0);
+        props.render();
+      },
+      end: () => {
+        // as after()'s three updates (dt 0, at the shown times): neon, signals, lamps, the light list, the cascades' schedule
+        plugin.time = neonT; world.time = shownT; atmo._frame = atmoF - 3;
+        for (let i = 0; i < 3; i++) worldStep(0);
+        world.time = 0;
+        if (nearPalms) nearPalms.fade.uTime.value = palmT;
+        cadence.set(cad);
+        if (car.probe) car.probe.face = face;
+        car.updateProbe(6); // the faces the frames rendered, again in the shown state
+        const su = atmo.sky.material.uniforms; su.uTime.value = 0; su.uCloudOffset.value.set(0.13, 0.41);
+        if (world.mat && world.mat.water && world.mat.water.userData.u) world.mat.water.userData.u.uTime.value = 0;
+      },
     },
     // building tiles stream in after a camera jump: update (traffic held) until the streamer is idle
     async settle() {

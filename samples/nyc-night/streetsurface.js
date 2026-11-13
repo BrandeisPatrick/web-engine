@@ -54,14 +54,17 @@ const ROAD = /* glsl */`
   c = mix(c, vec3(dot(c, vec3(0.333))), 0.35 * age);                   // old asphalt: grey, the binder gone
   // cracks: long meandering ones (iso-lines of a warped noise field), some overbanded with tar (black, glossy, a hair
   // raised), and alligator cracking (Voronoi edges, 0.9 m cells) only in a few tired patches
-  float cf = sNoise(P * 0.21 + vec2(n2, n1) * 0.55) * 0.75 + sNoise(P * 0.9 + 3.0) * 0.25;
-  float cw = abs(cf - 0.5);
+  // (both are multiplied by longZone: its noise runs only where that is non-zero)
   float longZone = smoothstep(0.3, 0.55, sNoise(P * 0.045 + 5.0) * 0.7 + age * 0.3);
-  float crack = (1.0 - smoothstep(0.0025, 0.007, cw)) * longZone;
-  float sealZone = step(0.5, sNoise(P * 0.03 + 11.0));
-  float seal = (1.0 - smoothstep(0.008, 0.016, cw)) * longZone * sealZone;
+  float crack = 0.0, seal = 0.0;
+  if (longZone > 0.0) {
+    float cf = sNoise(P * 0.21 + vec2(n2, n1) * 0.55) * 0.75 + sNoise(P * 0.9 + 3.0) * 0.25;
+    float cw = abs(cf - 0.5);
+    float sealZone = step(0.5, sNoise(P * 0.03 + 11.0));
+    crack = (1.0 - smoothstep(0.0025, 0.007, cw)) * longZone * (1.0 - sealZone);
+    seal = (1.0 - smoothstep(0.008, 0.016, cw)) * longZone * sealZone;
+  }
   float gator = smoothstep(0.74, 0.82, n3 * 0.5 + age * 0.35 + n2 * 0.25); // only the most tired patches
-  crack *= 1.0 - sealZone;
   if (gator > 0.0) { vec3 vo = sVoronoi(P * 1.1); crack = max(crack, (1.0 - smoothstep(0.008, 0.022, vo.x + (n1 - 0.5) * 0.03)) * gator * step(0.25, sHash(vo.yz))); }
   // longitudinal joint just beside the lane lines, transverse cracks every few metres
   float joint = 0.0, trans = 0.0;
@@ -79,7 +82,8 @@ const ROAD = /* glsl */`
   // oil: drips down the lane centres before a stop line, spots under parked cars
   float stopZone = hasI * (1.0 - smoothstep(4.0, 26.0, dI - rA)) * smoothstep(1.0, 4.0, dI - rA);
   float fl = (fract(lx / lw) - 0.5) * lw;
-  float blot = smoothstep(0.45, 0.8, sNoise(P * 0.9 + 1.7) * 0.6 + sNoise(P * 3.1) * 0.4);
+  float blot = 0.0; // (only counts multiplied by stopZone)
+  if (stopZone > 0.0) blot = smoothstep(0.45, 0.8, sNoise(P * 0.9 + 1.7) * 0.6 + sNoise(P * 3.1) * 0.4);
   float oil = stopZone * (1.0 - smoothstep(0.15, 0.6, abs(fl))) * (0.4 + 0.6 * blot) * step(ad, ch);
   if (pw > 0.1) {                                                        // parking lanes: one stain per car length
     float pc = floor(s / 6.2), ps = s - pc * 6.2 - 3.1 + (sHash(vec2(pc, 2.0)) - 0.5) * 2.0;
@@ -121,7 +125,9 @@ const ROAD = /* glsl */`
   diffuseColor.rgb = mix(diffuseColor.rgb, c, uStK);
   // paint: chipped, cracked through, eroded in the tracks, grimy
   // streaky wear along the direction of travel, fine chips, and whole areas worn thin
-  float chip = smoothstep(0.3, 0.56, sNoise(vec2(s * 1.6, ac * 9.0)) * 0.45 + sNoise(P * 24.0) * 0.3 + sNoise(P * 0.45 + 2.0) * 0.4);
+  float chip = 1.0; // (only counts multiplied by rPaint: its three noises run where there is paint)
+  if (rPaint > 0.0) chip = smoothstep(0.3, 0.56,
+    sNoise(vec2(s * 1.6, ac * 9.0)) * 0.45 + sNoise(P * 24.0) * 0.3 + sNoise(P * 0.45 + 2.0) * 0.4);
   float erode = 1.0 - 0.6 * rTrack - 0.5 * smoothstep(0.1, 0.4, oil);
   rPaint *= mix(1.0, chip * erode * (1.0 - crack) * (1.0 - 0.8 * seal) * (0.7 + 0.3 * n2), uStK);
   rPaintCol = mix(rPaintCol, yellow > white ? vec3(0.5, 0.36, 0.11) : vec3(0.46, 0.45, 0.42) * (0.85 + 0.15 * n1), uStK);

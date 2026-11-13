@@ -71,7 +71,7 @@ cam.position.set(3, 2, 10); cam.lookAt(0, 1, 0); cam.updateMatrixWorld();
 const hist = new CameraHistory(cam);
 const gbStub = { normal: new THREE.Texture() };
 {
-  const want = { scale: 0.5, maxPixels: Infinity, steps: 24, refine: 4, maxDistance: 80, thickness: 0.4, thicknessScale: 0, maxRoughness: 0.5, edgeFade: 0.1, jitter: false, metalTint: true, source: 'current', denoise: 0 };
+  const want = { scale: 0.5, maxPixels: Infinity, steps: 24, refine: 4, maxDistance: 80, thickness: 0.4, thicknessScale: 0, maxRoughness: 0.5, edgeFade: 0.1, jitter: false, metalTint: true, source: 'current', denoise: 0, interval: 1 };
   check('SSR_DEFAULTS: exactly the documented keys', Object.keys(SSR_DEFAULTS).join() === Object.keys(want).join(), Object.keys(SSR_DEFAULTS).join());
   for (const k in want) check(`SSR_DEFAULTS.${k} = ${String(want[k])}`, Object.is(SSR_DEFAULTS[k], want[k]), String(SSR_DEFAULTS[k]));
   check('SSR_DEFAULTS frozen', Object.isFrozen(SSR_DEFAULTS));
@@ -93,6 +93,7 @@ const gbStub = { normal: new THREE.Texture() };
     ['steps', 0], ['steps', 129], ['steps', 2.5], ['refine', -1], ['refine', 17], ['refine', 1.5],
     ['maxDistance', 0], ['maxDistance', Infinity], ['thickness', 0], ['thickness', -1], ['thicknessScale', -0.1], ['thicknessScale', 2], ['thicknessScale', NaN],
     ['maxRoughness', 0], ['maxRoughness', 1.1], ['edgeFade', -0.1], ['edgeFade', 0.6], ['source', 'foo'],
+    ['interval', 0], ['interval', 5], ['interval', 1.5], ['interval', '2'],
   ];
   let named = true, listed = [];
   for (const [k, v] of bad) {
@@ -152,7 +153,7 @@ const gbStub = { normal: new THREE.Texture() };
   p.setSize(1, 1);
   check('1 x 1 drawing buffer -> 1 x 1', size().join() === '1,1');
   check('texture identity kept across resizes', p.texture === tex);
-  check('reset() is a no-op that exists', typeof p.reset === 'function' && !throws(() => p.reset()));
+  check('reset() exists, does not throw', typeof p.reset === 'function' && !throws(() => p.reset()));
 }
 
 // ================================================================================================= SSRPass: shader contract
@@ -180,6 +181,33 @@ const gbStub = { normal: new THREE.Texture() };
   // the composite as maths: a = 0 is the identity, a = 1 is the reflection
   const comp = (col, s) => col.map((c, i) => c * (1 - s[3]) + s[i]);
   check('composite: weight 0 leaves the colour, weight 1 replaces it', comp([1, 2, 3], [0, 0, 0, 0]).join() === '1,2,3' && comp([1, 2, 3], [4, 5, 6, 1]).join() === '4,5,6');
+}
+
+// ================================================================================================= SSRPass: denoise blur
+{
+  const count = (s, re) => (s.match(re) || []).length;
+  const p = new SSRPass(cam, hist, gbStub);
+  check('denoise 0: no blur built', p._blurMat === null);
+  p.denoise = 4;
+  const m = p._blurMat, def = m.fragmentShader;
+  check('denoise 4: blur built', m !== null);
+  // the default blur: the 1.1.0-beta.1 weights from the full-resolution depth / normal, now behind the zero skip
+  check('default blur: full-resolution depth / normal, centre + one each per tap', /uniform highp sampler2D tDepth;/.test(def) && /uniform sampler2D tNormal;/.test(def)
+    && def.includes('vec4 gb = texelFetch( tNormal, ip, 0 );') && def.includes('float zc = linearDepth( texelFetch( tDepth, ip, 0 ).x );')
+    && def.includes('vec4 g = texelFetch( tNormal, tp, 0 );') && def.includes('float z = linearDepth( texelFetch( tDepth, tp, 0 ).x );'));
+  check('default blur: no-normal pixels pass through before anything else is read', /vec4 c = texture2D\( tSsr, vUv \);[\s\S]*ENGINE_GB_HAS_NORMAL \) == 0 \) \{ gl_FragColor = c; return; \}[\s\S]*bool lit = /.test(def));
+  check('default blur: weights and sum unchanged (Gaussian * depth * normal^8, sum / wsum)', def.includes('float w = exp( - 2.0 * t * t ) * exp( - abs( z - zc ) * zk ) * nd;')
+    && def.includes('float nd = max( dot( nc, engineOctDecode( g.rg ) ), 0.0 ); nd *= nd; nd *= nd; nd *= nd;') && def.includes('sum += texture2D( tSsr, uv ) * w; wsum += w;') && def.includes('gl_FragColor = sum / wsum;')
+    && def.includes('vec4 sum = c; float wsum = 1.0;') && def.includes('float r = uRadius * mix( 0.35, 1.0, clamp( gb.b / uMaxRoughness, 0.0, 1.0 ) );'));
+  check('zero skip: the 8 taps read before the depth / normal; all 0 with the centre -> 0, before any tap depth / normal read',
+    /bool lit = any\( notEqual\( c, vec4\( 0\.0 \) \) \);\s*if \( ! lit \) for [\s\S]*if \( any\( notEqual\( texture2D\( tSsr, uv \), vec4\( 0\.0 \) \) \) \) \{ lit = true; break; \}[\s\S]*if \( ! lit \) \{ gl_FragColor = vec4\( 0\.0 \); return; \}[\s\S]*texelFetch\( tDepth, ip/.test(def)
+    && def.indexOf('if ( ! lit ) {') < def.indexOf('texelFetch( tNormal, tp') && count(def, /texture2D\( tSsr/g) === 3 && !/\bs\[/.test(def));
+  check('zero skip: both loops skip the same off-screen taps (same tap uv)', count(def, /vec2 uv = vUv \+ uDir \* \( t \* r \);/g) === 2 && count(def, /if \( uv\.x < 0\.0 \|\| uv\.y < 0\.0 \|\| uv\.x > 1\.0 \|\| uv\.y > 1\.0 \) continue;/g) === 2);
+  check('default blur text: balanced, no GLSL3 qualifiers', glslBalanced(def) && !/#version/.test(def));
+  // the zero skip is exact: the default output where every SSR sample is 0 is (0 + sum of 0 * w) / wsum = 0, wsum >= 1
+  check('zero skip maths: all-zero taps give exactly 0 for any weights', [0.3, 1e-30, 0, 7].every((w) => (0 + 0 * w * 8) / (1 + w * 8) === 0));
+
+  p.dispose();
 }
 
 // ================================================================================================= SSRPass: render() on a stub
@@ -219,7 +247,69 @@ const gbStub = { normal: new THREE.Texture() };
 
   // nothing allocates per render
   gate(inRange, note, 'SSR render()', bytesPerCall((n) => { for (let i = 0; i < n; i++) p.render(r, null, read); }, 50000), { unit: 'frame' });
+
+  // denoise: trace -> blur H -> blur V, no allocation
+  const bound = [], sr = r.setRenderTarget;
+  r.setRenderTarget = (t) => { bound.push(t); sr(t); };
+  p.denoise = 3; p.render(r, null, read);
+  check('render, denoise: trace -> blur H -> blur V, texture = blur V', bound.join() === [p._rt, p._blurRts[0], p._blurRts[1]].join() && bound[2] === p._blurRts[1] && p.texture === p._blurRts[1].texture);
+  r.setRenderTarget = sr;
+  gate(inRange, note, 'SSR render() (denoise)', bytesPerCall((n) => { for (let i = 0; i < n; i++) p.render(r, null, read); }, 50000), { unit: 'frame' });
+  p.denoise = 0;
   check('dispose: no throw', !throws(() => { p.dispose(); q.dispose(); }));
+}
+
+// ================================================================================================= SSRPass: reuse (interval)
+{
+  const r = stubRenderer();
+  const h = new CameraHistory(cam);
+  const p = new SSRPass(cam, h, gbStub, { denoise: 2 });
+  p.setSize(64, 32);
+  const read = new THREE.WebGLRenderTarget(64, 32, { depthTexture: new THREE.DepthTexture(64, 32) });
+  let draws = 0;
+  const qr = p._quad.render.bind(p._quad);
+  p._quad.render = (rr) => { draws++; qr(rr); };
+  // one frame as PostFX renders it: history begin, the pass, history end; returns whether it traced
+  const frame = () => { const d = draws; h.begin(64, 32); p.render(r, null, read); h.end(); return draws > d; };
+  const run = (n) => { let t = ''; for (let i = 0; i < n; i++) t += frame() ? 'T' : '.'; return t; };
+  check('interval 1 (default): traces every frame, age 0', run(5) === 'TTTTT' && p.age === 0);
+  p.interval = 2;
+  check('interval 2: the setter forces a trace, then every 2nd frame; age counts the reused frames',
+    run(1) === 'T' && p.age === 0 && run(1) === '.' && p.age === 1 && run(5) === 'T.T.T' && p.age === 0);
+  p.interval = 3; run(1);
+  check('interval 3: T..T..', run(6) === '..T..T');
+  const tex = p.texture; run(1);
+  check('a reused frame draws nothing (trace + both blur passes skipped), texture unchanged', !frame() && p.texture === tex);
+  // forced traces: reset(), setSize, a fresh history, a skipped frame, an option change
+  p.interval = 2; run(1); // T, next is a reuse frame
+  p.reset();
+  check('reset(): the next frame traces', frame() && !frame());
+  p.setSize(64, 32);
+  check('setSize: the next frame traces', frame() && !frame());
+  h.reset();
+  check('history reset (cut / pose): the fresh frame traces', frame() && !frame());
+  h.begin(64, 32); h.end(); // a frame this pass did not render
+  check('a skipped frame: the next one traces', frame() && !frame());
+  p.steps = 12;
+  check('option change (steps): the next frame traces', frame() && !frame());
+  p.maxDistance = 70;
+  check('option change (maxDistance): the next frame traces', frame() && !frame());
+  const nh = new SSRPass(cam, null, gbStub, { interval: 2 }); nh.setSize(8, 8);
+  let nd = 0; const nq = nh._quad.render.bind(nh._quad); nh._quad.render = (rr) => { nd++; nq(rr); };
+  for (let i = 0; i < 4; i++) nh.render(r, null, read);
+  check('no history: traces every frame', nd === 4 && nh.age === 0);
+  // tracedJitter: the jitter of the frame the buffer was traced in
+  p.reset(); h.begin(64, 32); p.render(r, null, read);
+  const j0 = h.uniforms.uJitter.value.clone(); h.end();
+  check('tracedJitter = the traced frame\'s jitter', p.tracedJitter.equals(j0) && j0.lengthSq() > 0);
+  h.begin(64, 32); p.render(r, null, read); h.end();
+  check('tracedJitter kept on a reused frame', p.tracedJitter.equals(j0) && p.age === 1);
+  // the reuse bookkeeping allocates nothing (a pass without denoise: the blur's own reading on this stub is gated above)
+  const g = new SSRPass(cam, h, gbStub, { interval: 2 }); g.setSize(64, 32);
+  const plain = () => { h.begin(64, 32); g.render(r, null, read); h.end(); };
+  gate(inRange, note, 'SSR render() (interval 2: traced + reused frames)', bytesPerCall((n) => { for (let i = 0; i < n; i++) plain(); }, 50000), { unit: 'frame' });
+  g.dispose();
+  p.dispose(); nh.dispose();
 }
 
 // ================================================================================================= SSR trace: CPU port

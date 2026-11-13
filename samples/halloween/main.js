@@ -74,6 +74,7 @@ import { Environment } from './environment.js';
 import { CumulusClouds } from './clouds.js';
 
 const params = new URLSearchParams(location.search);
+const BENCH = readBenchParams(location.search).enabled; // ?bench=1: the harness page (deterministic, see toTitle)
 const flag = (k) => params.has(k) && params.get(k) !== '0';
 const FORCED = params.has('touch') ? flag('touch') : null; // ?touch=1 / ?touch=0 pin the touch UI on / off
 const TOUCH = FORCED ?? isTouchDevice({ multiTouch: true });  // at load; later touches / keys can switch (touchUI)
@@ -223,7 +224,7 @@ async function boot() {
     scene, renderer, camera, timeOfDay: 23.6, skyRadius: 1000, flare: false, cloudWind: [4, 1.5], looks: LOOKS,
     moon: { azimuth: 22, elevation: 13 }, moonIntensity: 1.9, moonColor: NIGHT.moon, fogDensity: [0.022, 0],
     moonScatter: 0.05, // the ground mist glows toward the moon (and the desktop volumetric pass marches moonlight)
-    shadows: LOW ? { cascades: 1, single: 24, singleMapSize: 1024, kernel: 'fast' } : { cascades: 1, single: 34, singleMapSize: 2048, kernel: 'fast' },
+    shadows: { ...(LOW ? { cascades: 1, single: 24, singleMapSize: 1024, kernel: 'fast' } : { cascades: 1, single: 34, singleMapSize: 2048, kernel: 'fast' }), skipUnlit: QUALITY.settings.shadows.skipUnlit },
     maxCasterHeight: 24,
   });
   // Halloween night: a deep indigo zenith over a violet horizon glow, on both the visible sky and the one the
@@ -488,7 +489,12 @@ async function boot() {
     lanterns.reset(); ghosts.reset(); fx.clear(); env.reset(); fillCandy(); porches.reset(); hands.reset(); thief.reset(); secrets.reset(); potions.reset(); chain.reset(); placeKid(); hud.clearCalls();
     orbitTarget.position.set(-2, 0, -4); orbit.distance = 30; orbit.elevation = 0.3; orbit.azimuth = 0.4; // title framing
     hud.showTitle(G.best, dailyBest(PATCH.key)); setRig(orbit);
-    for (let i = 0; i < 3; i++) ghosts.wake(SPAWN[0], SPAWN[1]); // a few ghosts drift around behind the title
+    // a few ghosts drift around behind the title; the bench page draws their graves from a fixed stream: with
+    // Math.random the title's ghosts rose at other graves each load, in or out of a pose's view (graveyard: 49, 53 or
+    // 55 draw calls), and full baseline updates refused. Stream 7 puts them where every bench pose draws what the
+    // recorded baseline did (desktop 55 / 51 / 47 / 49, mobile 46 / 42 / 39 / 41; of streams 1..48 seven do)
+    const wakeRnd = BENCH ? mulberry32(7) : Math.random;
+    for (let i = 0; i < 3; i++) ghosts.wake(SPAWN[0], SPAWN[1], wakeRnd);
   }
   function setClockPaused(on) { if (on) engine.clock.pause(); else engine.clock.resume(); }
   function setPaused(on) {
@@ -1300,6 +1306,8 @@ async function boot() {
       cam.position.set(x, heightAt(x, z) + h, z); cam.up.set(0, 1, 0); cam.lookAt(tx, heightAt(tx, tz) + th, tz);
     };
     const look = (x, z, h, tx, tz, th, hide) => (cam) => lookAt(cam, x, z, h, tx, tz, th, hide);
+    const glowAt = world.glowLevels.slice(), glowNow = world.glowLevels.slice(); // world.glowLevels when after() last started / when a bench began
+    let candyNow = null, beamsNow = null; // the candy's instances when a bench began
     harness = createBenchHarness(engine, {
       name: 'halloween',
       poses: {
@@ -1324,7 +1332,7 @@ async function boot() {
           },
         } : {}),
       },
-      after: () => { rig.deactivate(); orbit.deactivate(); rigOn = null; worldLate(0); }, // the rigs off: the pose places the camera
+      after: () => { glowAt.set(world.glowLevels); rig.deactivate(); orbit.deactivate(); rigOn = null; worldLate(0); }, // the rigs off: the pose places the camera
       // captures hash equal frame to frame: the eye adaptation reset to this view (as play settles to it; held at dt 0),
       // the volumetric march without jitter or history
       quiet: () => {
@@ -1336,6 +1344,48 @@ async function boot() {
           heldStill = true; postfx.set('jitter', false); postfx.history.reset();
           for (let i = 0; i < 8; i++) postfx.render(0);
         }
+      },
+      // bench frames as played (Bench.js `live`). A title-screen play frame runs input, the sim (kid, ghost AI and
+      // cloth, porches, hands, thief, lanterns: dyn.step), the kid's animation, the game clock and candy, the camera
+      // rig, the world's late pass (atmosphere, LOOK, sky dressing, env, glows, ghost sheets, lanterns, porches, bats,
+      // effects), HUD and audio. Kept: the world's late pass and the candy's instance upload, at dt 0: the uploads and
+      // per-frame CPU work happen, while the clocks they would advance (wind, storm, gusts, lightning, clouds, leaves)
+      // only move uniforms and cannot be put back for the next capture. Left out: input, the sim and the kid's
+      // animation (gameplay and physics), the camera rig (the camera stays at the pose), HUD and audio. With one
+      // shadow map (autoUpdate) there is no cascade schedule to advance.
+      // converged captures (Bench.converged): TAA jittered and accumulating from a reset history, all else as quiet()
+      // holds it; quiet() afterwards holds the frame again
+      converge: {
+        begin: () => {
+          if (!postfx || !postfx.history) return;
+          heldStill = false; postfx.set('jitter', true);
+          postfx.history.reset(); postfx.taaPass.reset();
+        },
+      },
+      live: {
+        begin: () => { // what quiet() holds, as in play: eye adaptation, TAA and the volumetric march jittered and accumulating
+          glowNow.set(world.glowLevels);
+          candyNow = candy.meshes.map((m) => [m.count, m.instanceMatrix.array.slice(), m.instanceColor ? m.instanceColor.array.slice() : null]);
+          beamsNow = candy.beams.map((b) => [b.visible, b.position.clone()]);
+          if (!postfx) return;
+          postfx.autoExposure = true;
+          if (postfx.volumetric) { postfx.set('volumetric.jitter', true); postfx.set('volumetric.temporal', true); }
+          if (postfx.history) { heldStill = false; postfx.set('jitter', true); }
+        },
+        // in play the environment rewrites world.glowLevels every frame and the porches / brew scale them; at dt 0 it
+        // does not, so each frame starts from the levels after() started from (and ends where after() ended)
+        // (the candy: its instance upload only; even at dt 0 its step drops a flying sweet onto the ground for good; the
+        // bench page froze before a game frame drew it, so end() puts the instances back as the captures have them)
+        frame: () => { world.glowLevels.set(glowAt); worldLate(0); candy._draw(G.time); },
+        end: () => {
+          world.glowLevels.set(glowNow);
+          candy.meshes.forEach((m, k) => {
+            const [n, mat, col] = candyNow[k];
+            m.count = n; m.instanceMatrix.array.set(mat); m.instanceMatrix.needsUpdate = true;
+            if (col) { m.instanceColor.array.set(col); m.instanceColor.needsUpdate = true; }
+          });
+          candy.beams.forEach((b, i) => { b.visible = beamsNow[i][0]; b.position.copy(beamsNow[i][1]); });
+        },
       },
       settings: {
         // cost knobs (perf.mjs --costs switches each true knob off): the desktop path, volumetrics, the ground's dressing

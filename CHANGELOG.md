@@ -1,6 +1,91 @@
 # Changelog
 
 ## Unreleased
+- PostFX `renderScale` (option, `set('renderScale', s)` / `get`, s in [0.5, 1], default 1 = unchanged: no new define,
+  every shader text pinned to the previous one): temporal upscaling, in effect only under TAA (else 1, the request
+  kept). The scene / G-buffer target, exposure, AO, SSR, volumetrics and the camera jitter run at the drawing buffer
+  x s (`internalWidth` / `internalHeight`, `renderScaleInEffect`, `onInternalResize(w, h)` for the clustered-light
+  tile mapping and the scene copy); the TAA resolve upscales (define `TAA_UPSCALE`: each output pixel windows the
+  internal 3x3 by the distance from where each texel sampled the scene this frame, the history at output resolution,
+  the variance clip from the internal neighbourhood, and a per-frame weight that grows when the nearest sample lands
+  on the pixel centre, so detail above the internal resolution accumulates from the jitter; `TAAPass.setUpscale`,
+  `upscaleWindow`, `upscaleProximity`, `taaUpscaleMeanWeight`); the final pass, motion blur and DoF map their depth /
+  G-buffer reads to the internal texel (`FINAL_UPSCALE`, `MB_UPSCALE`, `DOF_UPSCALE`). Resizes, TAA off / on, live
+  scale changes and G-buffer rebuilds restart the history. Measured on the city demos' desktop poses at 2268x1473
+  (converged captures against scale 1, alternating in-page A/B): s 0.87 saves 1.0-1.4 ms a frame, 0.8 1.6-2.3,
+  0.75 1.9-2.9 (miami beach about half) at 96-99 % of the sharpness (a bilinear upscale of a native 0.75 frame:
+  50-60 %), but nyc-night's square and sidewalk exceed the perf image guard at every scale (0.38 / 0.53 mean at
+  0.87, mostly wet-road sparkle, the LED billboard and foliage shaded at the lower resolution) and the per-pixel
+  flicker at rest is 8-64 % above scale 1 on every pose; a TAA blend of 0.96 under upscaling brings miami-drive to
+  about scale 1's flicker but not its car pose's sharpness. So the demos stay at scale 1. nyc-night and miami-drive
+  now size the world's clustered lights / scene copy from PostFX's internal size (identical at scale 1).
+- Bench harness: `converged(frames = 48, scale, into)` captures a pose as TAA converges at rest (the sample's new
+  `converge: { begin, end }` hook: TAA jittered and accumulating from a reset history, everything else as `quiet()`
+  holds it), then returns to the held state; repeated converged captures hash equal and leave held captures as they
+  were (the smoke test checks both on every pose). The three demos pass the hook.
+- ClusteredLights `cutoff` (constructor option and property, default 0 = unchanged): a point light is clustered, and
+  lights a fragment, only out to its reach, where its brightest channel x three's distance attenuation falls to the
+  cutoff (same units: linear colour x intensity / m^decay), never beyond its range. Above twice the cutoff it lights as
+  before; between twice the cutoff and the cutoff it fades to 0 (cut hard, every light ended in a ring: about 2.5 /
+  255 on nyc-night's pavement at 0.03). A cut light stores -(decay + 1) in row 1 w and its range and the cutoff in row
+  2 xy (fetched only for such a light). Spots keep their range. Measured on nyc-night (desktop): the clustered loop
+  costs 0.8-1.85 ms a frame, of which the BRDF only ~0.3 ms and the CPU clustering and upload < 0.05 ms: the cost is
+  lights listed far out where they add next to nothing. nyc-night's desktop tier uses `lights.cutoff` 0.0025: in-page
+  A/B 0.11 / 0.45 / 0.44 ms saved on avenue / square / sidewalk, static captures 0.012 / 0.004 / 0.005 / 255 mean and
+  < 0.1 % of pixels over 2 / 255 (0.03 saves 0.22 / 0.69 / 0.79 ms but takes soft far highlights off the wet pavement,
+  up to 7 / 255). miami-drive does not use it: at 0.01 and above a street lamp's highlight leaves the car's roof, and
+  at 0.0025 nothing measurable is saved.
+- Atmosphere `shadows.farInterval` (2 cascades; default 2 = unchanged, the far map on even frames): the far map
+  re-renders every farInterval-th frame, and above 2 also as soon as its box is 0.1 half sizes off (a pose, a quick
+  turn: the box leads the view). Where the NYC live frame's own work goes (in-page A/B, ms a frame by pose): all of
+  `live.frame` 1.0-1.6; `world.update` 0.5-0.9, of which the Atmosphere update (the far-map schedule) 0.45-0.8;
+  signage, facade grade, air glow and car shadows ~0; the GPU steam step <= 0.1; the clustered light list's CPU work
+  and upload <= 0.07. nyc-night's desktop tier uses 8 (in-page A/B, 7 rounds: 0.29 / 0.31 / 0.66 ms saved on avenue /
+  square / sidewalk), miami-drive's 4 (0.15-0.18 ms on every pose; 8 would save 0.1 ms more); static captures
+  unchanged. In motion, moving casters beyond the near map (traffic) cast at 60 / farInterval Hz instead of 30 Hz:
+  faint moonlight shadows on nyc-night, but under miami-drive's dusk sun every 8th frame would let a car's shadow trail
+  it by up to ~1.8 m, hence 4 there.
+- halloween bench page (`?bench=1`): deterministic between loads and days. The title's three ghosts rose at graves
+  drawn with Math.random, so a pose drew 0-6 cloth meshes more or less from load to load (graveyard: 49, 53 or 55
+  draw calls) and full baseline updates refused; the bench page now draws them from a fixed stream, one where every
+  pose draws what the recorded baseline did. Its night's seed (candy and porch layout, rng.js) was the date: the
+  bench page now shows one fixed night (`BENCH_SEED`, 20261113, the date of the current golden images) unless the URL
+  names a `seed`.
+- SSR `interval` (SSRPass option and `postfx.set('ssr.interval', n)`, integer 1..4, default 1 = unchanged): trace and
+  denoise every n-th frame and reuse the buffer in between; the TAA composite (new define `TAA_SSR_REUSE`) reads the
+  reused buffer where each pixel's surface was when it was traced (G-buffer velocity x frames since, plus the jitter
+  change). A trace is forced after a history reset / pose / cut, a skipped frame, a resize, `reset()` (PostFX calls it
+  when TAA's history restarts, so held bench captures are this frame's own trace) and any option change; without TAA
+  the interval is 1 in effect (the request is kept). `ssrPass.age` / `tracedJitter`, `taaPass.resetPending` are new.
+  nyc-night and miami-drive use interval 2 on the desktop tier: 0.3-0.5 ms a frame saved on nyc-night, 0.25-0.4 ms on
+  miami-drive (in-page A/B), static captures unchanged; in motion the reused frames lag one frame where reflected
+  content moves differently from its surface (wet-street highlights walking forward), and SSR's cost now falls on
+  every other frame.
+- Surface shaders skip work whose weight is zero (the picture is unchanged): the sidewalk / kerb material
+  (`MapWorld`) reads its cast-concrete scan only where a face is not flat (`textureGrad`, gradients taken outside the
+  branch); nyc-night's facade lamp wash skips each lamp beyond its fall-off reach, and its street surface runs the
+  long-crack, oil-blot and paint-chip noises only where their zone or the paint is non-zero.
+- nyc-night: the facade lamp wash takes the 4 nearest lamp heads, not 12 (8 on mobile): the loop costs every wall
+  pixel whether a lamp reaches it or not, and the lamps stand 60 m and more apart with a 17 m pool, so the 5th
+  nearest is a pool of a few pixels over 100 m away.
+- Bench harness (`createBenchHarness`, `src/core/Bench.js`): an optional `live: { dt, begin, frame, end }` hook group.
+  With it, `bench()` (and so `run()`, `report()` and `npm run perf`) measures frames as played: `begin()` undoes what
+  `quiet()` holds (TAA and volumetric jitter and history, eye adaptation), each warm-up and timed frame is
+  `frame(dt)` (the play loop's render-side work: atmosphere and shadow-cascade schedules, clustered light lists, GPU
+  steam, the car probe; no gameplay, physics, traffic or streaming) and then the render, warm-up is at least 12
+  frames (whole 12-frame cycles until 150 ms ran, while the GPU clocks up), and `end()` (puts back exactly what the
+  frames moved), `quiet()` and warm frames (as many renders in all as a held bench, modulo 12: renderFn's shadow-map
+  cadences end in the same phase) return the harness to the capture state: captures after a bench hash equal to
+  captures before it, and `info()` counts the same passes. The three demos pass one. Measured ms rise (a held frame
+  resolved TAA from a fresh history and skipped the far cascade, light uploads, particles and the probe); the
+  pictures do not change. Without `live`, `bench()` is unchanged.
+- nyc-night: in play the moon's near shadow map is tied to the frames between the far map's (it was a counter of its
+  own that happened to alternate with it; with both maps on the same frames the bench read about 0.7 ms more).
+- `TextureSets.options.maxAnisotropy` caps the texture arrays and `loadTextureSet` maps (unset = the GPU maximum, as
+  before); the two city demos pass the desktop tier's `textures.anisotropy` (8): 16x on grazing streets costs GPU time.
+- Atmosphere `shadows: { skipUnlit: true }` (on in both quality tiers; Halloween passes the tier's): the directional
+  light loop skips RE_Direct where the light is black at the pixel (cascade lights, full shadow), which adds exactly 0
+  there; `installSkipUnlitChunk` (`render/shadowSkipUnlit.js`), `test/skip-unlit.mjs`. Off, the shaders are unchanged.
 - `world/Shore.js` reads its texture sets from the shared texture root (`textureBase()`, so `TextureSets.options.base`
   applies) and no longer requests a set the root's `manifest.json` does not list: a game that ships its own sets gets
   no 404 per map (the two city demos logged eight each), and the procedural stand-in is used at once. Without a
@@ -9,6 +94,11 @@
   `test/texture-manifest.mjs`. The rendered frames are unchanged (pixel differences at load-to-load noise).
 - `samples/index.html` declares an empty icon (no favicon 404).
 - `test/vehicles-hd.mjs`: the build-time check is a blow-up guard (1500 ms), not a machine-speed limit.
+- `samples/nyc-night`: the desktop tier caps the pixel ratio at 1.5 (2268x1473 on a 14-inch MacBook Pro), as
+  `samples/miami-drive` already did; `bench/budgets.json` measures the two city demos' desktop views at that size
+  (10.7-11.6 ms and 6.3-11.5 ms against the 12 ms budget; native 3024x1964 was 16.5-18.1 and 10.0-16.9).
+- `SSRPass` denoise: where the centre and all eight taps of the reflection buffer are 0 the blur writes 0 without
+  reading the full-resolution depth and normal (fewer reads, the same output).
 
 ## 1.1.0-beta.1 — 2026-11-12 — NYC and Miami demos, quality tiers, asset detail
 A pre-release from the `feat/nyc-miami-demos` branch. Before / after captures: `docs/BEFORE-AFTER.md`. Known open

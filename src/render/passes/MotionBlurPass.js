@@ -97,6 +97,19 @@ const VELOCITY_FRAG = /* glsl */`
     mbVZ = vec4( l, min( uNear * uFar / ( uFar - ( uFar - uNear ) * d ), 65000.0 ), 0.0, 1.0 );
   }`;
 
+// 1 under upscaling (MB_UPSCALE, PostFX renderScale < 1: depth and G-buffer at the internal size uInRes, this pass at
+// the output size): each output pixel reads the internal texel under it, and the camera-only motion is that texel's
+// (its jitter is in internal px). Derived text: the plain one stays as it was.
+const VELOCITY_UPSCALE_FRAG = [
+  ['uniform vec2 uJitter, uRes;', 'uniform vec2 uJitter, uRes, uInRes;'],
+  ['ivec2 ip = ivec2( gl_FragCoord.xy );',
+    'ivec2 ip = min( ivec2( gl_FragCoord.xy * uInRes / uRes ), ivec2( uInRes ) - 1 );'],
+  ['vec2 uv = ( gl_FragCoord.xy + uJitter ) / uRes;', 'vec2 uv = ( vec2( ip ) + 0.5 + uJitter ) / uInRes;'],
+].reduce((t, [a, b]) => {
+  if (t.split(a).length !== 2) throw new Error(`[MotionBlurPass] shader anchor not found once: ${a}`);
+  return t.replace(a, b);
+}, VELOCITY_FRAG);
+
 // 2. tile max, one direction: uDir (1, 0) reduces tileSize texels of a row, (0, 1) of a column
 const TILE_FRAG = /* glsl */`
   uniform sampler2D tSrc;
@@ -204,6 +217,7 @@ export class MotionBlurPass extends Pass {
     this._samples = integer(o.samples ?? d.samples, 2, 64, 'samples');
     this._shutter = nonNegative(o.shutter ?? d.shutter, 'shutter');
     this._w = 1; this._h = 1;
+    this._inW = 0; this._inH = 0; // setUpscale: internal depth / G-buffer size (0 = the output size)
     this._camOnly = null; // MB_CAMERA_ONLY defined (gbuffer null), synced in render()
 
     const rg = { type: THREE.HalfFloatType, format: THREE.RGFormat, depthBuffer: false, stencilBuffer: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, generateMipmaps: false };
@@ -228,6 +242,7 @@ export class MotionBlurPass extends Pass {
       tDepth: { value: null }, tVelocity: { value: null }, tNormal: { value: null },
       uReproj: hu.uReproj, uJitter: hu.uJitter, // CameraHistory's own uniform objects
       uRes: { value: new THREE.Vector2(1, 1) }, uBlur: { value: new THREE.Vector2(0.5, 12) },
+      uInRes: { value: new THREE.Vector2(1, 1) }, // MB_UPSCALE only
       uNear: { value: 0.1 }, uFar: { value: 1000 },
     });
     this._tileMat = mat('PostFXMotionBlurTileMax', TILE_FRAG, { tSrc: { value: null }, uDir: { value: new THREE.Vector2(1, 0) }, uTile: { value: 20 } });
@@ -271,6 +286,25 @@ export class MotionBlurPass extends Pass {
 
   /** No history: nothing to reset (the camera history lives in CameraHistory). */
   reset() {}
+
+  /**
+   * Depth / G-buffer at an internal size below the output size (PostFX renderScale): width x height px, or 0 / null =
+   * the output size (the plain shader).
+   * @param {number|null} width
+   * @param {number|null} [height]
+   */
+  setUpscale(width, height) {
+    const w = width > 0 ? Math.max(1, width | 0) : 0, h = w > 0 ? Math.max(1, height | 0) : 0;
+    if (w === this._inW && h === this._inH) return;
+    const m = this._velocityMat, on = w > 0;
+    if (on !== this._inW > 0) {
+      m.fragmentShader = on ? VELOCITY_UPSCALE_FRAG : VELOCITY_FRAG;
+      if (on) m.defines.MB_UPSCALE = 1; else delete m.defines.MB_UPSCALE;
+      m.needsUpdate = true;
+    }
+    this._inW = w; this._inH = h;
+    if (on) m.uniforms.uInRes.value.set(w, h);
+  }
 
   /**
    * @param {number} width drawing-buffer px
