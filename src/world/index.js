@@ -32,5 +32,6 @@ export { hashStr, signedArea, pointInRing, pointInPoly, ringBounds, centroid, sa
 // helpers for big static worlds (tiled culling, per-pass shadow casters, real-light pools)
 export { chunkGeometry, chunkMesh, replaceWithChunks, chunkStats, localizeMeshOrigin } from './MeshChunker.js';
 export { shadowCount, shadowDrawRange, skipShadowPasses, shadowFrustum, NEAR_SHADOW_LAYER } from './ShadowPasses.js';
-export { NearestLights } from './NearestLights.js';
+// NearestLights lives in the render layer (three.js only); re-exported here for existing importers
+export { NearestLights } from '../render/NearestLights.js';
 export { clamp } from './geom.js';

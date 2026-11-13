@@ -163,7 +163,14 @@ export class Assets {
     return this._start(e, false);
   }
 
-  /** Loaded value of `key`; throws when it is not loaded (yet), failed or unknown. */
+  /**
+   * Loaded value of `key`; throws when it is not loaded (yet), failed or unknown. Its type depends on the loader: a
+   * 'gltf' key gives a GltfAsset (`@vibe/engine/render`: { scene, animations, instantiate() -> Object3D, ... }); in
+   * TypeScript name it: `assets.get<GltfAsset>('hero')`.
+   * @template [T=any]
+   * @param {string} key
+   * @returns {T}
+   */
   get(key) {
     const e = this._entries.get(key);
     if (e && e.state !== 'failed' && e.res.loaded) return e.res.value;

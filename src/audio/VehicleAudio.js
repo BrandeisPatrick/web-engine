@@ -17,6 +17,20 @@ import { CityAmbience } from './Ambience.js';
 
 function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
 
+/**
+ * @typedef {object} VehicleAudioState  what VehicleAudio.update reads each frame
+ * @property {number} [speedKmh]  road speed: motor pitch, tyre and wind noise
+ * @property {number} [rpmLike]  0..1 motor load (e.g. the throttle)
+ * @property {number} [thrust]  0..1 thruster roar (flying cars)
+ * @property {boolean} [grounded]  tyre noise only on the ground
+ * @property {'ground'|'flight'|string} [mode]
+ * @property {number} [wheelSlip]  0..1 tyre squeal
+ * @property {number} [boostLevel]  0..1
+ * @property {number} [thrusterLevel]  0..1 tank
+ * @property {number} [damage]  0..1; a rise plays an impact thump
+ * @property {number} [altitude]  m above ground
+ */
+
 export class VehicleAudio {
   /**
    * @param {object} [opts]
@@ -126,6 +140,12 @@ export class VehicleAudio {
   }
 
   // ------------------------------------------------------------------ per frame
+  /**
+   * Per frame. Missing fields count as 0 / false.
+   * @param {number} dt  seconds
+   * @param {VehicleAudioState} s  e.g. from a VehicleController: { speedKmh: vc.speed * 3.6, rpmLike: throttle,
+   *   grounded: vc.grounded, mode: vc.mode, wheelSlip: vc.wheelSlip, thrust: vc.thrust, damage: vc.damage }
+   */
   update(dt, s) {
     if (!s) return;
     // damage delta -> thump (tracked even before audio starts so no spurious hit on start)

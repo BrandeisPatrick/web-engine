@@ -4,6 +4,8 @@ export { Assets } from './Assets.js';
 export { Events } from './Events.js';
 export { Clock } from './Clock.js';
 export { Entity, EntitySystem } from './Entity.js';
+// render interpolation between fixed steps: save() before each step, apply(object3d, alpha) per frame
+export { PoseInterpolator } from './PoseInterpolator.js';
 // deterministic math for simulation code (IEEE-exact: + - * / sqrt only); mulberry32 / clamp live under MathDet
 // to avoid clashing with the render and world layers' exports
 export { hashU32, hashF64, hashF64Array, detAtan, detAtan2, detAsin, detAcos, detSqrt } from './mathDet.js';

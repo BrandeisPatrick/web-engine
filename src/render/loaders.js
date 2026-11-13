@@ -46,6 +46,19 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { ktx2Support } from './TextureSets.js';
 
+/**
+ * @typedef {object} GltfAsset  the value of a 'gltf' key: `assets.get('hero')`
+ * @property {THREE.Group} scene  the file's scene (shared: add instantiate() clones, not this, to keep it reusable)
+ * @property {THREE.AnimationClip[]} animations  its clips (pass to AnimationController; names as exported, e.g.
+ *   'HumanArmature|Man_Walk')
+ * @property {THREE.Camera[]} cameras
+ * @property {object} asset  glTF `asset` block
+ * @property {object} userData
+ * @property {object} gltf  three's GLTFLoader result (`parser` nulled)
+ * @property {() => THREE.Object3D} instantiate  a skinning-safe clone of `scene` (an Object3D to add to the scene;
+ *   it shares geometries / materials / textures; disposeInstance(clone) frees its skeletons)
+ */
+
 const WRAP = { repeat: THREE.RepeatWrapping, clamp: THREE.ClampToEdgeWrapping, mirror: THREE.MirroredRepeatWrapping };
 // three r180 renamed RGBELoader to HDRLoader and made RGBELoader a subclass that warns on construction: use its base
 // class there, RGBELoader itself on older three (where it extends DataTextureLoader directly)

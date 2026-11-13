@@ -2,7 +2,7 @@
 // AABB grid, heightfield, dynamic providers, casts) the vehicle and character controllers drive on; DynamicsWorld
 // (dynamics/) is the unified XPBD rigid-body solver that plugs into it through attachToPhysicsWorld (0.6.0).
 export { PhysicsWorld, LAYER, layerOf, namedLayers, setNamedLayers } from './PhysicsWorld.js';
-export { VehicleController, ROADSTER_SPEC, resolveVehicleSpec, G, WHEEL_LOCAL, THRUSTER } from './VehicleController.js';
+export { VehicleController, ROADSTER_SPEC, ROAD_CAR_SPEC, resolveVehicleSpec, G, WHEEL_LOCAL, THRUSTER } from './VehicleController.js';
 export { obbVsAabb, obbFromPose, sweepToContact, bounceVelocity, rayAabb, sphereCastAabb, closestPointOnAabb, aabbOverlap } from './collision.js';
 export { ColliderGrid, polygonToBoxes, SegmentHash, Raster, MinHeap } from './spatial.js';
 export { CharacterController } from './CharacterController.js';

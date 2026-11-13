@@ -43,8 +43,8 @@ const now = () => performance.now();
 
 export class Engine {
   /**
-   * @param {object} o
-   * @param {HTMLElement} o.container
+   * @param {object} [o]
+   * @param {HTMLElement} [o.container=document.body]
    * @param {number} [o.fixedHz=120]
    * @param {number} [o.maxSubsteps=4]
    * @param {number} [o.targetFps=0]  cap on ticks per second, 0 = every rAF callback (live: engine.targetFps = 60;
@@ -90,9 +90,17 @@ export class Engine {
     /** Display refresh rate (Hz) estimated from rAF timestamps; 0 until known. */
     this.refreshRate = 0;
     this._rafT = 0; this._rafMs = 0; this._rafN = 0; this._rafLong = 0; this._calib = 0; // refresh estimator (_frame)
-    /** Override to render through a composer: (scene, camera, dt) => void */
+    /**
+     * Draws the frame; replace it to render through post-processing: `engine.renderFn = (scene, camera, dt) =>
+     * postfx.render(dt)`. dt: the frame's (scaled) seconds.
+     * @type {(scene: THREE.Scene, camera: THREE.PerspectiveCamera, dt: number) => void}
+     */
     this.renderFn = (scene, camera) => this.renderer.render(scene, camera);
-    /** Called with (cssWidth, cssHeight, pixelRatio) on resize / pixel-ratio changes (PostFX.setSize hooks here). */
+    /**
+     * Called with (cssWidth, cssHeight, pixelRatio) on resize / pixel-ratio changes; hook post-processing here:
+     * `engine.onResize = (w, h, pr) => postfx.setSize(w, h, pr)` (the camera aspect is already updated).
+     * @type {(width: number, height: number, pixelRatio: number) => void}
+     */
     this.onResize = noop;
     this.time = 0; this.frameCount = 0; this.dt = 0; this.alpha = 0; this.substeps = 0;
     this._running = false; this._acc = 0; this._last = 0; this._raf = 0;
