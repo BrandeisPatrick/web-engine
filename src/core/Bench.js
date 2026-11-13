@@ -11,13 +11,14 @@
 //     quiet: (h) => { dust.clear(); postfx.autoExposure = false; },     // drift sources (particles, eye adaptation)
 //     settings: { 'postfx.aa': (v) => postfx.setMSAA(v === 'fxaa' ? 0 : 'auto'), 'shadows.kernel': { get, set } },
 //     settle: (h) => world.whenIdle(),                                  // optional: async work a pose starts
+//     live: { begin: (h) => postfx.set('jitter', true), frame: (dt, h) => world.update(dt, cam.position) }, // optional
 //   });
 //   const bp = readBenchParams();                 // ?bench=1&size=WxH
 //   if (bp.size) harness.resize(bp.size.w, bp.size.h);
 //   harness.setReady();
 //
-// API: name, engine, ready, poses (ids), settings (ids), frozen, setReady(), pose(id) -> id, settle() -> Promise,
-// render(), bench(frames = 24, { warmup = 3 }) -> ms per frame,
+// API: name, engine, ready, poses (ids), settings (ids), frozen, live (the hook group or null), setReady(),
+// pose(id) -> id, settle() -> Promise, render(), bench(frames = 24, { warmup = 3 }) -> ms per frame,
 // capture(scale = 4, into) -> { w, h, scale, data, hash }, diff(a, b) -> { meanAbs, p99, max, pctOver2, pctOver8 },
 // set(path, value), get(path), run(plan) -> Promise<{ name, renderer, size, frames, warmup, ms, rows }>,
 // info() -> { renderer, size, drawCalls, triangles, memory }, resize(w, h), size, freeze(), resume().
@@ -34,6 +35,26 @@
 // Exposure: with dt = 0 the adapted luminance holds whatever the last live frame left, which differs between page
 // loads. For hashes that reproduce across loads `quiet` must set postfx.autoExposure = false and call
 // postfx.setTimeOfDay(darkness) (which resets the adaptation to the current frame's luminance).
+// Live frames: quiet() holds the picture still for captures (TAA from a fresh history, no jitter, ...), and a frame
+// in that state does less GPU work than a frame in play, so bench() measures with the `live` hook group when the sample
+// passes one: { dt = 1/60, begin(h), frame(dt, h), end(h) }, each optional. bench(): begin() (undo what quiet() holds:
+// TAA / volumetric jitter and history, eye adaptation as in play), then warm-up and timed frames that are each
+// frame(dt) (the play loop's per-frame render-side work: atmosphere / shadow schedules, light lists, GPU particles,
+// probes; never gameplay, physics, traffic or streaming, and the camera stays put) followed by the render, the GPU
+// sync, then end(), quiet() and 2 or more warm frames. end() puts back exactly what frame() and the renders changed
+// (clocks, uniforms, particles, probes, the counters a renderFn keeps for its every-Nth-frame work; after() is not run
+// again: some of its work, e.g. a traffic refresh, is not idempotent), so the harness is back in the capture state and
+// captures after a bench hash equal to captures before it. begin() starts those counters at a fixed phase, so every
+// run renders the same schedule. The warm frames are as many as a held bench of the same warm-up and frames renders,
+// modulo 12: a renderFn's 2-, 3- and 4-frame schedules (a near shadow map every 2nd or 3rd frame) then end in the
+// phase they ended in before, and info() after a bench draws the same passes (its counts include the shadow maps of
+// its frame). The time is the whole loop: frame()'s CPU work is part of a frame's cost. Warm-up is at least 12 frames
+// with a live hook: one frame for the TAA / volumetric histories to take the accumulating path (and any lazily made
+// target or program), and one whole 12-frame cycle of the 2-, 3- and 4-frame schedules (shadow cascades, the probe)
+// before timing; before those, more whole cycles until 150 ms of frames ran (at most 16): after a page load or a pose
+// the GPU clocks up over its first ~100-300 ms, and 12 frames of a 1.5 ms view are 18 ms (its first two runs read
+// 15-20 % slow). Keep the timed frame count a multiple of 12 (24) so each run covers whole cycles. run() and report()
+// measure through bench(), so with the same live frames. Without `live`, bench() renders the held frames as before.
 // Captures read the default framebuffer with gl.readPixels in the same task as their render (no
 // preserveDrawingBuffer needed) into one reused full-size buffer, then box-downsample by `scale` (1..16): `data` holds
 // the raw per-channel SUMS over each scale x scale box (Uint16Array, top-down RGBA rows, at most 16 * 16 * 255, so
@@ -139,6 +160,8 @@ export function readBenchParams(search) {
  * @param {Object<string, Function|{ set: Function, get?: Function }>} [o.settings]  knobs by path, e.g. 'postfx.aa'
  * @param {Function} [o.settle]  (harness) => Promise: resolves once async work started by a pose has landed
  * @param {number} [o.dt=0]  seconds passed to renderFn for every harness frame (see header)
+ * @param {{ dt?: number, begin?: Function, frame?: Function, end?: Function }} [o.live]  bench() frames as played:
+ *   begin(harness), frame(dt, harness) before each render, end(harness) (see "Live frames" in the header)
  * @param {boolean} [o.global=true]  assign window.__sample
  */
 // ?perfreport=1: run report() and show it (plain DOM, no dependency on the ui layer); the page keeps its last pose
@@ -215,6 +238,9 @@ export function createBenchHarness(engine, o = {}) {
   const lastSet = new Map();
   let readback = new Uint8Array(0); // full drawing buffer, reused while the size holds
   const renderFrame = () => { R.info.reset(); E.renderFn(E.scene, E.camera, dt); };
+  const live = o.live && typeof o.live === 'object' ? o.live : null;
+  const liveDt = live && Number.isFinite(live.dt) ? live.dt : 1 / 60;
+  const liveFrame = () => { if (live.frame) live.frame(liveDt, h); renderFrame(); };
 
   const h = {
     name: o.name || 'sample',
@@ -226,6 +252,8 @@ export function createBenchHarness(engine, o = {}) {
     settings: Object.keys(knobs),
     /** True while pose() holds the engine loop (see header). */
     frozen: false,
+    /** The sample's live hook group, or null (see "Live frames" in the header). */
+    live,
 
     /** Mark the sample loaded: the smoke / bench scripts wait for this. */
     setReady() {
@@ -297,13 +325,27 @@ export function createBenchHarness(engine, o = {}) {
     },
 
     /**
-     * GPU-synchronised throughput of the current view: Profiler.benchThroughput over engine.renderFn.
+     * GPU-synchronised throughput of the current view: Profiler.benchThroughput over engine.renderFn, with the
+     * sample's live frames when it has a `live` hook (see header; warm-up at least 12 frames then).
      * @param {number} [frames=24]
      * @param {{ warmup?: number }} [opts]
      * @returns {number} mean ms per frame
      */
     bench(frames = 24, { warmup = 3 } = {}) {
-      return P.benchThroughput(renderFrame, frames, { warmup });
+      if (!live) return P.benchThroughput(renderFrame, frames, { warmup });
+      if (live.begin) live.begin(h);
+      const w = Math.max(warmup, 12);
+      try {
+        // whole 12-frame cycles until 150 ms of frames ran (the GPU clocks up after the idle of a load or a pose)
+        for (let ms = 0, k = 0; ms < 150 && k < 16; k++) ms += 12 * P.benchThroughput(liveFrame, 12, { warmup: 0 });
+        return P.benchThroughput(liveFrame, frames, { warmup: w });
+      } finally { // back to the capture state: the sample's end(), then the tail of pose() without after()
+        if (live.end) live.end(h);
+        if (quiet) quiet(h);
+        // 2 or more warm frames: as many as a held bench renders, modulo 12 (header)
+        const n = 2 + (((warmup + frames - 2) % 12) + 12) % 12;
+        for (let i = 0; i < n; i++) renderFrame();
+      }
     },
 
     /**

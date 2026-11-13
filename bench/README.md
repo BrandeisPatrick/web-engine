@@ -17,7 +17,13 @@ score = 100 x geometric mean, over every pose of every view, of (frame budget of
   size it renders on a 14-inch MacBook Pro with a 12 ms budget (the two city demos cap their pixel ratio at 1.5,
   2268x1473; the Halloween game renders the native 3024x1964), the mobile tier at 1280x720 with 4-5 ms.
 - A **pose** is a fixed camera position the sample registered with its bench harness (`src/core/Bench.js`).
-- **ms** is the median of 5 GPU-synchronised runs of 24 frames in headless Chrome on the real GPU.
+- **ms** is the median of 5 GPU-synchronised runs of 24 frames in headless Chrome on the real GPU. A measured frame
+  is a frame as played, not the held frame the captures use: the sample's `live` hook (`src/core/Bench.js`) turns
+  TAA and volumetric jitter and history (and eye adaptation) back on, and before each render runs the play loop's
+  per-frame render-side work (the atmosphere's shadow-cascade schedule, light lists and their upload, GPU particles,
+  reflection probes, instance uploads) with the camera at the pose; gameplay, physics, traffic and streaming are left
+  out. Each run warms up at least 12 frames first (whole cycles of the 2-, 3- and 4-frame schedules; more cycles until
+  150 ms of frames ran, while the GPU clocks up), and the captures are still taken in the held state afterwards.
 - 100 means on budget on average. Higher is faster. The geometric mean makes a 10 % gain count the same on every
   pose, so the cheap poses cannot hide the expensive ones; the "over budget" list in the output is the backlog,
   worst first.

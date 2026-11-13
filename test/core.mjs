@@ -1,4 +1,4 @@
-// Headless checks for the core kernel: Events, Clock, Entity / EntitySystem, mathDet (no browser, no WebGL).
+// Headless checks for the core kernel: Events, Clock, Entity / EntitySystem, the bench harness's live hook, mathDet (no browser, no WebGL).
 // Run: node test/core.mjs (imports the modules by path until the core index exports them).
 import * as THREE from 'three';
 import { Events } from '../src/core/Events.js';
@@ -6,6 +6,8 @@ import { Clock } from '../src/core/Clock.js';
 import { Entity, EntitySystem } from '../src/core/Entity.js';
 import { mulberry32, hashU32, hashF64, hashF64Array, detAtan, detAtan2, detAsin, detAcos, detSqrt, clamp } from '../src/core/mathDet.js';
 import { mulberry32 as noiseMulberry32 } from '../src/render/noise.js';
+import { createBenchHarness } from '../src/core/Bench.js';
+import { Profiler } from '../src/core/Profiler.js';
 import { atLeast, bytesPerCall, gate } from './helpers/alloc.mjs';
 
 let failures = 0;
@@ -337,6 +339,59 @@ const consistent = (sys) => {
   frames(1000);
   check('system: 3e6 hook calls (ms)', timed(() => frames(1000)), 0, 200, 'ms');
   gate(check, note, 'system: 1000 components x 3 phases', bytesPerCall(frames, 1000, { warm: 200 }), { unit: 'frame' });
+}
+
+// ======================================================================================= bench harness: live hook
+// a stand-in engine (no WebGL: the Profiler's GPU sync is a no-op without a context): renders are logged as held
+// (quiet() ran last) or live (live.begin() ran last)
+{
+  const log = [];
+  let held = false;
+  const R = { getContext: () => ({ drawingBufferWidth: 4, drawingBufferHeight: 4 }), info: { reset() {}, render: { calls: 0, triangles: 0 }, memory: {} }, getPixelRatio: () => 1 };
+  const E = { renderer: R, profiler: new Profiler(null), scene: {}, camera: { updateMatrixWorld() {} }, stop() {}, start() {}, renderFn: () => { log.push(held ? 'render:held' : 'render:live'); } };
+  const mk = (live) => createBenchHarness(E, {
+    global: false, poses: { a: () => {} }, after: () => { log.push('after'); }, quiet: () => { held = true; log.push('quiet'); }, live,
+  });
+  const hooks = (extra = {}) => ({ begin: () => { held = false; log.push('begin'); }, frame: (dt) => { log.push(`frame:${dt.toFixed(4)}`); }, end: () => { log.push('end'); }, ...extra });
+  const count = (s) => log.filter((x) => x === s).length;
+
+  const h0 = mk(undefined);
+  h0.pose('a'); log.length = 0;
+  h0.bench(8, { warmup: 2 });
+  check('bench: no live hook: only held renders (warm-up + timed)', log.length === 10 && count('render:held') === 10);
+  check('bench: no live hook: harness.live is null', h0.live === null);
+
+  const h1 = mk(hooks());
+  h1.pose('a'); log.length = 0;
+  h1.bench(24);
+  const n = 12 + 24, body = log.slice(1, 1 + 2 * n);
+  // (the stand-in's frames take no time: the warm-up adds its 16 extra 12-frame cycles)
+  const nl = count('render:live'), body2 = log.slice(1, 1 + 2 * nl);
+  let order = log[0] === 'begin';
+  for (let i = 0; i < nl; i++) order = order && body2[2 * i] === 'frame:0.0167' && body2[2 * i + 1] === 'render:live';
+  check('bench: live: begin, then frame(1/60) before each render', order);
+  check('bench: live: warm-up at least 12 frames, extra in whole 12-frame cycles', nl >= n && (nl - n) % 12 === 0 && nl <= n + 16 * 12);
+  check('bench: live: end, quiet, held frames last (after() not run again)', log.slice(1 + 2 * nl, 3 + 2 * nl).join() === 'end,quiet' && log.length > 3 + 2 * nl && log.slice(3 + 2 * nl).every((x) => x === 'render:held'));
+  check('bench: live: held frames after end() = a held bench\'s renders (3 + 24) modulo 12, at least 2', count('render:held'), 3);
+  log.length = 0; h1.render();
+  check('bench: live: the harness ends in the quiet state', held && log.join() === 'render:held');
+  log.length = 0; h1.bench(24, { warmup: 20 });
+  check('bench: live: a longer warm-up is kept (20 + 24 frames)', count('render:live') >= 44 && (count('render:live') - 44) % 12 === 0);
+  check('bench: live: a longer warm-up: held frames after end() = 44 modulo 12, at least 2', count('render:held'), 8);
+
+  const h2 = mk({ ...hooks(), dt: 0.05 });
+  h2.pose('a'); log.length = 0; h2.bench(4);
+  check('bench: live: dt option passed to frame()', log[1] === 'frame:0.0500');
+
+  const h3 = mk(hooks({ frame: () => { throw new Error('boom'); } }));
+  h3.pose('a'); log.length = 0;
+  let threw = false;
+  try { h3.bench(4); } catch { threw = true; }
+  check('bench: live: a throwing frame still ends in the quiet state', threw && held && log.includes('end') && log.includes('quiet') && log[log.length - 1] === 'render:held');
+
+  const h4 = mk({ frame: (dt) => { log.push(`frame:${dt.toFixed(4)}`); } }); // begin / end optional
+  h4.pose('a'); log.length = 0; h4.bench(12);
+  check('bench: live: begin / end optional', count('frame:0.0167') >= 24 && log.includes('quiet') && log[log.length - 1] === 'render:held');
 }
 
 // ================================================================================================= mathDet

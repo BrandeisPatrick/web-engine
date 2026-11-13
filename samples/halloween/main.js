@@ -1300,6 +1300,8 @@ async function boot() {
       cam.position.set(x, heightAt(x, z) + h, z); cam.up.set(0, 1, 0); cam.lookAt(tx, heightAt(tx, tz) + th, tz);
     };
     const look = (x, z, h, tx, tz, th, hide) => (cam) => lookAt(cam, x, z, h, tx, tz, th, hide);
+    const glowAt = world.glowLevels.slice(), glowNow = world.glowLevels.slice(); // world.glowLevels when after() last started / when a bench began
+    let candyNow = null, beamsNow = null; // the candy's instances when a bench began
     harness = createBenchHarness(engine, {
       name: 'halloween',
       poses: {
@@ -1324,7 +1326,7 @@ async function boot() {
           },
         } : {}),
       },
-      after: () => { rig.deactivate(); orbit.deactivate(); rigOn = null; worldLate(0); }, // the rigs off: the pose places the camera
+      after: () => { glowAt.set(world.glowLevels); rig.deactivate(); orbit.deactivate(); rigOn = null; worldLate(0); }, // the rigs off: the pose places the camera
       // captures hash equal frame to frame: the eye adaptation reset to this view (as play settles to it; held at dt 0),
       // the volumetric march without jitter or history
       quiet: () => {
@@ -1336,6 +1338,39 @@ async function boot() {
           heldStill = true; postfx.set('jitter', false); postfx.history.reset();
           for (let i = 0; i < 8; i++) postfx.render(0);
         }
+      },
+      // bench frames as played (Bench.js `live`). A title-screen play frame runs input, the sim (kid, ghost AI and
+      // cloth, porches, hands, thief, lanterns: dyn.step), the kid's animation, the game clock and candy, the camera
+      // rig, the world's late pass (atmosphere, LOOK, sky dressing, env, glows, ghost sheets, lanterns, porches, bats,
+      // effects), HUD and audio. Kept: the world's late pass and the candy's instance upload, at dt 0: the uploads and
+      // per-frame CPU work happen, while the clocks they would advance (wind, storm, gusts, lightning, clouds, leaves)
+      // only move uniforms and cannot be put back for the next capture. Left out: input, the sim and the kid's
+      // animation (gameplay and physics), the camera rig (the camera stays at the pose), HUD and audio. With one
+      // shadow map (autoUpdate) there is no cascade schedule to advance.
+      live: {
+        begin: () => { // what quiet() holds, as in play: eye adaptation, TAA and the volumetric march jittered and accumulating
+          glowNow.set(world.glowLevels);
+          candyNow = candy.meshes.map((m) => [m.count, m.instanceMatrix.array.slice(), m.instanceColor ? m.instanceColor.array.slice() : null]);
+          beamsNow = candy.beams.map((b) => [b.visible, b.position.clone()]);
+          if (!postfx) return;
+          postfx.autoExposure = true;
+          if (postfx.volumetric) { postfx.set('volumetric.jitter', true); postfx.set('volumetric.temporal', true); }
+          if (postfx.history) { heldStill = false; postfx.set('jitter', true); }
+        },
+        // in play the environment rewrites world.glowLevels every frame and the porches / brew scale them; at dt 0 it
+        // does not, so each frame starts from the levels after() started from (and ends where after() ended)
+        // (the candy: its instance upload only; even at dt 0 its step drops a flying sweet onto the ground for good; the
+        // bench page froze before a game frame drew it, so end() puts the instances back as the captures have them)
+        frame: () => { world.glowLevels.set(glowAt); worldLate(0); candy._draw(G.time); },
+        end: () => {
+          world.glowLevels.set(glowNow);
+          candy.meshes.forEach((m, k) => {
+            const [n, mat, col] = candyNow[k];
+            m.count = n; m.instanceMatrix.array.set(mat); m.instanceMatrix.needsUpdate = true;
+            if (col) { m.instanceColor.array.set(col); m.instanceColor.needsUpdate = true; }
+          });
+          candy.beams.forEach((b, i) => { b.visible = beamsNow[i][0]; b.position.copy(beamsNow[i][1]); });
+        },
       },
       settings: {
         // cost knobs (perf.mjs --costs switches each true knob off): the desktop path, volumetrics, the ground's dressing

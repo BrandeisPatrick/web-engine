@@ -418,6 +418,9 @@ async function boot() {
   engine.addSystem({
     lateUpdate(dt) {
       time += dt;
+      // the near map on the frames between the far map's (Atmosphere: far on its even frames), never both in one frame:
+      // the phase the bench's live frames run (with both maps on the same frames it read ~0.7 ms more per frame)
+      shadowFrame = (world.atmo._frame & 1) ^ 1;
       camera.updateMatrixWorld();
       updateSignage(signs, time);
       facadeGrade.update(camera); air.update(camera);
@@ -528,6 +531,26 @@ async function boot() {
     }
     return best;
   })();
+  // bench frames as played (Bench.js `live`): what a play frame renders differently from a held one. Of the play
+  // loop's systems, kept: world.update (the atmosphere's cascade schedule, far map on even frames; lamps, signals, the
+  // clustered light list and its upload, ExtraLights' writes included), signage, facade grade, air glow, the GPU steam
+  // step, car contact shadows, the city environment. Left out: player / input and the camera rig (the camera stays at
+  // the pose), traffic, boats and streaming (held: they move vehicles and tiles), pedestrians (a crowd simulation
+  // that walks skinned people around), the heap trim (heap tooling on a timer) and the HUD (DOM). end() puts back what
+  // the frames moved, as after() left it (after() itself is not idempotent: refreshHD, the steam's spawn accumulators).
+  let shownT = 0, liveT = 0, steamAcc = null, atmoF = 0, shadowF = 0; // shownT: the world time after()'s last update
+  // showed; atmoF: the atmosphere's frame count then (its far-cascade schedule); shadowF: renderFn's near-map count
+  const _lp = new THREE.Vector3();
+  const worldStep = (dt) => { // world.update with the traffic, the boats and the streamer held
+    const T = world.traffic, tu = T && T.update, St = world.streamer, B = world.waterfront && world.waterfront.boats, bu = B && B.update;
+    if (T) T.update = () => {};
+    if (B) B.update = () => {};
+    world.streamer = null;
+    world.update(dt, _lp.copy(engine.camera.position));
+    world.streamer = St;
+    if (T) T.update = tu;
+    if (B) B.update = bu;
+  };
   const harness = createBenchHarness(engine, {
     name: 'nyc-night',
     poses: {
@@ -581,7 +604,9 @@ async function boot() {
       facadeGrade.update(cam, true); air.update(cam);
       pinEnv();
       const su = world.atmo.sky.material.uniforms; su.uTime.value = 0; su.uCloudOffset.value.set(0.13, 0.41);
+      shownT = world.time;
       world.time = 0;
+      steamAcc = steam.vents.map((v) => v.acc);
       steam.preroll(4, cam);
       if (peds) peds.scatter(cam.position.x, cam.position.z, 4711);
       if (player.entity.visible && peds) peds.update(0, player.entity.position.x, player.entity.position.z);
@@ -615,6 +640,41 @@ async function boot() {
         // the current (un-jittered) frame as its output, bit-stable
         postfx.render(0);
       }
+    },
+    live: {
+      begin() { // what quiet() holds, as in play: TAA and the volumetric march jittered and accumulating, eye adaptation
+        heldStill = false; liveT = 12.5; world.time = shownT; atmoF = world.atmo._frame; // the clocks go on from what after() shows
+        // every run and load the same schedule (Bench.js: a fixed phase): the near map on the frames between the far
+        // map's (in play the two counters run in lockstep from whatever phase the load left)
+        shadowF = shadowFrame; shadowFrame = atmoF & 1;
+        if (postfx) postfx.autoExposure = true;
+        if (postfx && postfx.history) postfx.set('jitter', true);
+        if (postfx && postfx.volumetric) { postfx.set('volumetric.jitter', true); postfx.set('volumetric.temporal', true); }
+      },
+      frame(dt) {
+        const cam = engine.camera;
+        worldStep(dt);
+        liveT += dt;
+        updateSignage(signs, liveT);
+        facadeGrade.update(cam); air.update(cam);
+        steam.update(dt, cam);
+        if (carShadows) carShadows.update(cam.position);
+        pinEnv();
+      },
+      end() {
+        const cam = engine.camera;
+        updateSignage(signs, 12.5);
+        // as after()'s three updates (dt 0, at the shown time): signals, lamps, trees, water, the light list, the cascades' schedule
+        world.time = shownT; world.atmo._frame = atmoF - 3;
+        for (let i = 0; i < 3; i++) worldStep(0);
+        world.time = 0;
+        const su = world.atmo.sky.material.uniforms; su.uTime.value = 0; su.uCloudOffset.value.set(0.13, 0.41);
+        facadeGrade.update(cam, true); air.update(cam);
+        if (carShadows) carShadows.update(cam.position);
+        if (steamAcc) steam.vents.forEach((v, i) => { v.acc = steamAcc[i]; });
+        steam.preroll(4, cam); // the same pre-roll as after()'s (seeded, from the same accumulators)
+        shadowFrame = shadowF;
+      },
     },
     settings: {
       'postfx.ssr': { get: () => !!(postfx && postfx.ssr), set: (v) => { if (postfx && postfx.gbuffer) postfx.set('ssr', v ? S.postfx.ssr || true : false); } },

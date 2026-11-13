@@ -1,6 +1,19 @@
 # Changelog
 
 ## Unreleased
+- Bench harness (`createBenchHarness`, `src/core/Bench.js`): an optional `live: { dt, begin, frame, end }` hook group.
+  With it, `bench()` (and so `run()`, `report()` and `npm run perf`) measures frames as played: `begin()` undoes what
+  `quiet()` holds (TAA and volumetric jitter and history, eye adaptation), each warm-up and timed frame is
+  `frame(dt)` (the play loop's render-side work: atmosphere and shadow-cascade schedules, clustered light lists, GPU
+  steam, the car probe; no gameplay, physics, traffic or streaming) and then the render, warm-up is at least 12
+  frames (whole 12-frame cycles until 150 ms ran, while the GPU clocks up), and `end()` (puts back exactly what the
+  frames moved), `quiet()` and warm frames (as many renders in all as a held bench, modulo 12: renderFn's shadow-map
+  cadences end in the same phase) return the harness to the capture state: captures after a bench hash equal to
+  captures before it, and `info()` counts the same passes. The three demos pass one. Measured ms rise (a held frame
+  resolved TAA from a fresh history and skipped the far cascade, light uploads, particles and the probe); the
+  pictures do not change. Without `live`, `bench()` is unchanged.
+- nyc-night: in play the moon's near shadow map is tied to the frames between the far map's (it was a counter of its
+  own that happened to alternate with it; with both maps on the same frames the bench read about 0.7 ms more).
 - `TextureSets.options.maxAnisotropy` caps the texture arrays and `loadTextureSet` maps (unset = the GPU maximum, as
   before); the two city demos pass the desktop tier's `textures.anisotropy` (8): 16x on grazing streets costs GPU time.
 - Atmosphere `shadows: { skipUnlit: true }` (on in both quality tiers; Halloween passes the tier's): the directional
