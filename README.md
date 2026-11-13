@@ -63,7 +63,7 @@ git clone https://github.com/BrandeisPatrick/web-engine.git
 cd web-engine
 npm install
 npm run dev     # the demos at http://localhost:5190
-npm test        # 41 headless test suites
+npm test        # 42 headless test suites
 ```
 
 ### Use the engine in a project
@@ -156,7 +156,7 @@ changed in each.
 |---|---|
 | `npm run dev` | Serves the demos at http://localhost:5190 |
 | `npm run build` | Builds every demo into `dist/`; `npm run preview` serves the build at http://localhost:5191 |
-| `npm test` | Runs the 41 headless suites |
+| `npm test` | Runs the 42 headless suites |
 | `npm run types` | Emits TypeScript declarations into `types/`; `npm run types:check` compiles a strict TypeScript consumer against them |
 | `npm run smoke` | Drives the demos in Chrome with Playwright and checks stability and the look limits |
 | `npm run bench` | Measures frame times per pose (ENGINE.md, "Measurement protocol") |
@@ -183,7 +183,7 @@ Installed as a git submodule listed in a game's `workspaces`, the engine resolve
 
 ### Tests
 
-`npm test` runs 41 suites in Node, with no browser:
+`npm test` runs 42 suites in Node, with no browser:
 
 - `test/car-sim.mjs`: the vehicle model (`ROADSTER_SPEC`) and the PhysicsWorld queries; the determinism gate
   (bit-identical since 0.4.0).
@@ -194,8 +194,8 @@ Installed as a git submodule listed in a game's `workspaces`, the engine resolve
   input, animation and the character controller.
 - `test/dyn-*.mjs`, `cloth-mesh`, `character-dyn`, `ragdoll`: the dynamics, from shapes and joints to cloth, soft
   bodies, buoyancy and fracture.
-- `test/gpu-particles.mjs`, `clustered`, `shadows`, `postfx-options`, `gbuffer-chunks`, `ssr-ao`, `volumetric`,
-  `blur-dof-lut`, `water`: the render pipeline's shaders, options and defaults.
+- `test/gpu-particles.mjs`, `clustered`, `shadows`, `skip-unlit`, `postfx-options`, `gbuffer-chunks`, `ssr-ao`,
+  `volumetric`, `blur-dof-lut`, `water`: the render pipeline's shaders, options and defaults.
 - `test/halloween-enemies.mjs`, `halloween-depth`, `miami-car`, `nyc-traffic-mix`: the demos' rules and engine
   options.
 

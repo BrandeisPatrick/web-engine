@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Atmosphere `shadows: { skipUnlit: true }` (on in both quality tiers; Halloween passes the tier's): the directional
+  light loop skips RE_Direct where the light is black at the pixel (cascade lights, full shadow), which adds exactly 0
+  there; `installSkipUnlitChunk` (`render/shadowSkipUnlit.js`), `test/skip-unlit.mjs`. Off, the shaders are unchanged.
 - `world/Shore.js` reads its texture sets from the shared texture root (`textureBase()`, so `TextureSets.options.base`
   applies) and no longer requests a set the root's `manifest.json` does not list: a game that ships its own sets gets
   no 404 per map (the two city demos logged eight each), and the procedural stand-in is used at once. Without a

@@ -9,7 +9,7 @@
 //   const atmo = new Atmosphere({ scene, renderer, camera?, timeOfDay: 'golden' | hours,
 //                                 shadows: { cascades: 2, near: 45, far: [260, 420, 650], kernel: 'pcf' }, ...tunings });
 //   shadows.cascades 1 | 2 | 3 | 4: the sun light (near cascade) + black shadow-only lights sunMid (3+), sunMid2 (4)
-//   and sunFar (always the farthest); shadows.kernel 'pcf' | 'fast' | 'pcss' (DEFAULT_SHADOWS)
+//   and sunFar (always the farthest); shadows.kernel 'pcf' | 'fast' | 'pcss'; shadows.skipUnlit (DEFAULT_SHADOWS)
 //   (legacy: new Atmosphere(scene, renderer, opts) followed by atmo.build())
 //   atmo.update(cameraPos, dt?)    per frame: sky follows the camera, clouds drift, cascades + flare follow
 //   atmo.setTimeOfDay(hoursOrPreset) / atmo.setTime(hours)
@@ -32,6 +32,7 @@ import { Lensflare, LensflareElement } from 'three/addons/objects/Lensflare.js';
 import { clamp, smoothstep } from './noise.js';
 import { makeCloudTexture, sampleCloud, makeFlareTextures } from './skyTextures.js';
 import { installCascadeShadowChunk, MAX_CASCADES } from './shadowCascade.js';
+import { installSkipUnlitChunk } from './shadowSkipUnlit.js';
 import {
   SHADOW_KERNELS, installFastShadowChunk, installPcssShadowChunk, createShadowDepthTexture, attachShadowDepth, setFastShadowMaps,
   setPcssShadowParams, applyShadowKernel,
@@ -286,6 +287,8 @@ const DEFAULT_SHADOWS = {
   lightSize: 0.5,         // 'pcss': angular diameter of the sun (degrees): penumbra width per metre of caster distance
   maxPenumbra: 24,        // 'pcss': widest penumbra in near-map texels (the same width in metres on the other maps)
   temporalNoise: false,   // 'pcss': re-seed the per-pixel sample rotation every frame (with dt > 0), for TAA to average
+  skipUnlit: false,       // skip the BRDF of a directional light that is black at the pixel (cascade lights, full
+                          // shadow): the same picture, less shading (global chunk patch, shadowSkipUnlit.js)
 };
 
 export class Atmosphere {
@@ -297,7 +300,9 @@ export class Atmosphere {
    * @param {THREE.Camera} [o.camera]  cascades lead its view direction; lens flare
    * @param {number|string} [o.timeOfDay='golden']  hours 0..24 or a preset name (timePresets)
    * @param {object} [o.shadows]  { cascades: 1|2|3|4, near (m), far (m or [m by height step]), mid, kernel:
-   *        'pcf'|'fast'|'pcss', lightSize, maxPenumbra, ... } see DEFAULT_SHADOWS
+   *        'pcf'|'fast'|'pcss', lightSize, maxPenumbra, skipUnlit, ... } see DEFAULT_SHADOWS. skipUnlit (default
+   *        false): installs the global skip-unlit chunk patch here, before any material compiles; once installed it
+   *        applies to every lit material on the page
    * @param {boolean} [o.build]  build immediately (default true for the options form, false for the legacy form)
    */
   constructor(o = {}, legacyRenderer, legacyOpts) {
@@ -313,6 +318,7 @@ export class Atmosphere {
     this.cascaded = want > 1 && CASCADES;
     // cascades in use: 3 / 4 upgrade the global chunk patch (2 keeps its 0.6.0 text); 1 when unavailable / off
     this.cascadeCount = !this.cascaded ? 1 : want > 2 && installCascadeShadowChunk(want) ? want : 2;
+    if (sh.skipUnlit) installSkipUnlitChunk(); // chunk text is not in three's program key: before any material compiles
     this.cascadeLights = []; // shadow-casting sun lights in three's shadow order: near, middle..., far (build)
     this.shadowKernel = 'pcf'; // kernel in effect; build() selects sh.kernel through setShadowKernel
     const t = opts.timeOfDay ?? 'golden';

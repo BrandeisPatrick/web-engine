@@ -26,7 +26,7 @@ export const QUALITY_TIERS = {
   desktop: {
     label: 'Mac / desktop', blurb: 'Full lighting: reflections, light shafts, soft shadows, every street lamp lit.',
     engine: { maxPixelRatio: 2, adaptiveResolution: true },
-    shadows: { cascades: 3, kernel: 'pcss', nearMapSize: 2048 },
+    shadows: { cascades: 3, kernel: 'pcss', nearMapSize: 2048, skipUnlit: true },
     postfx: { gbuffer: true, aa: 'taa', ssr: true, volumetric: true, motionBlur: 0 },
     passes: { ao: true, bloom: true },
     lights: { clustered: true, clusteredRange: 220 },
@@ -37,7 +37,7 @@ export const QUALITY_TIERS = {
   mobile: {
     label: 'Phone / tablet', blurb: 'Lighter: fewer lit lamps, simpler shadows, no screen-space reflections. Saves battery.',
     engine: { maxPixelRatio: 1.5, adaptiveResolution: true },
-    shadows: { cascades: 1, kernel: 'fast', singleMapSize: 1024 },
+    shadows: { cascades: 1, kernel: 'fast', singleMapSize: 1024, skipUnlit: true },
     postfx: { gbuffer: false, aa: 'fxaa', ssr: false, volumetric: false, motionBlur: 0 },
     passes: { ao: false, bloom: true },
     lights: { clustered: false, clusteredRange: 90 },

@@ -223,7 +223,7 @@ async function boot() {
     scene, renderer, camera, timeOfDay: 23.6, skyRadius: 1000, flare: false, cloudWind: [4, 1.5], looks: LOOKS,
     moon: { azimuth: 22, elevation: 13 }, moonIntensity: 1.9, moonColor: NIGHT.moon, fogDensity: [0.022, 0],
     moonScatter: 0.05, // the ground mist glows toward the moon (and the desktop volumetric pass marches moonlight)
-    shadows: LOW ? { cascades: 1, single: 24, singleMapSize: 1024, kernel: 'fast' } : { cascades: 1, single: 34, singleMapSize: 2048, kernel: 'fast' },
+    shadows: { ...(LOW ? { cascades: 1, single: 24, singleMapSize: 1024, kernel: 'fast' } : { cascades: 1, single: 34, singleMapSize: 2048, kernel: 'fast' }), skipUnlit: QUALITY.settings.shadows.skipUnlit },
     maxCasterHeight: 24,
   });
   // Halloween night: a deep indigo zenith over a violet horizon glow, on both the visible sky and the one the

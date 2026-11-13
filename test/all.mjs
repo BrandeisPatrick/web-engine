@@ -36,6 +36,8 @@ const SUITES = [
   { file: 'gpu-particles.mjs', shim: true },
   { file: 'clustered.mjs' },
   { file: 'shadows.mjs' },
+  // directional lights black at the pixel skip their BRDF (shadows.skipUnlit)
+  { file: 'skip-unlit.mjs' },
   { file: 'postfx-options.mjs' },
   { file: 'gbuffer-chunks.mjs' },
   // render (0.8.0): screen-space reflections + AO normals, volumetrics, motion blur / DoF / LUT, water refraction
