@@ -111,7 +111,7 @@ Use only what is in `samples/public/`. Each demo folder lists every file, author
 ## Using the engine from another project
 
 `npm install three github:BrandeisPatrick/web-engine` (it is not on the npm registry). The package ships `src/`,
-`types/`, `tools/`, this file, `ENGINE.md`, `docs/HOWTO.md` and the two starter folders under
+`types/`, `tools/`, this file, `ENGINE.md`, `docs/HOWTO.md`, `docs/ASSETS.md` and the two starter folders under
 `node_modules/@vibe/engine/`. It does not ship `samples/public/`, so the starters' model and texture files are not
 there:
 
