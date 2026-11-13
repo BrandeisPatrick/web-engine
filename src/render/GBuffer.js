@@ -599,7 +599,7 @@ export class GBuffer {
    * Per-object velocity for dynamic meshes (every Mesh under object3d; skinned meshes: model-matrix motion only).
    * Each tracked material needs its own uniform: a material shared with another mesh in the same scene graph (or
    * with another tracked mesh) is cloned (shallow: same textures, shared uniform objects, same patches) and a
-   * warning is printed once; { clone: true } always clones. Track after adding to the scene, so that sharing is
+   * console.info note is printed once (expected, nothing to do); { clone: true } always clones (no note). Track after adding to the scene, so that sharing is
    * visible. A clone of a tracked mesh (Object3D.clone) shares its material: track it too. Returns the count added.
    */
   track(object3d, { clone = false } = {}) {
@@ -807,7 +807,10 @@ export class GBuffer {
       if (t === undefined) {
         t = m;
         if (forceClone || shared.has(m) || this._owner.has(m)) {
-          if (!forceClone) this._warnOnce('shared', `[GBuffer] track(): material '${m.name || m.type}' is shared; cloned for per-object velocity (warned once)`);
+          if (!forceClone && !this._warned.has('shared')) { // a note, not a problem: nothing needs doing
+            this._warned.add('shared');
+            console.info(`[GBuffer] track(): material '${m.name || m.type}' is shared with other meshes, so the tracked mesh got its own copy (per-object velocity needs one). This is expected; nothing to do. (Noted once; track(obj, { clone: true }) skips this note.)`);
+          }
           t = cloneMaterial(m, (k) => this._unwound(m, k));
           if (this._mats.has(m)) this._syncMaterial(t);
         }

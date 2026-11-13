@@ -10,7 +10,7 @@
 // loading. On macOS a SwiftShader renderer (no GPU) fails. Exit code 1 on any failure. The `-mobile` pages are the same
 // sample on the mobile quality tier (`?quality=mobile`, core/Quality.js).
 //
-//   node test/browser/smoke.mjs                        # nyc-night, miami-drive, halloween, their -mobile variants, assets
+//   node test/browser/smoke.mjs                        # nyc-night, miami-drive, halloween, the starters, their -mobile variants, assets
 //   node test/browser/smoke.mjs nyc-night --headed --size=1600x900 [--config=other.vite.config.js] [--no-look]
 import {
   defaultSize, repoRoot, legacyGlobals, readyTimeoutMs, parseArgs, parseSize, startVite, resolvePage, launchChrome,
@@ -22,9 +22,14 @@ const PAGE_QUERY = {
   'nyc-night': 'quality=desktop', 'nyc-night-mobile': 'quality=mobile',
   'miami-drive': 'quality=desktop', 'miami-drive-mobile': 'quality=mobile',
   halloween: 'quality=desktop', 'halloween-mobile': 'quality=mobile',
+  'starter-walk': 'quality=desktop', 'starter-walk-mobile': 'quality=mobile',
+  'starter-drive': 'quality=desktop', 'starter-drive-mobile': 'quality=mobile',
 };
 // pages that are another page with a different query, and the poses they run (default: all)
-const PAGE_PATH = { 'nyc-night-mobile': 'nyc-night', 'miami-drive-mobile': 'miami-drive', 'halloween-mobile': 'halloween' };
+const PAGE_PATH = {
+  'nyc-night-mobile': 'nyc-night', 'miami-drive-mobile': 'miami-drive', 'halloween-mobile': 'halloween',
+  'starter-walk-mobile': 'starter-walk', 'starter-drive-mobile': 'starter-drive',
+};
 const PAGE_POSES = {};
 // in-page checks after each pose: a failure message or ''
 const PAGE_CHECK = {};
@@ -60,7 +65,13 @@ function lookFailure(look, lim) {
 const STEP_MS = 90000;
 
 const args = parseArgs();
-const pages = args._.length ? args._ : args.pages ? String(args.pages).split(',') : ['nyc-night', 'nyc-night-mobile', 'miami-drive', 'miami-drive-mobile', 'halloween', 'halloween-mobile', 'assets'];
+const pages = args._.length ? args._ : args.pages ? String(args.pages).split(',') : [
+  'nyc-night', 'nyc-night-mobile', 'miami-drive', 'miami-drive-mobile', 'halloween', 'halloween-mobile',
+  // the starters (samples/starter-*): no poses, so they are checked for booting clean and drawing something
+  'starter-walk', 'starter-walk-mobile', 'starter-drive', 'starter-drive-mobile',
+  // the Asset library page
+  'assets',
+];
 const size = parseSize(args.size || defaultSize);
 const headless = !args.headed;
 const NO_LOOK = !!args['no-look'];
@@ -107,6 +118,7 @@ try {
           const info = await step(() => window.__sample.info(), undefined, 'info');
           row.renderer = info.renderer;
           poseRows.push({ page: id, pose: '(none)', hash: '-', stable: '-', draws: info.drawCalls, tris: info.triangles, size: fmtSize(info.size) });
+          if (!(info.drawCalls > 0)) failures.push(`${id}: the page is ready but drew nothing (info().drawCalls ${info.drawCalls})`);
         }
         for (const pose of ids) {
           const pr = { page: id, pose, hash: '', stable: '', draws: null, tris: null, size: '' };

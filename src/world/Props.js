@@ -29,7 +29,7 @@ import * as THREE from 'three';
 import { RBIT, samplePolyline } from './RoadNetwork.js';
 import { pointInPoly, ringBounds, signedArea, mulberry32, hashStr, clamp } from './geom.js';
 import { buildTreeMeshes } from './Vegetation.js';
-import { NearestLights } from './NearestLights.js';
+import { NearestLights } from '../render/NearestLights.js';
 import { makeVehicleGeometry, VEHICLE_SPECS, pickVehicleColor, createVehicleMaterial, PartBuilder } from './Vehicles.js';
 import {
   FURNITURE_META, makeFurnitureGeometry, makeShelterGlassGeometry, makePanelGeometry, makeDecalGeometry,

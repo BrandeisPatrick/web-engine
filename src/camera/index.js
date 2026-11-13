@@ -9,3 +9,5 @@ export { FirstPersonRig } from './FirstPersonRig.js';
 import { clamp, smooth01, damp, wrapPi, springStep } from './CameraRig.js';
 /** Small math helpers used by the rigs (namespaced to avoid clashing with other layers). */
 export const CameraMath = Object.freeze({ clamp, smooth01, damp, wrapPi, springStep });
+/** @typedef {import('./ChaseRig.js').ChaseTargetState} ChaseTargetState  what ChaseRig reads from its target's state */
+/** @typedef {import('./ThirdPersonRig.js').ThirdPersonTargetState} ThirdPersonTargetState  what ThirdPersonRig reads */

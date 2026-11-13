@@ -34,6 +34,13 @@ const _desired = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
 const _euler = new THREE.Euler(0, 0, 0, 'YXZ');
 
+/**
+ * @typedef {{ facing?: number, heading?: number, [key: string]: any }} ThirdPersonTargetState
+ *   What ThirdPersonRig reads from setTarget's state getter (optional): `facing` (radians, 0 = -Z, + turns left), the
+ *   character's facing that recentre / autoRecentre turn behind; else `heading`; with neither, the target's local -Z.
+ *   Other fields are ignored (a game may keep speed / grounded / velocity in the same object).
+ */
+
 export class ThirdPersonRig extends CameraRig {
   /**
    * @param {THREE.PerspectiveCamera} camera
@@ -104,6 +111,11 @@ export class ThirdPersonRig extends CameraRig {
   recentre() { if (this.target) this.yaw = targetFacing(this.target, this.getState && this.getState(), this.yaw); }
 
   /** Follow an Object3D; also turns the rig behind it. */
+  /**
+   * Follow a character and turn the rig behind it: `rig.setTarget(player, () => state)`.
+   * @param {THREE.Object3D} object3d
+   * @param {(() => ThirdPersonTargetState)|ThirdPersonTargetState|null} [stateGetter]
+   */
   setTarget(object3d, stateGetter) { super.setTarget(object3d, stateGetter); this.recentre(); }
 
   /** Place the camera now (when active with a target), else on the next update. */

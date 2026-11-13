@@ -195,7 +195,7 @@ export async function loadPbrTextures(renderer, { size = 1024, onProgress } = {}
   // ground sets: plain THREE textures (KTX2 CompressedTextures when compressed, else browser-decoded JPGs), null where
   // missing; fetched in parallel with the array so their transcode / decode overlaps the array packing
   const ground = {};
-  const groundP = Promise.all(Object.entries(GROUND_SETS).map(async ([k, id]) => { ground[k] = await loadTextureSet(id, { renderer, base, manifest }); }));
+  const groundP = Promise.all(Object.entries(GROUND_SETS).map(async ([k, id]) => { ground[k] = await loadTextureSet(id, { renderer, base, manifest, quiet: true }); }));
   const arr = await makeTextureArray(renderer, PBR_SETS, { size, base, manifest, onProgress });
   await groundP;
   return { ...arr, ground };

@@ -66,6 +66,9 @@ const SUITES = [
   // the asset catalogue (tools/catalog-assets.mjs): every samples/public file covered, entries resolvable, credits
   // complete, catalog.json and docs/ASSETS.md current
   { file: 'asset-catalog.mjs' },
+  // agent usability: ROAD_CAR_SPEC, loadTextureSet role keys / warnings, missing-clip errors, addStaticBox object
+  // forms, NearestLights from the render layer, PoseInterpolator
+  { file: 'agent-usability.mjs' },
 ];
 let failed = 0, ran = 0;
 const t0 = performance.now();

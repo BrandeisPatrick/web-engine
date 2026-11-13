@@ -295,19 +295,41 @@ const DEFAULT_SHADOWS = {
                           // shadow): the same picture, less shading (global chunk patch, shadowSkipUnlit.js)
 };
 
+/**
+ * @typedef {object} AtmosphereOptions
+ * @property {THREE.Scene} scene
+ * @property {THREE.WebGLRenderer|null} renderer  null: headless (lights, sun direction and darkness only; no
+ *   environment map, sky cube, horizon sampling or lens flare)
+ * @property {THREE.Camera} [camera]  cascades lead its view direction; lens flare
+ * @property {number|string} [timeOfDay='golden']  hours 0..24 or a preset name ('dawn', 'golden', 'dusk', 'night', ...:
+ *   TIME_PRESETS)
+ * @property {object} [shadows]  { cascades: 1|2|3|4, near (m), far, mid, kernel: 'pcf'|'fast'|'pcss', lightSize,
+ *   maxPenumbra, skipUnlit, ... } (see DEFAULT_SHADOWS; a quality tier's `settings.shadows` fits as is)
+ * @property {boolean} [build=true]  build immediately
+ * @property {Object<string, number>} [timePresets]  preset name -> hours (default TIME_PRESETS)
+ * @property {object} [sun]  sun model overrides (DEFAULT_SUN)
+ * @property {object} [looks]  per-time look table (DEFAULT_LOOKS)
+ * @property {number} [skyGain=0.38]
+ * @property {number} [skyRadius=4000]
+ * @property {number} [sunIntensity=3.9]
+ * @property {number} [moonIntensity=0.3]
+ * @property {number} [moonScatter=0]  opt-in moonlit fog glow at night
+ * @property {number[]} [moonColor]  linear [r, g, b]
+ * @property {{ azimuth: number, elevation: number }} [moon]  degrees
+ * @property {number[]} [fogDensity]  [day density, extra at night]
+ * @property {object|false} [flare]  lens flare spec (DEFAULT_FLARE), false = none
+ * @property {number} [maxCasterHeight=200]  tallest shadow caster (m)
+ * @property {number[]} [cloudWind]  [x, z] m/s at cloud height
+ * @property {number} [shadowNearHalf]  legacy: shadows.near
+ */
+
 export class Atmosphere {
   /**
-   * @param {object|THREE.Scene} o  options object ({ scene, renderer, ... }), or legacy (scene, renderer, opts)
-   * @param {THREE.Scene} o.scene
-   * @param {THREE.WebGLRenderer|null} o.renderer  (null: headless - lights, sun direction and darkness only; no
-   *        environment map, sky cube, horizon sampling or lens flare)
-   * @param {THREE.Camera} [o.camera]  cascades lead its view direction; lens flare
-   * @param {number|string} [o.timeOfDay='golden']  hours 0..24 or a preset name (timePresets)
-   * @param {object} [o.shadows]  { cascades: 1|2|3|4, near (m), far (m or [m by height step]), mid, kernel:
-   *        'pcf'|'fast'|'pcss', lightSize, maxPenumbra, skipUnlit, ... } see DEFAULT_SHADOWS. skipUnlit (default
-   *        false): installs the global skip-unlit chunk patch here, before any material compiles; once installed it
-   *        applies to every lit material on the page
-   * @param {boolean} [o.build]  build immediately (default true for the options form, false for the legacy form)
+   *   new Atmosphere({ scene, renderer, camera, timeOfDay: 'dusk', shadows: quality.settings.shadows });
+   *   per frame: atmosphere.update(camera.position, dt);
+   * @param {AtmosphereOptions|THREE.Scene} [o]  options object, or (legacy) the scene followed by renderer and opts
+   * @param {THREE.WebGLRenderer|null} [legacyRenderer]  legacy form only
+   * @param {Partial<AtmosphereOptions>} [legacyOpts]  legacy form only
    */
   constructor(o = {}, legacyRenderer, legacyOpts) {
     const legacy = !!(o && o.isScene);
@@ -834,8 +856,9 @@ export class Atmosphere {
   }
 
   /**
-   * Per frame. cam: camera WORLD POSITION (Vector3). dt (s): optional; when omitted the wall clock is used.
-   * Allocation-free.
+   * Per frame: `atmosphere.update(camera.position, dt)`. Allocation-free.
+   * @param {THREE.Vector3} cam  the camera's WORLD POSITION (not the camera)
+   * @param {number} [dt]  seconds; when omitted the wall clock is used
    */
   update(cam, dt) {
     if (!cam) return;

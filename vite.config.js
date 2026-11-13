@@ -7,7 +7,13 @@ const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 // Dev server / build for the samples: a multi-page app rooted at samples/ (index.html lists them; each sample is a
 // folder with its own index.html, served at /<name>/). Samples import the engine as the package `@vibe/engine`;
 // inside this repository that resolves to ./src (a game that installs the package gets it from node_modules).
-const SAMPLES = ['nyc-night', 'miami-drive', 'halloween'].filter((s) => fs.existsSync(here(`./samples/${s}/index.html`)));
+// Every samples/<name>/index.html is a page: a new sample folder needs no registration here (list it on
+// samples/index.html for people). `public` (static files), `shared` (modules) and `dev` (loose dev pages) are not
+// samples; `assets` (the Asset library page) is built by the second pass below.
+const NOT_SAMPLES = new Set(['public', 'shared', 'dev', 'assets']);
+const SAMPLES = fs.readdirSync(here('./samples'), { withFileTypes: true })
+  .filter((d) => d.isDirectory() && !NOT_SAMPLES.has(d.name) && fs.existsSync(here(`./samples/${d.name}/index.html`)))
+  .map((d) => d.name).sort();
 const input = { index: here('./samples/index.html') };
 for (const s of SAMPLES) input[s] = here(`./samples/${s}/index.html`);
 // The Asset library page (samples/assets/: the asset catalogue, with 3D previews that run engine and demo modules) is
