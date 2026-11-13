@@ -81,7 +81,10 @@
 // premultiplied, so the blur averages hits and misses correctly. A tap contributes by a Gaussian of its offset times
 // exp(-|z - zc| / (0.05 + 0.02 zc)) times max(0, N.Nc)^8 with z, N the tap's own full-resolution depth and G-buffer
 // normal (so a reflection never bleeds from the road onto the kerb face or a car); pixels that wrote no G-buffer
-// normal pass through. Cost: 2 x (1 + 9 x 3) reads per output pixel.
+// normal pass through. Cost: 2 x (1 + 9 x 3) reads per output pixel, but where the centre and all eight taps of the
+// traced texture are exactly 0 (no reflection within reach: rough walls, sky) the output is 0 whatever the weights,
+// so the taps are read first and the depth / normal reads skipped there (2 x (2 + 8) reads; same output; elsewhere
+// up to 8 more reads of the traced texture, cache hits).
 // Limitations:
 //   - jitter does not integrate under this TAA: the TAA_SSR hook composites the SAME SSR texel into all 9 taps, so the
 //     clip box gets no variance from the reflection and the history is clipped to the current frame's hit / miss
@@ -297,14 +300,26 @@ const SSRBlurShader = {
       vec4 gb = texelFetch( tNormal, ip, 0 );
       int flags = engineGbFlags( gb.a );
       if ( ( flags & ENGINE_GB_WROTE ) == 0 || ( flags & ENGINE_GB_HAS_NORMAL ) == 0 ) { gl_FragColor = c; return; }
+      float r = uRadius * mix( 0.35, 1.0, clamp( gb.b / uMaxRoughness, 0.0, 1.0 ) );
+      // the taps' reflections first (the small texture): where they and the centre are all exactly 0 the result is 0
+      // whatever the weights, so the depth / normal reads are skipped (the tap positions need the centre's
+      // roughness). The taps are read again below (cache hits): an array of the eight cost more than it saved.
+      bool lit = any( notEqual( c, vec4( 0.0 ) ) );
+      if ( ! lit ) for ( int i = - 4; i <= 4; i ++ ) {
+        if ( i == 0 ) continue;
+        float t = float( i ) * 0.25; // -1 .. 1 across the radius
+        vec2 uv = vUv + uDir * ( t * r );
+        if ( uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0 ) continue;
+        if ( any( notEqual( texture2D( tSsr, uv ), vec4( 0.0 ) ) ) ) { lit = true; break; }
+      }
+      if ( ! lit ) { gl_FragColor = vec4( 0.0 ); return; }
       float zc = linearDepth( texelFetch( tDepth, ip, 0 ).x );
       vec3 nc = engineOctDecode( gb.rg );
-      float r = uRadius * mix( 0.35, 1.0, clamp( gb.b / uMaxRoughness, 0.0, 1.0 ) );
       float zk = 1.0 / ( 0.05 + 0.02 * zc );
       vec4 sum = c; float wsum = 1.0;
       for ( int i = - 4; i <= 4; i ++ ) {
         if ( i == 0 ) continue;
-        float t = float( i ) * 0.25; // -1 .. 1 across the radius
+        float t = float( i ) * 0.25;
         vec2 uv = vUv + uDir * ( t * r );
         if ( uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0 ) continue;
         ivec2 tp = min( ivec2( uv * uRes ), mx );

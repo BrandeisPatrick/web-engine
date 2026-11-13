@@ -9,6 +9,8 @@
   `test/texture-manifest.mjs`. The rendered frames are unchanged (pixel differences at load-to-load noise).
 - `samples/index.html` declares an empty icon (no favicon 404).
 - `test/vehicles-hd.mjs`: the build-time check is a blow-up guard (1500 ms), not a machine-speed limit.
+- `SSRPass` denoise: where the centre and all eight taps of the reflection buffer are 0 the blur writes 0 without
+  reading the full-resolution depth and normal (fewer reads, the same output).
 
 ## 1.1.0-beta.1 — 2026-11-12 — NYC and Miami demos, quality tiers, asset detail
 A pre-release from the `feat/nyc-miami-demos` branch. Before / after captures: `docs/BEFORE-AFTER.md`. Known open

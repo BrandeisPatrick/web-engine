@@ -182,6 +182,33 @@ const gbStub = { normal: new THREE.Texture() };
   check('composite: weight 0 leaves the colour, weight 1 replaces it', comp([1, 2, 3], [0, 0, 0, 0]).join() === '1,2,3' && comp([1, 2, 3], [4, 5, 6, 1]).join() === '4,5,6');
 }
 
+// ================================================================================================= SSRPass: denoise blur
+{
+  const count = (s, re) => (s.match(re) || []).length;
+  const p = new SSRPass(cam, hist, gbStub);
+  check('denoise 0: no blur built', p._blurMat === null);
+  p.denoise = 4;
+  const m = p._blurMat, def = m.fragmentShader;
+  check('denoise 4: blur built', m !== null);
+  // the default blur: the 1.1.0-beta.1 weights from the full-resolution depth / normal, now behind the zero skip
+  check('default blur: full-resolution depth / normal, centre + one each per tap', /uniform highp sampler2D tDepth;/.test(def) && /uniform sampler2D tNormal;/.test(def)
+    && def.includes('vec4 gb = texelFetch( tNormal, ip, 0 );') && def.includes('float zc = linearDepth( texelFetch( tDepth, ip, 0 ).x );')
+    && def.includes('vec4 g = texelFetch( tNormal, tp, 0 );') && def.includes('float z = linearDepth( texelFetch( tDepth, tp, 0 ).x );'));
+  check('default blur: no-normal pixels pass through before anything else is read', /vec4 c = texture2D\( tSsr, vUv \);[\s\S]*ENGINE_GB_HAS_NORMAL \) == 0 \) \{ gl_FragColor = c; return; \}[\s\S]*bool lit = /.test(def));
+  check('default blur: weights and sum unchanged (Gaussian * depth * normal^8, sum / wsum)', def.includes('float w = exp( - 2.0 * t * t ) * exp( - abs( z - zc ) * zk ) * nd;')
+    && def.includes('float nd = max( dot( nc, engineOctDecode( g.rg ) ), 0.0 ); nd *= nd; nd *= nd; nd *= nd;') && def.includes('sum += texture2D( tSsr, uv ) * w; wsum += w;') && def.includes('gl_FragColor = sum / wsum;')
+    && def.includes('vec4 sum = c; float wsum = 1.0;') && def.includes('float r = uRadius * mix( 0.35, 1.0, clamp( gb.b / uMaxRoughness, 0.0, 1.0 ) );'));
+  check('zero skip: the 8 taps read before the depth / normal; all 0 with the centre -> 0, before any tap depth / normal read',
+    /bool lit = any\( notEqual\( c, vec4\( 0\.0 \) \) \);\s*if \( ! lit \) for [\s\S]*if \( any\( notEqual\( texture2D\( tSsr, uv \), vec4\( 0\.0 \) \) \) \) \{ lit = true; break; \}[\s\S]*if \( ! lit \) \{ gl_FragColor = vec4\( 0\.0 \); return; \}[\s\S]*texelFetch\( tDepth, ip/.test(def)
+    && def.indexOf('if ( ! lit ) {') < def.indexOf('texelFetch( tNormal, tp') && count(def, /texture2D\( tSsr/g) === 3 && !/\bs\[/.test(def));
+  check('zero skip: both loops skip the same off-screen taps (same tap uv)', count(def, /vec2 uv = vUv \+ uDir \* \( t \* r \);/g) === 2 && count(def, /if \( uv\.x < 0\.0 \|\| uv\.y < 0\.0 \|\| uv\.x > 1\.0 \|\| uv\.y > 1\.0 \) continue;/g) === 2);
+  check('default blur text: balanced, no GLSL3 qualifiers', glslBalanced(def) && !/#version/.test(def));
+  // the zero skip is exact: the default output where every SSR sample is 0 is (0 + sum of 0 * w) / wsum = 0, wsum >= 1
+  check('zero skip maths: all-zero taps give exactly 0 for any weights', [0.3, 1e-30, 0, 7].every((w) => (0 + 0 * w * 8) / (1 + w * 8) === 0));
+
+  p.dispose();
+}
+
 // ================================================================================================= SSRPass: render() on a stub
 {
   const r = stubRenderer();
@@ -219,6 +246,15 @@ const gbStub = { normal: new THREE.Texture() };
 
   // nothing allocates per render
   gate(inRange, note, 'SSR render()', bytesPerCall((n) => { for (let i = 0; i < n; i++) p.render(r, null, read); }, 50000), { unit: 'frame' });
+
+  // denoise: trace -> blur H -> blur V, no allocation
+  const bound = [], sr = r.setRenderTarget;
+  r.setRenderTarget = (t) => { bound.push(t); sr(t); };
+  p.denoise = 3; p.render(r, null, read);
+  check('render, denoise: trace -> blur H -> blur V, texture = blur V', bound.join() === [p._rt, p._blurRts[0], p._blurRts[1]].join() && bound[2] === p._blurRts[1] && p.texture === p._blurRts[1].texture);
+  r.setRenderTarget = sr;
+  gate(inRange, note, 'SSR render() (denoise)', bytesPerCall((n) => { for (let i = 0; i < n; i++) p.render(r, null, read); }, 50000), { unit: 'frame' });
+  p.denoise = 0;
   check('dispose: no throw', !throws(() => { p.dispose(); q.dispose(); }));
 }
 
