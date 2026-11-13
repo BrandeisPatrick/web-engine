@@ -9,6 +9,7 @@ A game engine for the web browser, built on Three.js and WebGL2. Physics, render
 city-scale worlds come as plain JavaScript modules in one package, `@vibe/engine`. Its only dependency is `three`.
 
 **[Live demos](https://brandeispatrick.github.io/web-engine/)** ·
+**[Build a game (AGENTS.md)](AGENTS.md)** ·
 **[Documentation](ENGINE.md)** ·
 **[Changelog](CHANGELOG.md)** ·
 **[Releases](https://github.com/BrandeisPatrick/web-engine/releases)**
@@ -54,6 +55,14 @@ The source is plain ES modules with JSDoc types. TypeScript declarations ship wi
 
 ## Getting started
 
+### Start a game from a starter
+
+The quickest way in is to copy a starter: `samples/starter-walk/` (a third-person walker with an animated character)
+or `samples/starter-drive/` (a car on a road). Each is one `main.js` of under 200 lines that uses only the public
+imports. Copy the folder to `samples/<name>/`, run `npm run dev` and open `http://localhost:5190/<name>/`.
+[AGENTS.md](AGENTS.md) is the short guide (commands, conventions, the API by task, known traps) and
+[docs/HOWTO.md](docs/HOWTO.md) has one tested recipe per task.
+
 ### Run the demos locally
 
 Requires Node 20.19 or newer.
@@ -62,7 +71,7 @@ Requires Node 20.19 or newer.
 git clone https://github.com/BrandeisPatrick/web-engine.git
 cd web-engine
 npm install
-npm run dev     # the demos at http://localhost:5190
+npm run dev     # the demos and starters at http://localhost:5190
 npm test        # the headless test suites (Node, no browser)
 ```
 
@@ -98,8 +107,10 @@ await engine.load();
 engine.start();
 ```
 
-The API, layer by layer, is in [ENGINE.md](ENGINE.md). The demos under `samples/` are full games spread over many
-modules each; read them for one technique at a time rather than as a template.
+The API, layer by layer, is in [ENGINE.md](ENGINE.md). For a whole game to copy, start from a starter (above). The
+demos under `samples/` are full games spread over many modules each; read them for one technique at a time rather
+than as a template. Using the engine from another project, and which files to copy with it:
+[AGENTS.md](AGENTS.md#using-the-engine-from-another-project).
 
 ### Entry points
 
@@ -107,15 +118,15 @@ Import everything from `@vibe/engine`, or one layer at a time:
 
 | Import | Contents |
 |---|---|
-| `@vibe/engine/core` | `Engine`, `Profiler`, `Assets`, `Events`, `Clock`, deterministic math, quality tiers (`resolveQuality`), the bench harness |
-| `@vibe/engine/physics` | `PhysicsWorld`, `VehicleController`, `CharacterController`, `DynamicsWorld`, `Cloth`, `Rope`, `SoftBody`, `Buoyancy`, `FracturedBody` |
-| `@vibe/engine/render` | `Atmosphere`, `PostFX`, `ClusteredLights`, `GpuParticleSystem`, `TextureSets`, shadows, instancing and LOD |
+| `@vibe/engine/core` | `Engine`, `Profiler`, `Assets`, `Events`, `Clock`, deterministic math, `PoseInterpolator`, quality tiers (`resolveQuality`), the bench harness |
+| `@vibe/engine/physics` | `PhysicsWorld`, `VehicleController` (+ `ROAD_CAR_SPEC`), `CharacterController`, `DynamicsWorld`, `Cloth`, `Rope`, `SoftBody`, `Buoyancy`, `FracturedBody` |
+| `@vibe/engine/render` | `Atmosphere`, `PostFX`, `ClusteredLights`, `GpuParticleSystem`, `NearestLights`, `TextureSets`, shadows, instancing and LOD |
 | `@vibe/engine/anim` | `AnimationController`, `TwoBoneIK`, `CCDIK`, `Ragdoll` |
 | `@vibe/engine/input` | `InputMap`, `TouchControls`, `VehicleInput`, `CharacterInput`, `PointerLock` |
 | `@vibe/engine/camera` | `ChaseRig`, `OrbitRig`, `FreeFlyRig`, `ThirdPersonRig`, `FirstPersonRig` |
 | `@vibe/engine/audio` | `AudioBus`, synth voices (`playTone`, ...), `PositionalAudio`, `SamplePlayer`, `VehicleAudio`, `CityAmbience` |
 | `@vibe/engine/ui` | HUD widgets (`UILayer`, `Panel`, `Readout`, `Gauge`, ...), `QualityMenu` |
-| `@vibe/engine/world` | `MapWorld` and its systems: terrain, roads, buildings, props, traffic, vegetation, water, `TileStreamer`; `NearestLights` (a pool of real point lights for any set of lamps) |
+| `@vibe/engine/world` | `MapWorld` and its systems: terrain, roads, buildings, props, traffic, vegetation, water, `TileStreamer` (and a re-export of `NearestLights`) |
 
 ## Performance
 
@@ -140,7 +151,10 @@ changed in each.
 
 ## Documentation
 
+- [AGENTS.md](AGENTS.md): the short guide for building a game, for people and coding agents.
+- [docs/HOWTO.md](docs/HOWTO.md): one recipe per task, each a checked copy of code that runs.
 - [ENGINE.md](ENGINE.md): the reference: what the engine provides today, layer by layer.
+<!-- assets-link -->
 - [docs/DESIGN-NOTES.md](docs/DESIGN-NOTES.md): design history, measurements and the record of decisions.
 - [CHANGELOG.md](CHANGELOG.md): what changed in each release.
 - [docs/BEFORE-AFTER.md](docs/BEFORE-AFTER.md): captures of the demos before and after the latest release.
@@ -201,34 +215,39 @@ Installed as a git submodule listed in a game's `workspaces`, the engine resolve
   `ssr-ao`, `volumetric`, `blur-dof-lut`, `water`: the render pipeline's shaders, options and defaults.
 - `test/halloween-enemies.mjs`, `halloween-depth`, `miami-car`, `nyc-traffic-mix`: the demos' rules and engine
   options.
-- `test/docs.mjs`: the docs name only paths, links and `@vibe/engine` imports that exist.
+- `test/agent-usability.mjs`: the APIs the starters rely on (road-car spec, texture ids, clip errors, static boxes).
+- `test/docs.mjs`: the docs name only paths, links and `@vibe/engine` imports that exist, and every recipe in
+  docs/HOWTO.md equals its marked source region. `test/howto.mjs` runs the Node recipes (`test/howto/recipes.js`).
 
-`test/browser/` (`smoke`, `bench`, `perf`, `halloween`, `halloween-media`) needs Chrome and runs locally; `smoke`
-also takes `nyc-night-mobile`, `miami-drive-mobile` and `halloween-mobile`, and `bench` the first two (the same demo
-on the mobile tier). The scripts share `test/browser/playwright.config.mjs` (`startVite`, `launchChrome`,
+`test/browser/` (`smoke`, `bench`, `perf`, `halloween`, `halloween-media`, `howto`, `check-page`) needs Chrome and
+runs locally. `smoke` covers the demos and the starters, each also as a `-mobile` page (the same page on the mobile
+tier); `bench` takes `nyc-night`, `miami-drive` and their `-mobile` pages. `howto` runs the browser-only recipes
+(clustered lights, GPU particles, vehicle sound) on the starter-drive page; `check-page <name>` loads one page and
+fails on any error. The scripts share `test/browser/playwright.config.mjs` (`startVite`, `launchChrome`,
 `loadSample`, `watchErrors`) and wait for the page to set `window.__sample.ready` (`createBenchHarness(...)
 .setReady()`); a page without it fails after the timeout. CI (`.github/workflows/ci.yml`, Node 26) runs `npm test`,
 the build and `types:check`.
 
 ### Adding a sample page
 
-Put it in `samples/<name>/index.html`; the dev server serves it at `/<name>/` at once. Add `<name>` to `SAMPLES` in
-`vite.config.js` so `npm run build` includes it, and a link in `samples/index.html`.
+Put it in `samples/<name>/index.html` (copying a starter folder is the quickest way). `vite.config.js` finds every
+such folder, so the dev server serves it at `/<name>/` and `npm run build` includes it; `public`, `shared` and `dev`
+are not pages. Add a link in `samples/index.html`.
 
 ### Source layout
 
 - `src/core/`: `Engine`, `Profiler`, `Assets`, `Events`, `Clock`, `Entity`, deterministic math, the bench harness,
-  the quality tiers (`Quality.js`).
+  the quality tiers (`Quality.js`), `PoseInterpolator`.
 - `src/physics/`: `PhysicsWorld`, `VehicleController`, `CharacterController`, and `dynamics/` (the XPBD solver,
   `Cloth`, `Rope`, `SoftBody`, `Buoyancy`, `FracturedBody`, a Worker client).
-- `src/render/`: `Atmosphere`, `PostFX`, `ClusteredLights`, shadows, `GpuParticleSystem`, instancing / LOD /
+- `src/render/`: `Atmosphere`, `PostFX`, `ClusteredLights`, `NearestLights`, shadows, `GpuParticleSystem`, instancing / LOD /
   impostors, `TextureSets` (KTX2), `SoftMeshes`, `FractureMesh`, `PhysicsDebug`.
 - `src/anim/`: `AnimationController`, `TwoBoneIK`, `CCDIK`, `Ragdoll`.
 - `src/input/`, `src/camera/`, `src/audio/`, `src/ui/`: input maps and touch controls, camera rigs, `AudioBus` and
   synth voices, HUD widgets.
-- `src/world/`: `MapWorld` and its systems (terrain, roads, buildings, props, traffic, vegetation, water) and
-  `NearestLights`. The data contracts are in [ENGINE.md, "World"](ENGINE.md#world).
-- `samples/`: the demos; `tools/`: the data bakers ([tools/README.md](tools/README.md)); `bench/`: the performance
+- `src/world/`: `MapWorld` and its systems (terrain, roads, buildings, props, traffic, vegetation, water). The data
+  contracts are in [ENGINE.md, "World"](ENGINE.md#world).
+- `samples/`: the demos and the two starters; `tools/`: the data bakers ([tools/README.md](tools/README.md)); `bench/`: the performance
   budgets and runbook.
 
 </details>

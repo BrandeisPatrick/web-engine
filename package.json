@@ -64,7 +64,12 @@
     "tools",
     "README.md",
     "LICENSE",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "AGENTS.md",
+    "ENGINE.md",
+    "docs/HOWTO.md",
+    "samples/starter-walk",
+    "samples/starter-drive"
   ],
   "sideEffects": false,
   "scripts": {

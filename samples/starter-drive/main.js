@@ -3,6 +3,7 @@
 // mobile quality tiers and a speed readout. Every block says what it is and what a game would change.
 // Controls: W / S or arrows drive and brake (brake from a stop reverses), A / D steer, X handbrake, C camera, R reset;
 // gamepad and touch work too.
+// The `// #region howto:` markers are for docs/HOWTO.md, which copies those blocks (test/docs.mjs checks the copies).
 import * as THREE from 'three';
 import { Engine, PoseInterpolator, resolveQuality, createBenchHarness } from '@vibe/engine/core';
 import { PhysicsWorld, VehicleController, ROAD_CAR_SPEC } from '@vibe/engine/physics';
@@ -17,9 +18,11 @@ const BASE = import.meta.env.BASE_URL; // asset URLs go through it, so the page 
 const Q = resolveQuality();
 const S = Q.settings;
 
+// #region howto:road-car-spec
 // ---- the car's physics: an ordinary road car. Spread it to tune: { ...ROAD_CAR_SPEC, motorPower: 200e3, vMax: 70 }.
 // (Without a spec VehicleController is the Roadster, a 400 km/h car that flies on the thrust input.)
 const SPEC = ROAD_CAR_SPEC;
+// #endregion howto:road-car-spec
 
 async function boot() {
   // ---- engine + physics. PhysicsWorld() is flat ground at y = 0; PhysicsWorld({ heightfield: (x, z) => y }) for hills
@@ -45,6 +48,7 @@ async function boot() {
     Object.assign(road.material, { map: asphalt.map, normalMap: asphalt.normalMap, roughnessMap: asphalt.roughnessMap, color: new THREE.Color(0xffffff) });
   }
   // a row of posts beside the road, as static colliders the car bounces off
+  // #region howto:static-posts
   const postMat = new THREE.MeshStandardMaterial({ color: 0xd8d2c4, roughness: 0.7 });
   for (let z = 80; z > -900; z -= 40) {
     for (const x of [-ROAD_W / 2 - 1, ROAD_W / 2 + 1]) {
@@ -53,11 +57,14 @@ async function boot() {
       physics.addStaticBox({ center: [x, 0.6, z], size: [0.3, 1.2, 0.3], kind: 'post' });
     }
   }
+  // #endregion howto:static-posts
 
   // ---- the car: the simulation (VehicleController) and what you see (a Group of boxes). Swap in a GLB model here
+  // #region howto:drive-car
   const car = new VehicleController(SPEC);
   const START = new THREE.Vector3(0, 0, 0);
   car.reset(START, 0, physics); // heading 0 faces -Z (down the road)
+  // #endregion howto:drive-car
   const body = new THREE.Group();
   const paint = new THREE.MeshStandardMaterial({ color: 0x8a0f16, roughness: 0.3, metalness: 0.5 });
   const hull = new THREE.Mesh(new THREE.BoxGeometry(SPEC.width, 0.55, SPEC.length), paint); hull.position.y = 0.6;
@@ -84,11 +91,13 @@ async function boot() {
   engine.onResize = (w, h, pr) => postfx.setSize(w, h, pr);
 
   // ---- input and the chase camera. The rig reads `state` each frame (ChaseTargetState: velocity, speedKmh, ...)
+  // #region howto:drive-controls
   const input = new VehicleInput(renderer.domElement, { touch: 'auto' });
   const controls = { throttle: 0, brake: 0, steer: 0, handbrake: false }; // what car.step() reads
   const state = { velocity: car.velocity, speedKmh: 0, grounded: true, wheelSlip: 0 };
   const rig = new ChaseRig(camera, renderer.domElement, { physics, canopyFromCollider: null, thinKinds: ['post'], flightFraming: false });
   rig.setTarget(body, () => state);
+  // #endregion howto:drive-controls
 
   // ---- HUD: one readout, and the quality menu
   const panel = new Panel({ parent: new UILayer(), corner: 'bl' });
@@ -97,16 +106,21 @@ async function boot() {
 
   // ---- the game loop: input per frame, simulation per fixed step, drawing per frame
   engine.addSystem({
+    // #region howto:drive-input
     earlyUpdate(dt) {
       input.update(dt);
       controls.throttle = input.throttle; controls.brake = input.brake; controls.steer = input.steer; controls.handbrake = input.handbrake;
       if (input.reset) { car.reset(START, 0, physics); smooth.snap(); rig.snap(); } // back to the start
       if (input.toggleCamera) rig.cycleMode();
     },
+    // #endregion howto:drive-input
+    // #region howto:drive-step
     fixedUpdate(dt) {
       smooth.save(); // before the step: the pose PoseInterpolator blends from
       car.step(dt, controls, physics);
     },
+    // #endregion howto:drive-step
+    // #region howto:drive-draw
     update(dt, alpha) {
       smooth.apply(body, alpha);
       for (let i = 0; i < 4; i++) { // roll the wheels, steer the front pair
@@ -116,6 +130,7 @@ async function boot() {
       state.speedKmh = car.speed * 3.6; state.grounded = car.grounded; state.wheelSlip = car.wheelSlip;
       rig.update(dt);
     },
+    // #endregion howto:drive-draw
     lateUpdate(dt) {
       atmosphere.update(camera.position, dt);
       speed.set(Math.round(Math.abs(car.forwardSpeed) * 3.6));

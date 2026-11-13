@@ -7,7 +7,11 @@
 //   - a fenced code block imports a name from `@vibe/engine` or a layer entry point (`@vibe/engine/core`, ...) that
 //     the entry point does not export;
 //   - an old embedded-engine path (`engine/src/`, `engine/tools/`) appears;
-//   - a count of test suites disagrees with test/all.mjs.
+//   - a count of test suites disagrees with test/all.mjs;
+//   - a fenced code block marked `<!-- from: <file>#<id> -->` (on one of the two lines before it) differs from the
+//     region `// #region howto:<id>` ... `// #endregion howto:<id>` of that file (dedented), or names a missing
+//     file / region; and in docs/HOWTO.md every js block must carry such a mark (recipes are copies of code that runs:
+//     the starters, test/howto/recipes.js run by test/howto.mjs and test/browser/howto.mjs, test/browser/check-page.mjs).
 // Paths with placeholders (`<name>`, `*`, `{...}`, `${...}`) and generated folders (`types/`, `dist/`) are skipped.
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join, normalize } from 'node:path';
@@ -147,6 +151,48 @@ function checkOldPathsAndCounts(rel, lines) {
   }
 }
 
+// --- snippets copied from marked regions of running code
+const regionCache = new Map();
+function region(file, id) {
+  const abs = join(root, file);
+  if (!existsSync(abs)) return { error: `snippet source missing: ${file}` };
+  if (!regionCache.has(abs)) regionCache.set(abs, readFileSync(abs, 'utf8').split('\n'));
+  const L = regionCache.get(abs);
+  const s = L.findIndex((l) => l.trim() === `// #region howto:${id}`);
+  const e = L.findIndex((l, i) => i > s && l.trim() === `// #endregion howto:${id}`);
+  if (s < 0 || e < 0) return { error: `no region howto:${id} in ${file}` };
+  const body = L.slice(s + 1, e).filter((l) => !/^\s*\/\/ #(end)?region howto:/.test(l));
+  const ind = Math.min(...body.filter((l) => l.trim()).map((l) => l.match(/^\s*/)[0].length));
+  return { text: body.map((l) => l.slice(ind).trimEnd()).join('\n').trim() };
+}
+
+function checkSnippets(rel, lines) {
+  const requireMark = rel === 'docs/HOWTO.md';
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (!l.fence || l.code) continue;
+    const open = /^\s*```(\w*)/.exec(l.line);
+    if (!open || (i > 0 && lines[i - 1].code)) continue; // a closing fence
+    let j = i + 1; const body = [];
+    while (j < lines.length && !lines[j].fence) body.push(lines[j++].line);
+    const mark = [lines[i - 1], lines[i - 2]].map((x) => x && /<!--\s*from:\s*([^#\s]+)#([\w-]+)\s*-->/.exec(x.line)).find(Boolean);
+    i = j;
+    if (!mark) {
+      if (requireMark && /^(js|javascript|mjs)$/.test(open[1])) { checks++; fail(rel, l.n, 'js block without a <!-- from: file#region --> source mark'); }
+      continue;
+    }
+    checks++;
+    const r = region(mark[1], mark[2]);
+    if (r.error) { fail(rel, l.n, r.error); continue; }
+    const text = body.map((x) => x.trimEnd()).join('\n').trim();
+    if (text !== r.text) {
+      const a = text.split('\n'), b = r.text.split('\n');
+      const k = a.findIndex((x, n) => x !== b[n]);
+      fail(rel, l.n, `snippet differs from ${mark[1]}#${mark[2]} at its line ${k + 1}: doc "${(a[k] ?? '').trim()}" vs source "${(b[k] ?? '').trim()}"`);
+    }
+  }
+}
+
 for (const rel of [...DOCS, ...LINK_ONLY]) {
   const abs = join(root, rel);
   if (!existsSync(abs)) { console.log(`skip  ${rel} (not there yet)`); continue; }
@@ -156,6 +202,7 @@ for (const rel of [...DOCS, ...LINK_ONLY]) {
   checkPaths(rel, lines);
   await checkImports(rel, lines);
   checkOldPathsAndCounts(rel, lines);
+  checkSnippets(rel, lines);
 }
 
 console.log(`docs: ${checks} checks, ${failures} failure${failures === 1 ? '' : 's'}`);

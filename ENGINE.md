@@ -1,7 +1,8 @@
 # `@vibe/engine` reference
 
-What the engine provides today, layer by layer, with the real signatures. [README.md](README.md) is the overview and
-the place to start; [docs/DESIGN-NOTES.md](docs/DESIGN-NOTES.md) keeps the history, the measurements and the reasoning
+What the engine provides today, layer by layer, with the real signatures. [README.md](README.md) is the overview,
+[AGENTS.md](AGENTS.md) the short guide for building a game (start there if you are a coding agent) and
+[docs/HOWTO.md](docs/HOWTO.md) one recipe per task; [docs/DESIGN-NOTES.md](docs/DESIGN-NOTES.md) keeps the history, the measurements and the reasoning
 behind the decisions (links below point to it where the reasoning helps). The release is in `package.json` and
 [CHANGELOG.md](CHANGELOG.md).
 
@@ -20,15 +21,15 @@ Order: core < physics < render < anim / input / camera / audio / ui < world. Low
 
 | Layer | Import | Main exports |
 |---|---|---|
-| core | `@vibe/engine/core` | `Engine` (renderer, scene, camera, fixed-step loop, systems, resize, adaptive pixel ratio), `Profiler`, `ProfilerOverlay`, `Events`, `Clock`, `Entity` / `EntitySystem`, `Assets`, `MathDet` and the `det*` functions, quality tiers (`resolveQuality`, `QUALITY_TIERS`, `defineTier`), the bench harness (`createBenchHarness`, `readBenchParams`) |
-| physics | `@vibe/engine/physics` | `PhysicsWorld` (query hub), `VehicleController` + `ROADSTER_SPEC`, `CharacterController`, `DynamicsWorld` (XPBD rigid bodies, joints, particles), `Cloth`, `Rope`, `SoftBody`, `Buoyancy`, `FracturedBody`, `DynamicsClient` (worker), the shape builders (`boxShape`, `sphereShape`, `capsuleShape`, ...) |
-| render | `@vibe/engine/render` | `Atmosphere`, `PostFX` and its passes, `GBuffer`, `ClusteredLights`, `GpuParticleSystem`, `ParticleSystem`, `TextureSets` / `loadTextureSet`, `registerRenderLoaders`, `InstancedPool`, `LODGroup`, impostors (`bakeImpostors`, `ImpostorBatch`), `DecalTrail`, `ChunkCuller`, `PhysicsDebug`, `ClothMesh` / `RopeMesh` / `SoftBodyMesh`, `FractureMesh`, LUT helpers |
+| core | `@vibe/engine/core` | `Engine` (renderer, scene, camera, fixed-step loop, systems, resize, adaptive pixel ratio), `Profiler`, `ProfilerOverlay`, `Events`, `Clock`, `Entity` / `EntitySystem`, `Assets`, `MathDet` and the `det*` functions, `PoseInterpolator` (render interpolation), quality tiers (`resolveQuality`, `QUALITY_TIERS`, `defineTier`), the bench harness (`createBenchHarness`, `readBenchParams`) |
+| physics | `@vibe/engine/physics` | `PhysicsWorld` (query hub), `VehicleController` + `ROAD_CAR_SPEC` / `ROADSTER_SPEC`, `CharacterController`, `DynamicsWorld` (XPBD rigid bodies, joints, particles), `Cloth`, `Rope`, `SoftBody`, `Buoyancy`, `FracturedBody`, `DynamicsClient` (worker), the shape builders (`boxShape`, `sphereShape`, `capsuleShape`, ...) |
+| render | `@vibe/engine/render` | `Atmosphere`, `PostFX` and its passes, `GBuffer`, `ClusteredLights`, `NearestLights`, `GpuParticleSystem`, `ParticleSystem`, `TextureSets` / `loadTextureSet`, `registerRenderLoaders`, `InstancedPool`, `LODGroup`, impostors (`bakeImpostors`, `ImpostorBatch`), `DecalTrail`, `ChunkCuller`, `PhysicsDebug`, `ClothMesh` / `RopeMesh` / `SoftBodyMesh`, `FractureMesh`, LUT helpers |
 | anim | `@vibe/engine/anim` | `AnimationController`, `TwoBoneIK`, `CCDIK`, `Ragdoll` |
 | input | `@vibe/engine/input` | `InputMap`, `CharacterInput`, `VehicleInput`, `TouchControls`, `PointerLock`, `GamepadState`, the action presets (`CHARACTER_ACTIONS`, `VEHICLE_ACTIONS`) |
 | camera | `@vibe/engine/camera` | `CameraRig`, `CameraCollision`, `ChaseRig`, `OrbitRig`, `FreeFlyRig`, `ThirdPersonRig`, `FirstPersonRig` |
 | audio | `@vibe/engine/audio` | `AudioBus`, the synth voices (`playTone`, `playNoiseBurst`, `OscStack`, `NoiseVoice`, ...), `PositionalAudio`, `SamplePlayer`, `registerAudioLoader`, `VehicleAudio`, `CityAmbience` |
 | ui | `@vibe/engine/ui` | `UILayer`, `Panel`, `Readout`, `Gauge`, `Bar`, `Badge`, `Segments`, `Minimap`, `Flash`, `GMeter`, `AttitudeIndicator`, `HelpOverlay`, `LoadingScreen`, `QualityMenu`, the theme (`setTheme`, `theme`) |
-| world | `@vibe/engine/world` | `MapWorld` and its systems (terrain, roads, buildings, props, vegetation, water, traffic), `TileStreamer`, `NearestLights` |
+| world | `@vibe/engine/world` | `MapWorld` and its systems (terrain, roads, buildings, props, vegetation, water, traffic), `TileStreamer`; `NearestLights` is re-exported from render |
 
 ## Conventions to know first
 
@@ -39,7 +40,8 @@ Order: core < physics < render < anim / input / camera / audio / ui < world. Low
   `samples/nyc-night/player.js` puts the model in a child group with `rotation.y = Math.PI`.
 - **Fixed step.** `Engine` runs `fixedUpdate(dt)` at `fixedHz` (default 120) up to `maxSubsteps` (default 4) times per
   frame; `update(dt, alpha)` runs once per frame with the interpolation factor. Simulation goes in `fixedUpdate`;
-  anything drawn from simulated state blends the last two steps with `alpha` ("Render interpolation" below).
+  anything drawn from simulated state blends the last two steps with `alpha` (`PoseInterpolator`, "Render
+  interpolation" below).
 - **Everything is opt-in.** `PostFX` features (G-buffer, TAA, SSR, volumetrics, motion blur, depth of field, LUT) are
   off by default; quality tiers are plain data that the game spreads into the constructors ("Quality tiers").
 - **World data frame.** The baked city data uses metres around a centre, x east, z SOUTH; `MapWorld` shifts it so the
@@ -136,7 +138,9 @@ submission + GPU execution, no vsync); `capture(scale)` reads the default frameb
 box-downsamples it; `diff(a, b)` gives `meanAbs / p99 / max / pctOver2 / pctOver8`; `run(plan)` crosses poses and
 settings into a table. `?bench=1&size=WxH` pins the drawing buffer at pixel ratio 1.
 
-`harness.setReady()` sets `window.__sample.ready`; the browser scripts in `test/browser/` (through
+The page contract: `harness.setReady()` sets `window.__sample.ready`; a page needs no poses for it:
+`window.__sample = createBenchHarness(engine, { name: 'my-game' }).setReady();` (the starters end with it). The
+browser scripts in `test/browser/` (through
 `test/browser/playwright.config.mjs`: `startVite`, `launchChrome`, `loadSample`, `watchErrors`) wait for it, so a page
 without it fails after the timeout. How to make captures reproduce across page loads, and the measured sweeps, are in
 [the design notes](docs/DESIGN-NOTES.md#measurement-protocol).
@@ -146,7 +150,11 @@ without it fails after the timeout. How to make captures reproduce across page l
 Physics runs at the fixed rate and frames arrive at a variable rate, so a frame may hold 0, 1 or more steps. Showing
 the latest step makes motion judder. The engine passes `alpha` (the fraction of a step left in the accumulator) to
 `update(dt, alpha)`; an object driven by fixed-step physics keeps its previous pose and blends:
-position `lerp(prev, cur, alpha)`, rotation `slerp(prev, cur, alpha)`. The camera then follows the blended pose. Why
+position `lerp(prev, cur, alpha)`, rotation `slerp(prev, cur, alpha)`. `PoseInterpolator` (`src/core/PoseInterpolator.js`)
+does it for anything with a `position` (and optionally a `quaternion`): `const smooth = new PoseInterpolator(car)`,
+`smooth.save()` at the start of each fixed step (before the body moves), `smooth.apply(mesh, alpha)` in `update`,
+`smooth.snap()` after a teleport. On a source without a quaternion (a `CharacterController`) only the position is
+blended. The camera then follows the blended pose. Why
 and what it measured: [design notes, "Render interpolation"](docs/DESIGN-NOTES.md#render-interpolation-fix-for-judder-2026-10-18).
 
 ## Physics
@@ -164,8 +172,10 @@ Two cooperating worlds, both pure JS, deterministic and Node-safe (`npm test` ru
   a `kind: 'rigid'` box record (pooled, allocation-free), so the car and the character collide with crates without
   knowing the solver, and the solver reads the PhysicsWorld's static boxes and heightfield as its static world.
 - `new PhysicsWorld({ heightfield, groundLevel, surface })`: `heightfield` is `{ heightAt(x, z, y) }` or `(x, z, y) => height`
-  (without one the ground is flat at `groundLevel`, default 0). Static boxes take their bounds in this order:
-  `physics.addStaticBox(minX, minY, maxX, maxY, minZ, maxZ, kind)` (x and y pairs first, then z).
+  (without one the ground is flat at `groundLevel`, default 0). Static boxes: `physics.addStaticBox({ center: [x, y, z],
+  size: [w, h, d], kind })` (like a `BoxGeometry(w, h, d)` at `center`), `addStaticBox({ min, max, kind })`, or the
+  positional form `addStaticBox(minX, minY, maxX, maxY, minZ, maxZ, kind)` (x and y pairs first, then z). Shape
+  builders for `DynamicsWorld` bodies (`boxShape(hx, hy, hz)`) take half extents.
 
 ### DynamicsWorld (0.6.0)
 Modules under `src/physics/dynamics/`, each independently testable (`test/dyn-*.mjs` in `npm test`):
@@ -260,13 +270,15 @@ within one JS engine only.
 
 ### Vehicle model (`src/physics/VehicleController.js`)
 
-`new VehicleController(spec)` with a plain spec object; missing fields come from `ROADSTER_SPEC` (`resolveVehicleSpec`),
-which is an electric hypercar with a thruster flight package. For a ground car pass `flight: false` (no thrusters,
-`mode` always `'ground'`) and set the powertrain (`mass`, `motorPower`, `motorPeakForce`, `vMax`); the full field list
-with comments is `ROADSTER_SPEC` in the source. `samples/miami-drive/spec.js` is a road-car spec that
-`test/miami-car.mjs` checks. Per fixed step: `vc.step(dt, controls, world)` with a controls object
+`new VehicleController(spec)` with a plain spec object; missing fields come from `ROADSTER_SPEC` (`resolveVehicleSpec`).
+**Without a spec the vehicle is the Roadster**: an electric hypercar of 2 t and about 1 MW with a thruster flight
+package. For an ordinary car use `ROAD_CAR_SPEC` (1350 kg, 4.3 x 1.8 x 1.45 m, about 110 kW rear drive, `vMax` 56 m/s,
+`flight: false`: no thrusters, `mode` always `'ground'`), and tune it by spreading: `{ ...ROAD_CAR_SPEC, motorPower:
+200e3, vMax: 70 }`. The full field list with comments is `ROADSTER_SPEC` in the source; the type is `VehicleSpec`.
+`samples/starter-drive/main.js` drives `ROAD_CAR_SPEC`; `samples/miami-drive/spec.js` is the Miami demo's own spec,
+checked by `test/miami-car.mjs`. Per fixed step: `vc.step(dt, controls, world)` with a controls object
 `{ throttle, brake, steer, handbrake, thrust, pitch, yaw, boost }` and a `PhysicsWorld`; `VehicleInput` outputs those
-values as fields and the game copies them in once per frame (`samples/miami-drive/car.js`); `vc.reset(position, heading,
+values as fields and the game copies them in once per frame (`samples/starter-drive/main.js`); `vc.reset(position, heading,
 world)` places it; `vc.hold = true` freezes it on the ground (countdowns) and `reset()` leaves it set.
 `PhysicsWorld.setSurfaceProvider(fn)` / `surfaceAt(x, z, out)` give per-wheel `{ mu, crr, tag }` multipliers.
 The suspension and contact model:
@@ -341,11 +353,13 @@ surface above.
   (blocker search + contact-hardening penumbra), switchable at runtime (`atmo.setShadowKernel`).
 - Post: GTAO (half-res + denoise), bloom (threshold per time of day), FXAA or 4x MSAA by day (forward path) or TAA
   over the G-buffer path (0.7.0), filmic grade, vignette, height fog pass. Everything resolution-aware.
-- Local lights: `NearestLights` (world layer, `src/world/NearestLights.js`) keeps a pool of real point lights
+- Local lights: `NearestLights` (`src/render/NearestLights.js`; also re-exported from world) keeps a pool of real point lights
   (default 8) on the lamps nearest the view, or, with `mode: 'clustered'` and a `ClusteredLights` instance, pushes
   every lamp in range into the clustered list. `MapWorld` does this for its street lamps (its `lights: { clustered:
   true }` option); a game without `MapWorld` creates the `NearestLights` / `ClusteredLights` itself. Intensities are
-  three's `PointLight` units (linear colour x intensity).
+  three's `PointLight` units (linear colour x intensity): about 8 for a garden lamp (reach 12 m, decay 1.5), up to 260
+  for a city street lamp (reach 48 m, decay 2); at 1 a lamp is invisible at dusk. The clustered wiring without
+  `MapWorld` is five calls: [docs/HOWTO.md, "Clustered lights"](docs/HOWTO.md#clustered-lights).
 - Moonlit scattering (opt-in, `new Atmosphere({ moonScatter: amount })`, default 0 = off): at night, while the moon
   is the shadow-casting light (`lightDir = moonDir`), the post fog's forward-scatter glow (`fogParams.sunScatter`,
   otherwise 0 at night) is `amount`, and `atmo.scatterDir` / `atmo.scatterColor` follow the moon (`moonDir`,
@@ -383,7 +397,7 @@ Two paths, chosen per `PostFX` instance; the forward path is the default and ren
   texture (+2 texture units); a global `lights_pars_begin` / `lights_fragment_begin` patch under `ENGINE_CLUSTERED`
   loops over the fragment's cell and calls three's `RE_Direct` with the stock attenuation, so 8 clustered lights
   render pixel-identically to 8 real `PointLight`s. No shadows on clustered lights (real three lights keep theirs).
-  The world layer's `NearestLights({ mode: 'clustered' })` pushes every lamp within `clusteredRange`.
+  `NearestLights({ mode: 'clustered', clustered })` pushes every lamp within `clusteredRange`.
 - **Cascades and PCSS** (`shadowCascade.js`, `shadowKernel.js`, `Atmosphere`): `shadows.cascades` 1-4 (middle
   cascades `sunMid` / `sunMid2` between the near `sun` and the far `sunFar`, round-robin map updates), `kernel:
   'pcss'` (8-tap blocker search on the packed map, penumbra from receiver - blocker, 12-tap rotated compare disc),
@@ -396,8 +410,8 @@ Two paths, chosen per `PostFX` instance; the forward path is the default and ren
   ([design notes](docs/DESIGN-NOTES.md#from-render-pipeline-070-the-measurements-enginemd-lines-128-179-at-d959298)
   has the measurements).
 - **Velocity for TAA and motion blur.** `postfx.track(object3d)` gives a moving mesh per-object velocity. A material
-  shared with other meshes is cloned for it, with a one-line `[GBuffer] track()` console warning; nothing else needs
-  doing.
+  shared with other meshes is cloned for it, with a one-line `[GBuffer] track()` console note (info, not a warning;
+  `track(obj, { clone: true })` skips it); nothing else needs doing.
 
 ### Render pipeline (0.8.0): screen-space reflections, volumetrics, water refraction, lens passes, LUT
 Five opt-in stages on top of the 0.7.0 pipeline, composed by `PostFX` in the order Scene -> Exposure -> AO -> **SSR**
@@ -463,15 +477,17 @@ a game. In this repository the sets live per demo: `samples/public/miami/texture
 `samples/public/nyc/textures/` (each folder has its `manifest.json` and `CREDITS.md`), served at
 `${import.meta.env.BASE_URL}miami/textures/` and so on.
 
-- `loadTextureSet(id, { renderer, base, manifest })` -> `{ map, normalMap, roughnessMap, size }` (plus `aoMap` when
-  `maps` asks for it), or null. `id` is the set's folder name, the manifest entry's `id` (for example
-  `leafy_grass`), not the manifest key (`grass`): with a manifest, an id it does not list returns null without a
-  warning. `base` is the folder URL ending in `/`; the default, `${BASE_URL}textures/`, does not exist in this
-  repository, so pass it. `size` is metres per tile (from the manifest). Never throws.
-- `loadTextureManifest(base)` -> the manifest or null.
+- `loadTextureSet(id, { renderer, base, manifest, maps, basisPath, quiet })` -> `{ map, normalMap, roughnessMap,
+  size }` (plus `aoMap` when `maps` asks for it), or null. `id` is the set's folder name (the manifest entry's `id`,
+  for example `leafy_grass`) or its role key (`grass`); the id wins when both match. A manifest that lists neither
+  gives null and a `console.warn` naming what it has; without a manifest a missing albedo file warns with the URL
+  tried (`quiet: true` silences both). `base` is the folder URL ending in `/`; the default, `${BASE_URL}textures/`,
+  does not exist in this repository, so pass it. `size` is metres per tile (from the manifest). Never throws. Types:
+  `TextureSetOptions`, `TextureSetResult`.
+- `loadTextureManifest(base)` -> the manifest or null (warns once per folder that cannot be read).
 - `TextureSets.configure({ base, basisPath, maxAnisotropy, ... })` sets the defaults for later calls. KTX2 needs the
   Basis transcoder; the default `basisPath()` is `${BASE_URL}basis/`, which does not exist here either; Miami ships
-  it at `samples/public/miami/basis/` (`basisPath: `${BASE_URL}miami/basis/``). Without a transcoder the JPGs load.
+  it at `samples/public/miami/basis/` (pass `basisPath` to `loadTextureSet` or `TextureSets.configure`). Without a transcoder the JPGs load.
 - `makeTextureArray(renderer, sets, opts)` packs several sets into two RGBA8 `DataArrayTexture`s for shaders that
   index a layer (the building facades).
 - `TextureSets.stats` and one `[TextureSets]` console line per load wave report the path (ktx2 / jpg / procedural),
@@ -505,11 +521,14 @@ cost are in [the design notes](docs/DESIGN-NOTES.md#textures-pbr-sets-ktx2).
   uses them all.
 - `anim` layer: `AnimationController` (states, 1D blend trees, transition table, markers, root motion with the
   hips' horizontal track neutralised) and `TwoBoneIK` / CCD helpers.
-- A working example of the whole stack: `samples/nyc-night/player.js` (controller, animation, the state the rig reads)
-  and `samples/nyc-night/main.js` (input and rig).
+- `AnimationController(model, clips, { states, trees })`: a state's `clip` is the clip's exact name (or an
+  `AnimationClip`); a name the GLB does not have throws with the list of its clip names (and a "did you mean" when
+  exactly one name ends with the one asked for). Types: `AnimationStateSpec`, `BlendTreeSpec`.
+- A working example of the whole stack in one file: `samples/starter-walk/main.js` (controller, GLB and animation,
+  input, rig, `PoseInterpolator`). The NYC demo's `samples/nyc-night/player.js` is a larger one.
 - `ChaseRig` (`src/camera/ChaseRig.js`) follows a vehicle: `rig.setTarget(object3d, () => state)` (`CameraRig`), where
   the state getter returns what the rig reads (`velocity`, `speedKmh`, `mode`, `grounded`, ...; the list is in the
-  ChaseRig source). `VehicleInput` (`src/input/VehicleInput.js`) reads keyboard, gamepad and touch into
+  ChaseRig source; type `ChaseTargetState`). `VehicleInput` (`src/input/VehicleInput.js`) reads keyboard, gamepad and touch into
   `throttle`, `brake`, `steer`, `handbrake`, ... fields, the values `VehicleController.step` takes.
 
 ## Audio and UI
@@ -551,7 +570,7 @@ meshes and `PhysicsWorld.setSurfaceProvider` instead.
 | `Vegetation.js` (+ `VegModels.js`, `VegTextures.js`, `VegMaterials.js`) | `buildTreeMeshes(placements, { groundAt, colliders, seed, rules, mix })`, `bakeVegImpostors`, `SPECIES`, `makeVegAtlas`, `createVegMaterial`, `createVegImpostorMaterial` |
 | `Water.js` / `Shore.js` / `Boats.js` | `Water`, `createWaterMaterial({ ..., refraction })` (0.8.0: `setWaterRefraction`, `setWaterSceneTextures`, `updateWaterRefraction`, `WATER_REFRACTION_DEFAULTS`), `buildShoreField`, Gerstner `waveHeight` / `waveSlope`; `Waterfront({ world, renderer, level, waterMat, pondMat, groundMat, ferryDock, islandFill, boats, farland })`, `createGroundMaterial`, `bakeLandClass`, `buildFarLand(json, world, level, opts)`; `Boats({ ..., ferryDock, ferryRoute, ferries, shipRoute, sailZones, sailCount, bridge })` |
 | `geom.js` | `hashStr`, `signedArea`, `pointInRing`, `RingIndex` (exact row-bucketed pointInRing for big rings), `pointInPoly`, `ringBounds`, `centroid`, `sanitizeRing`, `polylineLength` (+ re-exports of `render/noise.js`) |
-| `MeshChunker.js`, `ShadowPasses.js`, `NearestLights.js` | tiled static meshes, per-cascade shadow casters, nearest-N real lights (see Conventions) |
+| `MeshChunker.js`, `ShadowPasses.js` | tiled static meshes, per-cascade shadow casters (see Conventions); `NearestLights.js` re-exports the render layer's class |
 
 ```js
 const world = new MapWorld({
@@ -689,7 +708,7 @@ Measurements: [design notes, "From Streaming"](docs/DESIGN-NOTES.md#from-streami
   already built in a 7 x 7 grid of ~315 m chunks). Code that edits merged geometry in place (plugins: bridge,
   landmarks) must run before the tiling step. With streaming (default) buildings are not chunked: they are built per
   tile (district 7 x 7 chunks, 640 m squares in the filler ring) and marked `userData.streamed`.
-- **Real point lights: at most 8** (`src/world/NearestLights.js`): forward-lit materials loop over every light
+- **Real point lights: at most 8** (`src/render/NearestLights.js`): forward-lit materials loop over every light
   on every fragment and on Apple GPUs the cost per light climbs steeply past ~8 (16 lamp lights: +4.6 ms at the
   Embarcadero at night). Lights go to lamps whose light sphere reaches the view frustum, nearest to a point ahead of
   the camera; the rest of the city's lamps are emissive only.
