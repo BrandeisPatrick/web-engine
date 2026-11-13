@@ -48,6 +48,24 @@
 //   texture units WebGL2 guarantees; the TAA pass uses 6 with tSSR.
 //   Passes that need the G-buffer (SSR, MotionBlur, ao.normals 'gbuffer') are rebuilt from their kept options whenever
 //   the G-buffer is (re)built and torn down with it: `ssr` / `motionBlur` report the effective state.
+// renderScale (s in [0.5, 1], default 1; option, set('renderScale', s) / get): temporal upscaling. In effect only while
+// TAA is (else 1, the request kept, as ssr.interval): the scene / G-buffer target, exposure metering, AO, SSR, the
+// volumetric pass and the camera jitter (history.begin) run at the internal size round(drawing buffer x s)
+// (internalWidth / internalHeight, onInternalResize(w, h) for the ClusteredLights tile mapping and SceneCopy); the TAA
+// resolve upscales to the drawing buffer (TAAPass "Upscaling", define TAA_UPSCALE) and everything after it (motion
+// blur, DoF, bloom, final pass, flare) runs at the output size. Passes after TAA that read the internal depth /
+// G-buffer map their texel fetches (FINAL_UPSCALE: closestDepth; MB_UPSCALE: the velocity pass; DOF_UPSCALE: prefilter
+// and composite); reads by uv (fog, aoAt, the volume upsample, tSSR) need nothing. At 1 no define is set and every
+// shader text is the one before renderScale (test/render-scale.mjs pins them). Sizes, decided: AO keeps its absolute
+// pixel budget (maxPixels binds at the city demos' sizes down to s 0.67, so their AO is unchanged); SSR and volumetric
+// keep their scale OF THE INTERNAL size (not compensated: their absolute resolution falls with s, which is part of the
+// saving and of the measured difference); bloom, flare scale (setFlareScale(H)), grain, dither and the final pass's
+// uRes are output pixels. Every change of the effective scale or size restarts the history. Measured on the city demos'
+// desktop poses (2268x1473 output, M4, converged captures against scale 1): s 0.87 saves 1.0-1.4 ms (0.5 on miami
+// beach), 0.75 1.9-2.9 ms (1.2); but the image differs beyond the perf guard on nyc-night's square and sidewalk (0.38 /
+// 0.53 mean / 255 at 0.87, capture(8)) and the per-pixel flicker at rest rises 8-64 % at every scale tried, so the
+// demos stay at 1 (CHANGELOG). Engine adaptive resolution could drive renderScale instead of the pixel ratio (the
+// output size and the history stay put); not done.
 // Then the Atmosphere's lens-flare overlay. Anti-aliasing (`aa`, see resolveAA): 'auto' = forward: 4x MSAA on the
 // scene target by day (alpha-to-coverage foliage, thin bridge cables), FXAA inside the final pass once it is dark or
 // the drawing buffer is larger than msaaMaxPixels; G-buffer: TAA. 'msaa' | 'fxaa' fixed ('msaa' falls back to FXAA
@@ -85,7 +103,7 @@
 //   dof: null | true | { focusDistance 12, focalLength 50, fStop 2, sensorHeight 24, maxCoC 12, scale 0.5,
 //     samples 24, nearBlur true, stableDepth false } (DOF_DEFAULTS)
 //   lut: null | { texture: Data3DTexture, size, strength 1 } (the Assets 'lut' value works as it is)
-// set() paths (unknown paths throw): 'aa', 'gbuffer', 'jitter', 'timing', 'ao.enabled', 'ao.normals',
+// set() paths (unknown paths throw): 'aa', 'gbuffer', 'jitter', 'renderScale', 'timing', 'ao.enabled', 'ao.normals',
 //   'bloom.enabled', 'taa.<option>', 'ssr' (false | true | options), 'ssr.<option>', 'volumetric' (false | true |
 //   options), 'volumetric.<option>' (incl. 'volumetric.intensity'), 'motionBlur' (strength: 0 removes the pass; or
 //   options), 'motionBlur.<option>' ('strength' 0 removes it too), 'dof' (null | true | options), 'dof.<option>',
@@ -628,8 +646,8 @@ export class PostFX {
    * @param {THREE.PerspectiveCamera} camera
    * @param {object} [o] atmosphere (an Atmosphere, or null), width/height (CSS px), pixelRatio, samples (MSAA,
    *   default 4), msaa, msaaMaxPixels, lateClear, compactHDR, grade, ao, bloom, fog, fogFarFade, fogMinSkyElevation,
-   *   autoExposure, fogColor, fogParams, gbuffer, aa, taa, jitter, jitterPattern, timing; 0.8.0 (all off by
-   *   default): ssr, volumetric, motionBlur, dof, lut, ao.normals (see header)
+   *   autoExposure, fogColor, fogParams, gbuffer, aa, taa, jitter, jitterPattern, renderScale (1), timing; 0.8.0
+   *   (all off by default): ssr, volumetric, motionBlur, dof, lut, ao.normals (see header)
    */
   constructor(renderer, scene, camera, o = {}) {
     this.renderer = renderer; this.scene = scene; this.camera = camera;
@@ -946,17 +964,17 @@ export class PostFX {
   }
 
   /**
-   * Runtime knob by path, for harness settings: 'aa' (setAA), 'gbuffer' (setGBuffer), 'jitter', 'timing',
-   * 'ao.enabled', 'ao.normals' ('depth' | 'gbuffer'), 'bloom.enabled', 'taa.<option>' (blend, sharpen, gamma, clamp,
-   * filter, historyFormat, stableDepth, reject, velocityFirst, snap), 'ssr' / 'volumetric' (false | true | options),
-   * 'ssr.<option>', 'volumetric.<option>' (incl. intensity), 'motionBlur' (strength, 0 removes the pass, or options),
-   * 'motionBlur.<option>', 'dof' (null | true | options), 'dof.<option>', 'lut' (null | { texture, size, strength }),
-   * 'lut.strength'. An options object replaces the group's options, omitted keys at their defaults (so
+   * Runtime knob by path, for harness settings: 'aa' (setAA), 'gbuffer' (setGBuffer), 'jitter', 'renderScale',
+   * 'timing', 'ao.enabled', 'ao.normals' ('depth' | 'gbuffer'), 'bloom.enabled', 'taa.<option>' (blend, sharpen, gamma,
+   * clamp, filter, historyFormat, stableDepth, reject, velocityFirst, snap), 'ssr' / 'volumetric' (false | true |
+   * options), 'ssr.<option>', 'volumetric.<option>' (incl. intensity), 'motionBlur' (strength, 0 removes the pass, or
+   * options), 'motionBlur.<option>', 'dof' (null | true | options), 'dof.<option>', 'lut' (null | { texture, size,
+   * strength }), 'lut.strength'. An options object replaces the group's options, omitted keys at their defaults (so
    * set('motionBlur', { maxBlur: 16 }) also sets strength 1); true keeps them. Unknown paths and bad values throw
    * (nothing changes); creating SSR / motion blur / ao.normals 'gbuffer' without the G-buffer throws, a volumetric pass
    * without an atmosphere too. Option paths of an absent pass are kept for when it is created. Removed passes are
-   * disposed. Value paths of live passes (e.g. 'ssr.steps', 'lut.strength') do no object allocation (at most one
-   * boxed double per call, V8's).
+   * disposed. Value paths of live passes (e.g. 'ssr.steps', 'lut.strength') do no object allocation (at most one boxed
+   * double per call, V8's).
    * @param {string} path
    * @param {*} value
    */
@@ -1100,7 +1118,10 @@ export class PostFX {
     this._scaleOn = on; this._iw = w; this._ih = h;
     if (this.gbuffer !== null) this.gbuffer.setSize(w, h);
     this.aoPass.setSize(w, h);
-    for (const g of ['ssr', 'volumetric', 'motionBlur', 'dof']) { const p = this._pass(g); if (p !== null) this._scalePass(g, p); }
+    for (const g of ['ssr', 'volumetric', 'motionBlur', 'dof']) {
+      const p = this._pass(g);
+      if (p !== null) this._scalePass(g, p);
+    }
     if (this.taaPass !== null) this.taaPass.setUpscale(on ? w : 0, h);
     if (this.history !== null) this.history.reset();
     if (this.onInternalResize) this.onInternalResize(w, h);
@@ -1521,7 +1542,9 @@ function validateOption(group, key, value) {
 const scaled = (n, s) => Math.max(1, Math.round(n * s));
 
 function checkRenderScale(v) {
-  if (typeof v !== 'number' || !Number.isFinite(v) || v < 0.5 || v > 1) throw new Error(`[PostFX] renderScale: expected a number in [0.5, 1], got ${show(v)}`);
+  if (typeof v !== 'number' || !Number.isFinite(v) || v < 0.5 || v > 1) {
+    throw new Error(`[PostFX] renderScale: expected a number in [0.5, 1], got ${show(v)}`);
+  }
   return v;
 }
 

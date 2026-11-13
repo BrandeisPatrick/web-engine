@@ -1,13 +1,14 @@
-// Browser smoke test: every sample page boots in headless Chrome without console errors, and every bench pose renders
-// a deterministic frame. Starts the Vite dev server in-process (free port from playwright.config.mjs), opens
+// Browser smoke test: every sample page boots in headless Chrome without console errors, and every bench pose renders a
+// deterministic frame. Starts the Vite dev server in-process (free port from playwright.config.mjs), opens
 // /<page>/?bench=1&size=1280x720&nofx=0 (plus PAGE_QUERY), waits for window.__sample.ready (90 s), then per pose:
 // pose(id), settle(), two capture(4) calls (separate tasks) must hash equal (one retry: the first frame after a pose
-// may still adapt), two converged(48) captures must hash equal and leave the held capture as it was (pages with
-// a converge hook, src/core/Bench.js), and info() is recorded. Every page step runs under a 90 s watchdog; a page
-// that reloads after it was ready is waited out and the pose redone once. A page without a harness (it loads and sets a legacy global such
-// as window.__game, the Halloween game's play-mode state: under ?bench=1 it builds its world and exposes the harness)
-// or without a page on this server is SKIPPED, not failed: it still fails on a console error while loading. On macOS a SwiftShader renderer (no GPU) fails. Exit code 1 on any failure. The
-// `-mobile` pages are the same sample on the mobile quality tier (`?quality=mobile`, core/Quality.js).
+// may still adapt), two converged(48) captures must hash equal and leave the held capture as it was (pages with a
+// converge hook, src/core/Bench.js), and info() is recorded. Every page step runs under a 90 s watchdog; a page that
+// reloads after it was ready is waited out and the pose redone once. A page without a harness (it loads and sets a
+// legacy global such as window.__game, the Halloween game's play-mode state: under ?bench=1 it builds its world and
+// exposes the harness) or without a page on this server is SKIPPED, not failed: it still fails on a console error while
+// loading. On macOS a SwiftShader renderer (no GPU) fails. Exit code 1 on any failure. The `-mobile` pages are the same
+// sample on the mobile quality tier (`?quality=mobile`, core/Quality.js).
 //
 //   node test/browser/smoke.mjs                        # nyc-night, miami-drive, halloween and their -mobile variants
 //   node test/browser/smoke.mjs nyc-night --headed --size=1600x900 [--config=other.vite.config.js] [--no-look]
@@ -130,7 +131,8 @@ try {
                 return { c1, c2, held: h.capture(4).hash };
               }, undefined, `converged ${pose}`);
               if (conv) {
-                pr.converged = conv.c1 === conv.c2 && conv.held === hash ? 'yes' : `NO ${conv.c1}/${conv.c2} held ${hash}/${conv.held}`;
+                pr.converged = conv.c1 === conv.c2 && conv.held === hash ? 'yes'
+                  : `NO ${conv.c1}/${conv.c2} held ${hash}/${conv.held}`;
                 if (pr.converged !== 'yes') failures.push(`${id}/${pose}: converged captures: ${pr.converged}`);
               }
               if (PAGE_CHECK[id]) { const msg = await step(PAGE_CHECK[id], undefined, `check ${pose}`); if (msg) failures.push(`${id}/${pose}: ${msg}`); }
@@ -179,7 +181,8 @@ try {
 }
 
 console.log(`\n${formatTable(pageRows, ['page', 'path', 'status', 'load_s', 'poses', 'renderer', 'note'])}`);
-if (poseRows.length) console.log(`\n${formatTable(poseRows, ['page', 'pose', 'hash', 'stable', 'converged', 'draws', 'tris', 'size', 'lum', 'sat', 'over160'])}`);
+const POSE_COLS = ['page', 'pose', 'hash', 'stable', 'converged', 'draws', 'tris', 'size', 'lum', 'sat', 'over160'];
+if (poseRows.length) console.log(`\n${formatTable(poseRows, POSE_COLS)}`);
 if (failures.length) {
   console.log(`\n${failures.length} failure(s):`);
   for (const f of failures) console.log(`  - ${f}`);

@@ -57,16 +57,16 @@
 // the GPU clocks up over its first ~100-300 ms, and 12 frames of a 1.5 ms view are 18 ms (its first two runs read
 // 15-20 % slow). Keep the timed frame count a multiple of 12 (24) so each run covers whole cycles. run() and report()
 // measure through bench(), so with the same live frames. Without `live`, bench() renders the held frames as before.
-// Converged captures: quiet()'s held state shows TAA from a fresh history without jitter, i.e. one frame's samples. That
-// is the whole picture at renderScale 1 (minus the anti-aliasing), but under an upscaling resolve (PostFX renderScale
-// < 1) it is an upsampled internal frame, not what a player sees at rest. converged(frames) shows that instead: the
-// sample's `converge` hook group { begin(h), end(h) } (end optional) has begin() let TAA jitter and accumulate from a
-// reset history (the jitter pattern restarts there) with everything else held as quiet() holds it; then frames - 1
-// renders, capture() renders the last and reads it, end(), quiet() and the warm frames a held bench of `frames` frames
-// would render (see Live frames), so the harness is back in the capture state: held captures before and after hash
-// equal, and so do repeated converged captures of a pose (frames from a reset history, nothing else moving). 48
-// frames = 3 cycles of the 16-position jitter pattern and 4 of the 12-frame schedules; the first frame's share of the
-// accumulated history is then 0.9^47 = 0.7 % at the default TAA blend. Without the hook converged() is capture().
+// Converged captures: quiet()'s held state shows TAA from a fresh history without jitter, i.e. one frame's samples.
+// That is the whole picture at renderScale 1 (minus the anti-aliasing), but under an upscaling resolve (PostFX
+// renderScale < 1) it is an upsampled internal frame, not what a player sees at rest. converged(frames) shows that
+// instead: the sample's `converge` hook group { begin(h), end(h) } (end optional) has begin() let TAA jitter and
+// accumulate from a reset history (the jitter pattern restarts there) with everything else held as quiet() holds it;
+// then frames - 1 renders, capture() renders the last and reads it, end(), quiet() and the warm frames a held bench of
+// `frames` frames would render (see Live frames), so the harness is back in the capture state: held captures before and
+// after hash equal, and so do repeated converged captures of a pose (frames from a reset history, nothing else moving).
+// 48 frames = 3 cycles of the 16-position jitter pattern and 4 of the 12-frame schedules; the first frame's share of
+// the accumulated history is then 0.9^47 = 0.7 % at the default TAA blend. Without the hook converged() is capture().
 // Captures read the default framebuffer with gl.readPixels in the same task as their render (no
 // preserveDrawingBuffer needed) into one reused full-size buffer, then box-downsample by `scale` (1..16): `data` holds
 // the raw per-channel SUMS over each scale x scale box (Uint16Array, top-down RGBA rows, at most 16 * 16 * 255, so
@@ -255,7 +255,8 @@ export function createBenchHarness(engine, o = {}) {
   const live = o.live && typeof o.live === 'object' ? o.live : null;
   const liveDt = live && Number.isFinite(live.dt) ? live.dt : 1 / 60;
   const liveFrame = () => { if (live.frame) live.frame(liveDt, h); renderFrame(); };
-  const conv = o.converge && typeof o.converge === 'object' && typeof o.converge.begin === 'function' ? o.converge : null;
+  const conv = o.converge && typeof o.converge === 'object' && typeof o.converge.begin === 'function'
+    ? o.converge : null;
   // back to the capture state after n frames that were not held: quiet(), then the warm frames of a held bench of n
   // frames (see Live frames in the header)
   const backToHeld = (n) => {

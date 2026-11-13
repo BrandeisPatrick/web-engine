@@ -102,7 +102,8 @@ const VELOCITY_FRAG = /* glsl */`
 // (its jitter is in internal px). Derived text: the plain one stays as it was.
 const VELOCITY_UPSCALE_FRAG = [
   ['uniform vec2 uJitter, uRes;', 'uniform vec2 uJitter, uRes, uInRes;'],
-  ['ivec2 ip = ivec2( gl_FragCoord.xy );', 'ivec2 ip = min( ivec2( gl_FragCoord.xy * uInRes / uRes ), ivec2( uInRes ) - 1 );'],
+  ['ivec2 ip = ivec2( gl_FragCoord.xy );',
+    'ivec2 ip = min( ivec2( gl_FragCoord.xy * uInRes / uRes ), ivec2( uInRes ) - 1 );'],
   ['vec2 uv = ( gl_FragCoord.xy + uJitter ) / uRes;', 'vec2 uv = ( vec2( ip ) + 0.5 + uJitter ) / uInRes;'],
 ].reduce((t, [a, b]) => {
   if (t.split(a).length !== 2) throw new Error(`[MotionBlurPass] shader anchor not found once: ${a}`);

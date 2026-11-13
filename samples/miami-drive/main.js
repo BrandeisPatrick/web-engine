@@ -247,7 +247,10 @@ async function boot() {
   // the clustered light grid and the scene copy map gl_FragCoord of the scene target: its size is PostFX's internal
   // size (the drawing buffer x renderScale under TAA), which PostFX reports on every change
   engine.onResize = (w, h, pr) => { if (postfx) postfx.setSize(w, h, pr); else world.setSize(w, h, pr); };
-  if (postfx) { postfx.onInternalResize = (w, h) => world.setSize(w, h, 1); postfx.onInternalResize(postfx.internalWidth, postfx.internalHeight); }
+  if (postfx) {
+    postfx.onInternalResize = (w, h) => world.setSize(w, h, 1);
+    postfx.onInternalResize(postfx.internalWidth, postfx.internalHeight);
+  }
   else world.setSize(engine.size.width, engine.size.height, engine.pixelRatio);
 
   // ---------------------------------------------------------------- the car
@@ -625,8 +628,8 @@ function makeHarness({ engine, world, atmo, postfx, car, props, rig, placeCar, p
       }
       void posed;
     },
-    // converged captures (Bench.converged): TAA jittered and accumulating from a reset history (the jitter pattern and a
-    // reused SSR buffer restart), everything else as quiet() holds it; quiet() afterwards holds the frame again
+    // converged captures (Bench.converged): TAA jittered and accumulating from a reset history (the jitter pattern
+    // and a reused SSR buffer restart), everything else as quiet() holds it; quiet() afterwards holds the frame again
     converge: {
       begin: () => {
         if (!postfx || !postfx.history) return;

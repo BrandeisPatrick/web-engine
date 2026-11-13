@@ -314,7 +314,8 @@ export const TAA_UPSCALE_FRAGMENT = FRAG_HEAD + /* glsl */`
       vec3 mean = m1 / 9.0;
       if ( uSharpen > 0.0 ) { cur += ( cur - mean ) * uSharpen; cur.x = clamp( cur.x, 0.0, 0.999 ); }
 
-      vec2 uvJ = ( vec2( bp ) + 0.5 + uJitter ) / uInRes; // where that texel's surface is, unjittered` + FRAG_RESOLVE + /* glsl */`
+      vec2 uvJ = ( vec2( bp ) + 0.5 + uJitter ) / uInRes; // where that texel's surface is, unjittered`
+  + FRAG_RESOLVE + /* glsl */`
       // this frame's weight: (1 - blend) scaled by how close its nearest sample lies to the pixel centre (relative to
       // the mean over sample placements), so detail finer than the internal grid accumulates from the jitter
       float wn = a > 0.0 ? min( 1.0, ( 1.0 - a ) * mix( 1.0, exp( - 2.29 * dn ) * uUp.y, uUp.z ) ) : 1.0;

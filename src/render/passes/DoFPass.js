@@ -257,8 +257,7 @@ function derive(text, reps) {
 }
 const PREFILTER_UPSCALE_FRAG = derive(PREFILTER_FRAG, [
   ['\n  void main() {', DOF_IN_GLSL],
-  ['texelFetch( tDepth, i0, 0 )', 'texelFetch( tDepth, dofIn( i0 ), 0 )'], ['texelFetch( tDepth, p1, 0 )', 'texelFetch( tDepth, dofIn( p1 ), 0 )'],
-  ['texelFetch( tDepth, p2, 0 )', 'texelFetch( tDepth, dofIn( p2 ), 0 )'], ['texelFetch( tDepth, i1, 0 )', 'texelFetch( tDepth, dofIn( i1 ), 0 )'],
+  ...['i0', 'p1', 'p2', 'i1'].map((t) => [`texelFetch( tDepth, ${t}, 0 )`, `texelFetch( tDepth, dofIn( ${t} ), 0 )`]),
 ]);
 const COMPOSITE_UPSCALE_FRAG = derive(COMPOSITE_FRAG, [
   ['\n  void main() {', DOF_IN_GLSL],
@@ -449,7 +448,9 @@ export class DoFPass extends Pass {
     on = !!on;
     if (on === this._up) return;
     this._up = on;
-    for (const [m, plain, up] of [[this._prefilterMat, PREFILTER_FRAG, PREFILTER_UPSCALE_FRAG], [this._compositeMat, COMPOSITE_FRAG, COMPOSITE_UPSCALE_FRAG]]) {
+    const mats = [[this._prefilterMat, PREFILTER_FRAG, PREFILTER_UPSCALE_FRAG],
+      [this._compositeMat, COMPOSITE_FRAG, COMPOSITE_UPSCALE_FRAG]];
+    for (const [m, plain, up] of mats) {
       m.fragmentShader = on ? up : plain;
       if (on) m.defines.DOF_UPSCALE = 1; else delete m.defines.DOF_UPSCALE;
       m.needsUpdate = true;
