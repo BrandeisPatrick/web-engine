@@ -1347,6 +1347,15 @@ async function boot() {
       // only move uniforms and cannot be put back for the next capture. Left out: input, the sim and the kid's
       // animation (gameplay and physics), the camera rig (the camera stays at the pose), HUD and audio. With one
       // shadow map (autoUpdate) there is no cascade schedule to advance.
+      // converged captures (Bench.converged): TAA jittered and accumulating from a reset history, all else as quiet()
+      // holds it; quiet() afterwards holds the frame again
+      converge: {
+        begin: () => {
+          if (!postfx || !postfx.history) return;
+          heldStill = false; postfx.set('jitter', true);
+          postfx.history.reset(); postfx.taaPass.reset();
+        },
+      },
       live: {
         begin: () => { // what quiet() holds, as in play: eye adaptation, TAA and the volumetric march jittered and accumulating
           glowNow.set(world.glowLevels);

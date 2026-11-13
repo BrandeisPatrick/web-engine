@@ -39,6 +39,8 @@ const SUITES = [
   // directional lights black at the pixel skip their BRDF (shadows.skipUnlit)
   { file: 'skip-unlit.mjs' },
   { file: 'postfx-options.mjs' },
+  // PostFX renderScale (temporal upscaling): sizes, defines, scale-1 texts pinned, sequences, allocation
+  { file: 'render-scale.mjs' },
   { file: 'gbuffer-chunks.mjs' },
   // render (0.8.0): screen-space reflections + AO normals, volumetrics, motion blur / DoF / LUT, water refraction
   { file: 'ssr-ao.mjs' },

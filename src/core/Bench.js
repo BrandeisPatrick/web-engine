@@ -12,14 +12,16 @@
 //     settings: { 'postfx.aa': (v) => postfx.setMSAA(v === 'fxaa' ? 0 : 'auto'), 'shadows.kernel': { get, set } },
 //     settle: (h) => world.whenIdle(),                                  // optional: async work a pose starts
 //     live: { begin: (h) => postfx.set('jitter', true), frame: (dt, h) => world.update(dt, cam.position) }, // optional
+//     converge: { begin: (h) => { postfx.set('jitter', true); postfx.history.reset(); } },               // optional
 //   });
 //   const bp = readBenchParams();                 // ?bench=1&size=WxH
 //   if (bp.size) harness.resize(bp.size.w, bp.size.h);
 //   harness.setReady();
 //
-// API: name, engine, ready, poses (ids), settings (ids), frozen, live (the hook group or null), setReady(),
-// pose(id) -> id, settle() -> Promise, render(), bench(frames = 24, { warmup = 3 }) -> ms per frame,
-// capture(scale = 4, into) -> { w, h, scale, data, hash }, diff(a, b) -> { meanAbs, p99, max, pctOver2, pctOver8 },
+// API: name, engine, ready, poses (ids), settings (ids), frozen, live / converge (the hook groups or null),
+// setReady(), pose(id) -> id, settle() -> Promise, render(), bench(frames = 24, { warmup = 3 }) -> ms per frame,
+// capture(scale = 4, into) -> { w, h, scale, data, hash }, converged(frames = 48, scale = 4, into) -> the same,
+// diff(a, b) -> { meanAbs, p99, max, pctOver2, pctOver8 },
 // set(path, value), get(path), run(plan) -> Promise<{ name, renderer, size, frames, warmup, ms, rows }>,
 // info() -> { renderer, size, drawCalls, triangles, memory }, resize(w, h), size, freeze(), resume().
 // readBenchParams(search) parses the bench query.
@@ -55,6 +57,16 @@
 // the GPU clocks up over its first ~100-300 ms, and 12 frames of a 1.5 ms view are 18 ms (its first two runs read
 // 15-20 % slow). Keep the timed frame count a multiple of 12 (24) so each run covers whole cycles. run() and report()
 // measure through bench(), so with the same live frames. Without `live`, bench() renders the held frames as before.
+// Converged captures: quiet()'s held state shows TAA from a fresh history without jitter, i.e. one frame's samples. That
+// is the whole picture at renderScale 1 (minus the anti-aliasing), but under an upscaling resolve (PostFX renderScale
+// < 1) it is an upsampled internal frame, not what a player sees at rest. converged(frames) shows that instead: the
+// sample's `converge` hook group { begin(h), end(h) } (end optional) has begin() let TAA jitter and accumulate from a
+// reset history (the jitter pattern restarts there) with everything else held as quiet() holds it; then frames - 1
+// renders, capture() renders the last and reads it, end(), quiet() and the warm frames a held bench of `frames` frames
+// would render (see Live frames), so the harness is back in the capture state: held captures before and after hash
+// equal, and so do repeated converged captures of a pose (frames from a reset history, nothing else moving). 48
+// frames = 3 cycles of the 16-position jitter pattern and 4 of the 12-frame schedules; the first frame's share of the
+// accumulated history is then 0.9^47 = 0.7 % at the default TAA blend. Without the hook converged() is capture().
 // Captures read the default framebuffer with gl.readPixels in the same task as their render (no
 // preserveDrawingBuffer needed) into one reused full-size buffer, then box-downsample by `scale` (1..16): `data` holds
 // the raw per-channel SUMS over each scale x scale box (Uint16Array, top-down RGBA rows, at most 16 * 16 * 255, so
@@ -162,6 +174,8 @@ export function readBenchParams(search) {
  * @param {number} [o.dt=0]  seconds passed to renderFn for every harness frame (see header)
  * @param {{ dt?: number, begin?: Function, frame?: Function, end?: Function }} [o.live]  bench() frames as played:
  *   begin(harness), frame(dt, harness) before each render, end(harness) (see "Live frames" in the header)
+ * @param {{ begin: Function, end?: Function }} [o.converge]  converged(): begin(harness) lets TAA accumulate with
+ *   jitter from a reset history, all else held; end(harness) (see "Converged captures" in the header)
  * @param {boolean} [o.global=true]  assign window.__sample
  */
 // ?perfreport=1: run report() and show it (plain DOM, no dependency on the ui layer); the page keeps its last pose
@@ -241,6 +255,14 @@ export function createBenchHarness(engine, o = {}) {
   const live = o.live && typeof o.live === 'object' ? o.live : null;
   const liveDt = live && Number.isFinite(live.dt) ? live.dt : 1 / 60;
   const liveFrame = () => { if (live.frame) live.frame(liveDt, h); renderFrame(); };
+  const conv = o.converge && typeof o.converge === 'object' && typeof o.converge.begin === 'function' ? o.converge : null;
+  // back to the capture state after n frames that were not held: quiet(), then the warm frames of a held bench of n
+  // frames (see Live frames in the header)
+  const backToHeld = (n) => {
+    if (quiet) quiet(h);
+    const k = 2 + (((n - 2) % 12) + 12) % 12;
+    for (let i = 0; i < k; i++) renderFrame();
+  };
 
   const h = {
     name: o.name || 'sample',
@@ -254,6 +276,8 @@ export function createBenchHarness(engine, o = {}) {
     frozen: false,
     /** The sample's live hook group, or null (see "Live frames" in the header). */
     live,
+    /** The sample's converge hook group, or null (see "Converged captures" in the header). */
+    converge: conv,
 
     /** Mark the sample loaded: the smoke / bench scripts wait for this. */
     setReady() {
@@ -341,10 +365,28 @@ export function createBenchHarness(engine, o = {}) {
         return P.benchThroughput(liveFrame, frames, { warmup: w });
       } finally { // back to the capture state: the sample's end(), then the tail of pose() without after()
         if (live.end) live.end(h);
-        if (quiet) quiet(h);
-        // 2 or more warm frames: as many as a held bench renders, modulo 12 (header)
-        const n = 2 + (((warmup + frames - 2) % 12) + 12) % 12;
-        for (let i = 0; i < n; i++) renderFrame();
+        backToHeld(warmup + frames); // 2 or more warm frames: as many as a held bench renders, modulo 12 (header)
+      }
+    },
+
+    /**
+     * Capture the pose as TAA converges at rest (see "Converged captures" in the header): the sample's converge hooks,
+     * `frames` accumulating frames from a reset history (the last one read), then back to the held state.
+     * @param {number} [frames=48]
+     * @param {number} [scale=4]  1..16
+     * @param {BenchCapture|null} [into]
+     * @returns {BenchCapture}
+     */
+    converged(frames = 48, scale = 4, into = null) {
+      if (!conv) return h.capture(scale, into);
+      const n = Math.max(1, frames | 0);
+      conv.begin(h);
+      try {
+        for (let i = 1; i < n; i++) renderFrame();
+        return h.capture(scale, into);
+      } finally {
+        if (conv.end) conv.end(h);
+        backToHeld(n);
       }
     },
 

@@ -2,8 +2,9 @@
 // a deterministic frame. Starts the Vite dev server in-process (free port from playwright.config.mjs), opens
 // /<page>/?bench=1&size=1280x720&nofx=0 (plus PAGE_QUERY), waits for window.__sample.ready (90 s), then per pose:
 // pose(id), settle(), two capture(4) calls (separate tasks) must hash equal (one retry: the first frame after a pose
-// may still adapt), and info() is recorded. Every page step runs under a 90 s watchdog; a page that reloads after it
-// was ready is waited out and the pose redone once. A page without a harness (it loads and sets a legacy global such
+// may still adapt), two converged(48) captures must hash equal and leave the held capture as it was (pages with
+// a converge hook, src/core/Bench.js), and info() is recorded. Every page step runs under a 90 s watchdog; a page
+// that reloads after it was ready is waited out and the pose redone once. A page without a harness (it loads and sets a legacy global such
 // as window.__game, the Halloween game's play-mode state: under ?bench=1 it builds its world and exposes the harness)
 // or without a page on this server is SKIPPED, not failed: it still fails on a console error while loading. On macOS a SwiftShader renderer (no GPU) fails. Exit code 1 on any failure. The
 // `-mobile` pages are the same sample on the mobile quality tier (`?quality=mobile`, core/Quality.js).
@@ -120,6 +121,18 @@ try {
               Object.assign(pr, { hash, stable: s.reloads !== reloads ? `${stable} (reloaded)` : stable, draws: info.drawCalls, tris: info.triangles, size: fmtSize(info.size) });
               row.renderer = info.renderer;
               if (!ok) failures.push(`${id}/${pose}: captures differ (${stable})`);
+              // converged captures (Bench.converged, the sample's converge hook): two hash equal, and the held capture
+              // after them equals the one before (converged() returns to the capture state)
+              const conv = await step(() => {
+                const h = window.__sample;
+                if (!h.converge) return null;
+                const c1 = h.converged(48, 4).hash, c2 = h.converged(48, 4).hash;
+                return { c1, c2, held: h.capture(4).hash };
+              }, undefined, `converged ${pose}`);
+              if (conv) {
+                pr.converged = conv.c1 === conv.c2 && conv.held === hash ? 'yes' : `NO ${conv.c1}/${conv.c2} held ${hash}/${conv.held}`;
+                if (pr.converged !== 'yes') failures.push(`${id}/${pose}: converged captures: ${pr.converged}`);
+              }
               if (PAGE_CHECK[id]) { const msg = await step(PAGE_CHECK[id], undefined, `check ${pose}`); if (msg) failures.push(`${id}/${pose}: ${msg}`); }
               const lk = !NO_LOOK && PAGE_LOOK[PAGE_PATH[id] || id];
               if (lk) {
@@ -166,7 +179,7 @@ try {
 }
 
 console.log(`\n${formatTable(pageRows, ['page', 'path', 'status', 'load_s', 'poses', 'renderer', 'note'])}`);
-if (poseRows.length) console.log(`\n${formatTable(poseRows, ['page', 'pose', 'hash', 'stable', 'draws', 'tris', 'size', 'lum', 'sat', 'over160'])}`);
+if (poseRows.length) console.log(`\n${formatTable(poseRows, ['page', 'pose', 'hash', 'stable', 'converged', 'draws', 'tris', 'size', 'lum', 'sat', 'over160'])}`);
 if (failures.length) {
   console.log(`\n${failures.length} failure(s):`);
   for (const f of failures) console.log(`  - ${f}`);

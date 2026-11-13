@@ -54,7 +54,22 @@
 // G-buffer velocity where it wrote one, else 0; uSsrShift = (this frame's jitter - the traced frame's) / size, in uv).
 // On a traced frame age and shift are 0: the same uv as the plain fetch. Two more full-resolution reads (normal and
 // velocity at the pixel, mostly cache hits of the motion reads below).
-// API: render(renderer, writeBuffer, readBuffer), setSize(w, h), reset(), texture, ssr, dispose(); taaFilterWeights(jx, jy).
+// Upscaling (setUpscale(w, h), PostFX renderScale < 1; define TAA_UPSCALE, the TAA_UPSCALE_FRAGMENT text, so the plain
+// text above is unchanged): the input (colour, depth, G-buffer, the camera jitter) is the internal size w x h, the
+// output and history the size of setSize(). Per output pixel, with its centre at pin internal px:
+//   1. Current colour: the 3x3 internal texels around pin, each weighted by the window exp(-2.29 upscaleWindow d^2) of
+//      the distance d, in OUTPUT px, from where it sampled the scene this frame (texel centre + uJitter) to the pixel
+//      centre; dn = the nearest sample's d^2. Moments and the variance clip from the same 9 texels.
+//   2. Motion from the closest-depth internal texel of pin's texel and its diagonals; history at output resolution at
+//      uv - velocity (Catmull-Rom); disocclusion against the output history's depth, as above.
+//   3. This frame's weight wn = min(1, (1 - blend) * exp(-2.29 dn) / E), E = taaUpscaleMeanWeight (the mean of that
+//      factor over sample placements, uUp.y): a frame whose nearest sample lands on the pixel centre counts more, one
+//      whose samples all lie far from it less, so detail finer than the internal grid accumulates from the jitter
+//      instead of being overwritten by an upsampled frame. A rejected history takes wn = 1.
+//   4. Fresh history: the windowed upsample of 1. TAA_SSR composites into every tap; TAA_SSR_REUSE fetches the normal
+//      and velocity at pin's internal texel and shifts by the jitter change over the internal size.
+// API: render(renderer, writeBuffer, readBuffer), setSize(w, h), setUpscale(w, h), reset(), texture, ssr, upscale,
+// inputWidth / inputHeight, upscaleWindow, dispose(); taaFilterWeights(jx, jy), taaUpscaleMeanWeight(rx, ry).
 // Perspective cameras and a standard depth buffer (not reversedDepthBuffer / logarithmicDepthBuffer): the depth
 // reprojection and disocclusion test linearise depth with near / far. Output is NaN / Inf-safe (black).
 import * as THREE from 'three';
@@ -82,12 +97,9 @@ export function taaFilterWeights(jx, jy, out = new Float32Array(9)) {
   return out;
 }
 
-/** @internal The TAA shader sources (test/postfx-options.mjs pins the fragment text without its TAA_SSR blocks). */
-export const TAA_SHADER = {
-  vertexShader: /* glsl */`
-    varying vec2 vUv;
-    void main() { vUv = uv; gl_Position = vec4( position.xy, 0.0, 1.0 ); }`,
-  fragmentShader: /* glsl */`
+// The fragment shader in pieces: TAA_SHADER.fragmentShader is HEAD + MAIN + RESOLVE + OUT, byte for byte the text
+// before renderScale existed; the upscaling variant (TAA_UPSCALE_FRAGMENT) shares HEAD and RESOLVE.
+const FRAG_HEAD = /* glsl */`
     uniform sampler2D tColor;
     uniform highp sampler2D tDepth;
     uniform sampler2D tVelocity;
@@ -138,7 +150,9 @@ export const TAA_SHADER = {
     #else
       return texture2D( tHistory, uv ).rgb;
     #endif
-    }
+    }`;
+
+const FRAG_MAIN = /* glsl */`
 
     #define TAA_CLOSEST( X, Y ) { ivec2 q = clamp( ip + ivec2( X, Y ), ivec2( 0 ), mx ); float e = texelFetch( tDepth, q, 0 ).x; if ( e < d ) { d = e; bp = q; } }
     #define TAA_TAP( X, Y, I ) { vec3 c = tm( texelFetch( tColor, clamp( ip + ivec2( X, Y ), ivec2( 0 ), mx ), 0 ).rgb ); cur += c * uWeights[ I ]; m1 += c; m2 += c * c; lo = min( lo, c ); hi = max( hi, c ); }
@@ -178,7 +192,11 @@ export const TAA_SHADER = {
       if ( uSharpen > 0.0 ) { cur += ( cur - mean ) * uSharpen; cur.x = clamp( cur.x, 0.0, 0.999 ); }
 
       // motion of the front-most surface: G-buffer velocity, or the camera reprojection of its depth
-      vec2 uvJ = ( vec2( bp ) + 0.5 + uJitter ) / uRes; // where that texel's surface is, unjittered
+      vec2 uvJ = ( vec2( bp ) + 0.5 + uJitter ) / uRes; // where that texel's surface is, unjittered`;
+
+// motion, history position, rejection and the clipped history h (both mains): needs bp, d, z, uvJ, mean, m2, lo, hi
+// and `mx` = the history's last texel
+const FRAG_RESOLVE = /* glsl */`
       vec4 ndc = vec4( uvJ * 2.0 - 1.0, d * 2.0 - 1.0, 1.0 );
       vec4 pc = uReproj * ndc; // previous clip position if the surface is static
     #ifdef TAA_VELOCITY_FIRST
@@ -233,10 +251,90 @@ export const TAA_SHADER = {
       vec3 ext = max( sqrt( max( m2 / 9.0 - mean * mean, 0.0 ) ) * uGamma, vec3( 1e-5 ) ), v = h - mean, k = abs( v / ext );
       float m = max( k.x, max( k.y, k.z ) );
       if ( m > 1.0 ) h = mean + v / m; // clip toward the mean
-    #endif
+    #endif`;
+
+const FRAG_OUT = /* glsl */`
       gl_FragColor = vec4( finite( itm( mix( cur, h, a ) ) ), z );
-    }`,
+    }`;
+
+/** @internal The TAA shader sources (test/postfx-options.mjs pins the fragment text without its TAA_SSR blocks). */
+export const TAA_SHADER = {
+  vertexShader: /* glsl */`
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = vec4( position.xy, 0.0, 1.0 ); }`,
+  fragmentShader: FRAG_HEAD + FRAG_MAIN + FRAG_RESOLVE + FRAG_OUT,
 };
+
+/**
+ * @internal The upscaling resolve (define TAA_UPSCALE, PostFX renderScale < 1): the input (colour, depth, G-buffer) is
+ * the internal size uInRes, the output and history are uRes. See "Upscaling" in the header.
+ */
+export const TAA_UPSCALE_FRAGMENT = FRAG_HEAD + /* glsl */`
+    uniform vec2 uInRes; // internal (scene) size, px; uRes = output and history size
+    uniform vec3 uUp; // x: window factor on d^2 (output px); y: 1 / E[c] (the mean nearest-sample weight); z: its use
+
+    #define TAAU_CLOSEST( X, Y ) { ivec2 q = clamp( ic + ivec2( X, Y ), ivec2( 0 ), imx ); \
+      float e = texelFetch( tDepth, q, 0 ).x; if ( e < d ) { d = e; bp = q; } }
+    #define TAAU_COL( q ) texelFetch( tColor, q, 0 ).rgb
+    #ifdef TAA_SSR
+    #undef TAAU_COL
+    #define TAAU_COL( q ) engineSsrComposite( texelFetch( tColor, q, 0 ).rgb, ssrC )
+    #endif
+    // an internal texel q sampled the scene at q + 0.5 + uJitter (internal px): its weight is the window of its
+    // distance to this output pixel's centre, in output px (o); dn = the nearest sample's squared distance
+    #define TAAU_TAP( X, Y ) { ivec2 q = clamp( ic + ivec2( X, Y ), ivec2( 0 ), imx ); vec3 c = tm( TAAU_COL( q ) ); \
+      vec2 o = ( vec2( q ) + 0.5 + uJitter - pin ) * ko; float dd = dot( o, o ), w = exp( - 2.29 * uUp.x * dd ); \
+      cur += c * w; ws += w; dn = min( dn, dd ); m1 += c; m2 += c * c; lo = min( lo, c ); hi = max( hi, c ); }
+
+    void main() {
+      vec2 ko = uRes / uInRes; // output px per internal px
+      vec2 pin = gl_FragCoord.xy / ko; // this output pixel's centre, internal px
+      ivec2 imx = ivec2( uInRes ) - 1, mx = ivec2( uRes ) - 1, ic = clamp( ivec2( pin ), ivec2( 0 ), imx );
+      float d = texelFetch( tDepth, ic, 0 ).x;
+      ivec2 bp = ic;
+      TAAU_CLOSEST( - 1, - 1 ) TAAU_CLOSEST( 1, - 1 ) TAAU_CLOSEST( - 1, 1 ) TAAU_CLOSEST( 1, 1 )
+      float z = linearDepth( d );
+    #ifdef TAA_SSR
+     #ifdef TAA_SSR_REUSE
+      vec4 sg = texelFetch( tNormal, ic, 0 );
+      vec2 sv = ( engineGbFlags( sg.a ) & ENGINE_GB_WROTE ) != 0 ? texelFetch( tVelocity, ic, 0 ).rg : vec2( 0.0 );
+      vec4 ssrC = texture2D( tSSR, vUv - sv * uSsrAge + uSsrShift );
+     #else
+      vec4 ssrC = texture2D( tSSR, vUv );
+     #endif
+    #endif
+      // current frame at this output pixel: the windowed 3x3 internal neighbourhood + its moments (tonemapped YCoCg)
+      vec3 cur = vec3( 0.0 ), m1 = vec3( 0.0 ), m2 = vec3( 0.0 ), lo = vec3( 1e4 ), hi = vec3( - 1e4 );
+      float ws = 0.0, dn = 1e9;
+      TAAU_TAP( - 1, - 1 ) TAAU_TAP( 0, - 1 ) TAAU_TAP( 1, - 1 )
+      TAAU_TAP( - 1, 0 ) TAAU_TAP( 0, 0 ) TAAU_TAP( 1, 0 )
+      TAAU_TAP( - 1, 1 ) TAAU_TAP( 0, 1 ) TAAU_TAP( 1, 1 )
+      cur /= max( ws, 1e-20 );
+      if ( uFresh > 0.5 ) { gl_FragColor = vec4( finite( itm( cur ) ), z ); return; } // fresh: the filtered upsample
+      vec3 mean = m1 / 9.0;
+      if ( uSharpen > 0.0 ) { cur += ( cur - mean ) * uSharpen; cur.x = clamp( cur.x, 0.0, 0.999 ); }
+
+      vec2 uvJ = ( vec2( bp ) + 0.5 + uJitter ) / uInRes; // where that texel's surface is, unjittered` + FRAG_RESOLVE + /* glsl */`
+      // this frame's weight: (1 - blend) scaled by how close its nearest sample lies to the pixel centre (relative to
+      // the mean over sample placements), so detail finer than the internal grid accumulates from the jitter
+      float wn = a > 0.0 ? min( 1.0, ( 1.0 - a ) * mix( 1.0, exp( - 2.29 * dn ) * uUp.y, uUp.z ) ) : 1.0;
+      gl_FragColor = vec4( finite( itm( mix( h, cur, wn ) ) ), z );
+    }`;
+
+/**
+ * Mean of exp(-2.29 d^2) over the nearest-sample offset d (output px) of an upscaled TAA resolve: per axis the nearest
+ * sample lies uniformly within half an internal pixel, 0.5 * out / in output px. Normalises the per-frame weight.
+ * @param {number} ratioX output px per internal px (>= 1)
+ * @param {number} ratioY
+ */
+export function taaUpscaleMeanWeight(ratioX, ratioY) {
+  const axis = (a) => { // (1 / a) * integral_0^a exp(-2.29 x^2) dx, midpoint rule
+    let s = 0;
+    for (let i = 0; i < 64; i++) { const x = (i + 0.5) / 64 * a; s += Math.exp(-2.29 * x * x); }
+    return s / 64;
+  };
+  return axis(0.5 * ratioX) * axis(0.5 * ratioY);
+}
 
 export class TAAPass extends Pass {
   /**
@@ -273,6 +371,11 @@ export class TAAPass extends Pass {
     this._ssrOn = false; // TAA_SSR defined
     this._ssrReuse = false; // TAA_SSR_REUSE defined
     this._w = 1; this._h = 1;
+    this._inW = 0; this._inH = 0; // upscaling: the internal (input) size, 0 = off (input = output size)
+    /** Upscaling: window factor on the squared distance (output px) of the current-frame reconstruction (1). */
+    this.upscaleWindow = 1;
+    /** Upscaling: how much the per-frame weight follows the nearest sample's distance (1; 0 = a fixed 1 - blend). */
+    this.upscaleProximity = 1;
     this._rt = [null, null];
     this._makeTargets();
     this._cur = 0;
@@ -291,6 +394,7 @@ export class TAAPass extends Pass {
         uBlend: { value: 0.9 }, uGamma: { value: 1 }, uSharpen: { value: 0 }, uFresh: { value: 1 },
         uNear: { value: 0.1 }, uFar: { value: 1000 },
         uRes: { value: new THREE.Vector2(1, 1) },
+        uInRes: { value: new THREE.Vector2(1, 1) }, uUp: { value: new THREE.Vector3(1, 1, 1) }, // TAA_UPSCALE only
       },
       vertexShader: TAA_SHADER.vertexShader,
       fragmentShader: TAA_SHADER.fragmentShader,
@@ -340,6 +444,31 @@ export class TAAPass extends Pass {
     this._w = width; this._h = height;
     for (const rt of this._rt) rt.setSize(width, height);
     this.material.uniforms.uRes.value.set(width, height);
+    this._syncUpscale();
+    this._reset = true;
+  }
+
+  /** Upscaling: the internal (input) size, or 0 x 0 when the input is the output size (setUpscale). */
+  get inputWidth() { return this._inW || this._w; }
+  get inputHeight() { return this._inH || this._h; }
+  /** True while the resolve upscales (TAA_UPSCALE). */
+  get upscale() { return this._inW > 0; }
+
+  /**
+   * Upscale from an internal input of width x height px (the scene / G-buffer size) to the output size of setSize();
+   * 0 (or null) = off: the input is the output size and the shader is the plain resolve. Resets the history.
+   * @param {number|null} width
+   * @param {number|null} [height]
+   */
+  setUpscale(width, height) {
+    const w = width > 0 ? Math.max(1, width | 0) : 0, h = w > 0 ? Math.max(1, height | 0) : 0;
+    if (w === this._inW && h === this._inH) return;
+    this._inW = w; this._inH = h;
+    const m = this.material, on = w > 0;
+    m.fragmentShader = on ? TAA_UPSCALE_FRAGMENT : TAA_SHADER.fragmentShader;
+    if (on) m.defines.TAA_UPSCALE = 1; else delete m.defines.TAA_UPSCALE;
+    m.needsUpdate = true;
+    this._syncUpscale();
     this._reset = true;
   }
 
@@ -369,12 +498,13 @@ export class TAAPass extends Pass {
     u.uInvVPw.value.set(iv[3], iv[7], iv[11], iv[15]);
     const j = h.uniforms.uJitter.value;
     taaFilterWeights(j.x, j.y, u.uWeights.value);
-    if (reuse) {
+    if (reuse) { // the jitter is in input pixels
       const age = s.age ?? 0, tj = s.tracedJitter;
       if (u.uSsrAge.value !== age) u.uSsrAge.value = age;
       if (age === 0 || !tj) u.uSsrShift.value.set(0, 0);
-      else u.uSsrShift.value.set((j.x - tj.x) / this._w, (j.y - tj.y) / this._h);
+      else u.uSsrShift.value.set((j.x - tj.x) / this.inputWidth, (j.y - tj.y) / this.inputHeight);
     }
+    if (this._inW > 0) { u.uUp.value.x = this.upscaleWindow; u.uUp.value.z = this.upscaleProximity; }
     renderer.setRenderTarget(this._rt[this._cur]);
     this._quad.render(renderer);
   }
@@ -383,6 +513,14 @@ export class TAAPass extends Pass {
     for (const rt of this._rt) rt.dispose();
     this.material.dispose();
     this._quad.dispose();
+  }
+
+  // TAA_UPSCALE uniforms from the input / output sizes: uInRes, uUp.y = 1 / taaUpscaleMeanWeight
+  _syncUpscale() {
+    if (this._inW === 0) return;
+    const u = this.material.uniforms;
+    u.uInRes.value.set(this._inW, this._inH);
+    u.uUp.value.y = 1 / taaUpscaleMeanWeight(Math.max(1, this._w / this._inW), Math.max(1, this._h / this._inH));
   }
 
   _makeTargets() {
