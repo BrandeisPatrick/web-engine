@@ -40,7 +40,7 @@ const Q = resolveQuality({
     desktop: {
       engine: { maxPixelRatio: 1.5 }, // 2268x1473 on a 14" Retina under TAA: see the bench table (native 3024x1964 is ~18 ms)
       shadows: { cascades: 2, kernel: 'fast' },
-      postfx: { gbuffer: true, aa: 'taa', ssr: { scale: 0.4, steps: 20, maxRoughness: 0.55, maxDistance: 90, thickness: 0.5, jitter: false, denoise: 4 }, volumetric: { scale: 0.25, steps: 12, intensity: 0.55, density: 1.2 }, motionBlur: { strength: 0.45, samples: 6, maxBlur: 16 } },
+      postfx: { gbuffer: true, aa: 'taa', ssr: { scale: 0.4, steps: 20, maxRoughness: 0.55, maxDistance: 90, thickness: 0.5, jitter: false, denoise: 4, interval: 2 }, volumetric: { scale: 0.25, steps: 12, intensity: 0.55, density: 1.2 }, motionBlur: { strength: 0.45, samples: 6, maxBlur: 16 } },
       lights: { clustered: true, clusteredRange: 85 },
       world: { streamRadius: 800, traffic: 70, trafficHd: { count: 3, radius: 22, midCount: 10, midRadius: 60, parked: true } },
       car: { lod: 'high' },

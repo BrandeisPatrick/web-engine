@@ -75,7 +75,9 @@
 // absent pass); CPU submission only, and performance.now() is coarsened to 0.1 ms without cross-origin isolation).
 // 0.8.0 options, all off by default, validated like `taa` (unknown keys / bad values throw, naming the option):
 //   ssr: false | true | { scale 0.5, maxPixels Infinity, steps 24, refine 4, maxDistance 80, thickness 0.4,
-//     maxRoughness 0.7, edgeFade 0.1, jitter true, metalTint true, source 'current' } (SSR_DEFAULTS; needs gbuffer)
+//     maxRoughness 0.7, edgeFade 0.1, jitter true, metalTint true, source 'current', denoise 0, interval 1 }
+//     (SSR_DEFAULTS; needs gbuffer). interval n > 1 (trace every n-th frame, the TAA composite reprojects the reused
+//     buffer) is in effect only while TAA composites SSR: without TAA the pass traces every frame (the request kept)
 //   volumetric: false | true | { scale 0.25, maxPixels Infinity, steps 16, maxDistance 400, g 0.55, density 1,
 //     temporal true, blend 0.9, jitter true (VOLUMETRIC_DEFAULTS), intensity 1 (final pass) } (needs an atmosphere)
 //   motionBlur: 0 | strength | { strength 1, maxBlur 24, tileSize 20, samples 8, shutter 0 } (MOTION_BLUR_DEFAULTS;
@@ -512,6 +514,7 @@ const RANGES = {
   ssr: {
     scale: [0, 1, true], maxPixels: [1, Infinity], steps: [1, 128, false, false, true], refine: [0, 16, false, false, true],
     maxDistance: [0, 1e5, true], thickness: [0, 1e5, true], maxRoughness: [0, 1, true], edgeFade: [0, 0.5],
+    interval: [1, 4, false, false, true],
   },
   volumetric: {
     scale: [0, 1, true], maxPixels: [1, Infinity], steps: [1, 128, false, false, true], maxDistance: [0, Infinity, true],
@@ -527,7 +530,7 @@ const RANGES = {
   },
 };
 // counts that must be whole numbers (a group without RANGES for the key: numbers >= 0)
-const INTEGER_KEYS = new Set(['steps', 'refine', 'samples', 'tileSize']);
+const INTEGER_KEYS = new Set(['steps', 'refine', 'samples', 'tileSize', 'interval']);
 // why a pass needs the G-buffer (the constructor / set() error messages)
 const NEEDS_GBUFFER = {
   ssr: 'SSR marches the depth with the G-buffer normals and roughness',
@@ -1024,9 +1027,9 @@ export class PostFX {
     }
     const mbStrength = group === 'motionBlur' && key === 'strength';
     if (mbStrength && v > 0 && this.gbuffer === null) throw needsGBuffer('motionBlur');
-    const pass = this._pass(group), ssrJitter = group === 'ssr' && key === 'jitter';
-    // intensity is the final pass's (_syncFrame); motion-blur strength 0 removes the pass instead; ssr.jitter is a
-    // request (_syncSsrJitter)
+    const pass = this._pass(group), ssrJitter = group === 'ssr' && (key === 'jitter' || key === 'interval');
+    // intensity is the final pass's (_syncFrame); motion-blur strength 0 removes the pass instead; ssr.jitter and
+    // ssr.interval are requests (_syncSsrJitter)
     if (pass !== null && key !== 'intensity' && !(mbStrength && v === 0) && !ssrJitter) this._applyOption(pass, key, v);
     this._options(group)[key] = v;
     if (mbStrength) this._syncPasses(); // 0 removes the pass, > 0 creates it
@@ -1034,17 +1037,21 @@ export class PostFX {
   }
 
   // SSR's per-frame march jitter only pays off while TAA integrates it (else the start moves every frame: shimmer):
-  // in effect = the request && TAA on. Called where TAA toggles (_applyAA) and where SSR options / the pass change.
+  // in effect = the request && TAA on. The reuse interval likewise: only the TAA composite reprojects a reused
+  // buffer (the final pass reads it at the pixel), so without TAA it is 1. Called where TAA toggles (_applyAA) and
+  // where SSR options / the pass change.
   _syncSsrJitter() {
     const p = this.ssrPass;
     if (p === null) return;
-    const j = this.ssrOptions.jitter && this.taaPass !== null && this.taaPass.enabled;
+    const taa = this.taaPass !== null && this.taaPass.enabled;
+    const j = this.ssrOptions.jitter && taa, n = taa ? this.ssrOptions.interval : 1;
     if (p.jitter !== j) p.jitter = j;
+    if (p.interval !== n) p.interval = n;
   }
 
   // push a whole option set to a live pass with every intermediate state valid. DoF: the lens rule (focusDistance *
   // 1000 > focalLength) holds for the old and the new pair, so a shorter focal length goes before the focus distance,
-  // a longer one after it. Skipped: intensity (the final pass's) and ssr.jitter (_syncSsrJitter).
+  // a longer one after it. Skipped: intensity (the final pass's), ssr.jitter and ssr.interval (_syncSsrJitter).
   _applyAll(group, pass, opts) {
     const dof = group === 'dof';
     if (dof) {
@@ -1054,7 +1061,8 @@ export class PostFX {
       if (longer) this._applyOption(pass, 'focalLength', opts.focalLength);
     }
     for (const k in opts) {
-      if (k === 'intensity' || (group === 'ssr' && k === 'jitter') || (dof && (k === 'focusDistance' || k === 'focalLength'))) continue;
+      if (k === 'intensity' || (group === 'ssr' && (k === 'jitter' || k === 'interval'))
+        || (dof && (k === 'focusDistance' || k === 'focalLength'))) continue;
       this._applyOption(pass, k, opts[k]);
     }
   }
@@ -1176,9 +1184,12 @@ export class PostFX {
     let p = null;
     if (on) {
       switch (group) {
-        case 'ssr': // jitter as in effect now (_syncSsrJitter)
-          p = new SSRPass(this.camera, this.history, this.gbuffer, { ...this.ssrOptions, jitter: this.ssrOptions.jitter && this.taaPass !== null && this.taaPass.enabled });
+        case 'ssr': { // jitter / interval as in effect now (_syncSsrJitter)
+          const taa = this.taaPass !== null && this.taaPass.enabled;
+          const o = { ...this.ssrOptions, jitter: this.ssrOptions.jitter && taa, interval: taa ? this.ssrOptions.interval : 1 };
+          p = new SSRPass(this.camera, this.history, this.gbuffer, o);
           break;
+        }
         case 'volumetric': { // intensity is the final pass's (the pass rejects unknown keys)
           const vo = { ...this.volumetricOptions };
           delete vo.intensity;
@@ -1268,6 +1279,10 @@ export class PostFX {
     this.camera.updateMatrixWorld();
     if (gb !== null && this.composer.readBuffer !== gb.target) this._bindGBuffer();
     if (h !== null) h.begin(this._W, this._H); // jitter (TAA): every pass up to Final sees the jittered camera
+    // a TAA history reset (reset(), setSize, a harness holding TAA fresh) also restarts a reused SSR buffer, so the
+    // fresh resolve composites this frame's own trace
+    const taa = this.taaPass, sp = this.ssrPass;
+    if (sp !== null && taa !== null && taa.resetPending && sp.interval > 1) sp.reset();
     this._syncFrame(dt);
     const info = r.info, ar = info.autoReset;
     info.autoReset = false; info.reset();

@@ -1,6 +1,16 @@
 # Changelog
 
 ## Unreleased
+- SSR `interval` (SSRPass option and `postfx.set('ssr.interval', n)`, integer 1..4, default 1 = unchanged): trace and
+  denoise every n-th frame and reuse the buffer in between; the TAA composite (new define `TAA_SSR_REUSE`) reads the
+  reused buffer where each pixel's surface was when it was traced (G-buffer velocity x frames since, plus the jitter
+  change). A trace is forced after a history reset / pose / cut, a skipped frame, a resize, `reset()` (PostFX calls it
+  when TAA's history restarts, so held bench captures are this frame's own trace) and any option change; without TAA
+  the interval is 1 in effect (the request is kept). `ssrPass.age` / `tracedJitter`, `taaPass.resetPending` are new.
+  nyc-night and miami-drive use interval 2 on the desktop tier: 0.3-0.5 ms a frame saved on nyc-night, 0.25-0.4 ms on
+  miami-drive (in-page A/B), static captures unchanged; in motion the reused frames lag one frame where reflected
+  content moves differently from its surface (wet-street highlights walking forward), and SSR's cost now falls on
+  every other frame.
 - Surface shaders skip work whose weight is zero (the picture is unchanged): the sidewalk / kerb material
   (`MapWorld`) reads its cast-concrete scan only where a face is not flat (`textureGrad`, gradients taken outside the
   branch); nyc-night's facade lamp wash skips each lamp beyond its fall-off reach, and its street surface runs the

@@ -49,6 +49,11 @@
 // before the resolve: one tSSR fetch at the pixel, applied to the centre and to every neighbourhood tap before the
 // YCoCg conversion, so the variance clip box contains the reflection (clipped toward a neighbourhood without it, a
 // history with reflections would flicker), and to the fresh-frame output. Without it the shader text is 0.7.0's.
+// TAA_SSR_REUSE (inside the TAA_SSR fetch block; an SSR pass with interval > 1, see SSRPass "Reuse"): the buffer may
+// have been traced uSsrAge frames ago, so the fetch reads at vUv - velocity * uSsrAge + uSsrShift (the pixel's own
+// G-buffer velocity where it wrote one, else 0; uSsrShift = (this frame's jitter - the traced frame's) / size, in uv).
+// On a traced frame age and shift are 0: the same uv as the plain fetch. Two more full-resolution reads (normal and
+// velocity at the pixel, mostly cache hits of the motion reads below).
 // API: render(renderer, writeBuffer, readBuffer), setSize(w, h), reset(), texture, ssr, dispose(); taaFilterWeights(jx, jy).
 // Perspective cameras and a standard depth buffer (not reversedDepthBuffer / logarithmicDepthBuffer): the depth
 // reprojection and disocclusion test linearise depth with near / far. Output is NaN / Inf-safe (black).
@@ -108,6 +113,8 @@ export const TAA_SHADER = {
     vec3 finite( vec3 o ) { return all( lessThan( abs( o ), vec3( 65000.0 ) ) ) ? max( o, 0.0 ) : vec3( 0.0 ); }
     #ifdef TAA_SSR
     uniform sampler2D tSSR;
+    uniform float uSsrAge; // TAA_SSR_REUSE: frames since the reflection buffer was traced
+    uniform vec2 uSsrShift; // TAA_SSR_REUSE: (this frame's jitter - the traced frame's) / uRes (uv)
     ${SSR_COMPOSITE_GLSL}
     #endif
 
@@ -148,7 +155,16 @@ export const TAA_SHADER = {
       TAA_CLOSEST( - 1, - 1 ) TAA_CLOSEST( 1, - 1 ) TAA_CLOSEST( - 1, 1 ) TAA_CLOSEST( 1, 1 )
       float z = linearDepth( d );
     #ifdef TAA_SSR
+     #ifdef TAA_SSR_REUSE
+      // a reused reflection buffer (SSRPass interval > 1), traced uSsrAge frames ago: read where this pixel's surface
+      // was then (its G-buffer velocity per frame times the age, constant motion assumed) plus the jitter change;
+      // pixels without a G-buffer velocity (no reflection of their own) read at the jitter shift only. Age 0: vUv.
+      vec4 sg = texelFetch( tNormal, ip, 0 );
+      vec2 sv = ( engineGbFlags( sg.a ) & ENGINE_GB_WROTE ) != 0 ? texelFetch( tVelocity, ip, 0 ).rg : vec2( 0.0 );
+      vec4 ssrC = texture2D( tSSR, vUv - sv * uSsrAge + uSsrShift );
+     #else
       vec4 ssrC = texture2D( tSSR, vUv );
+     #endif
       if ( uFresh > 0.5 ) { gl_FragColor = vec4( finite( engineSsrComposite( texelFetch( tColor, ip, 0 ).rgb, ssrC ) ), z ); return; }
     #endif
       if ( uFresh > 0.5 ) { gl_FragColor = vec4( finite( texelFetch( tColor, ip, 0 ).rgb ), z ); return; }
@@ -248,9 +264,14 @@ export class TAAPass extends Pass {
     this._reject = check(o.reject ?? 'quad', TAA_REJECTS, 'reject');
     this._velocityFirst = !!(o.velocityFirst ?? false);
     this._snap = !!(o.snap ?? false);
-    /** @type {{ enabled: boolean, texture: THREE.Texture } | null} SSR pass to composite before the resolve (PostFX sets it). */
+    /**
+     * SSR pass to composite before the resolve (PostFX sets it); interval / age / tracedJitter: its buffer reuse.
+     * @type {{ enabled: boolean, texture: THREE.Texture, interval?: number, age?: number,
+     *   tracedJitter?: THREE.Vector2 } | null}
+     */
     this.ssr = null;
     this._ssrOn = false; // TAA_SSR defined
+    this._ssrReuse = false; // TAA_SSR_REUSE defined
     this._w = 1; this._h = 1;
     this._rt = [null, null];
     this._makeTargets();
@@ -263,7 +284,7 @@ export class TAAPass extends Pass {
       defines: {},
       uniforms: {
         tColor: { value: null }, tDepth: { value: null }, tVelocity: { value: null }, tNormal: { value: null }, tHistory: { value: null },
-        tSSR: { value: null }, // TAA_SSR only
+        tSSR: { value: null }, uSsrAge: { value: 0 }, uSsrShift: { value: new THREE.Vector2() }, // TAA_SSR only
         uReproj: hu.uReproj, uJitter: hu.uJitter, // CameraHistory's own uniform objects
         uInvVPw: { value: new THREE.Vector4() },
         uWeights: { value: new Float32Array(9) },
@@ -312,6 +333,8 @@ export class TAAPass extends Pass {
 
   /** The next frame outputs its input and starts a new history (teleport, camera cut). */
   reset() { this._reset = true; }
+  /** True when the next render starts a new history (reset() / setSize / a format change since the last render). */
+  get resetPending() { return this._reset; }
 
   setSize(width, height) {
     this._w = width; this._h = height;
@@ -323,7 +346,10 @@ export class TAAPass extends Pass {
   render(renderer, writeBuffer, readBuffer) {
     const u = this.material.uniforms, h = this.history, gb = this.gbuffer, cam = this.camera;
     const f = h.uniforms.uFrame.value, s = this.ssr, ssrOn = s !== null && s.enabled;
-    if (ssrOn !== this._ssrOn) { this._ssrOn = ssrOn; this._syncDefines(); }
+    const reuse = ssrOn && (s.interval ?? 1) > 1;
+    if (ssrOn !== this._ssrOn || reuse !== this._ssrReuse) {
+      this._ssrOn = ssrOn; this._ssrReuse = reuse; this._syncDefines();
+    }
     const fresh = this._reset || h.fresh || f !== this._lastFrame + 1; // a skipped frame leaves a stale history
     this._reset = false;
     this._lastFrame = f;
@@ -343,6 +369,12 @@ export class TAAPass extends Pass {
     u.uInvVPw.value.set(iv[3], iv[7], iv[11], iv[15]);
     const j = h.uniforms.uJitter.value;
     taaFilterWeights(j.x, j.y, u.uWeights.value);
+    if (reuse) {
+      const age = s.age ?? 0, tj = s.tracedJitter;
+      if (u.uSsrAge.value !== age) u.uSsrAge.value = age;
+      if (age === 0 || !tj) u.uSsrShift.value.set(0, 0);
+      else u.uSsrShift.value.set((j.x - tj.x) / this._w, (j.y - tj.y) / this._h);
+    }
     renderer.setRenderTarget(this._rt[this._cur]);
     this._quad.render(renderer);
   }
@@ -372,6 +404,7 @@ export class TAAPass extends Pass {
       TAA_VELOCITY_FIRST: this._velocityFirst,
       TAA_SNAP: this._snap,
       TAA_SSR: this._ssrOn,
+      TAA_SSR_REUSE: this._ssrReuse,
     };
     let changed = false;
     for (const k in want) {
