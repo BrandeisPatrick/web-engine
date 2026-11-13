@@ -1,6 +1,6 @@
 // PBR texture sets: a manifest-driven loader for photo-scanned material sets (diff / nor_gl / rough / ao JPEGs,
 // one folder per set id, e.g. Poly Haven CC0 downloads; optional GPU-compressed .ktx2 twins written by
-// engine/tools/compress-textures.mjs) with procedural canvas fallbacks for every map, so a
+// tools/compress-textures.mjs) with procedural canvas fallbacks for every map, so a
 // missing file (offline, assets not fetched) never breaks a game. Also the generic tileable canvas painters
 // (asphalt, concrete paving, grass, ground, water normals) and DataArrayTexture helpers.
 //
@@ -310,7 +310,7 @@ const MAP_FILES = { map: ['diff.jpg', true, 'Diffuse'], normalMap: ['nor_gl.jpg'
 const ARRAY_MAPS = ['map', 'normalMap', 'roughnessMap', 'aoMap'];
 
 // ------------------------------------------------------------------ KTX2 (Basis Universal) path + stats
-// engine/tools/compress-textures.mjs writes <id>/{diff,nor_gl,rough,ao}.ktx2 (Y-flipped, so the data matches the JPGs
+// tools/compress-textures.mjs writes <id>/{diff,nor_gl,rough,ao}.ktx2 (Y-flipped, so the data matches the JPGs
 // uploaded with flipY) and lists them per set in the manifest: `ktx2Maps: { Diffuse|nor_gl|Rough|AO: { file, bytes,
 // srcBytes, codec, ... } }` (+ `ktx2: true` when every map has one; the loader goes by the per-map entries).
 // loadTextureSet turns them into CompressedTextures through one shared KTX2Loader (transcoded off-thread to ASTC / BC7

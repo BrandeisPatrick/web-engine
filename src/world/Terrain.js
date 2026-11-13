@@ -1,6 +1,6 @@
 // Terrain: real elevation heightfield + the ground surface the world is built on + polygon draping.
 //
-// `Terrain` loads a terrain.json (contract below; baked by engine/tools/bake-terrain.mjs from AWS Terrarium tiles):
+// `Terrain` loads a terrain.json (contract below; baked by tools/bake-terrain.mjs from AWS Terrarium tiles):
 // heights in MSL metres, stored in the city.json BAKE frame. MapWorld shifts all map data by
 // `world.offset` so spawn is (0,0); call `setOffset(world.offset)` and query in WORLD coordinates.
 // Water stays a flat plane at the world's water level (-0.6 by default), so terrain y == metres above sea level.

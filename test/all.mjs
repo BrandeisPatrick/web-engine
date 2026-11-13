@@ -69,6 +69,10 @@ const SUITES = [
   // agent usability: ROAD_CAR_SPEC, loadTextureSet role keys / warnings, missing-clip errors, addStaticBox object
   // forms, NearestLights from the render layer, PoseInterpolator
   { file: 'agent-usability.mjs' },
+  // the docs (README.md, ENGINE.md, AGENTS.md, docs/HOWTO.md) name only paths, links and exports that exist
+  { file: 'docs.mjs' },
+  // the Node-capable recipes of docs/HOWTO.md (test/howto/recipes.js) run and do what they say
+  { file: 'howto.mjs' },
 ];
 let failed = 0, ran = 0;
 const t0 = performance.now();

@@ -1,7 +1,7 @@
-# engine/tools — data bakers
+# tools: data bakers
 
 Parameterised Node CLIs (Node >= 18, no npm deps except `compress-textures.mjs`) that produce the world data contracts MapWorld loads
-(see ../../ENGINE.md, "Data contracts"). Every tool takes `--help`, `--dry-run` (prints the plan, makes no requests and
+(see [ENGINE.md, "World"](../ENGINE.md#world), "Data contracts"). Every tool takes `--help`, `--dry-run` (prints the plan, makes no requests and
 writes nothing), `--refresh` (ignore caches), `--out`, `--cache` and `--config <file.json>` (same keys as the flags;
 flags win). The defaults are the San Francisco bake of Roadster, the game the engine was extracted from (that repository
 is retired: pass explicit `--lat` / `--lon` and paths for a new bake, as in the NYC example below); each tool also
@@ -17,10 +17,15 @@ exports an async function with the same options in camelCase, for a game's own s
 | `fetch-models.mjs` | the CC0 RobotExpressive.glb (three.js r180 examples) + CREDITS.md. Its default `--out` is the removed character sample's folder (historical): pass `--out` | `--out <dir> [--refresh] [--dry-run]` | `fetchModels(opts)` |
 
 ```bash
-node engine/tools/bake-map.mjs --lat 40.7128 --lon -74.006 --size 1500 --bridge-ext 0,0 --out maps/nyc/city.json --dry-run
-node engine/tools/bake-terrain.mjs --city maps/nyc/city.json --fine -1600,-1600,1600,1600 --out maps/nyc/terrain.json
+node tools/bake-map.mjs --lat 40.7128 --lon -74.006 --size 1500 --bridge-ext 0,0 --out maps/nyc/city.json --dry-run
+node tools/bake-terrain.mjs --city maps/nyc/city.json --fine -1600,-1600,1600,1600 --out maps/nyc/terrain.json
 ```
 `cli.mjs` holds the shared flag parser / usage printer.
+
+The `public/textures` and `public/basis` defaults of `fetch-textures.mjs` and `compress-textures.mjs` are the retired
+Roadster game's layout; in this repository the texture sets live per demo (for example `samples/public/nyc/textures/`,
+`samples/public/miami/textures/`, with the transcoder in `samples/public/miami/basis/`), so pass `--out` / `--dir` /
+`--basis` explicitly. `fetch-models.mjs`'s default `--out` is likewise historical.
 
 ## Asset catalogue (repository only)
 

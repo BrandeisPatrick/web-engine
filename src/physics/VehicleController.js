@@ -1,5 +1,5 @@
 // VehicleController: arcade-realistic wheeled vehicle with an optional thruster flight package.
-// Pure simulation (THREE math only, no scene graph, no DOM) so it runs in Node (tools/car-sim.mjs).
+// Pure simulation (THREE math only, no scene graph, no DOM) so it runs in Node (test/car-sim.mjs).
 // Parameterised by a plain `spec` object; ROADSTER_SPEC reproduces the Roadster.
 //
 // Frame conventions (Three.js): Y up, vehicle forward = local -Z, right = local +X.

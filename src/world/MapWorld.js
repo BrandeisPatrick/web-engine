@@ -216,7 +216,7 @@ export class MapWorld {
     P(0.01, 'Loading map data');
     // terrain loads in parallel with the map (never throws; flat if missing)
     const terrainP = !o.forceProcedural && o.terrain !== false ? new Terrain().load(this.urls.terrain) : Promise.resolve(new Terrain());
-    // CC0 PBR texture sets (public/textures, engine/tools/fetch-textures.mjs) load in parallel; never throws (procedural fallback)
+    // CC0 PBR texture sets (public/textures, tools/fetch-textures.mjs) load in parallel; never throws (procedural fallback)
     const pbrP = loadPbrTextures(this.renderer, { size: o.pbrSize || 1024 }).catch((e) => { console.warn('[MapWorld] PBR textures failed', e); return null; });
     let data = null;
     if (!o.forceProcedural) {
