@@ -1,6 +1,28 @@
 # Changelog
 
 ## Unreleased
+- input: `VehicleInput.enabled` (get / set), the InputMap's `enabled` as on CharacterInput: false silences every
+  vehicle action (additive; nothing else changes). Tested in test/character-input.mjs.
+- docs/HOWTO.md: new recipes "Get in and out of a vehicle" (two inputs, two rigs with `active: false` /
+  `activate()`, `interact` made alwaysOn, an OUT touch button, the parked car on the handbrake), "Headlights" (two
+  clustered spots re-aimed per frame on desktop, one real SpotLight with its target on the body on mobile; the Miami
+  demo's values) and the lamps tier switch (ClusteredLights on desktop, a NearestLights pool on mobile); "Clustered
+  lights" names the `setLight` arguments and adds a street lamp; "Drive a car" has the van spec; "Add a sample page"
+  says `Object.assign` copies fields by value. Each is a marked region of test/howto/recipes.js, run by
+  test/howto.mjs (van) or test/browser/howto.mjs (now three page loads: desktop, mobile, get in / out; the headlight
+  checks compare captures with the lights on and off: brighter ahead, unchanged behind). starter-drive's page contract
+  also exposes `body`.
+- ENGINE.md: "Quality tiers" has a table of both tiers' values, checked against `QUALITY_TIERS` by test/docs.mjs; the
+  input section lists the default keys, gamepad buttons and touch controls of CharacterInput and VehicleInput.
+- AGENTS.md: the engine's procedural vehicles and furniture face -Z; the page contract's `Object.assign` trap; two
+  API rows (drive and walk on one page, headlights).
+- Asset catalogue: docs/ASSETS.md gives every snippet in full and each entry's description (folded under its table;
+  the "Use" column shows the line that makes the asset); NYC texture sets lead with `nyc/textures/` and say what
+  `nyc/textures-512/` is; engine vehicle and furniture entries state their facing, origin and size, and their
+  snippets switch the lamps on (`userData.u.uDark` / `userData.u.uNight`), with the affected thumbnails re-rendered.
+- Types (JSDoc): `buildTreeMeshes` options (`groundAt(x, z)`) and result (`TreeMeshes`, `update(dt, cameraPos,
+  darkness, time)`); `createFurnitureMaterial` / `createPanelMaterial` / `createVehicleMaterial` type their
+  `userData.u` uniforms. test/types/check.ts uses them.
 - Starters: `samples/starter-walk/` (a third-person walker: animated GLB, CharacterController, CharacterInput,
   ThirdPersonRig, AnimationController blend tree, textured ground, a NearestLights lamp, Atmosphere, PostFX, quality
   tiers, a HUD readout, a jump sound) and `samples/starter-drive/` (a box car on VehicleController with ROAD_CAR_SPEC,

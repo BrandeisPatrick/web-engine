@@ -32,13 +32,15 @@ No registration is needed (`vite.config.js` finds every `samples/<name>/index.ht
 **The page contract.** The browser scripts wait for `window.__sample.ready`; a page without it fails after the timeout.
 End `boot()` with `window.__sample = createBenchHarness(engine, { name: '<name>' }).setReady();` (core), as the
 starters do. The harness is `test/browser/playwright.config.mjs` (`startVite`, `launchChrome`, `loadSample`,
-`watchErrors`); it starts and stops its own dev server.
+`watchErrors`); it starts and stops its own dev server. Fields added with `Object.assign` are copied once, by value:
+expose state that changes through a function (`{ game: () => ({ mode, score }) }`).
 
 ## Conventions that cause silent mistakes
 
 - **Units and axes.** Metres, seconds, radians, Y up. Heading / yaw 0 faces **-Z**; positive turns left, as
   `Object3D.rotation.y`. Cars, rigs and the character's `facing` all use it.
-- **Models face +Z.** The GLBs in `samples/public/` face +Z: rotate the model by `Math.PI` inside a parent group.
+- **Models face +Z.** The GLBs in `samples/public/` face +Z: rotate the model by `Math.PI` inside a parent group. The
+  engine's own procedural vehicles and furniture already face -Z (no flip; origin and size per asset in docs/ASSETS.md).
 - **Fixed step.** `fixedUpdate(dt)` runs at 120 Hz (`fixedHz`), `update(dt, alpha)` once per frame. Simulate in
   `fixedUpdate`; draw simulated bodies with `PoseInterpolator` (core): `save()` before the step, `apply(obj, alpha)`
   in `update`, `snap()` after a teleport. Without it motion judders.
@@ -60,6 +62,8 @@ starters do. The harness is `test/browser/playwright.config.mjs` (`startVite`, `
 | Walk a character | `CharacterController` (physics), `CharacterInput` (input), `ThirdPersonRig` (camera) | `cc.step(dt, moveX, moveZ, jump, sprint, physics)` | `samples/starter-walk/main.js` |
 | Load a GLB, play clips | `Assets` (core), `registerRenderLoaders` (render), `AnimationController` (anim) | `assets.get(key).instantiate()`; states name clips by exact string | `samples/starter-walk/main.js` |
 | Drive a car | `VehicleController`, `ROAD_CAR_SPEC` (physics), `VehicleInput` (input), `ChaseRig` (camera) | `car.step(dt, { throttle, brake, steer, handbrake }, physics)` | `samples/starter-drive/main.js` |
+| Drive and walk on one page | `VehicleInput`, `CharacterInput` (input), `ChaseRig`, `ThirdPersonRig` (camera) | `input.enabled = false`, `rig.activate()`: HOWTO "Get in and out of a vehicle" | `test/howto/recipes.js` |
+| Headlights | `THREE.SpotLight`, or `ClusteredLights` (render) | `cl.setSpot(...)` per frame: HOWTO "Headlights" | `test/howto/recipes.js` |
 | Smooth motion | `PoseInterpolator` (core) | `save()` / `apply(obj, alpha)` / `snap()` | HOWTO "Smooth rendering" |
 | A few lamps | `NearestLights` (render) | `setPositions([[x, y, z], ...])`; per frame `update(dt, { position }, intensity)` | `samples/starter-walk/main.js` |
 | Many lamps | `ClusteredLights`, `installClusteredChunks`, `syncClustered` (render) | five calls: HOWTO "Clustered lights" | `test/howto/recipes.js` |

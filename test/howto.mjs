@@ -1,9 +1,9 @@
 // Runs the Node-capable recipes of docs/HOWTO.md (their source is test/howto/recipes.js) and checks they do what the
-// recipe says: PoseInterpolator blends between steps, static boxes and loose bodies collide, a car drives a small
+// recipe says: the van spec is heavier and slower, PoseInterpolator blends between steps, static boxes and loose bodies collide, a car drives a small
 // track over a heightfield with a surface provider. The browser-only recipes run in test/browser/howto.mjs.
 import * as THREE from 'three';
-import { poseInterpolator, physicsBodies, smallTrack } from './howto/recipes.js';
-import { PhysicsWorld } from '@vibe/engine/physics';
+import { vanSpec, poseInterpolator, physicsBodies, smallTrack } from './howto/recipes.js';
+import { PhysicsWorld, VehicleController, ROAD_CAR_SPEC } from '@vibe/engine/physics';
 
 let failures = 0;
 function check(name, ok, detail = '') {
@@ -11,6 +11,23 @@ function check(name, ok, detail = '') {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  ' + detail : ''}`);
 }
 const DT = 1 / 120;
+
+// --- van-spec: the spread spec is heavier and slower than the road car, and its limiter holds 42 m/s
+{
+  const physics = new PhysicsWorld();
+  const van = vanSpec(), car = new VehicleController(ROAD_CAR_SPEC);
+  const full = { throttle: 1, brake: 0, steer: 0, handbrake: false };
+  for (const v of [van, car]) v.reset(new THREE.Vector3(0, 0, 0), 0, physics);
+  let van5 = 0, car5 = 0, vanTop = 0;
+  for (let i = 0; i < 120 * 60; i++) {                          // 60 s of full throttle down a flat -Z
+    van.step(DT, full, physics); if (i < 600) car.step(DT, full, physics);
+    if (i === 599) { van5 = van.speed; car5 = car.speed; }
+    vanTop = Math.max(vanTop, van.speed);
+  }
+  check('van-spec: the mass and power took effect', van.spec.mass === 2200 && van.spec.motorPower === 90e3 && van.spec.length === ROAD_CAR_SPEC.length);
+  check('van-spec: slower off the line than the road car (5 s)', van5 < car5, `${(van5 * 3.6).toFixed(0)} vs ${(car5 * 3.6).toFixed(0)} km/h`);
+  check('van-spec: top speed held at about vMax 42 m/s', vanTop > 35 && vanTop < 43, `${vanTop.toFixed(1)} m/s`);
+}
 
 // --- pose-interpolator: a stand-in engine that runs the system's hooks like Engine does (fixed steps, then update)
 {

@@ -126,6 +126,35 @@ unchanged).
 | `lights` | `MapWorld` `lights`, or your own `NearestLights` / `ClusteredLights` choice |
 | `world`, `textures`, `effects` | read by the game (stream radius, traffic, texture size, particle budgets) |
 
+What each tier sets (`QUALITY_TIERS` in `src/core/Quality.js`; `test/docs.mjs` fails when this table and it disagree):
+
+| Setting | desktop | mobile | What it is |
+|---|---|---|---|
+| `engine.maxPixelRatio` | `2` | `1.5` | device pixel ratio cap |
+| `engine.adaptiveResolution` | `true` | `true` | lowers the pixel ratio when frames run long |
+| `shadows.cascades` | `3` | `1` | sun shadow cascades |
+| `shadows.kernel` | `'pcss'` | `'fast'` | shadow filter: 'pcss' soft, contact-hardening; 'fast' hardware PCF taps, cheaper |
+| `shadows.nearMapSize` | `2048` | - | near cascade map (px) |
+| `shadows.skipUnlit` | `true` | `true` | skip the sun's lighting math where a pixel is in full shadow |
+| `shadows.singleMapSize` | - | `1024` | the one shadow map (px) |
+| `postfx.gbuffer` | `true` | `false` | G-buffer pipeline instead of forward (SSR and motion blur need it) |
+| `postfx.aa` | `'taa'` | `'fxaa'` | anti-aliasing |
+| `postfx.ssr` | `true` | `false` | screen-space reflections |
+| `postfx.volumetric` | `true` | `false` | light shafts / volumetric fog |
+| `postfx.motionBlur` | `0` | `0` | motion blur strength (0 = off) |
+| `passes.ao` | `true` | `false` | ambient occlusion (the game sets postfx.aoPass.enabled) |
+| `passes.bloom` | `true` | `true` | bloom (the game sets postfx.bloomPass.enabled) |
+| `lights.clustered` | `true` | `false` | every lamp lit (ClusteredLights) or a NearestLights pool |
+| `lights.clusteredRange` | `220` | `90` | MapWorld: metres of lamps listed around the camera |
+| `world.streamRadius` | `900` | `450` | MapWorld: building tiles loaded within (m) |
+| `world.traffic` | `150` | `40` | MapWorld: cars |
+| `world.pedestrians` | `60` | `16` | MapWorld: pedestrians |
+| `world.detail` | `1` | `0.5` | MapWorld: detail scale |
+| `textures.maxSize` | `2048` | `1024` | largest texture edge to load (px) |
+| `textures.anisotropy` | `8` | `2` | anisotropic filtering |
+| `effects.particles` | `1` | `0.4` | particle budget (0..1) |
+| `effects.decals` | `1` | `0.5` | decal budget (0..1) |
+
 A game may add its own groups (`resolveQuality({ overrides })`, `defineTier`). `new QualityMenu({ quality })` (ui
 layer) is the gear button; a change stores the tier and reloads the page.
 
@@ -530,6 +559,17 @@ cost are in [the design notes](docs/DESIGN-NOTES.md#textures-pbr-sets-ktx2).
   the state getter returns what the rig reads (`velocity`, `speedKmh`, `mode`, `grounded`, ...; the list is in the
   ChaseRig source; type `ChaseTargetState`). `VehicleInput` (`src/input/VehicleInput.js`) reads keyboard, gamepad and touch into
   `throttle`, `brake`, `steer`, `handbrake`, ... fields, the values `VehicleController.step` takes.
+- Default bindings (`CHARACTER_ACTIONS`, `VEHICLE_ACTIONS`; the generated types do not show them). To rebind, copy the
+  preset, edit an action's `bindings` and pass it as `actions`. `enabled = false` on either input silences it (as
+  `input.map.enabled`); CharacterInput's `toggleCamera` and `menu` are `alwaysOn` and still fire.
+  - `CharacterInput`: WASD / arrows move, Space jump, Shift sprint, Ctrl / C crouch, E / F `interact`, V camera,
+    Esc menu; mouse look while the pointer is locked or the right button is held. Gamepad: left stick move, right
+    stick look, A jump, LS click / LB sprint, B crouch, X interact, Y camera, Start menu. Touch: left stick, drag on the
+    right half to look, JUMP / RUN / USE.
+  - `VehicleInput`: W / S or ↑ / ↓ throttle / brake (brake from a standstill reverses), A / D or ← / → steer,
+    X handbrake, C camera, R reset, H help, B look back; for the flying Roadster Space thrust, Shift boost, Q / E yaw,
+    I / K pitch. Gamepad: RT / LT throttle / brake, left stick steer, A thrust, B boost, Y camera, X reset, right-stick
+    click handbrake, D-pad down look back. Touch: stick, GAS / BRK / LIFT / BST, CAM / RST / ?.
 
 ## Audio and UI
 

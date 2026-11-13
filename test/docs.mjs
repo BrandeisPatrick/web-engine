@@ -11,7 +11,9 @@
 //   - a fenced code block marked `<!-- from: <file>#<id> -->` (on one of the two lines before it) differs from the
 //     region `// #region howto:<id>` ... `// #endregion howto:<id>` of that file (dedented), or names a missing
 //     file / region; and in docs/HOWTO.md every js block must carry such a mark (recipes are copies of code that runs:
-//     the starters, test/howto/recipes.js run by test/howto.mjs and test/browser/howto.mjs, test/browser/check-page.mjs).
+//     the starters, test/howto/recipes.js run by test/howto.mjs and test/browser/howto.mjs, test/browser/check-page.mjs);
+//   - the tier table in ENGINE.md "Quality tiers" (rows `group.key` | desktop | mobile) disagrees with QUALITY_TIERS in
+//     src/core/Quality.js: a value differs, a setting has no row, or a row names no setting.
 // Paths with placeholders (`<name>`, `*`, `{...}`, `${...}`) and generated folders (`types/`, `dist/`) are skipped.
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join, normalize } from 'node:path';
@@ -192,6 +194,33 @@ function checkSnippets(rel, lines) {
     }
   }
 }
+
+// --- ENGINE.md "Quality tiers": the table of both tiers' values is QUALITY_TIERS
+async function checkTierTable() {
+  const rel = 'ENGINE.md';
+  const { QUALITY_TIERS: T } = await import(pathToFileURL(join(root, 'src/core/Quality.js')).href);
+  const lines = readFileSync(join(root, rel), 'utf8').split('\n');
+  const start = lines.findIndex((l) => /^###\s+Quality tiers\s*$/.test(l));
+  if (start < 0) { checks++; fail(rel, 0, 'no "### Quality tiers" section'); return; }
+  const fmt = (v) => (v === undefined ? '-' : `\`${typeof v === 'string' ? `'${v}'` : String(v)}\``);
+  const want = new Map();
+  for (const g of Object.keys(T.desktop)) {
+    if (g === 'label' || g === 'blurb') continue;
+    for (const k of new Set([...Object.keys(T.desktop[g] || {}), ...Object.keys(T.mobile[g] || {})])) want.set(`${g}.${k}`, [fmt(T.desktop[g][k]), fmt(T.mobile[g][k])]);
+  }
+  const seen = new Set();
+  for (let i = start + 1; i < lines.length && !/^#{1,3}\s/.test(lines[i]); i++) {
+    const m = /^\|\s*`([\w]+\.[\w]+)`\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|/.exec(lines[i]);
+    if (!m) continue;
+    checks++;
+    const [, id, d, mo] = m, w = want.get(id);
+    seen.add(id);
+    if (!w) { fail(rel, i + 1, `tier table row \`${id}\` is not in QUALITY_TIERS`); continue; }
+    if (d !== w[0] || mo !== w[1]) fail(rel, i + 1, `tier table \`${id}\`: doc ${d} | ${mo}, QUALITY_TIERS ${w[0]} | ${w[1]}`);
+  }
+  for (const id of want.keys()) { checks++; if (!seen.has(id)) fail(rel, start + 1, `tier table has no row for \`${id}\` (QUALITY_TIERS ${want.get(id).join(' | ')})`); }
+}
+await checkTierTable();
 
 for (const rel of [...DOCS, ...LINK_ONLY]) {
   const abs = join(root, rel);

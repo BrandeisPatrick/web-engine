@@ -139,7 +139,7 @@ async function boot() {
   engine.start();
 
   // ---- page contract for the browser tests (npm run smoke): window.__sample with `ready`
-  window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-drive' }), { car }).setReady();
+  window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-drive' }), { car, body }).setReady();
 }
 
 boot().catch((e) => console.error('[starter-drive] boot failed', e));

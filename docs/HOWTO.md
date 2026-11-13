@@ -16,8 +16,9 @@ create first. [ENGINE.md](../ENGINE.md) has the full API.
 Contents: [Engine and quality tiers](#engine-and-quality-tiers) ·
 [Character with camera, input and animation](#character-with-camera-input-and-animation) ·
 [Load a GLB and play its clips](#load-a-glb-and-play-its-clips) · [Drive a car](#drive-a-car) ·
+[Get in and out of a vehicle](#get-in-and-out-of-a-vehicle) ·
 [Smooth rendering between fixed steps](#smooth-rendering-between-fixed-steps) ·
-[Lamps without MapWorld](#lamps-without-mapworld) · [Clustered lights](#clustered-lights) ·
+[Lamps without MapWorld](#lamps-without-mapworld) · [Clustered lights](#clustered-lights) · [Headlights](#headlights) ·
 [A textured mesh from a texture set](#a-textured-mesh-from-a-texture-set) · [HUD text](#hud-text) ·
 [Play a sound](#play-a-sound) · [Vehicle sound](#vehicle-sound) · [GPU particles](#gpu-particles) ·
 [Static and loose physics bodies](#static-and-loose-physics-bodies) ·
@@ -184,6 +185,14 @@ Imports: `VehicleController`, `ROAD_CAR_SPEC` (physics), `VehicleInput` (input),
 const SPEC = ROAD_CAR_SPEC;
 ```
 
+A van: heavier, less power, a lower top speed. `length`, `width` and `height` can be spread in too; the wheel
+positions and the pitch / roll inertia are derived from them:
+
+<!-- from: test/howto/recipes.js#van-spec -->
+```js
+const van = new VehicleController({ ...ROAD_CAR_SPEC, mass: 2200, motorPower: 90e3, vMax: 42 }); // kg, W, m/s (151 km/h)
+```
+
 <!-- from: samples/starter-drive/main.js#drive-car -->
 ```js
 const car = new VehicleController(SPEC);
@@ -236,6 +245,89 @@ update(dt, alpha) {
 },
 ```
 
+## Get in and out of a vehicle
+
+One page, two control modes: a `VehicleController` you drive and a `CharacterController` you walk, each with its own
+input (`VehicleInput`, `CharacterInput`) and camera rig (`ChaseRig`, `ThirdPersonRig`); one of each is active at a time.
+
+- Inputs: both update every frame; `enabled = false` makes the idle one read 0 (on both classes it sets the
+  `InputMap`'s `enabled`).
+- The key: `CharacterInput`'s `interact` action is E or F (gamepad X, the USE touch button). Redefined with
+  `alwaysOn: true` it still fires while the walking input is disabled, so one key gets in and out. (`VehicleInput` binds
+  E to `yaw` too, which a road car ignores.) Every default binding: [ENGINE.md](../ENGINE.md#animation-input-and-camera).
+- Cameras: a rig made with `active: false` does nothing in `update()`; `activate()` takes the camera and snaps,
+  `deactivate()` lets go.
+- Touch: on a touch-first device each input builds its own on-screen controls; `enableTouch(on)` shows one set at a
+  time. The car's layout gets an OUT button: the entry with id `out` sets the virtual source `out`, which the added
+  `getOut` action reads.
+- Getting out: `cc.teleport(x, y, z)` beside the car, then `snap()` the walker's `PoseInterpolator`. The parked car
+  gets the handbrake, not the brake: brake at a standstill is reverse.
+
+`car`, `carBody`, `cc` and `player` are made as in the starters. Imports: `CharacterInput`, `CHARACTER_ACTIONS`,
+`VehicleInput`, `VEHICLE_ACTIONS`, `VEHICLE_TOUCH_LAYOUT` (input), `ChaseRig`, `ThirdPersonRig` (camera),
+`PoseInterpolator` (core). The whole loop:
+
+<!-- from: test/howto/recipes.js#get-in-out -->
+```js
+// one key both ways: CharacterInput's `interact` (E / F, pad X, the USE touch button), made alwaysOn so it still fires
+// while the walking controls are off; the car's touch layout gets an OUT button bound to a `getOut` action
+const walkInput = new CharacterInput({ element: renderer.domElement, actions: { ...CHARACTER_ACTIONS, interact: { ...CHARACTER_ACTIONS.interact, alwaysOn: true } } });
+const carInput = new VehicleInput(renderer.domElement, {
+  actions: { ...VEHICLE_ACTIONS, getOut: { type: 'button', bindings: [{ virtual: 'out' }] } },
+  touchLayout: [...VEHICLE_TOUCH_LAYOUT, { type: 'button', id: 'out', label: 'OUT', side: 'right', x: 36, y: 238, size: 46, top: true, fontSize: 10 }],
+});
+const touch = !!carInput.touch;                            // touch: 'auto' built the car's overlay: a touch-first device
+const carState = { velocity: car.velocity, speedKmh: 0, grounded: true, wheelSlip: 0 }, walkState = { facing: 0 };
+const chase = new ChaseRig(camera, renderer.domElement, { physics, canopyFromCollider: null, flightFraming: false });
+const orbit = new ThirdPersonRig(camera, renderer.domElement, { physics, distance: 4.2, height: 1.6, active: false });
+chase.setTarget(carBody, () => carState); orbit.setTarget(player, () => walkState);
+const carSmooth = new PoseInterpolator(car), walkSmooth = new PoseInterpolator(cc);
+let driving = true;
+const setDriving = (on) => {
+  driving = on;
+  carInput.enabled = on; walkInput.enabled = !on;          // the idle one reads 0 (interact stays alive: alwaysOn)
+  player.visible = !on;
+  if (touch) { carInput.enableTouch(on); walkInput.enableTouch(!on); } // one on-screen set at a time
+  if (!on) {                                               // out on the car's left side, facing where it faces
+    const h = car.heading, x = car.position.x - 2.2 * Math.cos(h), z = car.position.z + 2.2 * Math.sin(h);
+    cc.teleport(x, physics.getGroundHeight(x, z), z); walkSmooth.snap(); walkSmooth.apply(player, 1);
+    walkState.facing = h; orbit.yaw = h;
+  }
+  if (on) { orbit.deactivate(); chase.activate(); } else { chase.deactivate(); orbit.activate(); } // activate() snaps
+};
+setDriving(true);
+const controls = { throttle: 0, brake: 0, steer: 0, handbrake: false }, move = { x: 0, z: 0 };
+const fwd = new THREE.Vector3(), right = new THREE.Vector3();
+engine.addSystem({
+  earlyUpdate(dt) {
+    carInput.update(dt); walkInput.update(dt);
+    const use = walkInput.controls.interact || carInput.map.justPressed('getOut');
+    if (use && driving && car.speed < 1.5) setDriving(false);                            // stop first
+    else if (use && !driving && cc.position.distanceTo(car.position) < 4) setDriving(true); // next to the car
+    controls.throttle = carInput.throttle; controls.steer = carInput.steer;
+    controls.brake = carInput.brake; controls.handbrake = !driving || carInput.handbrake; // parked: handbrake only
+                                                              // (brake at a standstill is reverse)
+    const c = walkInput.controls;
+    orbit.turn(-c.lookX, -c.lookY); orbit.getForward(fwd); orbit.getRight(right);
+    move.x = right.x * c.moveX + fwd.x * c.moveY; move.z = right.z * c.moveX + fwd.z * c.moveY;
+  },
+  fixedUpdate(dt) {
+    carSmooth.save(); car.step(dt, controls, physics);
+    if (!driving) { walkSmooth.save(); cc.step(dt, move.x, move.z, walkInput.controls.jumpHeld, walkInput.controls.sprint, physics); }
+  },
+  update(dt, alpha) {
+    carSmooth.apply(carBody, alpha);
+    carState.speedKmh = car.speed * 3.6; carState.grounded = car.grounded; carState.wheelSlip = car.wheelSlip;
+    if (!driving) {
+      walkSmooth.apply(player, alpha);
+      if (move.x * move.x + move.z * move.z > 0.01) walkState.facing = Math.atan2(-move.x, -move.z);
+      player.rotation.y = walkState.facing;
+    }
+    chase.update(dt); orbit.update(dt);                    // an inactive rig does nothing
+  },
+}, 'get-in-out');
+```
+
 ## Smooth rendering between fixed steps
 
 Physics steps at 120 Hz, frames come at the display's rate. Draw a simulated body at the blend of its last two steps,
@@ -284,14 +376,17 @@ pool at 8 or fewer: every real light costs on every lit pixel. For more lamps, u
 ## Clustered lights
 
 Every lamp lights the scene, and a pixel pays only for the lights that reach it. The wiring is five calls in three
-places (imports from render: `ClusteredLights`, `installClusteredChunks`, `syncClustered`). `lamps` is an array of
-`[x, y, z]`:
+places (imports from render: `ClusteredLights`, `installClusteredChunks`, `syncClustered`).
+`cl.setLight(index, x, y, z, range, r, g, b, decay)`: the world position (m), the reach (m), the colour times the
+intensity (r, g, b = colour × three.js `PointLight` intensity) and the decay. `lamps` (garden lamps) and `streetLamps`
+are arrays of `[x, y, z]`:
 
 <!-- from: test/howto/recipes.js#clustered-lights -->
 ```js
 installClusteredChunks();                                  // 1. once per page, before materials compile
-const cl = new ClusteredLights({ maxLights: 256 });        // 2. the light list
-lamps.forEach(([x, y, z], i) => cl.setLight(i, x, y, z, 14, 6, 4.2, 2.4, 1.5)); // range m, colour x intensity, decay
+const cl = new ClusteredLights({ maxLights: 256 });        // 2. the light list: setLight(index, x, y, z, range, r, g, b, decay)
+lamps.forEach(([x, y, z], i) => cl.setLight(i, x, y, z, 14, 6, 4.2, 2.4, 1.5));      // garden lamp: 14 m, warm x 6, decay 1.5
+streetLamps.forEach(([x, y, z], i) => cl.setLight(lamps.length + i, x, y, z, 30, 150, 108, 63, 2)); // street lamp, 6-9 m up
 syncClustered(scene, true);                                // 3. lit materials use it (also ones added later)
 postfx.onInternalResize = (w, h) => cl.setSize(w, h);      // 4. the scene target's size in pixels...
 postfx.onInternalResize(postfx.internalWidth, postfx.internalHeight); // ...now and on every resize
@@ -301,6 +396,71 @@ engine.addSystem({ lateUpdate() { cl.update(camera); } }, 'lights'); // 5. per f
 Clustered lights cast no shadows. `NearestLights` can feed them instead of a pool:
 `new NearestLights({ mode: 'clustered', clustered: cl, ... })`. `MapWorld` does all of this itself with its
 `lights: { clustered: true }` option.
+
+Every game needs the tier switch: the desktop tier has `S.lights.clustered === true`, the mobile tier `false`. On
+mobile a `NearestLights` pool puts real lights on the four lamps nearest the camera (same reach and
+intensity). `S` is `resolveQuality().settings`:
+
+<!-- from: test/howto/recipes.js#lamps-tier -->
+```js
+let cl = null;
+if (S.lights.clustered) {                                  // desktop tier: every lamp lights (the five calls above)
+  installClusteredChunks();
+  cl = new ClusteredLights({ maxLights: 256 });
+  lamps.forEach(([x, y, z], i) => cl.setLight(i, x, y, z, 30, 150, 108, 63, 2));
+  syncClustered(scene, true);
+  postfx.onInternalResize = (w, h) => cl.setSize(w, h);
+  postfx.onInternalResize(postfx.internalWidth, postfx.internalHeight);
+  engine.addSystem({ lateUpdate() { cl.update(camera); } }, 'lights');
+} else {                                                   // mobile tier: real lights on the 4 lamps nearest the camera
+  const pool = new NearestLights({ count: 4, color: 0xffb06b, distance: 30, decay: 2, parent: scene });
+  pool.setPositions(lamps);
+  engine.addSystem({ lateUpdate(dt) { pool.update(dt, { position: camera.position }, 150); } }, 'lights');
+}
+```
+
+## Headlights
+
+Mounted on the Group you draw the car with (`body`, posed from a `VehicleController`; its front is -Z, so the lamps sit
+at z = -length / 2). `SPEC` is the car's spec, `cl` the page's `ClusteredLights` or null (the tier switch above), `slot`
+the first free light index (the lamp count). One way per tier:
+
+- Desktop: two clustered spot entries, `cl.setSpot(index, x, y, z, range, r, g, b, decay, dx, dy, dz, cosInner,
+  cosOuter)`, recomputed every frame from the body's matrix (the list is in world space; it does not follow a parent).
+  The Miami demo's values: reach 60 m, colour × intensity 90, decay 2, cone from cos(0.32) to cos(0.5), aimed 6 % down.
+- Mobile: one three.js `SpotLight` between the lamps, a child of the body (every real light costs on every lit pixel,
+  so one for the pair). Add its `target` to the body too: a target outside the scene graph never moves, and the beam
+  keeps pointing where it was (the world origin by default). The Miami demo's values: intensity 520, distance 70 m,
+  angle 0.5 rad, penumbra 0.45, decay 1.6.
+
+Add it after the system that poses `body`, so it reads this frame's pose:
+
+<!-- from: test/howto/recipes.js#headlights -->
+```js
+const front = -SPEC.length / 2 - 0.05;                     // just ahead of the bumper (the body faces -Z)
+if (cl) {                                                  // desktop tier: two clustered spots, re-aimed every frame
+  const lamp = new THREE.Vector3(), aim = new THREE.Vector3();
+  system = engine.addSystem({
+    update() {                                             // runs after the system that poses `body`
+      body.updateMatrixWorld();
+      for (const side of [-1, 1]) {
+        lamp.set(side * (SPEC.width / 2 - 0.3), 0.65, front).applyMatrix4(body.matrixWorld);
+        aim.set(side * 0.05, -0.06, -1).transformDirection(body.matrixWorld); // ahead, a touch outwards and down
+        // setSpot(index, x, y, z, range, r, g, b, decay, direction x, y, z, cos inner, cos outer)
+        cl.setSpot(slot + (side > 0 ? 1 : 0), lamp.x, lamp.y, lamp.z, 60, 90, 85, 77, 2, aim.x, aim.y, aim.z, Math.cos(0.32), Math.cos(0.5));
+      }
+    },
+  }, 'headlights');
+} else {                                                   // mobile tier: one real SpotLight between the lamps
+  spot = new THREE.SpotLight(0xfff0dc, 520, 70, 0.5, 0.45, 1.6); // colour, intensity, distance m, angle rad, penumbra, decay
+  spot.position.set(0, 0.62, front);
+  spot.target.position.set(0, -0.6, front - 20);           // 20 m ahead, aimed a little down
+  body.add(spot, spot.target);                             // the target too, or the beam points at the world origin
+}
+```
+
+A bright streak on a glossy road just behind the car, in a chase view, is usually a street lamp's reflection, not the
+headlights: it lies between the camera and the lamp. Raise the road's roughness to spread it.
 
 ## A textured mesh from a texture set
 
@@ -467,6 +627,9 @@ browser tests can tell when it is ready:
 ```js
 window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-walk' }), { cc, anim }).setReady();
 ```
+
+`Object.assign` copies the extra fields once, by value: a getter or a number in the source object is frozen at that
+moment. Expose state that changes as a function (`{ game: () => ({ mode, score }) }`) and call it from the test.
 
 ## Test a page headlessly
 
