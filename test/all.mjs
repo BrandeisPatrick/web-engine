@@ -63,6 +63,8 @@ const SUITES = [
   { file: 'miami-car.mjs' },
   // the NYC night walk sample's engine options: traffic fleet mix and the spawn area (TrafficSim)
   { file: 'nyc-traffic-mix.mjs' },
+  // the docs (README.md, ENGINE.md, AGENTS.md, docs/HOWTO.md) name only paths, links and exports that exist
+  { file: 'docs.mjs' },
 ];
 let failed = 0, ran = 0;
 const t0 = performance.now();
