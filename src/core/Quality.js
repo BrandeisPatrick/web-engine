@@ -137,7 +137,7 @@ export function storeTier(tier, key = QUALITY_STORAGE_KEY) {
  */
 /**
  * Pick the tier for this page load.
- * @param {{ search?: string, overrides?: { desktop?: object, mobile?: object, [tier: string]: object }, env?: object, storageKey?: string }} [opts]
+ * @param {{ search?: string, overrides?: { desktop?: object, mobile?: object, [tier: string]: object | undefined }, env?: object, storageKey?: string }} [opts]
  *   overrides: per tier, groups merged over the preset (a game's own groups too)
  * @returns {QualityChoice}
  */

@@ -14,3 +14,5 @@ export * as MathDet from './mathDet.js';
 export { createBenchHarness, readBenchParams, lookStats, LOOK_HUES } from './Bench.js';
 // quality tiers (desktop / mobile): presets, device recommendation, stored choice
 export { QUALITY_TIERS, TIER_IDS, QUALITY_STORAGE_KEY, tierSettings, defineTier, recommendTier, storedTier, storeTier, resolveQuality } from './Quality.js';
+/** @typedef {import('./Quality.js').TierSettings} TierSettings  one quality tier's settings (resolveQuality().settings) */
+/** @typedef {import('./Quality.js').QualityChoice} QualityChoice  resolveQuality's result */

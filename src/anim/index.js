@@ -4,3 +4,6 @@ export { AnimationController } from './AnimationController.js';
 export { TwoBoneIK, CCDIK, makeIKChain } from './IK.js';
 // 0.9.0: a ragdoll built from a skeleton on the dynamics world (bodies + joints from the bone chains, bones driven back)
 export { Ragdoll, DEFAULT_LIMITS as RAGDOLL_LIMITS, RAGDOLL_SEGMENTS, mapBonesAuto } from './Ragdoll.js';
+/** @typedef {import('./AnimationController.js').AnimationStateSpec} AnimationStateSpec  an AnimationController state */
+/** @typedef {import('./AnimationController.js').BlendTreeSpec} BlendTreeSpec  an AnimationController 1D blend tree */
+/** @typedef {import('./AnimationController.js').AnimationControllerOptions} AnimationControllerOptions */

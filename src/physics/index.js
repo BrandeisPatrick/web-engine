@@ -25,3 +25,7 @@ export { ParticleStore, ParticleConstraints, PFLAG, PCON, Cloth, Rope } from './
 export { SoftBody, SoftSkin, VolumeConstraints, tetrahedralize } from './dynamics/softbody.js';
 export { ParticleCollider, Buoyancy, closestPointOnShape, sampleShape } from './dynamics/coupling.js';
 export { FracturedBody, fracturePieces, splitConvex, FRACTURE_BREAK_FORCE, FRACTURE_COMPLIANCE } from './dynamics/fracture.js';
+/** @typedef {import('./VehicleController.js').VehicleSpec} VehicleSpec  a full or partial vehicle spec */
+/** @typedef {import('./VehicleController.js').VehicleControls} VehicleControls  what VehicleController.step reads */
+/** @typedef {import('./PhysicsWorld.js').StaticBoxSpec} StaticBoxSpec  addStaticBox's object form */
+/** @typedef {import('./dynamics/DynamicsWorld.js').AddBodyOptions} AddBodyOptions  DynamicsWorld.addBody options */

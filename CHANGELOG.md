@@ -1,6 +1,40 @@
 # Changelog
 
 ## Unreleased
+- Starters: `samples/starter-walk/` (a third-person walker: animated GLB, CharacterController, CharacterInput,
+  ThirdPersonRig, AnimationController blend tree, textured ground, a NearestLights lamp, Atmosphere, PostFX, quality
+  tiers, a HUD readout, a jump sound) and `samples/starter-drive/` (a box car on VehicleController with ROAD_CAR_SPEC,
+  VehicleInput, ChaseRig, a textured road with post colliders, Atmosphere, PostFX, quality tiers, a speed readout):
+  one main.js each (~140 lines), public imports only, listed on samples/index.html under "Starters" and in the smoke
+  test (desktop and mobile tiers; a page without poses must draw something).
+- vite.config.js finds every `samples/<name>/index.html` (except `public`, `shared`, `dev`): a new sample needs no
+  registration.
+- physics: `ROAD_CAR_SPEC`, an ordinary road car (1.35 t, ~110 kW, 0-100 km/h ~7.5 s, ~190 km/h, no thrusters, no
+  damage), a partial spec merged over ROADSTER_SPEC; VehicleController's JSDoc says the default spec is the flying
+  Roadster and lists the main spec fields. Types: `VehicleSpec`, `VehicleControls`.
+- `PhysicsWorld.addStaticBox` also takes `{ min: [x, y, z], max: [x, y, z], kind }` or `{ center, size, kind }`
+  (arrays or {x, y, z}); the positional form is unchanged.
+- core: `PoseInterpolator(source)`: render interpolation between fixed steps (`save()` before each step,
+  `apply(object3d, alpha)` per frame, `snap()` after a teleport) for anything with `position` (+ `quaternion`).
+- render: `NearestLights` moved to the render layer (it depends on three.js only) and exported from
+  `@vibe/engine/render`; `@vibe/engine/world` and `src/world/NearestLights.js` re-export it. Its `intensity` is
+  documented (three's PointLight candela; the demos' values: 7.5-8 for lanterns, up to 260 for city street lamps).
+- `loadTextureSet` accepts the manifest's role key ('grass') as well as the set id ('leafy_grass'), takes
+  `basisPath` and `quiet` options, and prints one console warning per set when the manifest does not list it (naming
+  the ids and roles it has) or the albedo is missing (naming the URL tried), instead of returning null silently.
+  `loadTextureManifest(base, { quiet })` warns once per root whose manifest cannot be fetched; the world layer's own
+  loads stay quiet.
+- AnimationController: a state whose clip name is not in the clips throws an error listing every clip name (and
+  suggests the one ending with the requested name); `play()` of an unknown node lists the states and trees.
+- GBuffer / PostFX `track()`: the shared-material note is now a console.info saying a copy was made and nothing needs
+  doing (was a warning).
+- Types (JSDoc): loadTextureSet options and result (`TextureSetOptions`, `TextureSetResult`, `TextureManifest`),
+  AnimationController descriptors (`AnimationStateSpec`, `BlendTreeSpec`), `AddBodyOptions`, `Engine.renderFn(scene,
+  camera, dt)` / `onResize(width, height, pixelRatio)`, Atmosphere's options (`AtmosphereOptions`; legacy parameters
+  optional) and `update(cameraPosition, dt?)`, `PostFX.track(object3d, opts?)`, `GltfAsset` (`assets.get<GltfAsset>`),
+  `resolveQuality()` (`QualityChoice`, `TierSettings` with room for a game's own groups), VehicleController's spec /
+  controls / `step` / `reset`, `CameraRig.setTarget` and the rigs' states (`ChaseTargetState`,
+  `ThirdPersonTargetState`), `VehicleAudioState`; test/types/check.ts uses each as a game would.
 - PostFX `renderScale` (option, `set('renderScale', s)` / `get`, s in [0.5, 1], default 1 = unchanged: no new define,
   every shader text pinned to the previous one): temporal upscaling, in effect only under TAA (else 1, the request
   kept). The scene / G-buffer target, exposure, AO, SSR, volumetrics and the camera jitter run at the drawing buffer
