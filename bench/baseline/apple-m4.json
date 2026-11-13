@@ -3,102 +3,102 @@
   "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
   "chrome": "157.0.8103.38",
   "updated": "2026-11-12",
-  "commit": "422e484",
+  "commit": "ff1ea80",
   "frames": 24,
   "repeats": 5,
-  "score": 140.6,
+  "score": 160.9,
   "views": {
     "nyc-night": {
-      "size": "3024x1964",
+      "size": "2268x1473",
       "tier": "desktop",
-      "heapMB": 280.2,
+      "heapMB": 270.3,
       "assetMB": 21.3,
-      "loadMs": 2670,
+      "loadMs": 2724,
       "poses": {
         "avenue": {
-          "ms": 16.55,
-          "spread": 0.003,
+          "ms": 10.55,
+          "spread": 0.005,
           "drawCalls": 212,
           "triangles": 1062458,
           "textures": 129,
           "programs": 115,
-          "hash": "32caffa2",
+          "hash": "b4794f01",
           "imageNoise": {
-            "meanAbs": 0.011,
+            "meanAbs": 0.009,
             "pctOver8": 0
           },
           "look": {
-            "lumMean": 30.24,
+            "lumMean": 30.12,
             "lumMedian": 22,
             "p90": 64,
-            "p99": 133,
-            "lumMax": 251.36,
-            "under40": 71.5,
-            "under80": 94.81,
-            "over160": 0.29,
+            "p99": 131,
+            "lumMax": 241.19,
+            "under40": 71.6,
+            "under80": 94.89,
+            "over160": 0.26,
             "over240": 0,
             "satMean": 0.33,
             "hues": {
               "red": 5.3,
-              "orange": 18.6
+              "orange": 18.8
             }
           }
         },
         "square": {
-          "ms": 16.59,
-          "spread": 0.004,
+          "ms": 10.95,
+          "spread": 0.008,
           "drawCalls": 244,
           "triangles": 1166681,
           "textures": 130,
           "programs": 117,
-          "hash": "99b72a4d",
+          "hash": "4f0febc6",
           "imageNoise": {
-            "meanAbs": 0,
-            "pctOver8": 0
+            "meanAbs": 0.042,
+            "pctOver8": 0.04
           },
           "look": {
-            "lumMean": 29.72,
+            "lumMean": 30.07,
             "lumMedian": 22,
             "p90": 59,
-            "p99": 133,
-            "lumMax": 236.16,
-            "under40": 76.44,
-            "under80": 95.93,
-            "over160": 0.69,
+            "p99": 134,
+            "lumMax": 233.39,
+            "under40": 75.51,
+            "under80": 95.84,
+            "over160": 0.66,
             "over240": 0,
-            "satMean": 0.335,
+            "satMean": 0.334,
             "hues": {
-              "red": 5,
-              "orange": 12.2
+              "red": 4.9,
+              "orange": 12.8
             }
           }
         },
         "sidewalk": {
-          "ms": 18.09,
-          "spread": 0.003,
+          "ms": 11.46,
+          "spread": 0.015,
           "drawCalls": 226,
           "triangles": 1126074,
           "textures": 133,
           "programs": 118,
-          "hash": "bd9bb7da",
+          "hash": "21304264",
           "imageNoise": {
             "meanAbs": 0,
             "pctOver8": 0
           },
           "look": {
-            "lumMean": 31.29,
+            "lumMean": 31.3,
             "lumMedian": 22,
-            "p90": 70,
-            "p99": 146,
-            "lumMax": 253.49,
-            "under40": 73.2,
-            "under80": 92.71,
-            "over160": 0.42,
-            "over240": 0.01,
-            "satMean": 0.297,
+            "p90": 71,
+            "p99": 144,
+            "lumMax": 252.11,
+            "under40": 73.21,
+            "under80": 92.78,
+            "over160": 0.37,
+            "over240": 0,
+            "satMean": 0.295,
             "hues": {
-              "red": 3.3,
-              "orange": 10.1
+              "red": 2.9,
+              "orange": 9.9
             }
           }
         }
@@ -201,32 +201,32 @@
       }
     },
     "miami-drive": {
-      "size": "3024x1964",
+      "size": "2268x1473",
       "tier": "desktop",
-      "heapMB": 235.2,
+      "heapMB": 225.2,
       "assetMB": 28.2,
-      "loadMs": 4470,
+      "loadMs": 4377,
       "poses": {
         "chase": {
-          "ms": 16.93,
-          "spread": 0.005,
+          "ms": 11.4,
+          "spread": 0.011,
           "drawCalls": 203,
           "triangles": 1396220,
           "textures": 132,
           "programs": 173,
-          "hash": "71997bb8",
+          "hash": "ba43ea0a",
           "imageNoise": {
-            "meanAbs": 0.01,
-            "pctOver8": 0.05
+            "meanAbs": 0.007,
+            "pctOver8": 0.01
           },
           "look": {
             "lumMean": 32.63,
             "lumMedian": 24,
             "p90": 75,
             "p99": 99,
-            "lumMax": 223.88,
-            "under40": 67.19,
-            "under80": 92.06,
+            "lumMax": 221.74,
+            "under40": 67.24,
+            "under80": 92.07,
             "over160": 0.05,
             "over240": 0,
             "satMean": 0.34,
@@ -237,71 +237,71 @@
           }
         },
         "strip": {
-          "ms": 13.95,
-          "spread": 0.004,
+          "ms": 9.87,
+          "spread": 0.016,
           "drawCalls": 214,
           "triangles": 1496134,
           "textures": 133,
           "programs": 183,
-          "hash": "d61880ed",
+          "hash": "bf375b94",
           "imageNoise": {
             "meanAbs": 0.004,
             "pctOver8": 0
           },
           "look": {
-            "lumMean": 32.67,
+            "lumMean": 32.64,
             "lumMedian": 18,
             "p90": 73,
-            "p99": 151,
-            "lumMax": 229.53,
-            "under40": 69.01,
-            "under80": 92.47,
-            "over160": 0.66,
+            "p99": 150,
+            "lumMax": 228.58,
+            "under40": 68.88,
+            "under80": 92.6,
+            "over160": 0.63,
             "over240": 0,
             "satMean": 0.339,
             "hues": {
               "red": 3.6,
-              "orange": 19.4
+              "orange": 19.3
             }
           }
         },
         "beach": {
-          "ms": 9.99,
-          "spread": 0.004,
+          "ms": 6.21,
+          "spread": 0.011,
           "drawCalls": 138,
           "triangles": 701246,
           "textures": 133,
           "programs": 183,
-          "hash": "0a0ddb08",
+          "hash": "deb5e2d6",
           "imageNoise": {
             "meanAbs": 0,
             "pctOver8": 0
           },
           "look": {
-            "lumMean": 35.68,
-            "lumMedian": 21,
+            "lumMean": 35.71,
+            "lumMedian": 20,
             "p90": 85,
             "p99": 107,
-            "lumMax": 200.32,
-            "under40": 64.91,
-            "under80": 87.38,
-            "over160": 0.07,
+            "lumMax": 202.29,
+            "under40": 64.85,
+            "under80": 87.29,
+            "over160": 0.06,
             "over240": 0,
             "satMean": 0.333,
             "hues": {
-              "red": 8,
-              "orange": 10.2
+              "red": 8.1,
+              "orange": 10.3
             }
           }
         },
         "car": {
-          "ms": 16.28,
-          "spread": 0.004,
+          "ms": 10.71,
+          "spread": 0.005,
           "drawCalls": 187,
           "triangles": 1264202,
           "textures": 133,
           "programs": 183,
-          "hash": "d086e0e3",
+          "hash": "05818df1",
           "imageNoise": {
             "meanAbs": 0,
             "pctOver8": 0
@@ -310,15 +310,15 @@
             "lumMean": 28.37,
             "lumMedian": 19,
             "p90": 69,
-            "p99": 98,
-            "lumMax": 226.92,
-            "under40": 77.28,
-            "under80": 93.52,
-            "over160": 0.06,
+            "p99": 97,
+            "lumMax": 216.76,
+            "under40": 77.36,
+            "under80": 93.53,
+            "over160": 0.05,
             "over240": 0,
             "satMean": 0.298,
             "hues": {
-              "red": 6,
+              "red": 5.9,
               "orange": 2.9
             }
           }

@@ -54,7 +54,7 @@ const Q = resolveQuality({
   storageKey: 'vibe.quality.nyc',
   overrides: {
     desktop: {
-      engine: { maxPixelRatio: 2, adaptiveResolution: true },
+      engine: { maxPixelRatio: 1.5, adaptiveResolution: true }, // 2268x1473 on a 14" Retina, as miami-drive: native 3024x1964 is 16.5-18 ms, this 10.7-11.6
       shadows: { cascades: 2, kernel: 'fast', nearMapSize: 2048 },
       postfx: { ssr: { scale: 0.4, steps: 22, refine: 4, maxDistance: 120, thickness: 0.6, maxRoughness: 0.45, edgeFade: 0.2, jitter: false, denoise: 5 }, volumetric: { scale: 0.25, steps: 12, maxDistance: 220, intensity: 1, density: 1 } },
       lights: { clustered: true, clusteredRange: 200 },

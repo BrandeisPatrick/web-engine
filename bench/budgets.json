@@ -1,10 +1,10 @@
 {
-  "comment": "Performance budgets of the samples (test/browser/perf.mjs, bench/README.md). One view per sample and quality tier, measured at a fixed drawing-buffer size. `ms` is the frame budget on the reference machine class; the score is 100 x the geometric mean of ms budget / measured ms over every pose of every view (100 = on budget on average, higher is faster). The other keys are ceilings that are reported when exceeded. Budgets are goals and change only by a decision of the owner, never to make a run pass.",
+  "comment": "Performance budgets of the samples (test/browser/perf.mjs, bench/README.md). One view per sample and quality tier, measured at a fixed drawing-buffer size: the size that tier renders on a 14-inch MacBook Pro (the city demos cap the desktop tier at a pixel ratio of 1.5, 2268x1473; the Halloween game renders the native 3024x1964), 1280x720 for the mobile tier. `ms` is the frame budget on the reference machine class; the score is 100 x the geometric mean of ms budget / measured ms over every pose of every view (100 = on budget on average, higher is faster). The other keys are ceilings that are reported when exceeded. Budgets are goals and change only by a decision of the owner, never to make a run pass.",
   "reference": "apple-m4",
   "views": {
-    "nyc-night": { "page": "nyc-night", "tier": "desktop", "size": "3024x1964", "ms": 12, "drawCalls": 320, "triangles": 1600000, "heapMB": 450, "assetMB": 40 },
+    "nyc-night": { "page": "nyc-night", "tier": "desktop", "size": "2268x1473", "ms": 12, "drawCalls": 320, "triangles": 1600000, "heapMB": 450, "assetMB": 40 },
     "nyc-night-mobile": { "page": "nyc-night", "tier": "mobile", "size": "1280x720", "ms": 5, "drawCalls": 300, "triangles": 1300000, "heapMB": 350, "assetMB": 10 },
-    "miami-drive": { "page": "miami-drive", "tier": "desktop", "size": "3024x1964", "ms": 12, "drawCalls": 320, "triangles": 1800000, "heapMB": 300, "assetMB": 40 },
+    "miami-drive": { "page": "miami-drive", "tier": "desktop", "size": "2268x1473", "ms": 12, "drawCalls": 320, "triangles": 1800000, "heapMB": 300, "assetMB": 40 },
     "miami-drive-mobile": { "page": "miami-drive", "tier": "mobile", "size": "1280x720", "ms": 5, "drawCalls": 300, "triangles": 1300000, "heapMB": 250, "assetMB": 8 },
     "halloween": { "page": "halloween", "tier": "desktop", "size": "3024x1964", "ms": 12, "drawCalls": 320, "triangles": 1200000, "heapMB": 300, "assetMB": 20 },
     "halloween-mobile": { "page": "halloween", "tier": "mobile", "size": "1280x720", "ms": 4, "drawCalls": 250, "triangles": 600000, "heapMB": 200, "assetMB": 6 }

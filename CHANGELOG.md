@@ -14,6 +14,9 @@
   `test/texture-manifest.mjs`. The rendered frames are unchanged (pixel differences at load-to-load noise).
 - `samples/index.html` declares an empty icon (no favicon 404).
 - `test/vehicles-hd.mjs`: the build-time check is a blow-up guard (1500 ms), not a machine-speed limit.
+- `samples/nyc-night`: the desktop tier caps the pixel ratio at 1.5 (2268x1473 on a 14-inch MacBook Pro), as
+  `samples/miami-drive` already did; `bench/budgets.json` measures the two city demos' desktop views at that size
+  (10.7-11.6 ms and 6.3-11.5 ms against the 12 ms budget; native 3024x1964 was 16.5-18.1 and 10.0-16.9).
 - `SSRPass` denoise: where the centre and all eight taps of the reflection buffer are 0 the blur writes 0 without
   reading the full-resolution depth and normal (fewer reads, the same output).
 

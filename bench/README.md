@@ -13,8 +13,9 @@ npm run perf -- --costs   # also: where each view's frame goes
 score = 100 x geometric mean, over every pose of every view, of (frame budget of the view / measured ms)
 ```
 
-- A **view** is a sample on a quality tier at a fixed drawing-buffer size (`budgets.json`): the desktop tier at
-  3024x1964 (a 14-inch MacBook Pro's native pixels) with a 12 ms budget, the mobile tier at 1280x720 with 4-5 ms.
+- A **view** is a sample on a quality tier at a fixed drawing-buffer size (`budgets.json`): the desktop tier at the
+  size it renders on a 14-inch MacBook Pro with a 12 ms budget (the two city demos cap their pixel ratio at 1.5,
+  2268x1473; the Halloween game renders the native 3024x1964), the mobile tier at 1280x720 with 4-5 ms.
 - A **pose** is a fixed camera position the sample registered with its bench harness (`src/core/Bench.js`).
 - **ms** is the median of 5 GPU-synchronised runs of 24 frames in headless Chrome on the real GPU.
 - 100 means on budget on average. Higher is faster. The geometric mean makes a 10 % gain count the same on every
