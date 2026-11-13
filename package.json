@@ -69,8 +69,8 @@
   "sideEffects": false,
   "scripts": {
     "dev": "vite",
-    "build": "vite build && vite build --mode assets",
-    "build:pages": "BASE_PATH=/web-engine/ vite build && BASE_PATH=/web-engine/ vite build --mode assets",
+    "build": "vite build && vite build --mode extras",
+    "build:pages": "BASE_PATH=/web-engine/ vite build && BASE_PATH=/web-engine/ vite build --mode extras",
     "deploy": "npm run build:pages && node tools/deploy-pages.mjs",
     "preview": "vite preview --port 5191",
     "test": "node test/all.mjs",
