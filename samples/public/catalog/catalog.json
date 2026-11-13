@@ -212,8 +212,8 @@
    ],
    "thumb": "catalog/thumbs/engine-vehicle-boxtruck.jpg",
    "preview3d": true,
-   "description": "Box truck built in code by the engine (src/world/Vehicles.js). MapWorld's traffic and parked cars use it; samples/dev/vehicles.html shows every type. Paint comes from the instance colour, the lamps from the material's uDark uniform (0 day .. 1 night).",
-   "snippet": "import * as THREE from 'three';\nimport { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';\nconst geometry = makeVehicleGeometry('boxtruck', { lod: 0 });\nconst car = new THREE.InstancedMesh(geometry, createVehicleMaterial({ brake: false }), 1);\ncar.setMatrixAt(0, new THREE.Matrix4());\ncar.setColorAt(0, pickVehicleColor(Math.random, 'truck', new THREE.Color()));\nscene.add(car);",
+   "description": "Box truck built in code by the engine (src/world/Vehicles.js). Faces -Z like VehicleController, with its origin on the ground between the axles, so it goes on a controller's body with no flip or offset; 7.4 x 2.44 x 3.42 m long x wide x high (VEHICLE_SPECS.boxtruck, wheelbase 4.3 m). MapWorld's traffic and parked cars use it; samples/dev/vehicles.html shows every type. Paint comes from the instance colour; the lamps glow with the material's userData.u.uDark uniform (0 day .. 1 night, set in the snippet).",
+   "snippet": "import * as THREE from 'three';\nimport { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';\nconst geometry = makeVehicleGeometry('boxtruck', { lod: 0 });\nconst material = createVehicleMaterial({ brake: false });\nmaterial.userData.u.uDark.value = 1;                                     // lamps on: 0 day .. 1 night\nconst car = new THREE.InstancedMesh(geometry, material, 1);\ncar.setMatrixAt(0, new THREE.Matrix4());\ncar.setColorAt(0, pickVehicleColor(Math.random, 'truck', new THREE.Color()));\nscene.add(car);",
    "preview": {
     "az": 140,
     "el": 16,
@@ -258,8 +258,8 @@
    ],
    "thumb": "catalog/thumbs/engine-vehicle-bus.jpg",
    "preview3d": true,
-   "description": "City bus built in code by the engine (src/world/Vehicles.js). MapWorld's traffic and parked cars use it; samples/dev/vehicles.html shows every type. Paint comes from the instance colour, the lamps from the material's uDark uniform (0 day .. 1 night).",
-   "snippet": "import * as THREE from 'three';\nimport { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';\nconst geometry = makeVehicleGeometry('bus', { lod: 0 });\nconst car = new THREE.InstancedMesh(geometry, createVehicleMaterial({ brake: false }), 1);\ncar.setMatrixAt(0, new THREE.Matrix4());\ncar.setColorAt(0, pickVehicleColor(Math.random, 'bus', new THREE.Color()));\nscene.add(car);",
+   "description": "City bus built in code by the engine (src/world/Vehicles.js). Faces -Z like VehicleController, with its origin on the ground between the axles, so it goes on a controller's body with no flip or offset; 12.2 x 2.59 x 3.02 m long x wide x high (VEHICLE_SPECS.bus, wheelbase 7 m). MapWorld's traffic and parked cars use it; samples/dev/vehicles.html shows every type. Paint comes from the instance colour; the lamps glow with the material's userData.u.uDark uniform (0 day .. 1 night, set in the snippet).",
+   "snippet": "import * as THREE from 'three';\nimport { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';\nconst geometry = makeVehicleGeometry('bus', { lod: 0 });\nconst material = createVehicleMaterial({ brake: false });\nmaterial.userData.u.uDark.value = 1;                                     // lamps on: 0 day .. 1 night\nconst car = new THREE.InstancedMesh(geometry, material, 1);\ncar.setMatrixAt(0, new THREE.Matrix4());\ncar.setColorAt(0, pickVehicleColor(Math.random, 'bus', new THREE.Color()));\nscene.add(car);",
    "preview": {
     "az": 140,
     "el": 16,
@@ -349,8 +349,8 @@
    ],
    "thumb": "catalog/thumbs/engine-vehicle-hatchback.jpg",
    "preview3d": true,
-   "description": "Hatchback built in code by the engine (src/world/Vehicles.js). MapWorld's traffic and parked cars use it; samples/dev/vehicles.html shows every type. Paint comes from the instance colour, the lamps from the material's uDark uniform (0 day .. 1 night).",
-   "snippet": "import * as THREE from 'three';\nimport { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';\nconst geometry = makeVehicleGeometry('hatchback', { lod: 'hd' });          // shared and cached: do not modify\nconst body = createVehicleMaterial({ hd: true, brake: false }), glass = createVehicleMaterial({ hd: true, glass: true, brake: false });\nconst car = new THREE.InstancedMesh(geometry, [body, glass], 1);\ncar.setMatrixAt(0, new THREE.Matrix4());\ncar.setColorAt(0, pickVehicleColor(Math.random, 'car', new THREE.Color()));\nscene.add(car);",
+   "description": "Hatchback built in code by the engine (src/world/Vehicles.js). Faces -Z like VehicleController, with its origin on the ground between the axles, so it goes on a controller's body with no flip or offset; 4.26 x 1.79 x 1.47 m long x wide x high (VEHICLE_SPECS.hatchback, wheelbase 2.63 m); for wheels that roll and steer, makeVehicleParts gives body, glass and wheels apart. MapWorld's traffic and parked cars use it; samples/dev/vehicles.html shows every type. Paint comes from the instance colour; the lamps glow with the material's userData.u.uDark uniform (0 day .. 1 night, set in the snippet).",
+   "snippet": "import * as THREE from 'three';\nimport { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';\nconst geometry = makeVehicleGeometry('hatchback', { lod: 'hd' });          // shared and cached: do not modify\nconst body = createVehicleMaterial({ hd: true, brake: false }), glass = createVehicleMaterial({ hd: true, glass: true, brake: false });\nconst car = new THREE.InstancedMesh(geometry, [body, glass], 1);\ncar.setMatrixAt(0, new THREE.Matrix4());\ncar.setColorAt(0, pickVehicleColor(Math.random, 'car', new THREE.Color()));\nfor (const m of [body, glass]) m.userData.u.uDark.value = 1;          // lamps on: 0 day .. 1 night\nscene.add(car);",
    "preview": {
     "az": 140,
     "el": 16,
@@ -395,8 +395,8 @@
    ],
    "thumb": "catalog/thumbs/engine-vehicle-minivan.jpg",
    "preview3d": true,
-   "description": "Minivan built in code by the engine (src/world/Vehicles.js). MapWorld's traffic and parked cars use it; samples/dev/vehicles.html shows every type. Paint comes from the instance colour, the lamps from the material's uDark uniform (0 day .. 1 night).",
-   "snippet": "import * as THREE from 'three';\nimport { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';\nconst geometry = makeVehicleGeometry('minivan', { lod: 'hd' });          // shared and cached: do not modify\nconst body = createVehicleMaterial({ hd: true, brake: false }), glass = createVehicleMaterial({ hd: true, glass: true, brake: false });\nconst car = new THREE.InstancedMesh(geometry, [body, glass], 1);\ncar.setMatrixAt(0, new THREE.Matrix4());\ncar.setColorAt(0, pickVehicleColor(Math.random, 'car', new THREE.Color()));\nscene.add(car);",
+   "description": "Minivan built in code by the engine (src/world/Vehicles.js). Faces -Z like VehicleController, with its origin on the ground between the axles, so it goes on a controller's body with no flip or offset; 5.16 x 1.99 x 1.74 m long x wide x high (VEHICLE_SPECS.minivan, wheelbase 3 m); for wheels that roll and steer, makeVehicleParts gives body, glass and wheels apart. MapWorld's traffic and parked cars use it; samples/dev/vehicles.html shows every type. Paint comes from the instance colour; the lamps glow with the material's userData.u.uDark uniform (0 day .. 1 night, set in the snippet).",
+   "snippet": "import * as THREE from 'three';\nimport { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';\nconst geometry = makeVehicleGeometry('minivan', { lod: 'hd' });          // shared and cached: do not modify\nconst body = createVehicleMaterial({ hd: true, brake: false }), glass = createVehicleMaterial({ hd: true, glass: true, brake: false });\nconst car = new THREE.InstancedMesh(geometry, [body, glass], 1);\ncar.setMatrixAt(0, new THREE.Matrix4());\ncar.setColorAt(0, pickVehicleColor(Math.random, 'car', new THREE.Color()));\nfor (const m of [body, glass]) m.userData.u.uDark.value = 1;          // lamps on: 0 day .. 1 night\nscene.add(car);",
    "preview": {
     "az": 140,
     "el": 16,
@@ -441,8 +441,8 @@
    ],
    "thumb": "catalog/thumbs/engine-vehicle-pickup.jpg",
    "preview3d": true,
-   "description": "Pickup truck built in code by the engine (src/world/Vehicles.js). MapWorld's traffic and parked cars use it; samples/dev/vehicles.html shows every type. Paint comes from the instance colour, the lamps from the material's uDark uniform (0 day .. 1 night).",
-   "snippet": "import * as THREE from 'three';\nimport { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';\nconst geometry = makeVehicleGeometry('pickup', { lod: 'hd' });          // shared and cached: do not modify\nconst body = createVehicleMaterial({ hd: true, brake: false }), glass = createVehicleMaterial({ hd: true, glass: true, brake: false });\nconst car = new THREE.InstancedMesh(geometry, [body, glass], 1);\ncar.setMatrixAt(0, new THREE.Matrix4());\ncar.setColorAt(0, pickVehicleColor(Math.random, 'car', new THREE.Color()));\nscene.add(car);",
+   "description": "Pickup truck built in code by the engine (src/world/Vehicles.js). Faces -Z like VehicleController, with its origin on the ground between the axles, so it goes on a controller's body with no flip or offset; 5.4 x 1.91 x 1.79 m long x wide x high (VEHICLE_SPECS.pickup, wheelbase 3.24 m); for wheels that roll and steer, makeVehicleParts gives body, glass and wheels apart. MapWorld's traffic and parked cars use it; samples/dev/vehicles.html shows every type. Paint comes from the instance colour; the lamps glow with the material's userData.u.uDark uniform (0 day .. 1 night, set in the snippet).",
+   "snippet": "import * as THREE from 'three';\nimport { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';\nconst geometry = makeVehicleGeometry('pickup', { lod: 'hd' });          // shared and cached: do not modify\nconst body = createVehicleMaterial({ hd: true, brake: false }), glass = createVehicleMaterial({ hd: true, glass: true, brake: false });\nconst car = new THREE.InstancedMesh(geometry, [body, glass], 1);\ncar.setMatrixAt(0, new THREE.Matrix4());\ncar.setColorAt(0, pickVehicleColor(Math.random, 'car', new THREE.Color()));\nfor (const m of [body, glass]) m.userData.u.uDark.value = 1;          // lamps on: 0 day .. 1 night\nscene.add(car);",
    "preview": {
     "az": 140,
     "el": 16,
@@ -484,8 +484,8 @@
    ],
    "thumb": "catalog/thumbs/engine-vehicle-police_sedan.jpg",
    "preview3d": true,
-   "description": "Police sedan built in code by the engine (src/world/Vehicles.js). MapWorld's traffic and parked cars use it (this type is not in the traffic mix: TrafficSim leaves it out); samples/dev/vehicles.html shows every type. Paint comes from the instance colour, the lamps from the material's uDark uniform (0 day .. 1 night).",
-   "snippet": "import * as THREE from 'three';\nimport { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';\nconst geometry = makeVehicleGeometry('police_sedan', { lod: 'hd' });          // shared and cached: do not modify\nconst body = createVehicleMaterial({ hd: true, brake: false }), glass = createVehicleMaterial({ hd: true, glass: true, brake: false });\nconst car = new THREE.InstancedMesh(geometry, [body, glass], 1);\ncar.setMatrixAt(0, new THREE.Matrix4());\ncar.setColorAt(0, pickVehicleColor(Math.random, 'police', new THREE.Color()));\nscene.add(car);",
+   "description": "Police sedan built in code by the engine (src/world/Vehicles.js). Faces -Z like VehicleController, with its origin on the ground between the axles, so it goes on a controller's body with no flip or offset; 4.72 x 1.83 x 1.45 m long x wide x high (VEHICLE_SPECS.police_sedan, wheelbase 2.8 m); for wheels that roll and steer, makeVehicleParts gives body, glass and wheels apart. MapWorld's traffic and parked cars use it (this type is not in the traffic mix: TrafficSim leaves it out); samples/dev/vehicles.html shows every type. Paint comes from the instance colour; the lamps glow with the material's userData.u.uDark uniform (0 day .. 1 night, set in the snippet).",
+   "snippet": "import * as THREE from 'three';\nimport { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';\nconst geometry = makeVehicleGeometry('police_sedan', { lod: 'hd' });          // shared and cached: do not modify\nconst body = createVehicleMaterial({ hd: true, brake: false }), glass = createVehicleMaterial({ hd: true, glass: true, brake: false });\nconst car = new THREE.InstancedMesh(geometry, [body, glass], 1);\ncar.setMatrixAt(0, new THREE.Matrix4());\ncar.setColorAt(0, pickVehicleColor(Math.random, 'police', new THREE.Color()));\nfor (const m of [body, glass]) m.userData.u.uDark.value = 1;          // lamps on: 0 day .. 1 night\nscene.add(car);",
    "preview": {
     "az": 140,
     "el": 16,
@@ -530,8 +530,8 @@
    ],
    "thumb": "catalog/thumbs/engine-vehicle-police.jpg",
    "preview3d": true,
-   "description": "Police SUV built in code by the engine (src/world/Vehicles.js). MapWorld's traffic and parked cars use it; samples/dev/vehicles.html shows every type. Paint comes from the instance colour, the lamps from the material's uDark uniform (0 day .. 1 night).",
-   "snippet": "import * as THREE from 'three';\nimport { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';\nconst geometry = makeVehicleGeometry('police', { lod: 'hd' });          // shared and cached: do not modify\nconst body = createVehicleMaterial({ hd: true, brake: false }), glass = createVehicleMaterial({ hd: true, glass: true, brake: false });\nconst car = new THREE.InstancedMesh(geometry, [body, glass], 1);\ncar.setMatrixAt(0, new THREE.Matrix4());\ncar.setColorAt(0, pickVehicleColor(Math.random, 'police', new THREE.Color()));\nscene.add(car);",
+   "description": "Police SUV built in code by the engine (src/world/Vehicles.js). Faces -Z like VehicleController, with its origin on the ground between the axles, so it goes on a controller's body with no flip or offset; 5.05 x 2 x 1.78 m long x wide x high (VEHICLE_SPECS.police, wheelbase 3.03 m); for wheels that roll and steer, makeVehicleParts gives body, glass and wheels apart. MapWorld's traffic and parked cars use it; samples/dev/vehicles.html shows every type. Paint comes from the instance colour; the lamps glow with the material's userData.u.uDark uniform (0 day .. 1 night, set in the snippet).",
+   "snippet": "import * as THREE from 'three';\nimport { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';\nconst geometry = makeVehicleGeometry('police', { lod: 'hd' });          // shared and cached: do not modify\nconst body = createVehicleMaterial({ hd: true, brake: false }), glass = createVehicleMaterial({ hd: true, glass: true, brake: false });\nconst car = new THREE.InstancedMesh(geometry, [body, glass], 1);\ncar.setMatrixAt(0, new THREE.Matrix4());\ncar.setColorAt(0, pickVehicleColor(Math.random, 'police', new THREE.Color()));\nfor (const m of [body, glass]) m.userData.u.uDark.value = 1;          // lamps on: 0 day .. 1 night\nscene.add(car);",
    "preview": {
     "az": 140,
     "el": 16,
@@ -576,8 +576,8 @@
    ],
    "thumb": "catalog/thumbs/engine-vehicle-sedan.jpg",
    "preview3d": true,
-   "description": "Sedan built in code by the engine (src/world/Vehicles.js). MapWorld's traffic and parked cars use it; samples/dev/vehicles.html shows every type. Paint comes from the instance colour, the lamps from the material's uDark uniform (0 day .. 1 night).",
-   "snippet": "import * as THREE from 'three';\nimport { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';\nconst geometry = makeVehicleGeometry('sedan', { lod: 'hd' });          // shared and cached: do not modify\nconst body = createVehicleMaterial({ hd: true, brake: false }), glass = createVehicleMaterial({ hd: true, glass: true, brake: false });\nconst car = new THREE.InstancedMesh(geometry, [body, glass], 1);\ncar.setMatrixAt(0, new THREE.Matrix4());\ncar.setColorAt(0, pickVehicleColor(Math.random, 'car', new THREE.Color()));\nscene.add(car);",
+   "description": "Sedan built in code by the engine (src/world/Vehicles.js). Faces -Z like VehicleController, with its origin on the ground between the axles, so it goes on a controller's body with no flip or offset; 4.72 x 1.83 x 1.45 m long x wide x high (VEHICLE_SPECS.sedan, wheelbase 2.8 m); for wheels that roll and steer, makeVehicleParts gives body, glass and wheels apart. MapWorld's traffic and parked cars use it; samples/dev/vehicles.html shows every type. Paint comes from the instance colour; the lamps glow with the material's userData.u.uDark uniform (0 day .. 1 night, set in the snippet).",
+   "snippet": "import * as THREE from 'three';\nimport { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';\nconst geometry = makeVehicleGeometry('sedan', { lod: 'hd' });          // shared and cached: do not modify\nconst body = createVehicleMaterial({ hd: true, brake: false }), glass = createVehicleMaterial({ hd: true, glass: true, brake: false });\nconst car = new THREE.InstancedMesh(geometry, [body, glass], 1);\ncar.setMatrixAt(0, new THREE.Matrix4());\ncar.setColorAt(0, pickVehicleColor(Math.random, 'car', new THREE.Color()));\nfor (const m of [body, glass]) m.userData.u.uDark.value = 1;          // lamps on: 0 day .. 1 night\nscene.add(car);",
    "preview": {
     "az": 140,
     "el": 16,
@@ -622,8 +622,8 @@
    ],
    "thumb": "catalog/thumbs/engine-vehicle-suv.jpg",
    "preview3d": true,
-   "description": "SUV built in code by the engine (src/world/Vehicles.js). MapWorld's traffic and parked cars use it; samples/dev/vehicles.html shows every type. Paint comes from the instance colour, the lamps from the material's uDark uniform (0 day .. 1 night).",
-   "snippet": "import * as THREE from 'three';\nimport { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';\nconst geometry = makeVehicleGeometry('suv', { lod: 'hd' });          // shared and cached: do not modify\nconst body = createVehicleMaterial({ hd: true, brake: false }), glass = createVehicleMaterial({ hd: true, glass: true, brake: false });\nconst car = new THREE.InstancedMesh(geometry, [body, glass], 1);\ncar.setMatrixAt(0, new THREE.Matrix4());\ncar.setColorAt(0, pickVehicleColor(Math.random, 'car', new THREE.Color()));\nscene.add(car);",
+   "description": "SUV built in code by the engine (src/world/Vehicles.js). Faces -Z like VehicleController, with its origin on the ground between the axles, so it goes on a controller's body with no flip or offset; 4.6 x 1.86 x 1.69 m long x wide x high (VEHICLE_SPECS.suv, wheelbase 2.69 m); for wheels that roll and steer, makeVehicleParts gives body, glass and wheels apart. MapWorld's traffic and parked cars use it; samples/dev/vehicles.html shows every type. Paint comes from the instance colour; the lamps glow with the material's userData.u.uDark uniform (0 day .. 1 night, set in the snippet).",
+   "snippet": "import * as THREE from 'three';\nimport { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';\nconst geometry = makeVehicleGeometry('suv', { lod: 'hd' });          // shared and cached: do not modify\nconst body = createVehicleMaterial({ hd: true, brake: false }), glass = createVehicleMaterial({ hd: true, glass: true, brake: false });\nconst car = new THREE.InstancedMesh(geometry, [body, glass], 1);\ncar.setMatrixAt(0, new THREE.Matrix4());\ncar.setColorAt(0, pickVehicleColor(Math.random, 'car', new THREE.Color()));\nfor (const m of [body, glass]) m.userData.u.uDark.value = 1;          // lamps on: 0 day .. 1 night\nscene.add(car);",
    "preview": {
     "az": 140,
     "el": 16,
@@ -668,8 +668,8 @@
    ],
    "thumb": "catalog/thumbs/engine-vehicle-taxi.jpg",
    "preview3d": true,
-   "description": "Taxi built in code by the engine (src/world/Vehicles.js). MapWorld's traffic and parked cars use it; samples/dev/vehicles.html shows every type. Paint comes from the instance colour, the lamps from the material's uDark uniform (0 day .. 1 night).",
-   "snippet": "import * as THREE from 'three';\nimport { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';\nconst geometry = makeVehicleGeometry('taxi', { lod: 'hd' });          // shared and cached: do not modify\nconst body = createVehicleMaterial({ hd: true, brake: false }), glass = createVehicleMaterial({ hd: true, glass: true, brake: false });\nconst car = new THREE.InstancedMesh(geometry, [body, glass], 1);\ncar.setMatrixAt(0, new THREE.Matrix4());\ncar.setColorAt(0, pickVehicleColor(Math.random, 'taxi', new THREE.Color()));\nscene.add(car);",
+   "description": "Taxi built in code by the engine (src/world/Vehicles.js). Faces -Z like VehicleController, with its origin on the ground between the axles, so it goes on a controller's body with no flip or offset; 4.72 x 1.83 x 1.45 m long x wide x high (VEHICLE_SPECS.taxi, wheelbase 2.8 m); for wheels that roll and steer, makeVehicleParts gives body, glass and wheels apart. MapWorld's traffic and parked cars use it; samples/dev/vehicles.html shows every type. Paint comes from the instance colour; the lamps glow with the material's userData.u.uDark uniform (0 day .. 1 night, set in the snippet).",
+   "snippet": "import * as THREE from 'three';\nimport { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';\nconst geometry = makeVehicleGeometry('taxi', { lod: 'hd' });          // shared and cached: do not modify\nconst body = createVehicleMaterial({ hd: true, brake: false }), glass = createVehicleMaterial({ hd: true, glass: true, brake: false });\nconst car = new THREE.InstancedMesh(geometry, [body, glass], 1);\ncar.setMatrixAt(0, new THREE.Matrix4());\ncar.setColorAt(0, pickVehicleColor(Math.random, 'taxi', new THREE.Color()));\nfor (const m of [body, glass]) m.userData.u.uDark.value = 1;          // lamps on: 0 day .. 1 night\nscene.add(car);",
    "preview": {
     "az": 140,
     "el": 16,
@@ -2066,7 +2066,7 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-aframe.jpg",
    "preview3d": true,
-   "description": "A-frame sandwich board built in code by the engine (src/world/Furniture.js). MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
+   "description": "A-frame sandwich board built in code by the engine (src/world/Furniture.js). Origin on the ground (pavement top), +Y up; 0.62 x 0.94 x 0.41 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour.",
    "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('aframe');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
    "preview": {
     "az": 35,
@@ -2109,8 +2109,8 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-acorn.jpg",
    "preview3d": true,
-   "description": "Acorn lamp built in code by the engine (src/world/Furniture.js): plaza lamp post. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
-   "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('acorn');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
+   "description": "Acorn lamp built in code by the engine (src/world/Furniture.js): plaza lamp post. Origin on the ground (pavement top), +Y up; 0.38 x 5.1 x 0.38 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour; lamp heads and screens glow with the material's userData.u.uNight uniform (0 day .. 1 night, set in the snippet).",
+   "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('acorn');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nitem.material.userData.u.uNight.value = 1;                               // lamp head on: 0 day .. 1 night\nscene.add(item);",
    "preview": {
     "az": 35,
     "el": 14
@@ -2274,7 +2274,7 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-bench.jpg",
    "preview3d": true,
-   "description": "Bench built in code by the engine (src/world/Furniture.js). MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
+   "description": "Bench built in code by the engine (src/world/Furniture.js). Origin on the ground (pavement top), +Y up, the seat faces -Z; 1.8 x 0.85 x 0.51 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour.",
    "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('bench');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0x2e4a35));       // paint of the painted parts\nscene.add(item);",
    "preview": {
     "az": 35,
@@ -2317,7 +2317,7 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-bikeRack.jpg",
    "preview3d": true,
-   "description": "Bike rack built in code by the engine (src/world/Furniture.js). MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
+   "description": "Bike rack built in code by the engine (src/world/Furniture.js). Origin on the ground (pavement top), +Y up; 0.65 x 1.2 x 0.05 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour.",
    "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('bikeRack');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
    "preview": {
     "az": 35,
@@ -2360,7 +2360,7 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-bollard.jpg",
    "preview3d": true,
-   "description": "Bollard built in code by the engine (src/world/Furniture.js). MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
+   "description": "Bollard built in code by the engine (src/world/Furniture.js). Origin on the ground (pavement top), +Y up; 0.20 x 1.0 x 0.20 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour.",
    "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('bollard');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
    "preview": {
     "az": 35,
@@ -2403,8 +2403,8 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-shelter.jpg",
    "preview3d": true,
-   "description": "Bus shelter built in code by the engine (src/world/Furniture.js): frame only; the glass is makeShelterGlassGeometry + createShelterGlassMaterial. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
-   "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('shelter');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
+   "description": "Bus shelter built in code by the engine (src/world/Furniture.js): frame only; the glass is makeShelterGlassGeometry + createShelterGlassMaterial. Origin on the ground (pavement top), +Y up, open side towards -Z; 4.2 x 3.0 x 1.5 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour; lamp heads and screens glow with the material's userData.u.uNight uniform (0 day .. 1 night, set in the snippet).",
+   "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('shelter');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nitem.material.userData.u.uNight.value = 1;                               // screen on: 0 day .. 1 night\nscene.add(item);",
    "preview": {
     "az": 35,
     "el": 14
@@ -2487,7 +2487,7 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-cafeSet.jpg",
    "preview3d": true,
-   "description": "Cafe table and chairs built in code by the engine (src/world/Furniture.js). MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
+   "description": "Cafe table and chairs built in code by the engine (src/world/Furniture.js). Origin on the ground (pavement top), +Y up; 1.7 x 0.91 x 0.70 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour.",
    "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('cafeSet');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
    "preview": {
     "az": 35,
@@ -2702,8 +2702,8 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-cobra.jpg",
    "preview3d": true,
-   "description": "Cobra-head street light built in code by the engine (src/world/Furniture.js): 9 m arterial cobra head; the arm points along +X. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
-   "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('cobra');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
+   "description": "Cobra-head street light built in code by the engine (src/world/Furniture.js): 9 m arterial cobra head; the arm points along +X. Origin on the ground (pavement top), +Y up, the arm reaches along +X from the pole; 3.4 x 9.4 x 0.40 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour; lamp heads and screens glow with the material's userData.u.uNight uniform (0 day .. 1 night, set in the snippet).",
+   "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('cobra');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nitem.material.userData.u.uNight.value = 1;                               // lamp head on: 0 day .. 1 night\nscene.add(item);",
    "preview": {
     "az": 20,
     "el": 14
@@ -2745,8 +2745,8 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-doubleGlobe.jpg",
    "preview3d": true,
-   "description": "Double-globe promenade lamp built in code by the engine (src/world/Furniture.js): twin-globe lamp; the crossarm runs along the kerb. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
-   "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('doubleGlobe');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
+   "description": "Double-globe promenade lamp built in code by the engine (src/world/Furniture.js): twin-globe lamp; the crossarm runs along the kerb. Origin on the ground (pavement top), +Y up, the crossarm runs along X; 1.7 x 5.5 x 0.46 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour; lamp heads and screens glow with the material's userData.u.uNight uniform (0 day .. 1 night, set in the snippet).",
+   "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('doubleGlobe');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nitem.material.userData.u.uNight.value = 1;                               // lamp head on: 0 day .. 1 night\nscene.add(item);",
    "preview": {
     "az": 35,
     "el": 14
@@ -2788,7 +2788,7 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-hydrant.jpg",
    "preview3d": true,
-   "description": "Fire hydrant built in code by the engine (src/world/Furniture.js). MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
+   "description": "Fire hydrant built in code by the engine (src/world/Furniture.js). Origin on the ground (pavement top), +Y up; 0.48 x 0.96 x 0.41 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour.",
    "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('hydrant');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
    "preview": {
     "az": 35,
@@ -2998,7 +2998,7 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-mailbox.jpg",
    "preview3d": true,
-   "description": "Mailbox built in code by the engine (src/world/Furniture.js): USPS-style blue. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
+   "description": "Mailbox built in code by the engine (src/world/Furniture.js): USPS-style blue. Origin on the ground (pavement top), +Y up, the front faces -Z; 0.54 x 1.3 x 0.49 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour.",
    "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('mailbox');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
    "preview": {
     "az": 35,
@@ -3041,7 +3041,7 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-newsBox.jpg",
    "preview3d": true,
-   "description": "Newspaper box built in code by the engine (src/world/Furniture.js). MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
+   "description": "Newspaper box built in code by the engine (src/world/Furniture.js). Origin on the ground (pavement top), +Y up, the front faces -Z; 0.52 x 1.1 x 0.45 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour.",
    "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('newsBox');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
    "preview": {
     "az": 35,
@@ -3084,8 +3084,8 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-meter.jpg",
    "preview3d": true,
-   "description": "Parking meter built in code by the engine (src/world/Furniture.js). MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
-   "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('meter');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
+   "description": "Parking meter built in code by the engine (src/world/Furniture.js). Origin on the ground (pavement top), +Y up, the front faces -Z; 0.17 x 1.6 x 0.15 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour; lamp heads and screens glow with the material's userData.u.uNight uniform (0 day .. 1 night, set in the snippet).",
+   "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('meter');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nitem.material.userData.u.uNight.value = 1;                               // screen on: 0 day .. 1 night\nscene.add(item);",
    "preview": {
     "az": 35,
     "el": 14
@@ -3127,8 +3127,8 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-pathOfGold.jpg",
    "preview3d": true,
-   "description": "Path of Gold lamp built in code by the engine (src/world/Furniture.js): ornate trident lamp post with gold lanterns. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
-   "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('pathOfGold');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
+   "description": "Path of Gold lamp built in code by the engine (src/world/Furniture.js): ornate trident lamp post with gold lanterns. Origin on the ground (pavement top), +Y up; 1.9 x 8.2 x 0.68 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour; lamp heads and screens glow with the material's userData.u.uNight uniform (0 day .. 1 night, set in the snippet).",
+   "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('pathOfGold');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nitem.material.userData.u.uNight.value = 1;                               // lamp head on: 0 day .. 1 night\nscene.add(item);",
    "preview": {
     "az": 35,
     "el": 14
@@ -3170,7 +3170,7 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-pedHead.jpg",
    "preview3d": true,
-   "description": "Pedestrian signal head built in code by the engine (src/world/Furniture.js): walk / don't walk head with push button. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
+   "description": "Pedestrian signal head built in code by the engine (src/world/Furniture.js): walk / don't walk head with push button. Origin on the ground (pavement top), +Y up, faces -Z, the head 1 to 3 m up on the pole side; 0.43 x 2.0 x 0.62 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour.",
    "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('pedHead');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
    "preview": {
     "az": 215,
@@ -3254,7 +3254,7 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-planter.jpg",
    "preview3d": true,
-   "description": "Planter built in code by the engine (src/world/Furniture.js). MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
+   "description": "Planter built in code by the engine (src/world/Furniture.js). Origin on the ground (pavement top), +Y up; 1.4 x 1.2 x 0.60 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour.",
    "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('planter');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
    "preview": {
     "az": 35,
@@ -3297,8 +3297,8 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-cobraRes.jpg",
    "preview3d": true,
-   "description": "Residential street light built in code by the engine (src/world/Furniture.js): 7.6 m residential cobra head. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
-   "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('cobraRes');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
+   "description": "Residential street light built in code by the engine (src/world/Furniture.js): 7.6 m residential cobra head. Origin on the ground (pavement top), +Y up, the arm reaches along +X from the pole; 2.7 x 8.1 x 0.40 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour; lamp heads and screens glow with the material's userData.u.uNight uniform (0 day .. 1 night, set in the snippet).",
+   "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('cobraRes');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nitem.material.userData.u.uNight.value = 1;                               // lamp head on: 0 day .. 1 night\nscene.add(item);",
    "preview": {
     "az": 20,
     "el": 14
@@ -3381,7 +3381,7 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-pot.jpg",
    "preview3d": true,
-   "description": "Shrub pot built in code by the engine (src/world/Furniture.js). MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
+   "description": "Shrub pot built in code by the engine (src/world/Furniture.js). Origin on the ground (pavement top), +Y up; 0.62 x 1.5 x 0.72 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour.",
    "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('pot');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
    "preview": {
     "az": 35,
@@ -3424,7 +3424,7 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-mastArm.jpg",
    "preview3d": true,
-   "description": "Signal mast arm built in code by the engine (src/world/Furniture.js): unit length along +X: scale X to the span. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
+   "description": "Signal mast arm built in code by the engine (src/world/Furniture.js): unit length along +X: scale X to the span. Origin at one end of the arm (x = 0), on its axis, +Y up, unit length along +X from the origin; 1.0 x 0.23 x 0.23 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour.",
    "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('mastArm');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
    "preview": {
     "az": 20,
@@ -3467,7 +3467,7 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-mastPole.jpg",
    "preview3d": true,
-   "description": "Signal mast pole built in code by the engine (src/world/Furniture.js): 7 m pole for a mast arm. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
+   "description": "Signal mast pole built in code by the engine (src/world/Furniture.js): 7 m pole for a mast arm. Origin on the ground (pavement top), +Y up; 0.68 x 7.3 x 0.65 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour.",
    "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('mastPole');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
    "preview": {
     "az": 35,
@@ -3510,7 +3510,7 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-pedPole.jpg",
    "preview3d": true,
-   "description": "Signal pedestal pole built in code by the engine (src/world/Furniture.js): 4.6 m pole. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
+   "description": "Signal pedestal pole built in code by the engine (src/world/Furniture.js): 4.6 m pole. Origin on the ground (pavement top), +Y up; 0.40 x 4.9 x 0.40 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour.",
    "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('pedPole');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
    "preview": {
     "az": 35,
@@ -3799,7 +3799,7 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-sigHead.jpg",
    "preview3d": true,
-   "description": "Traffic signal head built in code by the engine (src/world/Furniture.js): three-section head with visors, facing -Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
+   "description": "Traffic signal head built in code by the engine (src/world/Furniture.js): three-section head with visors, facing -Z. Origin at the hanger, the head hangs below it, +Y up, faces -Z; 0.64 x 1.3 x 0.51 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour.",
    "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('sigHead');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
    "preview": {
     "az": 215,
@@ -3842,7 +3842,7 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-trashCan.jpg",
    "preview3d": true,
-   "description": "Trash can built in code by the engine (src/world/Furniture.js): green or black by instance colour. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
+   "description": "Trash can built in code by the engine (src/world/Furniture.js): green or black by instance colour. Origin on the ground (pavement top), +Y up; 0.64 x 1.1 x 0.61 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour.",
    "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('trashCan');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0x2f5d3a));       // paint of the painted parts\nscene.add(item);",
    "preview": {
     "az": 35,
@@ -3885,7 +3885,7 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-utilityPole.jpg",
    "preview3d": true,
-   "description": "Utility pole built in code by the engine (src/world/Furniture.js): wire attachment points in FURNITURE_META. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
+   "description": "Utility pole built in code by the engine (src/world/Furniture.js): wire attachment points in FURNITURE_META. Origin on the ground (pavement top), +Y up, the crossarm runs along X; 2.4 x 11.5 x 0.31 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour.",
    "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('utilityPole');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
    "preview": {
     "az": 35,
@@ -3928,7 +3928,7 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-utilityPoleTx.jpg",
    "preview3d": true,
-   "description": "Utility pole with transformer built in code by the engine (src/world/Furniture.js). MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
+   "description": "Utility pole with transformer built in code by the engine (src/world/Furniture.js). Origin on the ground (pavement top), +Y up, the crossarm runs along X; 2.4 x 11.5 x 0.86 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour.",
    "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('utilityPoleTx');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
    "preview": {
     "az": 35,
@@ -4951,7 +4951,7 @@
    ],
    "thumb": "catalog/thumbs/engine-furniture-signPost.jpg",
    "preview3d": true,
-   "description": "Sign post built in code by the engine (src/world/Furniture.js): unit height: scale Y. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.",
+   "description": "Sign post built in code by the engine (src/world/Furniture.js): unit height: scale Y. Origin on the ground (pavement top), +Y up, unit height; 0.06 x 1.0 x 0.06 m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour.",
    "snippet": "import * as THREE from 'three';\nimport { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';\nconst geometry = makeFurnitureGeometry('signPost');                       // cached: shared by every caller\nconst item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);\nitem.setMatrixAt(0, new THREE.Matrix4());\nitem.setColorAt(0, new THREE.Color(0xffffff));       // paint of the painted parts\nscene.add(item);",
    "preview": {
     "az": 35,
@@ -5389,18 +5389,18 @@
    "demo": "nyc-night",
    "where": {
     "files": [
-     "samples/public/nyc/textures-512/asphalt_02/ao.jpg",
-     "samples/public/nyc/textures-512/asphalt_02/diff.jpg",
-     "samples/public/nyc/textures-512/asphalt_02/nor_gl.jpg",
-     "samples/public/nyc/textures-512/asphalt_02/rough.jpg",
      "samples/public/nyc/textures/asphalt_02/ao.jpg",
      "samples/public/nyc/textures/asphalt_02/diff.jpg",
      "samples/public/nyc/textures/asphalt_02/nor_gl.jpg",
-     "samples/public/nyc/textures/asphalt_02/rough.jpg"
+     "samples/public/nyc/textures/asphalt_02/rough.jpg",
+     "samples/public/nyc/textures-512/asphalt_02/ao.jpg",
+     "samples/public/nyc/textures-512/asphalt_02/diff.jpg",
+     "samples/public/nyc/textures-512/asphalt_02/nor_gl.jpg",
+     "samples/public/nyc/textures-512/asphalt_02/rough.jpg"
     ],
     "manifests": [
-     "samples/public/nyc/textures-512/manifest.json",
-     "samples/public/nyc/textures/manifest.json"
+     "samples/public/nyc/textures/manifest.json",
+     "samples/public/nyc/textures-512/manifest.json"
     ]
    },
    "usedBy": [
@@ -5432,8 +5432,8 @@
    ],
    "thumb": "catalog/thumbs/nyc-asphalt_02.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'asphalt_a' surface; a 1K desktop tier and a 512 px phone tier. The engine's TextureSets loads it by manifest id.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures-512/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('asphalt_02', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'asphalt_a' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/asphalt_02/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('asphalt_02', { base }) reads <base>asphalt_02/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('asphalt_02', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -5551,18 +5551,18 @@
    "demo": "nyc-night",
    "where": {
     "files": [
-     "samples/public/nyc/textures-512/beige_wall_002/ao.jpg",
-     "samples/public/nyc/textures-512/beige_wall_002/diff.jpg",
-     "samples/public/nyc/textures-512/beige_wall_002/nor_gl.jpg",
-     "samples/public/nyc/textures-512/beige_wall_002/rough.jpg",
      "samples/public/nyc/textures/beige_wall_002/ao.jpg",
      "samples/public/nyc/textures/beige_wall_002/diff.jpg",
      "samples/public/nyc/textures/beige_wall_002/nor_gl.jpg",
-     "samples/public/nyc/textures/beige_wall_002/rough.jpg"
+     "samples/public/nyc/textures/beige_wall_002/rough.jpg",
+     "samples/public/nyc/textures-512/beige_wall_002/ao.jpg",
+     "samples/public/nyc/textures-512/beige_wall_002/diff.jpg",
+     "samples/public/nyc/textures-512/beige_wall_002/nor_gl.jpg",
+     "samples/public/nyc/textures-512/beige_wall_002/rough.jpg"
     ],
     "manifests": [
-     "samples/public/nyc/textures-512/manifest.json",
-     "samples/public/nyc/textures/manifest.json"
+     "samples/public/nyc/textures/manifest.json",
+     "samples/public/nyc/textures-512/manifest.json"
     ]
    },
    "usedBy": [
@@ -5594,8 +5594,8 @@
    ],
    "thumb": "catalog/thumbs/nyc-beige_wall_002.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'stucco_a' surface; a 1K desktop tier and a 512 px phone tier. The engine's TextureSets loads it by manifest id.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures-512/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('beige_wall_002', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'stucco_a' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 256) in nyc/textures/beige_wall_002/; nyc/textures-512/ holds a 512 x 128 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('beige_wall_002', { base }) reads <base>beige_wall_002/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('beige_wall_002', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -5665,18 +5665,18 @@
    "demo": "nyc-night",
    "where": {
     "files": [
-     "samples/public/nyc/textures-512/bitumen/ao.jpg",
-     "samples/public/nyc/textures-512/bitumen/diff.jpg",
-     "samples/public/nyc/textures-512/bitumen/nor_gl.jpg",
-     "samples/public/nyc/textures-512/bitumen/rough.jpg",
      "samples/public/nyc/textures/bitumen/ao.jpg",
      "samples/public/nyc/textures/bitumen/diff.jpg",
      "samples/public/nyc/textures/bitumen/nor_gl.jpg",
-     "samples/public/nyc/textures/bitumen/rough.jpg"
+     "samples/public/nyc/textures/bitumen/rough.jpg",
+     "samples/public/nyc/textures-512/bitumen/ao.jpg",
+     "samples/public/nyc/textures-512/bitumen/diff.jpg",
+     "samples/public/nyc/textures-512/bitumen/nor_gl.jpg",
+     "samples/public/nyc/textures-512/bitumen/rough.jpg"
     ],
     "manifests": [
-     "samples/public/nyc/textures-512/manifest.json",
-     "samples/public/nyc/textures/manifest.json"
+     "samples/public/nyc/textures/manifest.json",
+     "samples/public/nyc/textures-512/manifest.json"
     ]
    },
    "usedBy": [
@@ -5708,8 +5708,8 @@
    ],
    "thumb": "catalog/thumbs/nyc-bitumen.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'roof_tar' surface; a 1K desktop tier and a 512 px phone tier. The engine's TextureSets loads it by manifest id.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures-512/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('bitumen', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'roof_tar' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/bitumen/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('bitumen', { base }) reads <base>bitumen/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('bitumen', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -5722,18 +5722,18 @@
    "demo": "nyc-night",
    "where": {
     "files": [
-     "samples/public/nyc/textures-512/brick_wall_006/ao.jpg",
-     "samples/public/nyc/textures-512/brick_wall_006/diff.jpg",
-     "samples/public/nyc/textures-512/brick_wall_006/nor_gl.jpg",
-     "samples/public/nyc/textures-512/brick_wall_006/rough.jpg",
      "samples/public/nyc/textures/brick_wall_006/ao.jpg",
      "samples/public/nyc/textures/brick_wall_006/diff.jpg",
      "samples/public/nyc/textures/brick_wall_006/nor_gl.jpg",
-     "samples/public/nyc/textures/brick_wall_006/rough.jpg"
+     "samples/public/nyc/textures/brick_wall_006/rough.jpg",
+     "samples/public/nyc/textures-512/brick_wall_006/ao.jpg",
+     "samples/public/nyc/textures-512/brick_wall_006/diff.jpg",
+     "samples/public/nyc/textures-512/brick_wall_006/nor_gl.jpg",
+     "samples/public/nyc/textures-512/brick_wall_006/rough.jpg"
     ],
     "manifests": [
-     "samples/public/nyc/textures-512/manifest.json",
-     "samples/public/nyc/textures/manifest.json"
+     "samples/public/nyc/textures/manifest.json",
+     "samples/public/nyc/textures-512/manifest.json"
     ]
    },
    "usedBy": [
@@ -5765,8 +5765,8 @@
    ],
    "thumb": "catalog/thumbs/nyc-brick_wall_006.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'brick_red' surface; a 1K desktop tier and a 512 px phone tier. The engine's TextureSets loads it by manifest id.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures-512/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('brick_wall_006', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'brick_red' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/brick_wall_006/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('brick_wall_006', { base }) reads <base>brick_wall_006/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('brick_wall_006', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -5779,18 +5779,18 @@
    "demo": "nyc-night",
    "where": {
     "files": [
-     "samples/public/nyc/textures-512/brick_wall_10/ao.jpg",
-     "samples/public/nyc/textures-512/brick_wall_10/diff.jpg",
-     "samples/public/nyc/textures-512/brick_wall_10/nor_gl.jpg",
-     "samples/public/nyc/textures-512/brick_wall_10/rough.jpg",
      "samples/public/nyc/textures/brick_wall_10/ao.jpg",
      "samples/public/nyc/textures/brick_wall_10/diff.jpg",
      "samples/public/nyc/textures/brick_wall_10/nor_gl.jpg",
-     "samples/public/nyc/textures/brick_wall_10/rough.jpg"
+     "samples/public/nyc/textures/brick_wall_10/rough.jpg",
+     "samples/public/nyc/textures-512/brick_wall_10/ao.jpg",
+     "samples/public/nyc/textures-512/brick_wall_10/diff.jpg",
+     "samples/public/nyc/textures-512/brick_wall_10/nor_gl.jpg",
+     "samples/public/nyc/textures-512/brick_wall_10/rough.jpg"
     ],
     "manifests": [
-     "samples/public/nyc/textures-512/manifest.json",
-     "samples/public/nyc/textures/manifest.json"
+     "samples/public/nyc/textures/manifest.json",
+     "samples/public/nyc/textures-512/manifest.json"
     ]
    },
    "usedBy": [
@@ -5822,8 +5822,8 @@
    ],
    "thumb": "catalog/thumbs/nyc-brick_wall_10.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'brick_dark' surface; a 1K desktop tier and a 512 px phone tier. The engine's TextureSets loads it by manifest id.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures-512/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('brick_wall_10', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'brick_dark' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/brick_wall_10/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('brick_wall_10', { base }) reads <base>brick_wall_10/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('brick_wall_10', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -5836,18 +5836,18 @@
    "demo": "nyc-night",
    "where": {
     "files": [
-     "samples/public/nyc/textures-512/clean_asphalt/ao.jpg",
-     "samples/public/nyc/textures-512/clean_asphalt/diff.jpg",
-     "samples/public/nyc/textures-512/clean_asphalt/nor_gl.jpg",
-     "samples/public/nyc/textures-512/clean_asphalt/rough.jpg",
      "samples/public/nyc/textures/clean_asphalt/ao.jpg",
      "samples/public/nyc/textures/clean_asphalt/diff.jpg",
      "samples/public/nyc/textures/clean_asphalt/nor_gl.jpg",
-     "samples/public/nyc/textures/clean_asphalt/rough.jpg"
+     "samples/public/nyc/textures/clean_asphalt/rough.jpg",
+     "samples/public/nyc/textures-512/clean_asphalt/ao.jpg",
+     "samples/public/nyc/textures-512/clean_asphalt/diff.jpg",
+     "samples/public/nyc/textures-512/clean_asphalt/nor_gl.jpg",
+     "samples/public/nyc/textures-512/clean_asphalt/rough.jpg"
     ],
     "manifests": [
-     "samples/public/nyc/textures-512/manifest.json",
-     "samples/public/nyc/textures/manifest.json"
+     "samples/public/nyc/textures/manifest.json",
+     "samples/public/nyc/textures-512/manifest.json"
     ]
    },
    "usedBy": [
@@ -5879,8 +5879,8 @@
    ],
    "thumb": "catalog/thumbs/nyc-clean_asphalt.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'asphalt_b' surface; a 1K desktop tier and a 512 px phone tier. The engine's TextureSets loads it by manifest id.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures-512/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('clean_asphalt', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'asphalt_b' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/clean_asphalt/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('clean_asphalt', { base }) reads <base>clean_asphalt/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('clean_asphalt', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -6006,18 +6006,18 @@
    "demo": "nyc-night",
    "where": {
     "files": [
-     "samples/public/nyc/textures-512/concrete_panels/ao.jpg",
-     "samples/public/nyc/textures-512/concrete_panels/diff.jpg",
-     "samples/public/nyc/textures-512/concrete_panels/nor_gl.jpg",
-     "samples/public/nyc/textures-512/concrete_panels/rough.jpg",
      "samples/public/nyc/textures/concrete_panels/ao.jpg",
      "samples/public/nyc/textures/concrete_panels/diff.jpg",
      "samples/public/nyc/textures/concrete_panels/nor_gl.jpg",
-     "samples/public/nyc/textures/concrete_panels/rough.jpg"
+     "samples/public/nyc/textures/concrete_panels/rough.jpg",
+     "samples/public/nyc/textures-512/concrete_panels/ao.jpg",
+     "samples/public/nyc/textures-512/concrete_panels/diff.jpg",
+     "samples/public/nyc/textures-512/concrete_panels/nor_gl.jpg",
+     "samples/public/nyc/textures-512/concrete_panels/rough.jpg"
     ],
     "manifests": [
-     "samples/public/nyc/textures-512/manifest.json",
-     "samples/public/nyc/textures/manifest.json"
+     "samples/public/nyc/textures/manifest.json",
+     "samples/public/nyc/textures-512/manifest.json"
     ]
    },
    "usedBy": [
@@ -6049,8 +6049,8 @@
    ],
    "thumb": "catalog/thumbs/nyc-concrete_panels.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'concrete_rough' surface; a 1K desktop tier and a 512 px phone tier. The engine's TextureSets loads it by manifest id.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures-512/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('concrete_panels', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'concrete_rough' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/concrete_panels/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('concrete_panels', { base }) reads <base>concrete_panels/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('concrete_panels', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -6120,18 +6120,18 @@
    "demo": "nyc-night",
    "where": {
     "files": [
-     "samples/public/nyc/textures-512/concrete_pavement/ao.jpg",
-     "samples/public/nyc/textures-512/concrete_pavement/diff.jpg",
-     "samples/public/nyc/textures-512/concrete_pavement/nor_gl.jpg",
-     "samples/public/nyc/textures-512/concrete_pavement/rough.jpg",
      "samples/public/nyc/textures/concrete_pavement/ao.jpg",
      "samples/public/nyc/textures/concrete_pavement/diff.jpg",
      "samples/public/nyc/textures/concrete_pavement/nor_gl.jpg",
-     "samples/public/nyc/textures/concrete_pavement/rough.jpg"
+     "samples/public/nyc/textures/concrete_pavement/rough.jpg",
+     "samples/public/nyc/textures-512/concrete_pavement/ao.jpg",
+     "samples/public/nyc/textures-512/concrete_pavement/diff.jpg",
+     "samples/public/nyc/textures-512/concrete_pavement/nor_gl.jpg",
+     "samples/public/nyc/textures-512/concrete_pavement/rough.jpg"
     ],
     "manifests": [
-     "samples/public/nyc/textures-512/manifest.json",
-     "samples/public/nyc/textures/manifest.json"
+     "samples/public/nyc/textures/manifest.json",
+     "samples/public/nyc/textures-512/manifest.json"
     ]
    },
    "usedBy": [
@@ -6163,8 +6163,8 @@
    ],
    "thumb": "catalog/thumbs/nyc-concrete_pavement.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'sidewalk' surface; a 1K desktop tier and a 512 px phone tier. The engine's TextureSets loads it by manifest id.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures-512/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('concrete_pavement', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'sidewalk' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/concrete_pavement/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('concrete_pavement', { base }) reads <base>concrete_pavement/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('concrete_pavement', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -6280,18 +6280,18 @@
    "demo": "nyc-night",
    "where": {
     "files": [
-     "samples/public/nyc/textures-512/corrugated_iron/ao.jpg",
-     "samples/public/nyc/textures-512/corrugated_iron/diff.jpg",
-     "samples/public/nyc/textures-512/corrugated_iron/nor_gl.jpg",
-     "samples/public/nyc/textures-512/corrugated_iron/rough.jpg",
      "samples/public/nyc/textures/corrugated_iron/ao.jpg",
      "samples/public/nyc/textures/corrugated_iron/diff.jpg",
      "samples/public/nyc/textures/corrugated_iron/nor_gl.jpg",
-     "samples/public/nyc/textures/corrugated_iron/rough.jpg"
+     "samples/public/nyc/textures/corrugated_iron/rough.jpg",
+     "samples/public/nyc/textures-512/corrugated_iron/ao.jpg",
+     "samples/public/nyc/textures-512/corrugated_iron/diff.jpg",
+     "samples/public/nyc/textures-512/corrugated_iron/nor_gl.jpg",
+     "samples/public/nyc/textures-512/corrugated_iron/rough.jpg"
     ],
     "manifests": [
-     "samples/public/nyc/textures-512/manifest.json",
-     "samples/public/nyc/textures/manifest.json"
+     "samples/public/nyc/textures/manifest.json",
+     "samples/public/nyc/textures-512/manifest.json"
     ]
    },
    "usedBy": [
@@ -6323,8 +6323,8 @@
    ],
    "thumb": "catalog/thumbs/nyc-corrugated_iron.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'metal_corrugated' surface; a 1K desktop tier and a 512 px phone tier. The engine's TextureSets loads it by manifest id.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures-512/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('corrugated_iron', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'metal_corrugated' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/corrugated_iron/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('corrugated_iron', { base }) reads <base>corrugated_iron/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('corrugated_iron', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -6540,18 +6540,18 @@
    "demo": "nyc-night",
    "where": {
     "files": [
-     "samples/public/nyc/textures-512/leafy_grass/ao.jpg",
-     "samples/public/nyc/textures-512/leafy_grass/diff.jpg",
-     "samples/public/nyc/textures-512/leafy_grass/nor_gl.jpg",
-     "samples/public/nyc/textures-512/leafy_grass/rough.jpg",
      "samples/public/nyc/textures/leafy_grass/ao.jpg",
      "samples/public/nyc/textures/leafy_grass/diff.jpg",
      "samples/public/nyc/textures/leafy_grass/nor_gl.jpg",
-     "samples/public/nyc/textures/leafy_grass/rough.jpg"
+     "samples/public/nyc/textures/leafy_grass/rough.jpg",
+     "samples/public/nyc/textures-512/leafy_grass/ao.jpg",
+     "samples/public/nyc/textures-512/leafy_grass/diff.jpg",
+     "samples/public/nyc/textures-512/leafy_grass/nor_gl.jpg",
+     "samples/public/nyc/textures-512/leafy_grass/rough.jpg"
     ],
     "manifests": [
-     "samples/public/nyc/textures-512/manifest.json",
-     "samples/public/nyc/textures/manifest.json"
+     "samples/public/nyc/textures/manifest.json",
+     "samples/public/nyc/textures-512/manifest.json"
     ]
    },
    "usedBy": [
@@ -6583,8 +6583,8 @@
    ],
    "thumb": "catalog/thumbs/nyc-leafy_grass.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'grass' surface; a 1K desktop tier and a 512 px phone tier. The engine's TextureSets loads it by manifest id.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures-512/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('leafy_grass', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'grass' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/leafy_grass/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('leafy_grass', { base }) reads <base>leafy_grass/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('leafy_grass', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -6694,18 +6694,18 @@
    "demo": "nyc-night",
    "where": {
     "files": [
-     "samples/public/nyc/textures-512/painted_worn_brick/ao.jpg",
-     "samples/public/nyc/textures-512/painted_worn_brick/diff.jpg",
-     "samples/public/nyc/textures-512/painted_worn_brick/nor_gl.jpg",
-     "samples/public/nyc/textures-512/painted_worn_brick/rough.jpg",
      "samples/public/nyc/textures/painted_worn_brick/ao.jpg",
      "samples/public/nyc/textures/painted_worn_brick/diff.jpg",
      "samples/public/nyc/textures/painted_worn_brick/nor_gl.jpg",
-     "samples/public/nyc/textures/painted_worn_brick/rough.jpg"
+     "samples/public/nyc/textures/painted_worn_brick/rough.jpg",
+     "samples/public/nyc/textures-512/painted_worn_brick/ao.jpg",
+     "samples/public/nyc/textures-512/painted_worn_brick/diff.jpg",
+     "samples/public/nyc/textures-512/painted_worn_brick/nor_gl.jpg",
+     "samples/public/nyc/textures-512/painted_worn_brick/rough.jpg"
     ],
     "manifests": [
-     "samples/public/nyc/textures-512/manifest.json",
-     "samples/public/nyc/textures/manifest.json"
+     "samples/public/nyc/textures/manifest.json",
+     "samples/public/nyc/textures-512/manifest.json"
     ]
    },
    "usedBy": [
@@ -6737,8 +6737,8 @@
    ],
    "thumb": "catalog/thumbs/nyc-painted_worn_brick.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'brick_painted' surface; a 1K desktop tier and a 512 px phone tier. The engine's TextureSets loads it by manifest id.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures-512/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('painted_worn_brick', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'brick_painted' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/painted_worn_brick/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('painted_worn_brick', { base }) reads <base>painted_worn_brick/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('painted_worn_brick', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -6848,18 +6848,18 @@
    "demo": "nyc-night",
    "where": {
     "files": [
-     "samples/public/nyc/textures-512/sandstone_blocks_08/ao.jpg",
-     "samples/public/nyc/textures-512/sandstone_blocks_08/diff.jpg",
-     "samples/public/nyc/textures-512/sandstone_blocks_08/nor_gl.jpg",
-     "samples/public/nyc/textures-512/sandstone_blocks_08/rough.jpg",
      "samples/public/nyc/textures/sandstone_blocks_08/ao.jpg",
      "samples/public/nyc/textures/sandstone_blocks_08/diff.jpg",
      "samples/public/nyc/textures/sandstone_blocks_08/nor_gl.jpg",
-     "samples/public/nyc/textures/sandstone_blocks_08/rough.jpg"
+     "samples/public/nyc/textures/sandstone_blocks_08/rough.jpg",
+     "samples/public/nyc/textures-512/sandstone_blocks_08/ao.jpg",
+     "samples/public/nyc/textures-512/sandstone_blocks_08/diff.jpg",
+     "samples/public/nyc/textures-512/sandstone_blocks_08/nor_gl.jpg",
+     "samples/public/nyc/textures-512/sandstone_blocks_08/rough.jpg"
     ],
     "manifests": [
-     "samples/public/nyc/textures-512/manifest.json",
-     "samples/public/nyc/textures/manifest.json"
+     "samples/public/nyc/textures/manifest.json",
+     "samples/public/nyc/textures-512/manifest.json"
     ]
    },
    "usedBy": [
@@ -6891,8 +6891,8 @@
    ],
    "thumb": "catalog/thumbs/nyc-sandstone_blocks_08.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'concrete_panel' surface; a 1K desktop tier and a 512 px phone tier. The engine's TextureSets loads it by manifest id.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures-512/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('sandstone_blocks_08', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'concrete_panel' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/sandstone_blocks_08/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('sandstone_blocks_08', { base }) reads <base>sandstone_blocks_08/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('sandstone_blocks_08', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -6905,18 +6905,18 @@
    "demo": "nyc-night",
    "where": {
     "files": [
-     "samples/public/nyc/textures-512/stone_block_wall/ao.jpg",
-     "samples/public/nyc/textures-512/stone_block_wall/diff.jpg",
-     "samples/public/nyc/textures-512/stone_block_wall/nor_gl.jpg",
-     "samples/public/nyc/textures-512/stone_block_wall/rough.jpg",
      "samples/public/nyc/textures/stone_block_wall/ao.jpg",
      "samples/public/nyc/textures/stone_block_wall/diff.jpg",
      "samples/public/nyc/textures/stone_block_wall/nor_gl.jpg",
-     "samples/public/nyc/textures/stone_block_wall/rough.jpg"
+     "samples/public/nyc/textures/stone_block_wall/rough.jpg",
+     "samples/public/nyc/textures-512/stone_block_wall/ao.jpg",
+     "samples/public/nyc/textures-512/stone_block_wall/diff.jpg",
+     "samples/public/nyc/textures-512/stone_block_wall/nor_gl.jpg",
+     "samples/public/nyc/textures-512/stone_block_wall/rough.jpg"
     ],
     "manifests": [
-     "samples/public/nyc/textures-512/manifest.json",
-     "samples/public/nyc/textures/manifest.json"
+     "samples/public/nyc/textures/manifest.json",
+     "samples/public/nyc/textures-512/manifest.json"
     ]
    },
    "usedBy": [
@@ -6948,8 +6948,8 @@
    ],
    "thumb": "catalog/thumbs/nyc-stone_block_wall.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'granite' surface; a 1K desktop tier and a 512 px phone tier. The engine's TextureSets loads it by manifest id.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures-512/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('stone_block_wall', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'granite' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/stone_block_wall/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('stone_block_wall', { base }) reads <base>stone_block_wall/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('stone_block_wall', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {

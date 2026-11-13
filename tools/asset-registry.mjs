@@ -14,6 +14,10 @@
 // File entries add files (repo paths) and credit: { file: CREDITS.md path, row: text that finds the table row or
 //   paragraph, plus any of author / licence / source / url the row does not state }.
 
+import * as THREE from 'three';
+import { VEHICLE_SPECS } from '../src/world/Vehicles.js';
+import { makeFurnitureGeometry } from '../src/world/Furniture.js';
+
 export const DEMOS = {
   'nyc-night': 'Night NYC walk',
   'miami-drive': 'Miami drive',
@@ -262,7 +266,7 @@ const vehicleEntry = ([type, [name, palette]]) => ({
   usedBy: type === 'police_sedan' ? [] : ['nyc-night', 'miami-drive'], via: type === 'police_sedan' ? null : 'MapWorld',
   tags: ['car', 'traffic', 'procedural', 'lod', type, palette],
   facts: { lods: HD.has(type) ? "0, 1, 'mid', 'hd' (two draw groups: body, glass)" : "0, 1 ('hd' returns the LOD 0 build)", paint: `pickVehicleColor palette '${palette}'` },
-  description: `${name} built in code by the engine (src/world/Vehicles.js). MapWorld's traffic and parked cars use it${type === 'police_sedan' ? ' (this type is not in the traffic mix: TrafficSim leaves it out)' : ''}; samples/dev/vehicles.html shows every type. Paint comes from the instance colour, the lamps from the material's uDark uniform (0 day .. 1 night).`,
+  description: `${name} built in code by the engine (src/world/Vehicles.js). Faces -Z like VehicleController, with its origin on the ground between the axles, so it goes on a controller's body with no flip or offset; ${VEHICLE_SPECS[type].L} x ${VEHICLE_SPECS[type].W} x ${VEHICLE_SPECS[type].H} m long x wide x high (VEHICLE_SPECS.${type}, wheelbase ${VEHICLE_SPECS[type].WB} m)${HD.has(type) ? '; for wheels that roll and steer, makeVehicleParts gives body, glass and wheels apart' : ''}. MapWorld's traffic and parked cars use it${type === 'police_sedan' ? ' (this type is not in the traffic mix: TrafficSim leaves it out)' : ''}; samples/dev/vehicles.html shows every type. Paint comes from the instance colour; the lamps glow with the material's userData.u.uDark uniform (0 day .. 1 night, set in the snippet).`,
   snippet: HD.has(type) ? `import * as THREE from 'three';
 import { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';
 const geometry = makeVehicleGeometry('${type}', { lod: 'hd' });          // shared and cached: do not modify
@@ -270,10 +274,13 @@ const body = createVehicleMaterial({ hd: true, brake: false }), glass = createVe
 const car = new THREE.InstancedMesh(geometry, [body, glass], 1);
 car.setMatrixAt(0, new THREE.Matrix4());
 car.setColorAt(0, pickVehicleColor(Math.random, '${palette}', new THREE.Color()));
+for (const m of [body, glass]) m.userData.u.uDark.value = 1;          // lamps on: 0 day .. 1 night
 scene.add(car);` : `import * as THREE from 'three';
 import { makeVehicleGeometry, createVehicleMaterial, pickVehicleColor } from '@vibe/engine/world';
 const geometry = makeVehicleGeometry('${type}', { lod: 0 });
-const car = new THREE.InstancedMesh(geometry, createVehicleMaterial({ brake: false }), 1);
+const material = createVehicleMaterial({ brake: false });
+material.userData.u.uDark.value = 1;                                     // lamps on: 0 day .. 1 night
+const car = new THREE.InstancedMesh(geometry, material, 1);
 car.setMatrixAt(0, new THREE.Matrix4());
 car.setColorAt(0, pickVehicleColor(Math.random, '${palette}', new THREE.Color()));
 scene.add(car);`,
@@ -309,18 +316,34 @@ const FURN = {
   pot: ['Shrub pot', 'frontage', ''],
   planter: ['Planter', 'frontage', ''],
 };
+// what the source header (src/world/Furniture.js) says about each frame; checked against the geometry's bounds
+const FURN_FRAME = {
+  cobra: 'the arm reaches along +X from the pole', cobraRes: 'the arm reaches along +X from the pole',
+  doubleGlobe: 'the crossarm runs along X', mastArm: 'unit length along +X from the origin', signPost: 'unit height',
+  sigHead: 'faces -Z', pedHead: 'faces -Z, the head 1 to 3 m up on the pole side',
+  bench: 'the seat faces -Z', shelter: 'open side towards -Z', meter: 'the front faces -Z', newsBox: 'the front faces -Z',
+  mailbox: 'the front faces -Z', utilityPole: 'the crossarm runs along X', utilityPoleTx: 'the crossarm runs along X',
+};
+const GLOWS = new Set(['cobra', 'cobraRes', 'pathOfGold', 'doubleGlobe', 'acorn', 'meter', 'shelter']); // parts with night emission
+const furnitureSize = (type) => {
+  const g = makeFurnitureGeometry(type);
+  if (!g.boundingBox) g.computeBoundingBox();
+  const s = g.boundingBox.getSize(new THREE.Vector3());
+  return [s.x, s.y, s.z].map((v) => (v < 1 ? v.toFixed(2) : v.toFixed(1))).join(' x ');
+};
 const furnitureEntry = ([type, [name, group, note]]) => ({
   id: `engine-furniture-${type}`, name, category: type === 'signPost' ? 'sign' : 'prop', module: 'src/world/Furniture.js', export: 'makeFurnitureGeometry',
   usedBy: ['nyc-night', 'miami-drive'], via: 'MapWorld',
   tags: ['street furniture', group, 'procedural', type],
   facts: { type, origin: 'on the ground' },
-  description: `${name} built in code by the engine (src/world/Furniture.js)${note ? `: ${note}` : ''}. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour, lamp heads and screens light with the material's uNight uniform.`,
+  description: `${name} built in code by the engine (src/world/Furniture.js)${note ? `: ${note}` : ''}. ${type === 'sigHead' ? 'Origin at the hanger, the head hangs below it' : type === 'mastArm' ? 'Origin at one end of the arm (x = 0), on its axis' : 'Origin on the ground (pavement top)'}, +Y up${FURN_FRAME[type] ? `, ${FURN_FRAME[type]}` : ''}; ${furnitureSize(type)} m along X x Y x Z. MapWorld's Props places street furniture along the map's roads; one cached geometry per type, vertex coloured, painted parts take the instance colour${GLOWS.has(type) ? "; lamp heads and screens glow with the material's userData.u.uNight uniform (0 day .. 1 night, set in the snippet)" : ''}.`,
   snippet: `import * as THREE from 'three';
 import { makeFurnitureGeometry, createFurnitureMaterial } from '@vibe/engine/world';
 const geometry = makeFurnitureGeometry('${type}');                       // cached: shared by every caller
 const item = new THREE.InstancedMesh(geometry, createFurnitureMaterial(), 1);
 item.setMatrixAt(0, new THREE.Matrix4());
-item.setColorAt(0, new THREE.Color(${type === 'trashCan' ? '0x2f5d3a' : type === 'bench' ? '0x2e4a35' : '0xffffff'}));       // paint of the painted parts
+item.setColorAt(0, new THREE.Color(${type === 'trashCan' ? '0x2f5d3a' : type === 'bench' ? '0x2e4a35' : '0xffffff'}));       // paint of the painted parts${GLOWS.has(type) ? `
+item.material.userData.u.uNight.value = 1;                               // ${/^(meter|shelter)$/.test(type) ? 'screen' : 'lamp head'} on: 0 day .. 1 night` : ''}
 scene.add(item);`,
   preview: { az: type === 'cobra' || type === 'cobraRes' || type === 'mastArm' ? 20 : type === 'sigHead' || type === 'pedHead' ? 215 : 35, el: 14 },
 });
