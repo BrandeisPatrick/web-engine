@@ -32,12 +32,19 @@ onSignals(cleanup);
 const failures = [];
 try {
   vite = await startVite();
-  browser = await launchChrome({ headless: !args.headed });
-  const context = await browser.newContext({ viewport: { width: 960, height: 640 }, deviceScaleFactor: 1 });
+  let context = null;
+  // a fresh browser when the last one went away (a GPU process crash in a long run closes it)
+  const ensureBrowser = async () => {
+    if (browser && browser.isConnected()) return;
+    if (browser) await browser.close().catch(() => {});
+    browser = await launchChrome({ headless: !args.headed });
+    context = await browser.newContext({ viewport: { width: 960, height: 640 }, deviceScaleFactor: 1 });
+  };
   fs.mkdirSync(abs(THUMB_DIR), { recursive: true });
   let i = 0;
   for (const e of list) {
     i++;
+    await ensureBrowser();
     const page = await context.newPage();
     const errors = watchErrors(page);
     const t0 = Date.now();

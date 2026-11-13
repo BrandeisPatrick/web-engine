@@ -10,7 +10,7 @@
 // loading. On macOS a SwiftShader renderer (no GPU) fails. Exit code 1 on any failure. The `-mobile` pages are the same
 // sample on the mobile quality tier (`?quality=mobile`, core/Quality.js).
 //
-//   node test/browser/smoke.mjs                        # nyc-night, miami-drive, halloween and their -mobile variants
+//   node test/browser/smoke.mjs                        # nyc-night, miami-drive, halloween, their -mobile variants, assets
 //   node test/browser/smoke.mjs nyc-night --headed --size=1600x900 [--config=other.vite.config.js] [--no-look]
 import {
   defaultSize, repoRoot, legacyGlobals, readyTimeoutMs, parseArgs, parseSize, startVite, resolvePage, launchChrome,
@@ -60,7 +60,7 @@ function lookFailure(look, lim) {
 const STEP_MS = 90000;
 
 const args = parseArgs();
-const pages = args._.length ? args._ : args.pages ? String(args.pages).split(',') : ['nyc-night', 'nyc-night-mobile', 'miami-drive', 'miami-drive-mobile', 'halloween', 'halloween-mobile'];
+const pages = args._.length ? args._ : args.pages ? String(args.pages).split(',') : ['nyc-night', 'nyc-night-mobile', 'miami-drive', 'miami-drive-mobile', 'halloween', 'halloween-mobile', 'assets'];
 const size = parseSize(args.size || defaultSize);
 const headless = !args.headed;
 const NO_LOOK = !!args['no-look'];
@@ -101,6 +101,9 @@ try {
         const ids = (await step(() => window.__sample.poses.slice(), undefined, 'poses')).filter((p) => !PAGE_POSES[id] || PAGE_POSES[id].includes(p));
         row.poses = ids.length;
         if (!ids.length) {
+          // pages without poses may test themselves (the Asset library opens a details view with a 3D preview)
+          const self = await step(() => (window.__sample.selfTest ? window.__sample.selfTest() : ''), undefined, 'self test');
+          if (self) failures.push(`${id}: self test: ${self}`);
           const info = await step(() => window.__sample.info(), undefined, 'info');
           row.renderer = info.renderer;
           poseRows.push({ page: id, pose: '(none)', hash: '-', stable: '-', draws: info.drawCalls, tris: info.triangles, size: fmtSize(info.size) });

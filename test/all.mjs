@@ -63,6 +63,9 @@ const SUITES = [
   { file: 'miami-car.mjs' },
   // the NYC night walk sample's engine options: traffic fleet mix and the spawn area (TrafficSim)
   { file: 'nyc-traffic-mix.mjs' },
+  // the asset catalogue (tools/catalog-assets.mjs): every samples/public file covered, entries resolvable, credits
+  // complete, catalog.json and docs/ASSETS.md current
+  { file: 'asset-catalog.mjs' },
 ];
 let failed = 0, ran = 0;
 const t0 = performance.now();

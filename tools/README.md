@@ -21,3 +21,14 @@ node engine/tools/bake-map.mjs --lat 40.7128 --lon -74.006 --size 1500 --bridge-
 node engine/tools/bake-terrain.mjs --city maps/nyc/city.json --fine -1600,-1600,1600,1600 --out maps/nyc/terrain.json
 ```
 `cli.mjs` holds the shared flag parser / usage printer.
+
+## Asset catalogue (repository only)
+
+`catalog-assets.mjs` writes the asset catalogue (`samples/public/catalog/catalog.json` and `docs/ASSETS.md`) from
+`asset-registry.mjs` (the hand-kept list of assets made in code and of files no manifest describes), the texture
+manifests, the `CREDITS.md` files and `asset-measurements.json`; `--check` writes nothing and fails when either output is
+stale or a check fails (`test/asset-catalog.mjs` runs the same build). `render-asset-thumbs.mjs` renders one 480 x 320
+JPEG per entry in headless Chrome by running the entry's code snippet (`samples/dev/asset-thumbs.html`, the runtime in
+`samples/assets/runtime.js`), records triangles and animation names in `asset-measurements.json`, then rebuilds the
+catalogue: `--only=<id,...>`, `--category=<name>`, `--missing`. These read the samples, so they are of no use from the
+npm package.

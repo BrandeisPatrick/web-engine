@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="data:," />
+  <title>Asset library · @vibe/engine</title>
+  <meta name="description" content="Every asset of the @vibe/engine samples: downloaded models, textures and panoramas, and the vehicles, buildings, props, trees, characters and skies made in code." />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main>
+    <header class="top">
+      <a class="back" href="../">@vibe/engine samples</a>
+      <h1>Asset library</h1>
+      <p class="intro" id="intro">Every asset in the repository: downloaded files and things made in code, in the engine or inside a demo. Pick one for its credit, a 3D preview and the code that loads or creates it.</p>
+    </header>
+
+    <section class="controls" aria-label="Filters">
+      <input id="q" type="search" placeholder="Search assets" autocomplete="off" aria-label="Search assets" />
+      <div class="seg" id="scope" role="radiogroup" aria-label="Where it lives">
+        <button type="button" data-v="" aria-pressed="true">All</button>
+        <button type="button" data-v="engine" aria-pressed="false">In the engine</button>
+        <button type="button" data-v="demo" aria-pressed="false">In a demo</button>
+      </div>
+      <div class="chips" id="cats" aria-label="Category"></div>
+    </section>
+
+    <p class="count" id="count" aria-live="polite"></p>
+    <ul class="grid" id="grid"></ul>
+    <p class="empty" id="empty" hidden>Nothing matches. Clear the search or pick another category.</p>
+
+    <section class="sources" id="sources" aria-labelledby="sources-h">
+      <h2 id="sources-h">Sources</h2>
+      <p>Downloaded assets come from these places; everything else is made in code in this repository (MIT). Each asset's own credit is in its details and in the <code>CREDITS.md</code> next to its files.</p>
+      <table><thead><tr><th>Source</th><th>Licence</th><th>Assets</th></tr></thead><tbody id="sources-body"></tbody></table>
+      <p class="foot">For tools and coding agents: the same list as data in <a href="../catalog/catalog.json">catalog.json</a>, and as Markdown in <code>docs/ASSETS.md</code>.</p>
+    </section>
+  </main>
+
+  <dialog id="details" aria-labelledby="d-name">
+    <div class="d-wrap">
+      <button type="button" class="close" id="d-close" aria-label="Close">×</button>
+      <div class="d-view" id="d-view">
+        <img id="d-img" alt="" />
+        <canvas id="d-canvas" hidden></canvas>
+        <p class="d-status" id="d-status"></p>
+      </div>
+      <div class="d-body">
+        <p class="d-cat" id="d-cat"></p>
+        <h2 id="d-name"></h2>
+        <p class="d-desc" id="d-desc"></p>
+        <p class="d-warn" id="d-warn" hidden></p>
+        <dl class="d-facts" id="d-facts"></dl>
+        <div class="d-code" id="d-code-wrap">
+          <div class="d-code-head"><span>Code</span><button type="button" id="d-copy">Copy</button></div>
+          <pre><code id="d-code"></code></pre>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
