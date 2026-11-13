@@ -1,0 +1,1480 @@
+{
+ "engine-boat-ferry": {
+  "triangles": 212,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-boat-fishingBoat": {
+  "triangles": 122,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-boat-launch": {
+  "triangles": 58,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-boat-sailboat": {
+  "triangles": 94,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-boat-ship": {
+  "triangles": 1482,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-city-ambience": {
+  "ran": true
+ },
+ "engine-cloud-texture": {
+  "triangles": 2,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-facade-windows": {
+  "ran": true
+ },
+ "engine-furniture-acorn": {
+  "triangles": 184,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-aframe": {
+  "triangles": 156,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-bench": {
+  "triangles": 132,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-bikeRack": {
+  "triangles": 108,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-bollard": {
+  "triangles": 72,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-cafeSet": {
+  "triangles": 324,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-cobra": {
+  "triangles": 200,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-cobraRes": {
+  "triangles": 200,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-doubleGlobe": {
+  "triangles": 594,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-hydrant": {
+  "triangles": 256,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-mailbox": {
+  "triangles": 92,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-mastArm": {
+  "triangles": 24,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-mastPole": {
+  "triangles": 122,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-meter": {
+  "triangles": 84,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-newsBox": {
+  "triangles": 60,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-pathOfGold": {
+  "triangles": 752,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-pedHead": {
+  "triangles": 108,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-pedPole": {
+  "triangles": 88,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-planter": {
+  "triangles": 102,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-pot": {
+  "triangles": 190,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-shelter": {
+  "triangles": 180,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-sigHead": {
+  "triangles": 116,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-signPost": {
+  "triangles": 12,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-trashCan": {
+  "triangles": 150,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-utilityPole": {
+  "triangles": 174,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-furniture-utilityPoleTx": {
+  "triangles": 218,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-sky-afternoon": {
+  "triangles": 12,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-sky-dawn": {
+  "triangles": 12,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-sky-dusk": {
+  "triangles": 12,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-sky-golden": {
+  "triangles": 12,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-sky-morning": {
+  "triangles": 12,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-sky-night": {
+  "triangles": 12,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-sky-noon": {
+  "triangles": 12,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-sky-sunset": {
+  "triangles": 12,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-street-signs": {
+  "triangles": 2,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-tex-asphalt": {
+  "triangles": 2,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-tex-grass": {
+  "triangles": 2,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-tex-ground": {
+  "triangles": 2,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-tex-paving": {
+  "triangles": 2,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-tex-waternormal": {
+  "triangles": 2,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-tree-cypress": {
+  "triangles": 600,
+  "meshes": 2,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-tree-oak": {
+  "triangles": 576,
+  "meshes": 2,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-tree-palm": {
+  "triangles": 866,
+  "meshes": 2,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-tree-pine": {
+  "triangles": 664,
+  "meshes": 2,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-tree-planeA": {
+  "triangles": 568,
+  "meshes": 2,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-tree-planeB": {
+  "triangles": 540,
+  "meshes": 2,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-tree-round": {
+  "triangles": 520,
+  "meshes": 2,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-vegetation-atlas": {
+  "triangles": 2,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-vehicle-audio": {
+  "ran": true
+ },
+ "engine-vehicle-boxtruck": {
+  "triangles": 1158,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-vehicle-bus": {
+  "triangles": 1352,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-vehicle-hatchback": {
+  "triangles": 36920,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-vehicle-minivan": {
+  "triangles": 36790,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-vehicle-pickup": {
+  "triangles": 35840,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-vehicle-police": {
+  "triangles": 38600,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-vehicle-police_sedan": {
+  "triangles": 39624,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-vehicle-sedan": {
+  "triangles": 38356,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-vehicle-suv": {
+  "triangles": 36672,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-vehicle-taxi": {
+  "triangles": 39456,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-water": {
+  "triangles": 36972,
+  "meshes": 2,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-audio": {
+  "ran": true
+ },
+ "halloween-bark_brown_02": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-bats": {
+  "triangles": 16,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 9,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-bench": {
+  "triangles": 256,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-bridge": {
+  "triangles": 1384,
+  "meshes": 2,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-candle-lantern": {
+  "triangles": 160,
+  "meshes": 2,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-candy": {
+  "triangles": 1232,
+  "meshes": 4,
+  "instanced": 3,
+  "instances": 3,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-cauldron": {
+  "triangles": 1984,
+  "meshes": 2,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-clouds": {
+  "triangles": 2,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-cottage": {
+  "triangles": 5331,
+  "meshes": 2,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-creek": {
+  "triangles": 294,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-crypt": {
+  "triangles": 2286,
+  "meshes": 2,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-dead-tree": {
+  "triangles": 846,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-forest_leaves_02": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-forrest_ground_01": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-gate-arch": {
+  "triangles": 1916,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-ghosts": {
+  "triangles": 1152,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-gravestones": {
+  "triangles": 992,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-green_rough_planks": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-haunted-house": {
+  "triangles": 6478,
+  "meshes": 2,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-hay-bale": {
+  "triangles": 510,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-hollow-oak": {
+  "triangles": 1914,
+  "meshes": 2,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-iron-fence": {
+  "triangles": 1180,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-jack-o-lantern": {
+  "triangles": 181,
+  "meshes": 2,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-kid": {
+  "triangles": 12657,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 1,
+  "points": 0,
+  "animations": [
+   "Idle",
+   "Walking",
+   "Running",
+   "Jump"
+  ]
+ },
+ "halloween-lanterns": {
+  "triangles": 4108,
+  "meshes": 2,
+  "instanced": 2,
+  "instances": 6,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-lichen_rock": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-old_stone_wall": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-picket-fence": {
+  "triangles": 908,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-pumpkin": {
+  "triangles": 1036,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-reeds": {
+  "triangles": 289,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-rocky_trail": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-roof_slates_02": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-scarecrow": {
+  "triangles": 1796,
+  "meshes": 2,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-signpost": {
+  "triangles": 236,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-standing-stone": {
+  "triangles": 305,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "halloween-thief": {
+  "triangles": 2832,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 1,
+  "points": 0
+ },
+ "halloween-well": {
+  "triangles": 1340,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "lut-bleach": {
+  "triangles": 2,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "lut-identity": {
+  "triangles": 2,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "lut-warm": {
+  "triangles": 2,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-asphalt_02": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-asphalt_02_2k": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-beige_wall_002": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-bitumen": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-car-audio": {
+  "ran": true
+ },
+ "miami-car-concept": {
+  "triangles": 213229,
+  "meshes": 41,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-car-env": {
+  "triangles": 0,
+  "meshes": 0,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-coast_sand_01": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-coast_sand_rocks_02_2k": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-concrete_pavement": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-concrete_wall_004": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-coral_gravel": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-dune-road": {
+  "triangles": 164076,
+  "meshes": 7,
+  "instanced": 1,
+  "instances": 5200,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-dusk-sky": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-hotel-signs": {
+  "triangles": 2,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-leafy_grass": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-map": {
+  "ran": true
+ },
+ "miami-near-palms": {
+  "triangles": 4766,
+  "meshes": 2,
+  "instanced": 2,
+  "instances": 2,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-prop-bin": {
+  "triangles": 144,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-prop-box": {
+  "triangles": 12,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-prop-chair": {
+  "triangles": 120,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-prop-cone": {
+  "triangles": 44,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-prop-crate": {
+  "triangles": 12,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-prop-lounger": {
+  "triangles": 72,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-prop-parasol": {
+  "triangles": 56,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-prop-table": {
+  "triangles": 232,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-rock_07": {
+  "triangles": 976,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-sedan": {
+  "triangles": 201519,
+  "meshes": 25,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-shrub_04": {
+  "triangles": 1561,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "miami-white_stucco": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-BusinessMan": {
+  "triangles": 6634,
+  "meshes": 10,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 10,
+  "points": 0,
+  "animations": [
+   "CharacterArmature|Death",
+   "CharacterArmature|Gun_Shoot",
+   "CharacterArmature|HitRecieve",
+   "CharacterArmature|HitRecieve_2",
+   "CharacterArmature|Idle",
+   "CharacterArmature|Idle_Gun",
+   "CharacterArmature|Idle_Gun_Pointing",
+   "CharacterArmature|Idle_Gun_Shoot",
+   "CharacterArmature|Idle_Neutral",
+   "CharacterArmature|Idle_Sword",
+   "CharacterArmature|Interact",
+   "CharacterArmature|Kick_Left",
+   "CharacterArmature|Kick_Right",
+   "CharacterArmature|Punch_Left",
+   "CharacterArmature|Punch_Right",
+   "CharacterArmature|Roll",
+   "CharacterArmature|Run",
+   "CharacterArmature|Run_Back",
+   "CharacterArmature|Run_Left",
+   "CharacterArmature|Run_Right",
+   "CharacterArmature|Run_Shoot",
+   "CharacterArmature|Sword_Slash",
+   "CharacterArmature|Walk",
+   "CharacterArmature|Wave"
+  ]
+ },
+ "nyc-ManInSuit": {
+  "triangles": 2058,
+  "meshes": 7,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 7,
+  "points": 0,
+  "animations": [
+   "HumanArmature|Man_Clapping",
+   "HumanArmature|Man_Death",
+   "HumanArmature|Man_Idle",
+   "HumanArmature|Man_Jump",
+   "HumanArmature|Man_Punch",
+   "HumanArmature|Man_Run",
+   "HumanArmature|Man_RunningJump",
+   "HumanArmature|Man_Sitting",
+   "HumanArmature|Man_Standing",
+   "HumanArmature|Man_SwordSlash",
+   "HumanArmature|Man_Walk"
+  ]
+ },
+ "nyc-Woman": {
+  "triangles": 1908,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 1,
+  "points": 0,
+  "animations": [
+   "Armature|Death",
+   "Armature|Idle",
+   "Armature|Jump",
+   "Armature|Jump2",
+   "Armature|PickUp",
+   "Armature|Punch",
+   "Armature|Running",
+   "Armature|SitIdle",
+   "Armature|Sitting",
+   "Armature|Walking"
+  ]
+ },
+ "nyc-asphalt_02": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-beige_wall_002": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-bitumen": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-brick_wall_006": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-brick_wall_10": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-city-env": {
+  "triangles": 0,
+  "meshes": 0,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-clean_asphalt": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-concrete_panels": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-concrete_pavement": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-corrugated_iron": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-env-cinema_lobby": {
+  "triangles": 0,
+  "meshes": 0,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-env-comfy_cafe": {
+  "triangles": 0,
+  "meshes": 0,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-env-decor_shop": {
+  "triangles": 0,
+  "meshes": 0,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-env-gear_store": {
+  "triangles": 0,
+  "meshes": 0,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-env-modern_buildings_night": {
+  "triangles": 0,
+  "meshes": 0,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-env-warm_bar": {
+  "triangles": 0,
+  "meshes": 0,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-env-warm_restaurant_night": {
+  "triangles": 0,
+  "meshes": 0,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-leafy_grass": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-map": {
+  "ran": true
+ },
+ "nyc-night-lut": {
+  "triangles": 2,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-night-sky": {
+  "triangles": 12,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-painted_worn_brick": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-rooftops": {
+  "triangles": 12,
+  "meshes": 1,
+  "instanced": 1,
+  "instances": 6,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-sandstone_blocks_08": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-shop-fronts": {
+  "triangles": 1170,
+  "meshes": 2,
+  "instanced": 1,
+  "instances": 26,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-shop-interiors": {
+  "triangles": 2,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-sign-atlas": {
+  "triangles": 2,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-signage": {
+  "triangles": 16,
+  "meshes": 3,
+  "instanced": 2,
+  "instances": 32,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-steam": {
+  "triangles": 42,
+  "meshes": 2,
+  "instanced": 1,
+  "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-stone_block_wall": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-street-bag": {
+  "triangles": 900,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-street-barrier": {
+  "triangles": 1400,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-street-box": {
+  "triangles": 500,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-street-can": {
+  "triangles": 1499,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-street-crate": {
+  "triangles": 1212,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-street-hydrant": {
+  "triangles": 2399,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-street-manhole": {
+  "triangles": 936,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-street-ubox": {
+  "triangles": 881,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-water-tower": {
+  "triangles": 172,
+  "meshes": 4,
+  "instanced": 4,
+  "instances": 10,
+  "skinned": 0,
+  "points": 0
+ },
+ "nyc-whitewashed_brick": {
+  "triangles": 3968,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 0,
+  "points": 0
+ }
+}
