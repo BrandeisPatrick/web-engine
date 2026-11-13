@@ -248,8 +248,14 @@ async function boot() {
     if (postfx) postfx.render(dt); else { renderer.render(sc, cam); atmo.renderFlare(renderer, cam); }
     if (!hold.still && (++probeFrame & 3) === 0) car.updateProbe(1); // after the main pass (its shadow maps are this frame's); a face every 4th frame (a full cube in 24 frames)
   };
-  engine.onResize = (w, h, pr) => { if (postfx) postfx.setSize(w, h, pr); world.setSize(w, h, pr); };
-  world.setSize(engine.size.width, engine.size.height, engine.pixelRatio);
+  // the clustered light grid and the scene copy map gl_FragCoord of the scene target: its size is PostFX's internal
+  // size (the drawing buffer x renderScale under TAA), which PostFX reports on every change
+  engine.onResize = (w, h, pr) => { if (postfx) postfx.setSize(w, h, pr); else world.setSize(w, h, pr); };
+  if (postfx) {
+    postfx.onInternalResize = (w, h) => world.setSize(w, h, 1);
+    postfx.onInternalResize(postfx.internalWidth, postfx.internalHeight);
+  }
+  else world.setSize(engine.size.width, engine.size.height, engine.pixelRatio);
 
   // ---------------------------------------------------------------- the car
   const car = new HeroCar({ scene, renderer, physics, model: W.model, lights: extra, lod: QS.car.lod, effects: QS.effects.particles, postfx, atmosphere: atmo });
@@ -625,6 +631,16 @@ function makeHarness({ engine, world, atmo, postfx, car, props, rig, placeCar, p
         postfx.render(0);
       }
       void posed;
+    },
+    // converged captures (Bench.converged): TAA jittered and accumulating from a reset history (the jitter pattern
+    // and a reused SSR buffer restart), everything else as quiet() holds it; quiet() afterwards holds the frame again
+    converge: {
+      begin: () => {
+        if (!postfx || !postfx.history) return;
+        hold.still = false;
+        postfx.set('jitter', true);
+        postfx.history.reset(); postfx.taaPass.reset();
+      },
     },
     live: {
       begin: () => { // what quiet() holds, as in play: TAA and the volumetric march jittered and accumulating, the probe

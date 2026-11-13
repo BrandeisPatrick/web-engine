@@ -157,6 +157,14 @@ poses (≤ 0.003), `velocityFirst` 0 on static poses (velocity is 0 there), `rej
 (≤ 0.005), `stableDepth: true` +0.13 ms (0.005), `filter: 'bilinear'` -0.25 ms, `historyFormat: 'r11g11b10'`
 -0.58 ms but a 0.38-0.68 mean fixed bias (the 10 % per-frame update is below its mantissa), so RGBA16F stays.
 
+Temporal upscaling (`renderScale` < 1, TAA only): the scene and the passes before TAA run at the drawing buffer x s,
+the TAA resolve upscales (TAAPass "Upscaling"). City demos, desktop poses at 2268x1473, converged captures against
+scale 1: s 0.87 saves 1.0-1.4 ms, 0.8 1.6-2.3 ms, 0.75 1.9-2.9 ms (miami beach about half), sharpness 96-99 % of
+scale 1 (a bilinear upscale of a native 0.75 frame: 50-60 %), but the perf image guard is exceeded on nyc-night's square and
+sidewalk at every scale (0.38 / 0.53 mean / 255 at 0.87: lower-resolution shading of wet-road sparkle, the LED billboard and
+foliage, not the resolve) and the per-pixel flicker at rest is 8-64 % higher than at scale 1. So the demos stay at
+1; `postfx.set('renderScale', s)` is there to try.
+
 City at night (`?clustered&t=night`, 698 lamps in the map; 27 within 220 m of the `high` pose, 15 of them in the
 frustum's clusters), poses street / crossing / high: 8-light pool 11.12 / 11.46 / 11.29 ms, every lamp clustered 11.69 / 12.43 / 11.28
 (0.97-2.27 mean: the whole street is lit), clustered + G-buffer + TAA 14.70 / 15.49 / 14.80; at 2560x1440 (MSAA

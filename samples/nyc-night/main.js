@@ -298,8 +298,14 @@ async function boot() {
     if (heldStill && postfx && postfx.taaPass) postfx.taaPass._reset = true; // bench / smoke captures (see quiet)
     if (postfx) postfx.render(dt); else { renderer.render(sc, cam); world.atmo.renderFlare(renderer, cam); }
   };
-  engine.onResize = (w, h, pr) => { if (postfx) postfx.setSize(w, h, pr); world.setSize(w, h, pr); };
-  { const { width, height } = engine.size; world.setSize(width, height, engine.pixelRatio); }
+  // the clustered light grid and the scene copy map gl_FragCoord of the scene target: its size is PostFX's internal
+  // size (the drawing buffer x renderScale under TAA), which PostFX reports on every change
+  engine.onResize = (w, h, pr) => { if (postfx) postfx.setSize(w, h, pr); else world.setSize(w, h, pr); };
+  if (postfx) {
+    postfx.onInternalResize = (w, h) => world.setSize(w, h, 1);
+    postfx.onInternalResize(postfx.internalWidth, postfx.internalHeight);
+  }
+  else { const { width, height } = engine.size; world.setSize(width, height, engine.pixelRatio); }
 
   // traffic signals: one light per (junction, phase group) at the mean of its heads, coloured by the phase the bulbs show
   const signalLights = [];
@@ -676,6 +682,16 @@ async function boot() {
         if (steamAcc) steam.vents.forEach((v, i) => { v.acc = steamAcc[i]; });
         steam.preroll(4, cam); // the same pre-roll as after()'s (seeded, from the same accumulators)
         shadowFrame = shadowF;
+      },
+    },
+    // converged captures (Bench.converged): TAA jittered and accumulating from a reset history (the jitter pattern
+    // and a reused SSR buffer restart), everything else as quiet() holds it; quiet() afterwards holds the frame again
+    converge: {
+      begin() {
+        if (!postfx || !postfx.history) return;
+        heldStill = false;
+        postfx.set('jitter', true);
+        postfx.history.reset(); postfx.taaPass.reset();
       },
     },
     settings: {

@@ -1,6 +1,28 @@
 # Changelog
 
 ## Unreleased
+- PostFX `renderScale` (option, `set('renderScale', s)` / `get`, s in [0.5, 1], default 1 = unchanged: no new define,
+  every shader text pinned to the previous one): temporal upscaling, in effect only under TAA (else 1, the request
+  kept). The scene / G-buffer target, exposure, AO, SSR, volumetrics and the camera jitter run at the drawing buffer
+  x s (`internalWidth` / `internalHeight`, `renderScaleInEffect`, `onInternalResize(w, h)` for the clustered-light
+  tile mapping and the scene copy); the TAA resolve upscales (define `TAA_UPSCALE`: each output pixel windows the
+  internal 3x3 by the distance from where each texel sampled the scene this frame, the history at output resolution,
+  the variance clip from the internal neighbourhood, and a per-frame weight that grows when the nearest sample lands
+  on the pixel centre, so detail above the internal resolution accumulates from the jitter; `TAAPass.setUpscale`,
+  `upscaleWindow`, `upscaleProximity`, `taaUpscaleMeanWeight`); the final pass, motion blur and DoF map their depth /
+  G-buffer reads to the internal texel (`FINAL_UPSCALE`, `MB_UPSCALE`, `DOF_UPSCALE`). Resizes, TAA off / on, live
+  scale changes and G-buffer rebuilds restart the history. Measured on the city demos' desktop poses at 2268x1473
+  (converged captures against scale 1, alternating in-page A/B): s 0.87 saves 1.0-1.4 ms a frame, 0.8 1.6-2.3,
+  0.75 1.9-2.9 (miami beach about half) at 96-99 % of the sharpness (a bilinear upscale of a native 0.75 frame:
+  50-60 %), but nyc-night's square and sidewalk exceed the perf image guard at every scale (0.38 / 0.53 mean at
+  0.87, mostly wet-road sparkle, the LED billboard and foliage shaded at the lower resolution) and the per-pixel
+  flicker at rest is 8-64 % above scale 1 on every pose; a TAA blend of 0.96 under upscaling brings miami-drive to
+  about scale 1's flicker but not its car pose's sharpness. So the demos stay at scale 1. nyc-night and miami-drive
+  now size the world's clustered lights / scene copy from PostFX's internal size (identical at scale 1).
+- Bench harness: `converged(frames = 48, scale, into)` captures a pose as TAA converges at rest (the sample's new
+  `converge: { begin, end }` hook: TAA jittered and accumulating from a reset history, everything else as `quiet()`
+  holds it), then returns to the held state; repeated converged captures hash equal and leave held captures as they
+  were (the smoke test checks both on every pose). The three demos pass the hook.
 - ClusteredLights `cutoff` (constructor option and property, default 0 = unchanged): a point light is clustered, and
   lights a fragment, only out to its reach, where its brightest channel x three's distance attenuation falls to the
   cutoff (same units: linear colour x intensity / m^decay), never beyond its range. Above twice the cutoff it lights as
