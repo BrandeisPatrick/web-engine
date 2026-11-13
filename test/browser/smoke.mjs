@@ -112,13 +112,15 @@ try {
         const ids = (await step(() => window.__sample.poses.slice(), undefined, 'poses')).filter((p) => !PAGE_POSES[id] || PAGE_POSES[id].includes(p));
         row.poses = ids.length;
         if (!ids.length) {
-          // pages without poses may test themselves (the Asset library opens a details view with a 3D preview)
-          const self = await step(() => (window.__sample.selfTest ? window.__sample.selfTest() : ''), undefined, 'self test');
+          // pages without poses may test themselves (the Asset library opens a details view with a 3D preview); a page
+          // that does not (the starters) must at least have drawn something
+          const selfTests = await step(() => typeof window.__sample.selfTest === 'function', undefined, 'self test?');
+          const self = selfTests ? await step(() => window.__sample.selfTest(), undefined, 'self test') : '';
           if (self) failures.push(`${id}: self test: ${self}`);
           const info = await step(() => window.__sample.info(), undefined, 'info');
           row.renderer = info.renderer;
           poseRows.push({ page: id, pose: '(none)', hash: '-', stable: '-', draws: info.drawCalls, tris: info.triangles, size: fmtSize(info.size) });
-          if (!(info.drawCalls > 0)) failures.push(`${id}: the page is ready but drew nothing (info().drawCalls ${info.drawCalls})`);
+          if (!selfTests && !(info.drawCalls > 0)) failures.push(`${id}: the page is ready but drew nothing (info().drawCalls ${info.drawCalls})`);
         }
         for (const pose of ids) {
           const pr = { page: id, pose, hash: '', stable: '', draws: null, tris: null, size: '' };
