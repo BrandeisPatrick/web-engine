@@ -1,7 +1,8 @@
-// Headless checks for the character input preset (CharacterInput + InputMap.readSources + PointerLock): no browser,
+// Headless checks for the character input preset (CharacterInput + InputMap.readSources + PointerLock) and VehicleInput.enabled: no browser,
 // no DOM element (element: null); pointer / key events are fed through the modules' own handlers with plain objects.
 // Run: node test/character-input.mjs
 import { CharacterInput } from '../src/input/CharacterInput.js';
+import { VehicleInput } from '../src/input/VehicleInput.js';
 import { InputMap } from '../src/input/InputMap.js';
 import { PointerLock } from '../src/input/PointerLock.js';
 import { resolveTouchEntry, touchEdge, isPortrait, isTouchDevice } from '../src/input/TouchControls.js';
@@ -214,6 +215,29 @@ function fakePad(map) {
     if (had) globalThis.window = saved; else delete globalThis.window;
   }
   check('isTouchDevice in Node: false', isTouchDevice({ multiTouch: true }) ? 1 : 0, 0);
+}
+
+// --- VehicleInput.enabled: the map's flag, as CharacterInput's; false silences the pedals and edges ----------
+{
+  const input = new VehicleInput(null, { touch: false });
+  check('VehicleInput.enabled defaults to true', input.enabled, 1);
+  keyDown(input.map, 'KeyW');
+  for (let i = 0; i < 30; i++) input.update(DT);
+  check('enabled: W holds the throttle at 1', input.throttle, 1);
+  input.enabled = false;
+  check('VehicleInput.enabled = false sets map.enabled', input.map.enabled, 0);
+  for (let i = 0; i < 10; i++) input.update(DT);                         // the pedal ramps out (0.06 s)
+  check('disabled: throttle back to 0 with W still held', input.throttle, 0);
+  input.map.setVirtual('cam', 1); input.update(DT);
+  check('disabled: toggleCamera edge does not fire', input.toggleCamera, 0);
+  input.map.setVirtual('cam', 0); input.update(DT);
+  input.enabled = true;
+  check('enabled again: map.enabled true', input.map.enabled, 1);
+  for (let i = 0; i < 30; i++) input.update(DT);
+  check('enabled again: W (still held) drives the throttle', input.throttle, 1);
+  input.map.enabled = false;
+  check('VehicleInput.enabled reads map.enabled', input.enabled, 0);
+  input.dispose();
 }
 
 console.log(results.join('\n'));

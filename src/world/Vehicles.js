@@ -2018,6 +2018,8 @@ export function pickVehicleColor(rnd, kind = 'car', out = new THREE.Color()) {
  *        fluted / prismatic lenses, fabric and plastic grain, the taxi sign's lettering) as albedo x bump, road dirt
  *        along the sills, warm tail lamps (orange-red, hot cell cores from the geometry's n +- d codes)
  * @param {number} [o.envIntensity] opt-in envMapIntensity (default 1)
+ * @returns {THREE.MeshPhysicalMaterial & { userData: { u: { uDark: { value: number }, tVehAtlas?: { value: THREE.Texture } } } }}
+ *   `material.userData.u.uDark.value` (0 day .. 1 night) lights the head, tail and sign lamps
  */
 export function createVehicleMaterial({ brake = true, lamps = true, glass = false, hd = false, envIntensity = null } = {}) {
   const m = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.3, clearcoat: 1, clearcoatRoughness: 0.07 });

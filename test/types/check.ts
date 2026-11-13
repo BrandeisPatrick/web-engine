@@ -160,3 +160,12 @@ const lampPool = new NearestLights({ count: 1, color: 0xffb070, distance: 12, de
 lampPool.setPositions([[0, 3, -5]]);
 lampPool.update(1 / 60, { position: engine.camera.position }, 8);
 const sameClass: typeof NearestLights = WorldNearestLights; void sameClass;
+
+// world helpers outside MapWorld: trees on a height function, lamp / vehicle glow uniforms
+import { buildTreeMeshes, createFurnitureMaterial, createVehicleMaterial } from '@vibe/engine/world';
+const trees = buildTreeMeshes([{ x: 0, z: 0, s: 1, hue: 0.5, kind: 'park', ctx: { park: 'park' } }], { groundAt: (x: number, z: number) => 0.1 * x + 0.1 * z, mix: { park: [['oak', 1]] } });
+if (trees.group) engine.scene.add(trees.group);
+trees.update(1 / 60, engine.camera.position, 0, 2.5);
+const treeCount: number = trees.count; void treeCount;
+createFurnitureMaterial().userData.u.uNight.value = 1;
+createVehicleMaterial({ hd: true }).userData.u.uDark.value = 1;
