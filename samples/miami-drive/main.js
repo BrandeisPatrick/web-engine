@@ -39,8 +39,12 @@ const Q = resolveQuality({
   overrides: {
     desktop: {
       engine: { maxPixelRatio: 1.5 }, // 2268x1473 on a 14" Retina under TAA: see the bench table (native 3024x1964 is ~18 ms)
-      shadows: { cascades: 2, kernel: 'fast' },
+      // far map every 4th frame (Atmosphere farInterval), not nyc-night's 8th: under the dusk sun the shadows of
+      // traffic beyond the near map show, and at 7.5 Hz they would trail their cars by up to ~1.8 m
+      shadows: { cascades: 2, kernel: 'fast', farInterval: 4 },
       postfx: { gbuffer: true, aa: 'taa', ssr: { scale: 0.4, steps: 20, maxRoughness: 0.55, maxDistance: 90, thickness: 0.5, jitter: false, denoise: 4, interval: 2 }, volumetric: { scale: 0.25, steps: 12, intensity: 0.55, density: 1.2 }, motionBlur: { strength: 0.45, samples: 6, maxBlur: 16 } },
+      // no lights.cutoff here (ClusteredLights): at 0.01 and above it takes a street lamp's highlight off the car's
+      // roof (chase), and at 0.0025, where the picture holds, it saves nothing measurable
       lights: { clustered: true, clusteredRange: 85 },
       world: { streamRadius: 800, traffic: 70, trafficHd: { count: 3, radius: 22, midCount: 10, midRadius: 60, parked: true } },
       car: { lod: 'high' },

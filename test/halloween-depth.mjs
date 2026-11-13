@@ -26,7 +26,7 @@ import { Potions, POTION, ZOOM, SNEAK, SWEET } from '../samples/halloween/potion
 import { StompChain, CHAIN } from '../samples/halloween/chain.js';
 import { Secrets, SECRET, WELL, CRYPT, OAK } from '../samples/halloween/secrets.js';
 import { BadgeBook, BADGES, SHOW_NEW, earnedBy, dailyBest, saveDaily } from '../samples/halloween/badges.js';
-import { rng, patchFor } from '../samples/halloween/rng.js';
+import { rng, patchFor, BENCH_SEED } from '../samples/halloween/rng.js';
 
 let failures = 0;
 const results = [];
@@ -209,6 +209,11 @@ const stepS = (s) => { for (let i = 0; i < Math.round(s / DT); i++) S.fixedUpdat
   check('patch: tonight\'s seed is the date (20261101, "NOV 1"); ?seed=20261031 is a friend\'s night ("OCT 31"), ?seed=1234 "#1234", a bad one tonight\'s',
     p0.seed === 20261101 && p0.today && p0.label === 'NOV 1' && p1.seed === 20261031 && !p1.today && p1.label === 'OCT 31' && p2.seed === 1234 && p2.label === '#1234' && p3.seed === 20261101,
     JSON.stringify([p0, p1, p2].map((p) => [p.seed, p.label, p.today])));
+  const b0 = patchFor('?bench=1&size=1280x720', new Date(2026, 10, 1)), b1 = patchFor('?bench=1', new Date(2027, 0, 9));
+  const b2 = patchFor('?bench=1&seed=1234', new Date(2026, 10, 1)), b3 = patchFor('?bench=0', new Date(2026, 10, 1));
+  check('patch: the bench page (?bench=1) shows one fixed night on any date, a ?seed= wins, ?bench=0 is tonight\'s',
+    b0.seed === BENCH_SEED && b1.seed === BENCH_SEED && b2.seed === 1234 && b3.seed === 20261101,
+    JSON.stringify([b0, b1, b2, b3].map((p) => p.seed)));
   // a night as the game lays it out (main.js fillCandy, then the porches and the hands reset): 60 candies, then the
   // porches' next relight jitter and the hands' first waits
   const porches = new Porches({ scene, physics, heightAt, candy, ghosts, world, rnd: rng.porch });

@@ -74,6 +74,7 @@ import { Environment } from './environment.js';
 import { CumulusClouds } from './clouds.js';
 
 const params = new URLSearchParams(location.search);
+const BENCH = readBenchParams(location.search).enabled; // ?bench=1: the harness page (deterministic, see toTitle)
 const flag = (k) => params.has(k) && params.get(k) !== '0';
 const FORCED = params.has('touch') ? flag('touch') : null; // ?touch=1 / ?touch=0 pin the touch UI on / off
 const TOUCH = FORCED ?? isTouchDevice({ multiTouch: true });  // at load; later touches / keys can switch (touchUI)
@@ -488,7 +489,12 @@ async function boot() {
     lanterns.reset(); ghosts.reset(); fx.clear(); env.reset(); fillCandy(); porches.reset(); hands.reset(); thief.reset(); secrets.reset(); potions.reset(); chain.reset(); placeKid(); hud.clearCalls();
     orbitTarget.position.set(-2, 0, -4); orbit.distance = 30; orbit.elevation = 0.3; orbit.azimuth = 0.4; // title framing
     hud.showTitle(G.best, dailyBest(PATCH.key)); setRig(orbit);
-    for (let i = 0; i < 3; i++) ghosts.wake(SPAWN[0], SPAWN[1]); // a few ghosts drift around behind the title
+    // a few ghosts drift around behind the title; the bench page draws their graves from a fixed stream: with
+    // Math.random the title's ghosts rose at other graves each load, in or out of a pose's view (graveyard: 49, 53 or
+    // 55 draw calls), and full baseline updates refused. Stream 7 puts them where every bench pose draws what the
+    // recorded baseline did (desktop 55 / 51 / 47 / 49, mobile 46 / 42 / 39 / 41; of streams 1..48 seven do)
+    const wakeRnd = BENCH ? mulberry32(7) : Math.random;
+    for (let i = 0; i < 3; i++) ghosts.wake(SPAWN[0], SPAWN[1], wakeRnd);
   }
   function setClockPaused(on) { if (on) engine.clock.pause(); else engine.clock.resume(); }
   function setPaused(on) {

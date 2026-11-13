@@ -148,10 +148,11 @@ check('cloned uniforms keep the shared textures and vec4 arrays', cloned.engineC
 // --- assignment vs brute force ----------------------------------------------------------------------------------
 // lights in world space around a camera; region test = what the shader lights (distance < range, and for spots
 // angle cosine > cosOuter); brute force samples a 4 x 4 x 4 jittered grid + the 8 inner corners in every cell
-function scenario({ camera, seed, nLights = 200, maxLights = 256, maxIndices = 65536, W = 1600, H = 900, spots = 0.3 }) {
+function scenario({ camera, seed, nLights = 200, maxLights = 256, maxIndices = 65536, W = 1600, H = 900, spots = 0.3,
+  cutoff = 0 }) {
   camera.updateWorldMatrix(true, false);
   const rnd = mulberry32(seed);
-  const cl = new ClusteredLights({ maxLights, maxIndices, timing: true });
+  const cl = new ClusteredLights({ maxLights, maxIndices, timing: true, cutoff });
   cl.setSize(W, H);
   const inv = camera.matrixWorld;
   const lights = [];
@@ -170,6 +171,7 @@ function scenario({ camera, seed, nLights = 200, maxLights = 256, maxIndices = 6
     const range = rnd() < 0.1 ? 40 + rnd() * 40 : 0.5 + rnd() * 25;
     const col = rnd() < 0.02 ? [0, 0, 0] : [rnd() * 5, rnd() * 5, rnd() * 5];
     const L = { i, p: v, range, col, spot: rnd() < spots };
+    L.reach = L.spot ? range : reachOf(Math.max(...col), range, 2, cutoff);
     if (L.spot) {
       L.dir = new THREE.Vector3(rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1).normalize();
       const angle = THREE.MathUtils.degToRad(3 + rnd() * 87), pen = rnd();
@@ -185,6 +187,15 @@ function scenario({ camera, seed, nLights = 200, maxLights = 256, maxIndices = 6
     if (L.spot) L.vd = L.dir.clone().negate().transformDirection(V); // towards the light, as the shader compares
   }
   return { cl, lights, W, H };
+}
+
+// where I x three's getDistanceAttenuation falls below the cutoff (a fine march from the light outwards; the
+// reference the shader's lit region is checked against with a cutoff)
+function reachOf(I, range, decay, cutoff) {
+  if (!(cutoff > 0)) return range;
+  const at = (d) => { const q = d / range, w = 1 - q ** 4; return I * w * w / Math.max(d ** decay, 0.01); };
+  for (let k = 1; k <= 100000; k++) { const d = range * k / 100000; if (at(d) < cutoff) return d; }
+  return range;
 }
 
 function cellList(cl, c, out) {
@@ -220,7 +231,7 @@ function bruteForce({ cl, lights, W, H }, camera, rnd, perCell = 4) {
         if (L.col[0] + L.col[1] + L.col[2] === 0) continue;
         const dx = L.vp.x - x, dy = L.vp.y - y, dz = L.vp.z + depth;
         const d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 >= L.range * L.range) continue;
+        if (d2 >= L.reach * L.reach) continue;
         if (L.spot) { const d = Math.sqrt(d2); if (!(d > 0) || (dx * L.vd.x + dy * L.vd.y + dz * L.vd.z) / d <= L.cosOuter) continue; }
         pairs.add(cell * 4096 + L.i);
         if (!list.has(L.i)) missed++;
@@ -276,6 +287,38 @@ function bruteForce({ cl, lights, W, H }, camera, rnd, perCell = 4) {
   check(`scaled camera parent: ${nSpots} spots decode to three's direction / cosines`, decodeErr, 0, 1e-4);
   const bf4 = bruteForce(sc4, camS, mulberry32(13), 3);
   check(`scaled camera parent: missed of ${bf4.pairs} pairs`, bf4.missed, 0);
+  // cutoff: points end at their reach (where brightness x attenuation meets the cutoff), the shader's lit region
+  const sc5 = scenario({ camera, seed: 7, maxIndices: 1 << 20, cutoff: 0.05 });
+  const bf5 = bruteForce(sc5, camera, mulberry32(11));
+  check(`cutoff 0.05: brute force, missed of ${bf5.pairs} pairs`, bf5.missed, 0);
+  check('cutoff 0.05: fewer cluster pairs than without', sc5.cl.stats.indices / sc.cl.stats.indices, 0.05, 0.95);
+  let reachErr = 0, cut = 0, layout = 0;
+  for (const Lt of sc5.lights) {
+    if (Lt.spot || Lt.col[0] + Lt.col[1] + Lt.col[2] === 0) continue;
+    const r = sc5.cl._wb[Lt.i * 2 + 1], D = sc5.cl.lightData, o1 = (256 + Lt.i) * 4, o2 = (512 + Lt.i) * 4;
+    reachErr = Math.max(reachErr, Math.abs(r - Lt.reach) / Lt.range);
+    if (r < Lt.range) {
+      cut++;
+      if (D[o1 + 3] !== -3 || D[o2] !== Math.fround(Lt.range) || D[o2 + 1] !== Math.fround(0.05)) layout++;
+    }
+    else if (D[o1 + 3] !== 2) layout++;
+    if (D[Lt.i * 4 + 3] !== Math.fround(r)) layout++; // row 0 w: the reach
+  }
+  check('cutoff: reach = where brightness x attenuation meets the cutoff (of the range)', reachErr, 0, 2e-5);
+  check('cutoff: points cut short of their range', cut, 20, Infinity);
+  check('cutoff: rows (0 w reach, 1 w -(decay + 1), 2 xy range, cutoff)', layout, 0);
+  sc5.cl.cutoff = 0; sc5.cl.update(camera);
+  // (the lists' padding to whole texels keeps what an earlier frame wrote there: the shader never reads it)
+  const listsOf = (cl) => {
+    const out = [];
+    for (let c = 0; c < cl.cellCount; c++) {
+      const w = cl.cellData[c], s0 = w & 0xffffff;
+      out.push(w, ...cl.cellData.subarray(s0, s0 + (w >>> 24)));
+    }
+    return out.join();
+  };
+  check('cutoff back to 0: cell lists and row 1 as never cut', listsOf(sc5.cl) === listsOf(sc.cl)
+    && sc5.lights.every((Lt) => Lt.spot || sc5.cl.lightData[(256 + Lt.i) * 4 + 3] === 2) ? 1 : 0, 1);
   // determinism: same input, same data
   const a = scenario({ camera, seed: 7, maxIndices: 1 << 20 }), b = scenario({ camera, seed: 7, maxIndices: 1 << 20 });
   check('deterministic (cells + lights data)', Buffer.compare(Buffer.from(a.cl.cellData.buffer), Buffer.from(b.cl.cellData.buffer)) === 0

@@ -282,6 +282,10 @@ const DEFAULT_SHADOWS = {
   nearRadius: 2.0, midRadius: 1.7, farRadius: 1.4,
   lead: 0.45, farLead: 0.55, // boxes lead the camera's view direction by this fraction of their half size (middle: farLead)
   farMaxY: 40,            // far (and middle) box centre height cap (m)
+  farInterval: 2,         // 2 cascades: the far map re-renders every farInterval-th frame, when its box steps and,
+                          // above 2, when its box is 0.1 half sizes off; 2 = every other frame. The city demos use 8
+                          // (0.3-0.6 ms a frame on nyc-night): the far map holds the static city; moving casters in it
+                          // (traffic beyond the near map) update at 60 / farInterval Hz
   kernel: 'pcf',          // 'fast': 5 hardware-compare taps per lookup instead of three's 17; 'pcss': contact-hardening
                           // soft shadows (setShadowKernel, shadowKernel.js)
   lightSize: 0.5,         // 'pcss': angular diameter of the sun (degrees): penumbra width per metre of caster distance
@@ -871,11 +875,12 @@ export class Atmosphere {
       else if (idx > 0 && cam.y < down[idx - 1]) idx--;
       if (steps[idx] !== this._farHalf) { this._farHalf = steps[idx]; this._setBox(this.sunFar, this._farHalf); this._setMidBoxes(idx); this._farDirty = true; }
       // maps beyond the near one re-render round-robin (each is consistent with its own matrix in between), all of
-      // them when dirty: 2 cascades: far on even frames; 3: middle on odd, far on even frames; 4: middle on odd
-      // frames, second middle and far on alternate even frames (one map besides the near one per frame). With 3+, a
-      // map whose box centre is 0.3 half sizes off (teleport, pose) refits at once (2 keeps the 0.6.0 schedule).
+      // them when dirty: 2 cascades: far on every farInterval-th frame (default 2: the even frames); 3: middle on odd,
+      // far on even frames; 4: middle on odd frames, second middle and far on alternate even frames (one map besides
+      // the near one per frame). With 3+, a map whose box centre is 0.3 half sizes off (teleport, pose) refits at once
+      // (2 keeps the 0.6.0 schedule).
       const L = this.cascadeLights, n = L.length, f = this._frame, dirty = this._farDirty;
-      const yCap = Math.min(cam.y, sh.farMaxY), farLead = sh.farLead;
+      const yCap = Math.min(cam.y, sh.farMaxY), farLead = sh.farLead, fi = Math.max(1, sh.farInterval | 0 || 2);
       let py = cam.y, ph = this.nearHalf, pl = sh.lead; // previous box: centre height, half size, lead
       for (let j = 1; j < n; j++) {
         const light = L[j], h = light.userData.half, off = h * farLead;
@@ -888,8 +893,13 @@ export class Atmosphere {
           py = y; ph = h; pl = farLead;
         }
         const x = cam.x + fx * off, z = cam.z + fz * off;
-        let due = dirty || (n === 2 ? (f & 1) === 0 : j === 1 ? (f & 1) === 1 : n === 3 ? (f & 1) === 0 : (f & 3) === (j === 2 ? 0 : 2));
-        if (!due && n > 2 && light.target.position.distanceToSquared(_focus.set(x, y, z)) > (0.3 * h) ** 2) due = true;
+        let due = dirty
+          || (n === 2 ? f % fi === 0 : j === 1 ? (f & 1) === 1 : n === 3 ? (f & 1) === 0
+            : (f & 3) === (j === 2 ? 0 : 2));
+        // with 3+ maps, or a slower far map (farInterval > 2), a box 0.3 (0.1) half sizes off refits at once (a pose, a
+        // quick turn of the view: the boxes lead the view direction), not frames late
+        const off2 = !due && (n > 2 || fi > 2) ? light.target.position.distanceToSquared(_focus.set(x, y, z)) : 0;
+        if (off2 > ((n > 2 ? 0.3 : 0.1) * h) ** 2) due = true;
         if (!due) continue;
         this._fitCascade(light, x, y, z, h);
         light.shadow.needsUpdate = true;

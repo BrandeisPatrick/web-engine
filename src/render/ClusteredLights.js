@@ -26,11 +26,14 @@
 // constructed or updated):
 //   engineClLights  RGBA32F, min(maxLights, 1024) x 3 rows per band of 1024 lights (one band up to 1024 lights);
 //                   light i at x = i & 1023, y = (i >> 10) * 3 + row:
-//                   row 0  view-space position xyz, w = range (> 0 point, < 0 spot)          rewritten every frame
-//                   row 1  linear colour * intensity rgb, w = decay                          on setLight / setSpot
-//                   row 2  spot only: view-space direction towards the light * k, w = -cosOuter * k with
+//                   row 0  view-space position xyz, w = reach (> 0 point: its range, or with `cutoff` the
+//                          distance where it stops showing; < 0 spot: -range)                rewritten every frame
+//                   row 1  linear colour * intensity rgb, w = decay, or -(decay + 1) for a point cut short of its
+//                          range (row 2 x then holds the range)                              on setLight / setSpot
+//                   row 2  spot: view-space direction towards the light * k, w = -cosOuter * k with
 //                          k = 1 / (cosInner - cosOuter), so k = length(xyz), cosOuter = -w / k and
 //                          cosInner = cosOuter + 1 / k (exact, one fetch)                     every frame
+//                          point cut by `cutoff`: x = range, y = the cutoff                   on setLight
 //   engineClCells   RGBA32UI, 1024 texels (4096 uint32) per row; cells and index lists packed in ONE texture (+2
 //                   texture units, not +3). uint32 element e at texel e >> 2, component e & 3:
 //                   [0, cells)          cell c = (slice * gridY + tileY) * gridX + tileX:
@@ -42,16 +45,22 @@
 //   engineClTiles   vec4 (tile width px, tile height px, 1 / width, 1 / height)  from setSize()
 //
 // Upload per frame, through texture.updateRanges (one texSubImage2D per range, each inside one texture row): every
-// value the shader can read this frame and nothing else: lights rows 0 and 1 for [0, count) (32 B / light), row 2
-// over the span of spot indices; cells the used prefix [0, used) (cell words + every index list). Each request is
-// self-sufficient: it never relies on what the GPU storage held before, which may be fresh (three allocates with
-// texStorage2D and, on a first upload with ranges, uploads only the ranges), from an older frame (a request three
-// never uploaded is replaced by the next one), or re-allocated (dispose, context restore, a second renderer).
+// value the shader can read this frame and nothing else: lights rows 0 and 1 for [0, count) (32 B / light), row 2 over
+// the span of spot indices (with a cutoff: over [0, count)); cells the used prefix [0, used) (cell words + every index
+// list). Each request is self-sufficient: it never relies on what the GPU storage held before, which may be fresh
+// (three allocates with texStorage2D and, on a first upload with ranges, uploads only the ranges), from an older frame
+// (a request three never uploaded is replaced by the next one), or re-allocated (dispose, context restore, a second
+// renderer).
 // Measured: 320 street lamps at 3024x1964, default grid: ~86 KB / frame (10 KB lights, 14 KB cell words, the rest
 // index lists); frames where no light reaches the view upload nothing (the loop is off: lightCount 0).
 // Per-frame allocation: none here; three's clearUpdateRanges() empties the updateRanges array it refills.
 // GPU per lit fragment: 1 uvec4 fetch (cell word); per listed light 1 RGBA32F fetch + a sphere test (+ 1 uvec4 per
-// 4 lights); per light that reaches the fragment +1 fetch (+1 for a spot) and RE_Direct.
+// 4 lights); per light that reaches the fragment +1 fetch (+1 for a spot or a cut point) and RE_Direct.
+// Where the time goes (nyc-night desktop, 2268x1473, ~190 lights, measured by switching parts off in the same page):
+// the loop costs 0.8-1.85 ms a frame by pose (0.2-0.25 of it only for being compiled in), RE_Direct at most 0.3 ms of
+// that (a diffuse-only BRDF saved 0.1-0.3), the CPU clustering and upload < 0.05 ms; a finer grid (32x18, 16x9x48)
+// did not pay. The listed lights that reach the fragment are the cost, most of them far out where they add next to
+// nothing: `cutoff` ends each point light where it stops showing instead of at its nominal range.
 //
 // Tile mapping: gl_FragCoord of the scene render target. setSize(width, height) must get that target's size in
 // pixels: the drawing-buffer size (PostFX renders the scene at floor(css * pixelRatio), pixel ratio 1 inside the
@@ -141,6 +150,7 @@ const PARS = /* glsl */`
 		vec3 direction;
 		float coneCos;
 		float penumbraCos;
+		float cut;
 		bool spot;
 	};
 	highp ivec2 engineClLightTexel( const in highp int li, const in int row ) {
@@ -163,6 +173,13 @@ const PARS = /* glsl */`
 		l.spot = row0.w < 0.0;
 		l.color = row1.rgb;
 		l.decay = row1.a;
+		l.cut = 0.0;
+		if ( row1.a < 0.0 ) { // a point cut at its reach (row0.w): decay stored as -(decay + 1), row 2 = range, cutoff
+			vec2 cut = texelFetch( engineClLights, engineClLightTexel( li, 2 ), 0 ).xy;
+			l.decay = - row1.a - 1.0;
+			l.distance = cut.x;
+			l.cut = cut.y;
+		}
 		l.direction = vec3( 0.0, 0.0, 1.0 );
 		l.coneCos = - 1.0;
 		l.penumbraCos = 1.0;
@@ -186,6 +203,11 @@ const PARS = /* glsl */`
 			light.color = l.color;
 		}
 		light.color *= getDistanceAttenuation( lightDistance, l.distance, l.decay );
+		// a cut point fades out while its brightest channel falls from twice the cutoff to the cutoff (= at its reach):
+		// cut hard there, each light ended in a visible ring
+		if ( l.cut > 0.0 ) {
+			light.color *= smoothstep( l.cut, 2.0 * l.cut, max( light.color.r, max( light.color.g, light.color.b ) ) );
+		}
 		light.visible = ( light.color != vec3( 0.0 ) );
 	}
 #endif`;
@@ -278,8 +300,11 @@ export class ClusteredLights {
    * @param {number} [o.zNear=0.5] @param {number} [o.zFar=400]  slice range (m); lights wholly beyond zFar are dropped
    * @param {number} [o.maxIndices=65536]  index-list capacity (light-cell pairs incl. the per-cell padding to 4)
    * @param {boolean} [o.timing=false]  measure update() into stats.ms
+   * @param {number} [o.cutoff=0]  point lights end at their reach (see `cutoff`); 0: at their range
    */
-  constructor({ maxLights = 1024, grid = [16, 9, 24], zNear = 0.5, zFar = 400, maxIndices = 65536, timing = false } = {}) {
+  constructor({
+    maxLights = 1024, grid = [16, 9, 24], zNear = 0.5, zFar = 400, maxIndices = 65536, timing = false, cutoff = 0,
+  } = {}) {
     const gx = grid[0] | 0, gy = grid[1] | 0, gz = grid[2] | 0;
     if (!(gx > 0 && gy > 0 && gz > 0 && gx <= 4096 && gy <= 4096 && gz <= 4096)) throw new RangeError('ClusteredLights: bad grid');
     if (!(maxLights >= 1 && maxLights <= 1 << 20)) throw new RangeError('ClusteredLights: maxLights must be 1 .. 2^20');
@@ -303,7 +328,9 @@ export class ClusteredLights {
     this._wb = new Float64Array(N * 2);    // bounding sphere: centre offset along a spot's axis (0: point), radius
     this._wd = new Float64Array(N * 4);    // spots: direction towards the light xyz, k = 1 / (cosInner - cosOuter)
     this._wc = new Float64Array(N);        // spots: cosOuter
+    this._wi = new Float64Array(N * 2);    // points: brightest channel, decay (the reach under `cutoff`)
     this._flags = new Uint8Array(N);
+    this._cutoff = 0;
     this._count = 0;
     this._spotN = 0; this._spotLo = N; this._spotHi = 0; // spot indices lie in [spotLo, spotHi) (row 2 uploads)
 
@@ -340,7 +367,29 @@ export class ClusteredLights {
     this.width = 1920; this.height = 1080; this._mx = MARGIN_PX / 1920; this._my = MARGIN_PX / 1080;
     this.stats = { lights: 0, cells: 0, indices: 0, overflow: 0, ms: 0, maxPerCell: 0, bytes: 0 };
     this._disposed = false;
+    this.cutoff = cutoff;
     this._bind();
+  }
+
+  /**
+   * Point lights end where they stop showing: with cutoff > 0 a point light is clustered, and lights a fragment, only
+   * out to its reach, the distance where its brightest channel x three's distance attenuation falls to `cutoff` (the
+   * same units: linear colour x intensity / m^decay), never beyond its range. Where that product is above twice the
+   * cutoff it lights exactly as before (the attenuation keeps the range as its cutoff distance); between twice the
+   * cutoff and the cutoff it fades to 0 (smoothstep), because cut hard every light ended in a ring (about 2.5 / 255 on
+   * nyc-night's pavement at 0.03). So a light loses at most ~1.1 x cutoff anywhere, without an edge; what it added
+   * beyond its reach is dropped, and a glossy surface shows that first: at 0.01-0.03 a far lamp's highlight left
+   * miami-drive's car roof and a soft one nyc-night's wet pavement. nyc-night uses 0.0025 (in-page A/B: 0.11 / 0.45 /
+   * 0.44 ms a frame saved on avenue / square / sidewalk of the 0.22 / 0.69 / 0.79 that 0.03 saves; captures 0.012 /
+   * 0.004 / 0.005 / 255 mean, < 0.1 % of pixels over 2 / 255): most of the cost was lights listed far out where they
+   * add next to nothing. 0 (default): the reach is the range. Spots keep their range.
+   */
+  get cutoff() { return this._cutoff; }
+  set cutoff(v) {
+    v = v > 0 && v < Infinity ? +v : 0;
+    if (v === this._cutoff) return;
+    this._cutoff = v;
+    for (let i = 0; i < this._count; i++) if ((this._flags[i] & (ACTIVE | SPOT)) === ACTIVE) this._reach(i);
   }
 
   /** The shared uniform objects (also in every lit THREE.ShaderLib template after installClusteredChunks()). */
@@ -373,7 +422,9 @@ export class ClusteredLights {
     wp[o] = x; wp[o + 1] = y; wp[o + 2] = z; wp[o + 3] = range;
     this._wb[i * 2] = 0; this._wb[i * 2 + 1] = range;
     this._row1(i, r, g, b, decay);
+    this._wi[i * 2] = Math.max(r, g, b); this._wi[i * 2 + 1] = decay;
     this._setFlags(i, range > 0 && range < Infinity ? ACTIVE | (r === 0 && g === 0 && b === 0 ? BLACK : 0) : 0);
+    if (this._cutoff > 0 && (this._flags[i] & ACTIVE)) this._reach(i);
   }
 
   /**
@@ -465,7 +516,7 @@ export class ClusteredLights {
       let cy = V[1] * x + V[5] * y + V[9] * z + V[13];
       let cz = V[2] * x + V[6] * y + V[10] * z + V[14];
       L[t0o] = cx; L[t0o + 1] = cy; L[t0o + 2] = cz;
-      L[t0o + 3] = f & SPOT ? -range : range;
+      L[t0o + 3] = f & SPOT ? -range : wb[i * 2 + 1]; // a point's reach (= range without a cutoff)
       if (f & SPOT) {
         const k = wd[o + 3], ax = wd[o], ay = wd[o + 1], az = wd[o + 2];
         // towards the light in view space, renormalised like three's transformDirection (V may carry a scale)
@@ -602,6 +653,24 @@ export class ClusteredLights {
     L[o] = r; L[o + 1] = g; L[o + 2] = b; L[o + 3] = decay;
   }
 
+  // point light i under `cutoff`: its reach (bounding sphere, row 0 w) and, when that is short of the range, row 1 w
+  // = -(decay + 1) and row 2 xy = the range (the shader's attenuation still ends at the range), the cutoff (its
+  // fade); else the plain layout
+  _reach(i) {
+    const range = this._wp[i * 4 + 3], I = this._wi[i * 2], decay = this._wi[i * 2 + 1], c = this._cutoff;
+    let reach = range;
+    // brightness x attenuation decreases with distance: bisect for where it meets the cutoff
+    if (c > 0 && I > 0 && lit(range * 0.999, range, I, decay) < c) {
+      let lo = 0, hi = range;
+      for (let k = 0; k < 24; k++) { const m = 0.5 * (lo + hi); if (lit(m, range, I, decay) >= c) lo = m; else hi = m; }
+      reach = hi; // the first distance (to 2^-24 of the range) where it is below the cutoff
+    }
+    this._wb[i * 2 + 1] = reach;
+    const b0 = (((i >> 10) * ROWS) * this.lightsWidth + (i & (BAND - 1))) * 4, L = this.lightData;
+    const o1 = b0 + this.lightsWidth * 4, o2 = b0 + this.lightsWidth * 8;
+    if (reach < range) { L[o1 + 3] = -(decay + 1); L[o2] = range; L[o2 + 1] = c; } else L[o1 + 3] = decay;
+  }
+
   // screen bound in view units (x/depth for perspective, x for orthographic) -> tile range in _tr; 0 when off screen
   _tiles(persp, P, u0, u1, v0, v1, mx, my, gx, gy) {
     let a, b, c, d;
@@ -644,7 +713,10 @@ export class ClusteredLights {
       if (hi <= lo) break;
       k = this._range(tex, R, k, band, 0, lo, hi);
       k = this._range(tex, R, k, band, 1, lo, hi);
-      if (this._spotN > 0) k = this._range(tex, R, k, band, 2, Math.max(lo, this._spotLo), Math.min(hi, this._spotHi));
+      if (this._cutoff > 0) k = this._range(tex, R, k, band, 2, lo, hi); // cut points' ranges (and the spots)
+      else if (this._spotN > 0) {
+        k = this._range(tex, R, k, band, 2, Math.max(lo, this._spotLo), Math.min(hi, this._spotHi));
+      }
     }
     if (k === 0) return 0; // (needsUpdate without ranges would upload everything)
     for (let j = 0; j < k; j++) bytes += R[j].count * 4;
@@ -678,6 +750,12 @@ export class ClusteredLights {
 }
 
 const _tr = new Int32Array(4);
+
+// I x three's getDistanceAttenuation(d, range, decay)
+function lit(d, range, I, decay) {
+  const q = d / range, w = 1 - q * q * q * q;
+  return I * w * w / Math.max(Math.pow(d, decay), 0.01);
+}
 
 // point a shared texture at another image; a different size needs new GPU storage (three sizes it at the first upload)
 function swapImage(tex, img) {

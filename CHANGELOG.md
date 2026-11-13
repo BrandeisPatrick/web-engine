@@ -1,6 +1,34 @@
 # Changelog
 
 ## Unreleased
+- ClusteredLights `cutoff` (constructor option and property, default 0 = unchanged): a point light is clustered, and
+  lights a fragment, only out to its reach, where its brightest channel x three's distance attenuation falls to the
+  cutoff (same units: linear colour x intensity / m^decay), never beyond its range. Above twice the cutoff it lights as
+  before; between twice the cutoff and the cutoff it fades to 0 (cut hard, every light ended in a ring: about 2.5 /
+  255 on nyc-night's pavement at 0.03). A cut light stores -(decay + 1) in row 1 w and its range and the cutoff in row
+  2 xy (fetched only for such a light). Spots keep their range. Measured on nyc-night (desktop): the clustered loop
+  costs 0.8-1.85 ms a frame, of which the BRDF only ~0.3 ms and the CPU clustering and upload < 0.05 ms: the cost is
+  lights listed far out where they add next to nothing. nyc-night's desktop tier uses `lights.cutoff` 0.0025: in-page
+  A/B 0.11 / 0.45 / 0.44 ms saved on avenue / square / sidewalk, static captures 0.012 / 0.004 / 0.005 / 255 mean and
+  < 0.1 % of pixels over 2 / 255 (0.03 saves 0.22 / 0.69 / 0.79 ms but takes soft far highlights off the wet pavement,
+  up to 7 / 255). miami-drive does not use it: at 0.01 and above a street lamp's highlight leaves the car's roof, and
+  at 0.0025 nothing measurable is saved.
+- Atmosphere `shadows.farInterval` (2 cascades; default 2 = unchanged, the far map on even frames): the far map
+  re-renders every farInterval-th frame, and above 2 also as soon as its box is 0.1 half sizes off (a pose, a quick
+  turn: the box leads the view). Where the NYC live frame's own work goes (in-page A/B, ms a frame by pose): all of
+  `live.frame` 1.0-1.6; `world.update` 0.5-0.9, of which the Atmosphere update (the far-map schedule) 0.45-0.8;
+  signage, facade grade, air glow and car shadows ~0; the GPU steam step <= 0.1; the clustered light list's CPU work
+  and upload <= 0.07. nyc-night's desktop tier uses 8 (in-page A/B, 7 rounds: 0.29 / 0.31 / 0.66 ms saved on avenue /
+  square / sidewalk), miami-drive's 4 (0.15-0.18 ms on every pose; 8 would save 0.1 ms more); static captures
+  unchanged. In motion, moving casters beyond the near map (traffic) cast at 60 / farInterval Hz instead of 30 Hz:
+  faint moonlight shadows on nyc-night, but under miami-drive's dusk sun every 8th frame would let a car's shadow trail
+  it by up to ~1.8 m, hence 4 there.
+- halloween bench page (`?bench=1`): deterministic between loads and days. The title's three ghosts rose at graves
+  drawn with Math.random, so a pose drew 0-6 cloth meshes more or less from load to load (graveyard: 49, 53 or 55
+  draw calls) and full baseline updates refused; the bench page now draws them from a fixed stream, one where every
+  pose draws what the recorded baseline did. Its night's seed (candy and porch layout, rng.js) was the date: the
+  bench page now shows one fixed night (`BENCH_SEED`, 20261113, the date of the current golden images) unless the URL
+  names a `seed`.
 - SSR `interval` (SSRPass option and `postfx.set('ssr.interval', n)`, integer 1..4, default 1 = unchanged): trace and
   denoise every n-th frame and reuse the buffer in between; the TAA composite (new define `TAA_SSR_REUSE`) reads the
   reused buffer where each pixel's surface was when it was traced (G-buffer velocity x frames since, plus the jitter
