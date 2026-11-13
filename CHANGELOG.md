@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased
+- Surface shaders skip work whose weight is zero (the picture is unchanged): the sidewalk / kerb material
+  (`MapWorld`) reads its cast-concrete scan only where a face is not flat (`textureGrad`, gradients taken outside the
+  branch); nyc-night's facade lamp wash skips each lamp beyond its fall-off reach, and its street surface runs the
+  long-crack, oil-blot and paint-chip noises only where their zone or the paint is non-zero.
+- nyc-night: the facade lamp wash takes the 4 nearest lamp heads, not 12 (8 on mobile): the loop costs every wall
+  pixel whether a lamp reaches it or not, and the lamps stand 60 m and more apart with a 17 m pool, so the 5th
+  nearest is a pool of a few pixels over 100 m away.
 - Bench harness (`createBenchHarness`, `src/core/Bench.js`): an optional `live: { dt, begin, frame, end }` hook group.
   With it, `bench()` (and so `run()`, `report()` and `npm run perf`) measures frames as played: `begin()` undoes what
   `quiet()` holds (TAA and volumetric jitter and history, eye adaptation), each warm-up and timed frame is

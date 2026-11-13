@@ -522,7 +522,11 @@ varying vec2 vRawUv;`)
         .replace('#include <map_fragment>', `
 float cUp = abs(dot(normalize(vNormal), normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz)));
 float cFlat = smoothstep(0.55, 0.8, cUp);
-vec4 cWall = texture(uPA, vec3(vRawUv * 6.0 / uSize, uLayer));
+// the cast-concrete scan only counts where cFlat < 1 (kerb faces, walls): the flat tops skip its read. Inside the
+// branch the read takes explicit gradients, taken outside it (implicit ones are undefined in non-uniform flow)
+vec2 cWu = vRawUv * 6.0 / uSize, cWx = dFdx(cWu), cWy = dFdy(cWu);
+vec4 cWall = vec4(0.0);
+if (cFlat < 1.0) cWall = textureGrad(uPA, vec3(cWu, uLayer), cWx, cWy);
 #include <map_fragment>
 diffuseColor.rgb = mix(cWall.rgb * vec3(1.0, 0.99, 0.97) * cWall.a, diffuseColor.rgb, cFlat);
 diffuseColor.rgb *= (0.85 + 0.3 * texture2D(map, vMapUv * 0.071 + 0.13).g) * mix(1.0, 1.55, cFlat); // light concrete sidewalks`)

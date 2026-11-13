@@ -75,12 +75,14 @@ const GRADE = /* glsl */`
   reflectedLight.indirectDiffuse *= k;
   reflectedLight.directDiffuse *= mix(1.0, canyon, 0.5);             // the moon's light too reads stronger up high
   reflectedLight.indirectSpecular *= fGlass > 0.5 ? mix(1.0, k, 0.5) : k;
-  // the street lamps wash the first two storeys in pools
+  // the street lamps wash the first two storeys in pools. A lamp adds nothing beyond r2 = 300 (its fall-off reaches
+  // 0 there), so a lamp out of that reach is skipped (exact; most of a wall is out of reach of most of the lamps)
   if (hs < 13.0 && uNycGrade.w > 0.0) {
     float wash = 0.0;
     for (int i = 0; i < NYC_LAMPS; i++) {
       vec4 L = uNycLamps[i];
       vec3 d = L.xyz - vWPos; float r2 = dot(d, d);
+      if (r2 >= 300.0) continue;
       float a = L.w / (1.0 + r2 * 0.05) * (1.0 - smoothstep(90.0, 300.0, r2));
       a *= 0.25 + 0.75 * max(dot(gN, d * inversesqrt(r2 + 1e-4)), 0.0);
       a *= 1.0 - smoothstep(-1.0, 3.0, vWPos.y - L.y);                             // the head shines down
@@ -98,7 +100,9 @@ function rep(src, a, b, what) {
 }
 
 /**
- * o: { world, camera, lamps = 12, west: {x,z} (unit, toward the afterglow), skyGain, canyon: [floor, roof], wash }.
+ * o: { world, camera, lamps = 12 (the nearest heads that wash the walls: each costs every wall pixel a little, lit or
+ * not; the map's lamps stand 60 m and more apart and a pool reaches 17 m, so nyc-night passes 4), west: {x,z} (unit,
+ * toward the afterglow), skyGain, canyon: [floor, roof], wash }.
  * Returns { uniforms, update(camera) }.
  */
 export function gradeFacades(o) {
