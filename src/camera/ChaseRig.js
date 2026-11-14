@@ -51,6 +51,14 @@ export function defaultChaseModes(rig) {
   };
 }
 
+/**
+ * @typedef {{ velocity?: THREE.Vector3, speedKmh?: number, mode?: 'ground'|'flight'|string, thrust?: number,
+ *   gForce?: number, grounded?: boolean, wheelSlip?: number, [key: string]: any }} ChaseTargetState
+ *   What ChaseRig reads from setTarget's state getter (every field optional): velocity (world m/s, e.g. a
+ *   VehicleController's `velocity`: speed-dependent distance / FOV, velocity-biased yaw; else speedKmh), mode ('flight'
+ *   switches to flight framing), thrust / gForce / wheelSlip (0..1-ish: camera shake; wheelSlip only while grounded).
+ */
+
 export class ChaseRig extends CameraRig {
   /**
    * @param {THREE.PerspectiveCamera} camera
@@ -178,6 +186,14 @@ export class ChaseRig extends CameraRig {
     this._modeIndex = i >= 0 ? i : 0;
     return this;
   }
+
+  /**
+   * Follow a vehicle: `rig.setTarget(carMesh, () => state)` with state a ChaseTargetState you update each frame (e.g.
+   * `{ velocity: car.velocity, speedKmh, grounded, wheelSlip, gForce }` from a VehicleController).
+   * @param {THREE.Object3D} object3d
+   * @param {(() => ChaseTargetState)|ChaseTargetState|null} [stateGetter]
+   */
+  setTarget(object3d, stateGetter) { super.setTarget(object3d, stateGetter); }
 
   cycleMode() {
     this._setModeIndex((this._modeIndex + 1) % this.modeOrder.length);

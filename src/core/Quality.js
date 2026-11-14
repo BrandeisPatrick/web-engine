@@ -54,7 +54,12 @@ function merge(base, over) {
   return out;
 }
 
-/** Tier settings (a deep copy) with `overrides` merged per group: `tierSettings('mobile', { postfx: { aa: 'taa' } })`. */
+/**
+ * Tier settings (a deep copy) with `overrides` merged per group: `tierSettings('mobile', { postfx: { aa: 'taa' } })`.
+ * @param {string} tier
+ * @param {object} [overrides]
+ * @returns {TierSettings}
+ */
 export function tierSettings(tier, overrides) {
   const base = QUALITY_TIERS[tier] || QUALITY_TIERS.desktop;
   return merge(JSON.parse(JSON.stringify(base)), overrides || {});
@@ -103,9 +108,38 @@ export function storeTier(tier, key = QUALITY_STORAGE_KEY) {
 }
 
 /**
+ * @typedef {{
+ *   label: string, blurb: string,
+ *   engine: { maxPixelRatio: number, adaptiveResolution: boolean, [key: string]: any },
+ *   shadows: { cascades: number, kernel: 'pcf' | 'fast' | 'pcss', skipUnlit?: boolean, [key: string]: any },
+ *   postfx: { gbuffer: boolean, aa: string, ssr: boolean | object, volumetric: boolean | object, motionBlur: number, [key: string]: any },
+ *   passes: { ao: boolean, bloom: boolean },
+ *   lights: { clustered: boolean, clusteredRange: number },
+ *   world: { streamRadius: number, traffic: number, pedestrians: number, detail: number },
+ *   textures: { maxSize: number, anisotropy: number },
+ *   effects: { particles: number, decals: number },
+ *   [group: string]: any,
+ * }} TierSettings
+ *   One tier's settings (QUALITY_TIERS.desktop / .mobile, plus overrides). Spread the groups into the classes:
+ *   Engine({ ...s.engine }), Atmosphere({ shadows: s.shadows }), PostFX(..., { ...s.postfx }); `passes` is applied by
+ *   the game (postfx.aoPass.enabled = s.passes.ao; postfx.bloomPass.enabled = s.passes.bloom); `lights.clustered`
+ *   says whether to use ClusteredLights; `textures` / `effects` are budgets a game reads. A game adds its own groups
+ *   through `overrides` (e.g. `{ desktop: { walk: { lamps: 6 } } }` -> s.walk.lamps).
+ */
+/**
+ * @typedef {object} QualityChoice  resolveQuality's result
+ * @property {'desktop'|'mobile'|string} tier  the tier in effect
+ * @property {'desktop'|'mobile'|string} recommended  what the device would get
+ * @property {string} reason  why it was recommended
+ * @property {'query'|'stored'|'recommended'} source  where `tier` came from (?quality=, the stored choice, the device)
+ * @property {TierSettings} settings  the tier's groups, overrides merged
+ * @property {string} storageKey
+ */
+/**
  * Pick the tier for this page load.
- * @param {{ search?: string, overrides?: { desktop?: object, mobile?: object }, env?: object, storageKey?: string }} [opts]
- * @returns {{ tier: string, recommended: string, reason: string, source: 'query' | 'stored' | 'recommended', settings: object, storageKey: string }}
+ * @param {{ search?: string, overrides?: { desktop?: object, mobile?: object, [tier: string]: object | undefined }, env?: object, storageKey?: string }} [opts]
+ *   overrides: per tier, groups merged over the preset (a game's own groups too)
+ * @returns {QualityChoice}
  */
 export function resolveQuality(opts = {}) {
   const search = opts.search ?? (typeof location !== 'undefined' ? location.search : '');

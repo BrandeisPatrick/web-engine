@@ -17,6 +17,8 @@
 // Touch (phones, or touch: true): left stick steer/pitch, GAS / BRAKE / LIFT / BOOST buttons, CAM / RESET / HELP.
 // A custom `actions` map may leave any of these actions out (e.g. no flight actions for a ground vehicle):
 // missing actions read as 0 / false.
+// `enabled` (default true) is the map's: false silences every action (pedals, steer and edges read 0 / false), e.g.
+// while the player is out of the car; as CharacterInput.enabled.
 import { InputMap, ramp } from './InputMap.js';
 import { TouchControls, isTouchDevice } from './TouchControls.js';
 import { PAD_BUTTONS as B, PAD_AXES as AX } from './Gamepad.js';
@@ -92,6 +94,10 @@ export class VehicleInput {
     const t = opts.touch ?? 'auto';
     if (typeof document !== 'undefined' && (t === true || (t === 'auto' && isTouchDevice()))) this.enableTouch(true);
   }
+
+  /** False silences every action (the InputMap's `enabled`), e.g. while the player walks; as CharacterInput. */
+  get enabled() { return this.map.enabled; }
+  set enabled(v) { this.map.enabled = !!v; }
 
   /** Vehicle calls this so ↑/↓ map to pitch while airborne. */
   setFlightMode(on) { this.flightMode = !!on; this.map.setContext('flight', this.flightMode); }

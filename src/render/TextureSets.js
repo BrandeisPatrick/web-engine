@@ -1,6 +1,6 @@
 // PBR texture sets: a manifest-driven loader for photo-scanned material sets (diff / nor_gl / rough / ao JPEGs,
 // one folder per set id, e.g. Poly Haven CC0 downloads; optional GPU-compressed .ktx2 twins written by
-// engine/tools/compress-textures.mjs) with procedural canvas fallbacks for every map, so a
+// tools/compress-textures.mjs) with procedural canvas fallbacks for every map, so a
 // missing file (offline, assets not fetched) never breaks a game. Also the generic tileable canvas painters
 // (asphalt, concrete paving, grass, ground, water normals) and DataArrayTexture helpers.
 //
@@ -12,8 +12,8 @@
 //   TextureSets.options.manifestIds (opt-in)       arrays read a role's folder from the manifest `id` (own scans per role)
 //   TextureSets.options.maxAnisotropy (opt-in)     caps the anisotropy of the texture arrays and loadTextureSet maps
 //                                                  (unset = the GPU maximum, as before; e.g. a tier's textures.anisotropy)
-//   loadTextureManifest(base?)                     -> manifest | null (never throws)
-//   loadTextureSet(id, { renderer, base, manifest, maps?, ktx2? })
+//   loadTextureManifest(base?, { quiet? })         -> manifest | null (never throws; warns once per missing root)
+//   loadTextureSet(id, { renderer, base, manifest, maps?, ktx2?, basisPath?, quiet? })   id: set id or role key
 //                                                  -> { map, normalMap, roughnessMap, aoMap?, size } | null
 //        (KTX2 CompressedTextures when the manifest set has `ktx2: true` and the GPU has ASTC / BC7 / ETC2 / BC1,
 //         else JPG; see "KTX2" below)
@@ -244,9 +244,29 @@ export function basisPath() {
   return `${b}basis/`;
 }
 
-/** Fetch `${base}manifest.json`; null when missing or offline (never throws). */
-export async function loadTextureManifest(base = textureBase()) {
-  try { const r = await fetch(`${base}manifest.json`); if (r.ok) return await r.json(); } catch { /* offline */ }
+const _warnedTex = new Set();
+/** console.warn once per key (missing manifests and sets: a game sees the problem once, not per call). */
+function warnTex(key, msg) { if (_warnedTex.has(key)) return; _warnedTex.add(key); console.warn(msg); }
+
+/**
+ * Fetch `${base}manifest.json`; null when missing or offline (never throws). A missing or unreadable manifest is
+ * reported once per `base` with console.warn (`quiet: true` turns that off, e.g. for an optional root).
+ * @param {string} [base]  texture root (a folder URL ending in '/'); default textureBase()
+ * @param {{ quiet?: boolean }} [o]
+ * @returns {Promise<TextureManifest|null>}
+ */
+export async function loadTextureManifest(base = textureBase(), { quiet = false } = {}) {
+  let why = '';
+  try {
+    const r = await fetch(`${base}manifest.json`);
+    if (r.ok) return await r.json();
+    why = `HTTP ${r.status}`;
+  } catch (e) { why = e && e.message ? e.message : String(e); /* offline, or not JSON (a dev server's HTML fallback) */ }
+  if (!quiet) {
+    warnTex(`manifest:${base}`, `[TextureSets] no texture manifest at ${base}manifest.json (${why}): loadTextureSet() calls on this root `
+      + 'will try the files without one. Pass `base` = the folder that holds manifest.json and the set folders '
+      + "(the samples here use e.g. base: `${import.meta.env.BASE_URL}nyc/textures/`)");
+  }
   return null;
 }
 
@@ -254,11 +274,13 @@ const _manifests = new Map();
 /**
  * loadTextureManifest once per texture root per page: every caller of the same `base` shares one request (and one
  * result, null included). The world layer's loaders use it, so a root's manifest.json is fetched once however many
- * of them ask.
+ * of them ask. Quiet: a missing manifest is not reported (the world layer's roots are optional).
+ * @param {string} [base]
+ * @returns {Promise<TextureManifest|null>}
  */
 export function sharedTextureManifest(base = textureBase()) {
   let p = _manifests.get(base);
-  if (!p) { p = loadTextureManifest(base); _manifests.set(base, p); }
+  if (!p) { p = loadTextureManifest(base, { quiet: true }); _manifests.set(base, p); } // optional roots (world layer)
   return p;
 }
 /** True when `manifest` lists a set with this id (or has no set list to go by: null / malformed counts as "unknown, try"). */
@@ -288,7 +310,7 @@ const MAP_FILES = { map: ['diff.jpg', true, 'Diffuse'], normalMap: ['nor_gl.jpg'
 const ARRAY_MAPS = ['map', 'normalMap', 'roughnessMap', 'aoMap'];
 
 // ------------------------------------------------------------------ KTX2 (Basis Universal) path + stats
-// engine/tools/compress-textures.mjs writes <id>/{diff,nor_gl,rough,ao}.ktx2 (Y-flipped, so the data matches the JPGs
+// tools/compress-textures.mjs writes <id>/{diff,nor_gl,rough,ao}.ktx2 (Y-flipped, so the data matches the JPGs
 // uploaded with flipY) and lists them per set in the manifest: `ktx2Maps: { Diffuse|nor_gl|Rough|AO: { file, bytes,
 // srcBytes, codec, ... } }` (+ `ktx2: true` when every map has one; the loader goes by the per-map entries).
 // loadTextureSet turns them into CompressedTextures through one shared KTX2Loader (transcoded off-thread to ASTC / BC7
@@ -694,18 +716,71 @@ function procJob(kind, seed, tint, prio) {
 }
 
 /**
+ * @typedef {object} TextureManifestSet  one entry of manifest.json `sets` (keyed by its role, e.g. 'grass')
+ * @property {string} id  folder name of the set under the texture root (e.g. 'leafy_grass')
+ * @property {number[]} [size]  [w, h] metres covered by one tile of the texture
+ * @property {Object<string, string>} [maps]  source file per map
+ * @property {boolean} [ktx2]  .ktx2 twins exist (ktx2Maps lists them)
+ * @property {Object<string, object>} [ktx2Maps]
+ */
+/**
+ * @typedef {{ sets: Object<string, TextureManifestSet>, [key: string]: any }} TextureManifest  a texture root's
+ *   manifest.json (loadTextureManifest): `sets` maps a role key ('grass') to its set ({ id: 'leafy_grass', ... })
+ */
+/**
+ * @typedef {object} TextureSetOptions
+ * @property {import('three').WebGLRenderer|null} [renderer]  needed for KTX2 and the anisotropy cap
+ * @property {string} [base]  texture root: the folder (URL ending in '/') holding manifest.json and one folder per set
+ *   id. Default textureBase() (`${BASE_URL}textures/`, or TextureSets.configure({ base })). The samples keep theirs
+ *   under samples/public/<demo>/textures/, so pass it.
+ * @property {TextureManifest|null} [manifest]  from loadTextureManifest(base): sets it does not list resolve to null
+ *   without fetching (with a warning)
+ * @property {Array<'map'|'normalMap'|'roughnessMap'|'aoMap'>} [maps]  which maps to fetch (default map, normalMap,
+ *   roughnessMap)
+ * @property {number} [defaultSize=2]  `size` of the result when the manifest gives none (metres per tile)
+ * @property {boolean} [ktx2]  false forces the JPGs for this call
+ * @property {string} [basisPath]  KTX2 transcoder folder for this load (same as TextureSets.configure({ basisPath }),
+ *   which it sets; default basisPath())
+ * @property {boolean} [quiet=false]  no console warning when the set is missing (optional sets)
+ */
+/**
+ * @typedef {object} TextureSetResult
+ * @property {import('three').Texture} map  albedo (sRGB, repeat-wrapped)
+ * @property {import('three').Texture|null} [normalMap]  OpenGL-convention normals (linear); null when its file is missing
+ * @property {import('three').Texture|null} [roughnessMap]  linear; null when missing
+ * @property {import('three').Texture|null} [aoMap]  linear, only when `maps` asked for it
+ * @property {number} size  metres covered by one tile: repeat = surface size / size (e.g. tex.map.repeat.set(80 / size, 80 / size))
+ */
+/**
  * Load one set as plain THREE textures: `.ktx2` CompressedTextures when the manifest lists them and the renderer has a
  * compressed format (see KTX2 notes above), otherwise browser-decoded JPGs (TextureLoader, flipY). Repeat-wrapped, max
  * anisotropy (capped by TextureSets.options.maxAnisotropy when set), sRGB albedo / linear data. `maps`: which of
- * map / normalMap / roughnessMap / aoMap to fetch. With a manifest, a set id it does not list resolves to null without
- * fetching. Returns null when the albedo is missing.
- * `ktx2: false` forces the JPGs for this call. Never throws.
- * @param {string} id
- * @param {{ renderer?: import('three').WebGLRenderer|null, base?: string, manifest?: object|null, maps?: string[], defaultSize?: number, ktx2?: boolean }} [o]
+ * map / normalMap / roughnessMap / aoMap to fetch. `id` is the set's folder id ('leafy_grass') or its role key in the
+ * manifest ('grass'). With a manifest, a set it does not list resolves to null without fetching. Returns null when
+ * the albedo is missing. Both null cases print one console warning per set naming what was looked for (`quiet: true`
+ * turns it off). `ktx2: false` forces the JPGs for this call. Never throws.
+ *
+ *   const base = `${import.meta.env.BASE_URL}nyc/textures/`;
+ *   const tex = await loadTextureSet('leafy_grass', { renderer, base, manifest: await loadTextureManifest(base) });
+ *   if (tex) { tex.map.repeat.set(80 / tex.size, 80 / tex.size); material.map = tex.map; }
+ * @param {string} id  set id (folder name) or role key
+ * @param {TextureSetOptions} [o]
+ * @returns {Promise<TextureSetResult|null>}
  */
-export async function loadTextureSet(id, { renderer = null, base = textureBase(), manifest = null, maps = ['map', 'normalMap', 'roughnessMap'], defaultSize = 2, ktx2 } = {}) {
-  const m = manifest && manifest.sets && Object.values(manifest.sets).find((e) => e.id === id);
-  if (manifest && !m) return null;
+export async function loadTextureSet(id, { renderer = null, base = textureBase(), manifest = null, maps = ['map', 'normalMap', 'roughnessMap'], defaultSize = 2, ktx2, basisPath: bp, quiet = false } = {}) {
+  if (bp) TextureSets.configure({ basisPath: bp });
+  const sets = manifest && manifest.sets && typeof manifest.sets === 'object' ? manifest.sets : null;
+  // a set id first; else a role key ('grass' -> its set 'leafy_grass')
+  let m = sets && Object.values(sets).find((e) => e && e.id === id);
+  if (sets && !m && sets[id] && typeof sets[id].id === 'string') { m = sets[id]; id = m.id; }
+  if (sets && !m) {
+    if (!quiet) {
+      const ids = Object.values(sets).map((e) => e && e.id).filter(Boolean);
+      warnTex(`set:${base}${id}`, `[TextureSets] loadTextureSet('${id}'): ${base}manifest.json lists no set with that id or role; `
+        + `returning null. Set ids: ${ids.join(', ') || '(none)'}; roles: ${Object.keys(sets).join(', ') || '(none)'}`);
+    }
+    return null;
+  }
   const st = beginStat('set', id);
   const kx = m && m.ktx2Maps && ktx2Wanted(ktx2) ? ktx2Support(renderer) : null;
   const finish = (t, srgb) => {
@@ -729,9 +804,15 @@ export async function loadTextureSet(id, { renderer = null, base = textureBase()
   const out = {};
   maps.forEach((k, i) => { out[k] = got[i]; });
   endStat(st);
-  if (!out.map) return null;
+  if (!out.map) {
+    if (!quiet) {
+      warnTex(`set:${base}${id}`, `[TextureSets] loadTextureSet('${id}'): no albedo at ${base}${id}/${MAP_FILES.map[0]}${m && m.ktx2Maps ? ' (or its .ktx2)' : ''}; `
+        + `returning null. \`base\` must be the folder holding the set folders${manifest ? '' : ' (and manifest.json: pass manifest: await loadTextureManifest(base))'}`);
+    }
+    return null;
+  }
   out.size = m && m.size ? m.size[0] : defaultSize;
-  return out;
+  return /** @type {TextureSetResult} */ (out);
 }
 
 /**
@@ -761,7 +842,7 @@ export async function makeTextureArray(renderer, sets, { size = 1024, base = tex
   if (manifest === undefined) {
     // boot the transcode workers while the manifest loads (they retire after 10 s idle if it lists no .ktx2)
     if (ktx2Wanted(ktx2) && TextureSets.options.arrayKtx2 !== false && !_rgbaFailed && typeof Worker !== 'undefined') rgbaPool();
-    manifest = await loadTextureManifest(base);
+    manifest = await loadTextureManifest(base, { quiet: true }); // optional: missing sets fall back to procedural layers
   }
   sets = sets.map((s) => {
     const m = manifest && manifest.sets && manifest.sets[s.role];

@@ -2,7 +2,7 @@
 // AABB grid, heightfield, dynamic providers, casts) the vehicle and character controllers drive on; DynamicsWorld
 // (dynamics/) is the unified XPBD rigid-body solver that plugs into it through attachToPhysicsWorld (0.6.0).
 export { PhysicsWorld, LAYER, layerOf, namedLayers, setNamedLayers } from './PhysicsWorld.js';
-export { VehicleController, ROADSTER_SPEC, resolveVehicleSpec, G, WHEEL_LOCAL, THRUSTER } from './VehicleController.js';
+export { VehicleController, ROADSTER_SPEC, ROAD_CAR_SPEC, resolveVehicleSpec, G, WHEEL_LOCAL, THRUSTER } from './VehicleController.js';
 export { obbVsAabb, obbFromPose, sweepToContact, bounceVelocity, rayAabb, sphereCastAabb, closestPointOnAabb, aabbOverlap } from './collision.js';
 export { ColliderGrid, polygonToBoxes, SegmentHash, Raster, MinHeap } from './spatial.js';
 export { CharacterController } from './CharacterController.js';
@@ -25,3 +25,7 @@ export { ParticleStore, ParticleConstraints, PFLAG, PCON, Cloth, Rope } from './
 export { SoftBody, SoftSkin, VolumeConstraints, tetrahedralize } from './dynamics/softbody.js';
 export { ParticleCollider, Buoyancy, closestPointOnShape, sampleShape } from './dynamics/coupling.js';
 export { FracturedBody, fracturePieces, splitConvex, FRACTURE_BREAK_FORCE, FRACTURE_COMPLIANCE } from './dynamics/fracture.js';
+/** @typedef {import('./VehicleController.js').VehicleSpec} VehicleSpec  a full or partial vehicle spec */
+/** @typedef {import('./VehicleController.js').VehicleControls} VehicleControls  what VehicleController.step reads */
+/** @typedef {import('./PhysicsWorld.js').StaticBoxSpec} StaticBoxSpec  addStaticBox's object form */
+/** @typedef {import('./dynamics/DynamicsWorld.js').AddBodyOptions} AddBodyOptions  DynamicsWorld.addBody options */

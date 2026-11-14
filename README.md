@@ -9,6 +9,7 @@ A game engine for the web browser, built on Three.js and WebGL2. Physics, render
 city-scale worlds come as plain JavaScript modules in one package, `@vibe/engine`. Its only dependency is `three`.
 
 **[Live demos](https://brandeispatrick.github.io/web-engine/)** ·
+**[Build a game (AGENTS.md)](AGENTS.md)** ·
 **[Documentation](ENGINE.md)** ·
 **[Changelog](CHANGELOG.md)** ·
 **[Releases](https://github.com/BrandeisPatrick/web-engine/releases)**
@@ -38,6 +39,10 @@ in the URL forces one.
 
 [Before and after](docs/BEFORE-AFTER.md) shows what changed on screen in the latest release.
 
+The **[asset library](docs/ASSETS.md)** lists every asset the repository has, downloaded or made in code, with its
+credit, where it lives and the code that loads or creates it. On the samples site it is a browsable page with 3D
+previews (`samples/assets/`); the same data is in `samples/public/catalog/catalog.json` for tools and agents.
+
 ## Features
 
 | Area | What it provides |
@@ -48,11 +53,19 @@ in the URL forces one.
 | **Animation** | State machine with blend trees, two-bone and CCD inverse kinematics, ragdolls |
 | **Input and camera** | Keyboard, mouse, gamepad and touch (floating sticks, safe-area aware); chase, orbit, free-fly, third-person and first-person rigs |
 | **Audio and UI** | Synthesised music and effects, positional sound, sample playback; DOM HUD widgets and a settings menu |
-| **Worlds** | City worlds baked from OpenStreetMap and terrain data: roads, buildings, props, vegetation, water, tile streaming and traffic |
+| **Worlds** | City worlds baked from OpenStreetMap and terrain data: roads, buildings, props, vegetation, water, tile streaming and traffic. Built for map-scale cities; a small track or arena uses `PhysicsWorld` with a heightfield and its own meshes |
 
 The source is plain ES modules with JSDoc types. TypeScript declarations ship with the package.
 
 ## Getting started
+
+### Start a game from a starter
+
+The quickest way in is to copy a starter: `samples/starter-walk/` (a third-person walker with an animated character)
+or `samples/starter-drive/` (a car on a road). Each is one `main.js` of under 200 lines that uses only the public
+imports. Copy the folder to `samples/<name>/`, run `npm run dev` and open `http://localhost:5190/<name>/`.
+[AGENTS.md](AGENTS.md) is the short guide (commands, conventions, the API by task, known traps) and
+[docs/HOWTO.md](docs/HOWTO.md) has one tested recipe per task.
 
 ### Run the demos locally
 
@@ -62,8 +75,8 @@ Requires Node 20.19 or newer.
 git clone https://github.com/BrandeisPatrick/web-engine.git
 cd web-engine
 npm install
-npm run dev     # the demos at http://localhost:5190
-npm test        # 42 headless test suites
+npm run dev     # the demos and starters at http://localhost:5190
+npm test        # the headless test suites (Node, no browser)
 ```
 
 ### Use the engine in a project
@@ -91,14 +104,17 @@ const postfx = new PostFX(renderer, scene, camera, {
   aa: 'taa',
 });
 engine.renderFn = (sc, cam, dt) => postfx.render(dt);
+engine.onResize = (w, h, pr) => postfx.setSize(w, h, pr); // keep PostFX at the window size
 
 engine.addSystem({ lateUpdate: (dt) => atmosphere.update(camera.position, dt) }, 'world');
 await engine.load();
 engine.start();
 ```
 
-The full API is in [ENGINE.md, "Engine API"](ENGINE.md#engine-api). Each demo's `main.js` under `samples/` is a
-complete example.
+The API, layer by layer, is in [ENGINE.md](ENGINE.md). For a whole game to copy, start from a starter (above). The
+demos under `samples/` are full games spread over many modules each; read them for one technique at a time rather
+than as a template. Using the engine from another project, and which files to copy with it:
+[AGENTS.md](AGENTS.md#using-the-engine-from-another-project).
 
 ### Entry points
 
@@ -106,15 +122,15 @@ Import everything from `@vibe/engine`, or one layer at a time:
 
 | Import | Contents |
 |---|---|
-| `@vibe/engine/core` | `Engine`, `Profiler`, `Assets`, `Events`, `Clock`, deterministic math, quality tiers (`resolveQuality`), the bench harness |
-| `@vibe/engine/physics` | `PhysicsWorld`, `VehicleController`, `CharacterController`, `DynamicsWorld`, `Cloth`, `Rope`, `SoftBody`, `Buoyancy`, `FracturedBody` |
-| `@vibe/engine/render` | `Atmosphere`, `PostFX`, `ClusteredLights`, `GpuParticleSystem`, `TextureSets`, shadows, instancing and LOD |
+| `@vibe/engine/core` | `Engine`, `Profiler`, `Assets`, `Events`, `Clock`, deterministic math, `PoseInterpolator`, quality tiers (`resolveQuality`), the bench harness |
+| `@vibe/engine/physics` | `PhysicsWorld`, `VehicleController` (+ `ROAD_CAR_SPEC`), `CharacterController`, `DynamicsWorld`, `Cloth`, `Rope`, `SoftBody`, `Buoyancy`, `FracturedBody` |
+| `@vibe/engine/render` | `Atmosphere`, `PostFX`, `ClusteredLights`, `GpuParticleSystem`, `NearestLights`, `TextureSets`, shadows, instancing and LOD |
 | `@vibe/engine/anim` | `AnimationController`, `TwoBoneIK`, `CCDIK`, `Ragdoll` |
 | `@vibe/engine/input` | `InputMap`, `TouchControls`, `VehicleInput`, `CharacterInput`, `PointerLock` |
 | `@vibe/engine/camera` | `ChaseRig`, `OrbitRig`, `FreeFlyRig`, `ThirdPersonRig`, `FirstPersonRig` |
-| `@vibe/engine/audio` | `AudioBus`, `SamplePlayer` |
-| `@vibe/engine/ui` | HUD widgets, `QualityMenu` |
-| `@vibe/engine/world` | `MapWorld` and its systems: terrain, roads, buildings, props, traffic, vegetation, water, `TileStreamer` |
+| `@vibe/engine/audio` | `AudioBus`, synth voices (`playTone`, ...), `PositionalAudio`, `SamplePlayer`, `VehicleAudio`, `CityAmbience` |
+| `@vibe/engine/ui` | HUD widgets (`UILayer`, `Panel`, `Readout`, `Gauge`, ...), `QualityMenu` |
+| `@vibe/engine/world` | `MapWorld` and its systems: terrain, roads, buildings, props, traffic, vegetation, water, `TileStreamer` (and a re-export of `NearestLights`) |
 
 ## Performance
 
@@ -139,9 +155,13 @@ changed in each.
 
 ## Documentation
 
-- [ENGINE.md](ENGINE.md): design notes, the API, measurements and the record of decisions.
+- [AGENTS.md](AGENTS.md): the short guide for building a game, for people and coding agents.
+- [docs/HOWTO.md](docs/HOWTO.md): one recipe per task, each a checked copy of code that runs.
+- [ENGINE.md](ENGINE.md): the reference: what the engine provides today, layer by layer.
+- [docs/DESIGN-NOTES.md](docs/DESIGN-NOTES.md): design history, measurements and the record of decisions.
 - [CHANGELOG.md](CHANGELOG.md): what changed in each release.
 - [docs/BEFORE-AFTER.md](docs/BEFORE-AFTER.md): captures of the demos before and after the latest release.
+- [docs/ASSETS.md](docs/ASSETS.md): the asset catalogue, generated by `tools/catalog-assets.mjs`.
 - [bench/README.md](bench/README.md): how performance is scored and guarded.
 - [tools/README.md](tools/README.md): the map, terrain and texture bakers.
 
@@ -156,10 +176,11 @@ changed in each.
 |---|---|
 | `npm run dev` | Serves the demos at http://localhost:5190 |
 | `npm run build` | Builds every demo into `dist/`; `npm run preview` serves the build at http://localhost:5191 |
-| `npm test` | Runs the 42 headless suites |
+| `npm test` | Runs every headless suite listed in `test/all.mjs` |
+| `npm run catalog` | Rebuilds the asset catalogue (`samples/public/catalog/catalog.json`, `docs/ASSETS.md`) from `tools/asset-registry.mjs`; `npm run catalog:thumbs -- --only=<id>` renders thumbnails in Chrome |
 | `npm run types` | Emits TypeScript declarations into `types/`; `npm run types:check` compiles a strict TypeScript consumer against them |
 | `npm run smoke` | Drives the demos in Chrome with Playwright and checks stability and the look limits |
-| `npm run bench` | Measures frame times per pose (ENGINE.md, "Measurement protocol") |
+| `npm run bench` | Measures frame times per pose ([design notes, "Measurement protocol"](docs/DESIGN-NOTES.md#measurement-protocol)) |
 | `npm run perf` | Computes the performance score and compares it with the committed baseline; `bench/LOOP.md` is the runbook for an unattended optimisation loop |
 | `npm run deploy` | Builds and publishes the live site. It is deployed separately and may trail `main` |
 | `npm run pack:check` | Lists the package tarball |
@@ -172,8 +193,9 @@ Installed as a git submodule listed in a game's `workspaces`, the engine resolve
 - `?quality=desktop|mobile` overrides the stored tier and the device's recommendation for that page load
   (`resolveQuality` in `src/core/Quality.js`; the menu is `QualityMenu` in `src/ui/`). The Halloween game also reads
   the old `low|high`.
-- `?bench=1&size=WxH` exposes `window.__sample` (poses, settings, `run(plan)`) in the NYC and Miami demos. The
-  Halloween game exposes `window.__game` instead.
+- `window.__sample` is the bench harness (poses, settings, `run(plan)`; `createBenchHarness` in `src/core/Bench.js`):
+  always on in the NYC and Miami demos, only under `?bench=1` in the Halloween game, which also exposes its round
+  state as `window.__game`. `?bench=1&size=WxH` freezes the loop at load and pins the drawing buffer size.
 - Render flags shared by the demos are in `samples/shared/fx-flags.js`: `?gbuffer=1`, `?aa=taa|fxaa|msaa`,
   `?shadows=pcf|fast|pcss`, `?cascades=2|3|4`, `?ssr=1`, `?volumetric=1`, `?motionblur=1`, `?dof=1`,
   `?lut=warm|bleach`, `?aonormals=gbuffer`, `?fps=60`.
@@ -183,7 +205,7 @@ Installed as a git submodule listed in a game's `workspaces`, the engine resolve
 
 ### Tests
 
-`npm test` runs 42 suites in Node, with no browser:
+`npm test` runs the suites listed in `test/all.mjs` in Node, with no browser:
 
 - `test/car-sim.mjs`: the vehicle model (`ROADSTER_SPEC`) and the PhysicsWorld queries; the determinism gate
   (bit-identical since 0.4.0).
@@ -194,29 +216,45 @@ Installed as a git submodule listed in a game's `workspaces`, the engine resolve
   input, animation and the character controller.
 - `test/dyn-*.mjs`, `cloth-mesh`, `character-dyn`, `ragdoll`: the dynamics, from shapes and joints to cloth, soft
   bodies, buoyancy and fracture.
-- `test/gpu-particles.mjs`, `clustered`, `shadows`, `skip-unlit`, `postfx-options`, `gbuffer-chunks`, `ssr-ao`,
-  `volumetric`, `blur-dof-lut`, `water`: the render pipeline's shaders, options and defaults.
+- `test/gpu-particles.mjs`, `clustered`, `shadows`, `skip-unlit`, `postfx-options`, `render-scale`, `gbuffer-chunks`,
+  `ssr-ao`, `volumetric`, `blur-dof-lut`, `water`: the render pipeline's shaders, options and defaults.
 - `test/halloween-enemies.mjs`, `halloween-depth`, `miami-car`, `nyc-traffic-mix`: the demos' rules and engine
   options.
+- `test/agent-usability.mjs`: the APIs the starters rely on (road-car spec, texture ids, clip errors, static boxes).
+- `test/docs.mjs`: the docs name only paths, links and `@vibe/engine` imports that exist, and every recipe in
+  docs/HOWTO.md equals its marked source region. `test/howto.mjs` runs the Node recipes (`test/howto/recipes.js`).
+- `test/asset-catalog.mjs`: the asset catalogue is in step with the files (every `samples/public` file covered,
+  credits complete, generated `catalog.json` and `docs/ASSETS.md` current).
 
-`test/browser/` (`smoke`, `bench`, `perf`, `halloween`) needs Chrome and runs locally; `smoke` and `bench` also take
-the `-mobile` pages (`nyc-night-mobile`, `miami-drive-mobile`: the same demo on the mobile tier). CI
-(`.github/workflows/ci.yml`, Node 26) runs `npm test`, the build and `types:check`.
+`test/browser/` (`smoke`, `bench`, `perf`, `halloween`, `halloween-media`, `howto`, `check-page`) needs Chrome and
+runs locally. `smoke` covers the demos and the starters, each also as a `-mobile` page (the same page on the mobile
+tier); `bench` takes `nyc-night`, `miami-drive` and their `-mobile` pages. `howto` runs the browser-only recipes
+(clustered lights, GPU particles, vehicle sound) on the starter-drive page; `check-page <name>` loads one page and
+fails on any error. The scripts share `test/browser/playwright.config.mjs` (`startVite`, `launchChrome`,
+`loadSample`, `watchErrors`) and wait for the page to set `window.__sample.ready` (`createBenchHarness(...)
+.setReady()`); a page without it fails after the timeout. CI (`.github/workflows/ci.yml`, Node 26) runs `npm test`,
+the build and `types:check`.
+
+### Adding a sample page
+
+Put it in `samples/<name>/index.html` (copying a starter folder is the quickest way). `vite.config.js` finds every
+such folder, so the dev server serves it at `/<name>/` and `npm run build` includes it; `public`, `shared` and `dev`
+are not pages. Add a link in `samples/index.html`.
 
 ### Source layout
 
 - `src/core/`: `Engine`, `Profiler`, `Assets`, `Events`, `Clock`, `Entity`, deterministic math, the bench harness,
-  the quality tiers (`Quality.js`).
+  the quality tiers (`Quality.js`), `PoseInterpolator`.
 - `src/physics/`: `PhysicsWorld`, `VehicleController`, `CharacterController`, and `dynamics/` (the XPBD solver,
   `Cloth`, `Rope`, `SoftBody`, `Buoyancy`, `FracturedBody`, a Worker client).
-- `src/render/`: `Atmosphere`, `PostFX`, `ClusteredLights`, shadows, `GpuParticleSystem`, instancing / LOD /
+- `src/render/`: `Atmosphere`, `PostFX`, `ClusteredLights`, `NearestLights`, shadows, `GpuParticleSystem`, instancing / LOD /
   impostors, `TextureSets` (KTX2), `SoftMeshes`, `FractureMesh`, `PhysicsDebug`.
 - `src/anim/`: `AnimationController`, `TwoBoneIK`, `CCDIK`, `Ragdoll`.
 - `src/input/`, `src/camera/`, `src/audio/`, `src/ui/`: input maps and touch controls, camera rigs, `AudioBus` and
   synth voices, HUD widgets.
 - `src/world/`: `MapWorld` and its systems (terrain, roads, buildings, props, traffic, vegetation, water). The data
-  contracts are in ENGINE.md, "World layer".
-- `samples/`: the demos; `tools/`: the data bakers ([tools/README.md](tools/README.md)); `bench/`: the performance
+  contracts are in [ENGINE.md, "World"](ENGINE.md#world).
+- `samples/`: the demos and the two starters; `tools/`: the data bakers ([tools/README.md](tools/README.md)); `bench/`: the performance
   budgets and runbook.
 
 </details>
@@ -228,7 +266,7 @@ the `-mobile` pages (`nyc-night-mobile`, `miami-drive-mobile`: the same demo on 
   (CC0), and the Miami hero car is the Khronos glTF sample "Car Concept" (CC-BY 4.0, logos removed).
 - Each demo lists every file, author and licence in its own credits:
   [NYC](samples/public/nyc/CREDITS.md), [Miami](samples/public/miami/CREDITS.md),
-  [Halloween](samples/public/halloween/CREDITS.md).
+  [Halloween](samples/public/halloween/CREDITS.md). [docs/ASSETS.md](docs/ASSETS.md) has them all in one list.
 
 The engine and its demos were built with Claude (AI agents).
 

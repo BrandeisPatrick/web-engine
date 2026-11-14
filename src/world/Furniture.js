@@ -345,7 +345,15 @@ export function makeDecalGeometry() {
 }
 
 // ------------------------------------------------------------------ materials
-/** Furniture: vertex colour x instance colour (paint mask), per-vertex roughness/metalness, night emission. */
+/**
+ * @typedef {THREE.MeshStandardMaterial & { userData: { u: { uNight: { value: number } } } }} FurnitureMaterial
+ *   A furniture material: `material.userData.u.uNight.value` (0 day .. 1 night) lights lamp heads and screens.
+ */
+/**
+ * Furniture: vertex colour x instance colour (paint mask), per-vertex roughness/metalness, night emission.
+ * `m.userData.u.uNight.value = 1` turns the lamp heads and screens on.
+ * @returns {FurnitureMaterial}
+ */
 export function createFurnitureMaterial() {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.3 });
   const u = { uNight: { value: 0 } };
@@ -381,6 +389,10 @@ vEmit = color * aSurf.z * uNight;`);
 /**
  * Sign panels / decals from the atlas: per-instance aUvA (front rect), aUvB (back rect), aGlow (night
  * emission); vertex-shader distance cull (uCull). decal: polygon offset for road decals.
+ * @param {THREE.Texture|null} [atlas]
+ * @param {{ decal?: boolean, cull?: number }} [o]
+ * @returns {THREE.MeshStandardMaterial & { userData: { u: { uNight: { value: number }, uCull: { value: number } } } }}
+ *   `userData.u.uNight.value` (0 day .. 1 night) lights the glowing panels; `userData.u.uCull.value` is the cull distance (m)
  */
 export function createPanelMaterial(atlas, { decal = false, cull = 400 } = {}) {
   const m = new THREE.MeshStandardMaterial({

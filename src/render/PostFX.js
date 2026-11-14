@@ -922,6 +922,11 @@ export class PostFX {
   /**
    * Per-object velocity for dynamic meshes (GBuffer.track). PostFX keeps the list and replays it whenever the
    * G-buffer is (re)built, so call it once, G-buffer on or off. Returns the meshes tracked now (0 while it is off).
+   * A material shared with other meshes is copied for the tracked mesh (a console.info note, nothing to do).
+   *   postfx.track(carGroup);  postfx.track(characterModel);   // after adding them to the scene
+   * @param {THREE.Object3D} object3d  every Mesh under it is tracked
+   * @param {{ clone?: boolean }} [opts]  clone: always give the tracked meshes their own material copies
+   * @returns {number}
    */
   track(object3d, opts) {
     if (!object3d) return 0;
@@ -930,6 +935,7 @@ export class PostFX {
     return this.gbuffer ? this.gbuffer.track(object3d, opts) : 0;
   }
 
+  /** @param {THREE.Object3D} object3d */
   untrack(object3d) {
     const i = this._tracked.indexOf(object3d);
     if (i >= 0) { this._tracked.splice(i, 1); this._trackOpts.splice(i, 1); }

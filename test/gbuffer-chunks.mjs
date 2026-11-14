@@ -17,8 +17,9 @@ function check(name, ok, detail = '') {
   if (ok) passes++; else { failures++; console.log(`FAIL  ${name}${detail ? `  (${detail})` : ''}`); }
   return ok;
 }
-const warns = [];
+const warns = [], infos = [];
 console.warn = (...a) => warns.push(a.join(' '));
+console.info = (...a) => infos.push(a.join(' '));
 
 // ---- a minimal GLSL preprocessor: evaluates only conditionals that name ENGINE_* / gl_FragColor --------------------
 function evalCond(kind, rest, defs) {
@@ -442,9 +443,10 @@ const W = 'ENGINE_GBUFFER', Z = 'ENGINE_GBUFFER_ZERO', NV = 'ENGINE_GBUFFER_NOVE
   scene.add(car, other, solo, skinlike);
   const gb = new G.GBuffer(fakeRenderer());
   gb.sync(scene);
-  warns.length = 0;
+  warns.length = 0; infos.length = 0;
   check('track(): returns meshes tracked', gb.track(car) === 1 && gb.track(skinlike) === 2 && gb.track(car) === 0);
-  check('track(): shared material cloned (warned once), the other mesh keeps the original', car.material !== shared && other.material === shared && warns.filter((w) => w.includes('shared')).length === 1);
+  check('track(): shared material cloned (an info note once, no warning), the other mesh keeps the original', car.material !== shared && other.material === shared
+    && infos.filter((w) => w.includes('shared') && w.includes('nothing to do')).length === 1 && !warns.some((w) => w.includes('shared')));
   check('track(): clone keeps G-buffer + own defines, adds ENGINE_GBUFFER_PREV', has(car.material, W) && has(car.material, 'STANDARD') && has(car.material, 'ENGINE_GBUFFER_PREV') && !has(shared, 'ENGINE_GBUFFER_PREV'));
   gb.track(solo);
   const soloMat = solo.material;

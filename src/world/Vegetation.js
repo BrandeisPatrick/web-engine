@@ -87,6 +87,21 @@ const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vect
 
 const ruleTest = (r, name) => (typeof r.road === 'function' ? !!r.road(name) : r.road.test(name));
 
+/**
+ * @typedef {object} TreeMeshes  what buildTreeMeshes returns
+ * @property {THREE.Object3D|null} group  add it to the scene (null when there are no trees, or outside a page: Node builds the colliders only)
+ * @property {number} count  trees planted
+ * @property {object} [stats]  build statistics (per species counts, buildMs)
+ * @property {(dt: number, cameraPos?: THREE.Vector3, darkness?: number, time?: number) => void} update  once per frame:
+ *   wind time (seconds; dt is added when `time` is left out) and the near / impostor split around `cameraPos`
+ */
+/**
+ * Plant procedural trees (see the header for the placement fields, rules and mix).
+ * @param {Array<{ x: number, z: number, s?: number, hue?: number, kind?: string, ctx?: object }>} placements
+ * @param {{ groundAt?: (x: number, z: number) => number, colliders?: any, seed?: number, rules?: any[], mix?: object }} [opts]
+ *   groundAt(x, z): the ground height under a tree (default 0)
+ * @returns {TreeMeshes}
+ */
 export function buildTreeMeshes(placements, { groundAt = () => 0, colliders = null, seed = 1, rules = [], mix = null } = {}) {
   const n = Math.min(placements.length, MAX_TREES);
   if (!n) return { group: null, count: 0, update() {} };

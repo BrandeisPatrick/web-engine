@@ -14,7 +14,7 @@
 //    'island' = > 1.5 km2, 'small') drives the ground material blend (createGroundMaterial); instanced scrub / tree
 //    blobs on the islands and natural hills; low instanced city blocks over the mainland outside the filler ring
 //    and on the `islandFill` island's flat ground (lit windows at night); FarLand: the real relief beyond the map
-//    square (farland.json, engine/tools/bake-farland.mjs) with city blocks on the flats, optional container cranes
+//    square (farland.json, tools/bake-farland.mjs) with city blocks on the flats, optional container cranes
 //    on a waterfront (`farland` options), depth-compressed into the camera far plane and hazed with a
 //    height-dependent extension of the scene fog. One draw call each.
 //  - boats (Boats.js): ferries, a container ship and sailboats with wakes (routes from the `boats` options).

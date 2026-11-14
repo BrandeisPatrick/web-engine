@@ -1,5 +1,5 @@
 // VehicleController: arcade-realistic wheeled vehicle with an optional thruster flight package.
-// Pure simulation (THREE math only, no scene graph, no DOM) so it runs in Node (tools/car-sim.mjs).
+// Pure simulation (THREE math only, no scene graph, no DOM) so it runs in Node (test/car-sim.mjs).
 // Parameterised by a plain `spec` object; ROADSTER_SPEC reproduces the Roadster.
 //
 // Frame conventions (Three.js): Y up, vehicle forward = local -Z, right = local +X.
@@ -45,9 +45,14 @@ export const G = 9.81;
 const RHO = 1.225;
 const DEG = Math.PI / 180;
 
+/** @template T @param {T} o @returns {Readonly<T>} */
 const deepFreeze = (o) => { for (const v of Object.values(o)) if (v && typeof v === 'object') deepFreeze(v); return Object.freeze(o); };
 
-/** The Roadster: electric hypercar (tri-motor AWD) with a cold-gas thruster package. */
+/**
+ * The Roadster: electric hypercar (tri-motor AWD, 2 t, 1 MW, ~400 km/h) WITH a cold-gas thruster package (it flies on
+ * a lift input). It is VehicleController's default spec and the base every partial spec is merged over; for an
+ * ordinary car use ROAD_CAR_SPEC.
+ */
 export const ROADSTER_SPEC = deepFreeze({
   // ---- chassis --------------------------------------------------------------------------------
   mass: 2000,
@@ -155,6 +160,41 @@ export const ROADSTER_SPEC = deepFreeze({
   autoRightTau: 0.35,
 });
 
+/**
+ * An ordinary road car: a ~1.35 t rear-drive hatchback with ~110 kW, 0-100 km/h in ~7.5 s, ~190 km/h top speed, no
+ * thrusters (flight: false: lift inputs do nothing, jumps are ballistic), no damage, steady street tyres. A partial
+ * spec: VehicleController merges it over ROADSTER_SPEC and derives the wheel / body contact points and the pitch /
+ * roll inertia from these dimensions, so `{ ...ROAD_CAR_SPEC, length: 4.8 }` re-derives them too.
+ *
+ *   const car = new VehicleController(ROAD_CAR_SPEC);
+ *   const van = new VehicleController({ ...ROAD_CAR_SPEC, mass: 2200, motorPower: 90e3, vMax: 42 });
+ * @type {Readonly<VehicleSpec>}
+ */
+export const ROAD_CAR_SPEC = deepFreeze({
+  // chassis: 4.3 x 1.8 x 1.45 m, 2.6 m wheelbase
+  mass: 1350,
+  length: 4.3, width: 1.8, height: 1.45,
+  axleFront: -1.3, axleRear: 1.3, halfTrack: 0.78,
+  wheelRadius: 0.32,
+  cgHeight: 0.5,
+  yawInertia: 2000,
+  // suspension: comfortable, visible dive / roll
+  suspensionTravel: 0.15, suspensionSag: 0.4, suspensionDamping: 0.55, antiRoll: 0.45,
+  stepHeight: 0.22,
+  // tyres: street rubber, a progressive slide
+  mu: 1.0, Bf: 10, Br: 11, C: 1.4, gripCap: 0.92,
+  // powertrain: ~110 kW, rear-wheel drive, limiter at 56 m/s (~200 km/h)
+  motorPeakForce: 6000, motorPower: 110e3, vMax: 56, limiterRamp: 4,
+  reverseMax: 8, reverseForce: 4000, frontDrive: 0,
+  brakeDecel: 10,
+  // aero: Cd 0.32 x 2.1 m^2, almost no downforce
+  CdA: 0.67, CdA_side: 2.4, CdA_top: 4.2, ClA: 0.1, downforceFront: 0.45, Crr: 0.012,
+  // no thruster / flight package, no boost
+  flight: false, boostPower: 1, airControl: 'arcade',
+  // impacts bounce off without damage (damage would cut the power)
+  landingDamageBase: 0, landingDamagePerMs: 0, wallDamageSpeed: 99, wallDamagePerMs: 0,
+});
+
 const GEOMETRY_DIMS = ['length', 'width', 'height'];
 const WHEEL_DIMS = ['axleFront', 'axleRear', 'halfTrack'];
 
@@ -162,6 +202,10 @@ const WHEEL_DIMS = ['axleFront', 'axleRear', 'halfTrack'];
  * Merge a partial spec over ROADSTER_SPEC. Contact geometry the caller did not give is derived from the
  * dimensions when those changed (wheels from axles/halfTrack; body points + OBB from length/width/height;
  * pitch / roll inertia from mass and dimensions).
+ */
+/**
+ * @param {VehicleSpec} [spec=ROADSTER_SPEC]  partial or full
+ * @returns {VehicleSpec}
  */
 export function resolveVehicleSpec(spec = ROADSTER_SPEC) {
   if (spec === ROADSTER_SPEC) return ROADSTER_SPEC;
@@ -212,10 +256,50 @@ const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 const num = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : 0);
 const mult = (x) => (typeof x === 'number' && x >= 0 && x < Infinity ? x : 1); // surface multiplier (bad -> 1)
 
+/**
+ * @typedef {Partial<typeof ROADSTER_SPEC>} VehicleSpec
+ *   A vehicle spec: any subset of ROADSTER_SPEC's fields (see ROADSTER_SPEC for all of them and their units). The main
+ *   ones: mass (kg); length / width / height (m); axleFront / axleRear (local z of the axles, front negative),
+ *   halfTrack, wheelRadius (m); motorPower (W), motorPeakForce (N), vMax (m/s limiter), frontDrive (0 rear .. 1 front);
+ *   brakeDecel (m/s^2); mu (tyre grip); maxSteer (rad); suspensionTravel (m); flight (false = no thrusters);
+ *   airControl ('flight' | 'arcade' | 'none').
+ */
+/**
+ * @typedef {object} VehicleControls  the controls object step() reads (VehicleInput's fields of the same names)
+ * @property {number} [throttle]  0..1
+ * @property {number} [brake]  0..1 (also reverses once stopped)
+ * @property {number} [steer]  -1..1, +1 = right
+ * @property {boolean} [handbrake]
+ * @property {number} [thrust]  0..1 lift (flight package only)
+ * @property {number} [pitch]  -1..1, +1 = nose up (in the air)
+ * @property {number} [roll]  -1..1, +1 = bank right (defaults to steer)
+ * @property {number} [yaw]  -1..1, +1 = right (in the air)
+ * @property {boolean} [boost]
+ */
+/** @typedef {import('./PhysicsWorld.js').PhysicsWorld | { getGroundHeight?: Function, queryColliders?: Function, [key: string]: any }} VehicleWorld */
+
+/**
+ * A wheeled vehicle simulated in fixed steps (pure JS, no scene graph). Drive it from a fixed-step system and draw
+ * an Object3D at its `position` / `quaternion` (PoseInterpolator smooths between steps):
+ *
+ *   const car = new VehicleController(ROAD_CAR_SPEC);           // the default spec is the flying Roadster (below)
+ *   car.reset(new THREE.Vector3(0, 0, 0), 0, physics);          // position, heading (0 faces -Z), world
+ *   fixedUpdate(dt) { car.step(dt, { throttle, brake, steer, handbrake }, physics); }
+ *
+ * The DEFAULT spec (no argument) is ROADSTER_SPEC: a 2 t, 1 MW, ~400 km/h electric hypercar with thrusters that
+ * fly it on a `thrust` input. A partial spec is merged over it, so anything you leave out (power, top speed,
+ * flight) is the Roadster's: pass ROAD_CAR_SPEC (or spread it) for an ordinary car. Main spec fields: mass (kg),
+ * length / width / height (m), axleFront / axleRear (local z of the axles, front negative), halfTrack, wheelRadius,
+ * motorPower (W), motorPeakForce (N), vMax (m/s), frontDrive (0..1), brakeDecel (m/s^2), mu (grip), maxSteer (rad),
+ * suspensionTravel (m), flight (false: no thrusters), airControl ('flight' | 'arcade' | 'none').
+ * Outputs to read: position, quaternion, velocity (Vector3), speed / forwardSpeed (m/s), steerAngle (rad), grounded,
+ * mode ('ground' | 'flight'), gForce, wheelSlip, heading, wheels[i].compression.
+ */
 export class VehicleController {
   /**
-   * @param {object} [spec=ROADSTER_SPEC]  full or partial spec (merged over ROADSTER_SPEC)
-   * @param {object} [options]  { hoverAssist } (overrides spec.hoverAssist)
+   * @param {VehicleSpec} [spec=ROADSTER_SPEC]  full or partial spec, merged over ROADSTER_SPEC (a flying hypercar:
+   *   pass ROAD_CAR_SPEC for an ordinary car)
+   * @param {{ hoverAssist?: boolean }} [options]  hoverAssist overrides spec.hoverAssist
    */
   constructor(spec = ROADSTER_SPEC, options = {}) {
     const S = this.spec = resolveVehicleSpec(spec || ROADSTER_SPEC);
@@ -265,6 +349,10 @@ export class VehicleController {
    * Place the vehicle on the ground at `position` facing `headingRad` (0 = -Z, + = left), resting on its
    * suspension at the static load with the body fitted to the local ground plane (no first-step snap on a hill).
    * Without a world, position.y is taken as the ground height.
+   * @param {{ x: number, y: number, z: number }|null} [position]  e.g. a THREE.Vector3 (default the origin)
+   * @param {number} [headingRad=0]  0 faces -Z, positive turns left (as Object3D.rotation.y)
+   * @param {VehicleWorld|null} [world]  the PhysicsWorld it drives on (null: flat ground at position.y)
+   * @returns {this}
    */
   reset(position, headingRad = 0, world = null) {
     const p = position || _t1.set(0, 0, 0);
@@ -349,17 +437,20 @@ export class VehicleController {
   /** Current thrust fraction 0..1: max of the lift command and the rear nozzles (0 without the flight package). */
   get thrust() { return Math.max(this.liftCmd, this.thrusters[4], this.thrusters[5]); }
 
-  /** Alias of step() (engine system naming). */
+  /**
+   * Alias of step() (engine system naming).
+   * @param {number} dt @param {VehicleControls} [controls] @param {VehicleWorld|null} [world]
+   */
   update(dt, controls, world) { return this.step(dt, controls, world); }
 
   // ------------------------------------------------------------------------
   /**
    * Advance one fixed step.
    * @param {number} dtIn  seconds (clamped to 1e-4 .. 1/30)
-   * @param {object} c     controls: throttle 0..1, brake 0..1, steer -1..1 (+right), thrust 0..1,
+   * @param {VehicleControls} [c]  controls: throttle 0..1, brake 0..1, steer -1..1 (+right), thrust 0..1,
    *                       pitch -1..1 (+nose up), roll -1..1 (+bank right, defaults to steer), yaw -1..1 (+right),
    *                       boost, handbrake
-   * @param {object} world PhysicsWorld or legacy world (or null: flat ground at y = 0)
+   * @param {VehicleWorld|null} [world] PhysicsWorld or legacy world (or null: flat ground at y = 0)
    */
   step(dtIn, c = {}, world = null) {
     const S = this.spec;

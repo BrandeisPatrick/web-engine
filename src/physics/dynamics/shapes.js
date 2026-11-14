@@ -295,7 +295,10 @@ const SPHERE_CORES = {
   },
 };
 
-/** Sphere of `radius` centred at the shape origin. */
+/**
+ * Sphere of `radius` centred at the shape origin.
+ * @param {number} radius  m
+ */
 export function sphere(radius) {
   checkPositive('sphere', 'radius', radius);
   const s = makeShape(SHAPE.SPHERE, SPHERE_CORES);
@@ -329,7 +332,11 @@ const CAPSULE_CORES = {
   },
 };
 
-/** Capsule along local Y: the segment (0, +-halfHeight, 0) swept by `radius`. */
+/**
+ * Capsule along local Y: the segment (0, +-halfHeight, 0) swept by `radius`.
+ * @param {number} radius  m
+ * @param {number} halfHeight  m, half the segment length (total height = 2 * (halfHeight + radius))
+ */
 export function capsule(radius, halfHeight) {
   checkPositive('capsule', 'radius', radius);
   checkPositive('capsule', 'halfHeight', halfHeight, true);
@@ -370,7 +377,13 @@ const BOX_LOOPS = [[0, 1, 5, 4], [0, 2, 3, 1], [0, 4, 6, 2], [1, 3, 7, 5], [2, 6
 const BOX_PLANES = [[1, -1], [2, -1], [0, -1], [0, 1], [1, 1], [2, 1]];
 const BOX_TOPOLOGY = canonicalTopology(BOX_LOOPS);
 
-/** Box with half extents hx, hy, hz centred at the shape origin (also carries hull topology: see the header). */
+/**
+ * Box with HALF extents hx, hy, hz centred at the shape origin (also carries hull topology: see the header): a 1 m
+ * crate is box(0.5, 0.5, 0.5).
+ * @param {number} hx  m
+ * @param {number} hy  m
+ * @param {number} hz  m
+ */
 export function box(hx, hy, hz) {
   checkPositive('box', 'hx', hx); checkPositive('box', 'hy', hy); checkPositive('box', 'hz', hz);
   const s = makeShape(SHAPE.BOX, BOX_CORES);
