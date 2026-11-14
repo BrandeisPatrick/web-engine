@@ -1,0 +1,1 @@
+function u(s,t,n,a){const e=s.updateRanges;if(e.length!==1||e[0]!==t)e.length=0,t.start=n,t.count=a,e.push(t);else{const o=Math.max(t.start+t.count,n+a);n<t.start&&(t.start=n),t.count=o-t.start}s.needsUpdate=!0}const c=()=>({start:0,count:0});export{c as n,u as t};

@@ -1,0 +1,1 @@
+const t={WINDOW:1.6,PAY:[7,10,13]};class n{constructor(){this.reset()}reset(){this.n=0,this.last=-99,this.best=0,this.chains=0,this.paid=0}stomp(s){this.n=s-this.last<=t.WINDOW?this.n+1:1,this.last=s,this.n===2&&this.chains++,this.n>this.best&&(this.best=this.n);const i=t.PAY[Math.min(this.n,t.PAY.length)-1];return this.paid+=i,i}}export{t as CHAIN,n as StompChain};
