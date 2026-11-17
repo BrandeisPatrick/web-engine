@@ -16,6 +16,7 @@ import {
   createBenchHarness, readBenchParams, resolveQuality, isTouchDevice, lutFromFunction, DEFAULT_GRADE, TextureSets, loadTextureSet, loadTextureManifest,
 } from '@vibe/engine';
 import { createMemoryTrim } from '@vibe/engine/render';
+import { applyFoliageLightingTo } from '@vibe/engine/world';
 import { QualityMenu } from '@vibe/engine/ui';
 import { MapWorld, ExtraLights, miamiPlugin, miamiWorldOptions, prepareMiamiData, MIAMI_MAP_URL, MIAMI_PRESETS } from './world.js';
 import { buildCarModel } from './car-model.js';
@@ -96,14 +97,14 @@ const TOUCH = [
 // After sunset the frame is a near-silhouette lit by the sky: fixed low exposure (no eye adaptation brightening the
 // dark), neutral-warm blacks (no teal / blue split toning), restrained saturation, bloom only on lamp cores (high
 // threshold, small radius), a slight vignette and fine grain. DUSK_EXPOSURE is the look knob (?exposure= overrides).
-const DUSK_EXPOSURE = +(new URLSearchParams(location.search).get('exposure') || 0.62);
+const DUSK_EXPOSURE = +(new URLSearchParams(location.search).get('exposure') || (MOBILE ? 0.55 : 0.62)); // (phones: no SSR / volumetrics, a brighter, smoother road under the afterglow key)
 const DUSK_GRADE = DEFAULT_GRADE.map((g) => {
   const dusk = g.el < 6 && g.el > -20;
   return {
     ...g,
     aeS: 0,
     exp: dusk ? g.exp * DUSK_EXPOSURE : g.exp,
-    sat: dusk ? 0.82 : g.sat, con: dusk ? g.con + 0.04 : g.con,
+    sat: dusk ? 0.85 : g.sat, con: dusk ? g.con + 0.04 : g.con,
     wb: dusk ? [1.04, 1.0, 0.94] : g.wb,
     sh: dusk ? [0.004, 0.001, -0.004] : g.sh, hi: dusk ? [0.01, 0.004, -0.01] : g.hi, split: dusk ? 0.6 : g.split,
     bT: dusk ? 4.5 : g.bT, bS: dusk ? 0.2 : g.bS, bR: dusk ? 0.28 : g.bR,
@@ -116,12 +117,12 @@ function duskLut() {
     const c = [r, g, b];
     for (let i = 0; i < 3; i++) {
       const v = Math.min(1, Math.max(0, c[i]));
-      const toe = v * v / (v + 0.06) * 1.06;              // long toe
+      const toe = v * v / (v + 0.025) * 1.025;            // a short toe: the darks keep their value and colour
       out[i] = Math.min(1, toe < 0.8 ? toe : 0.8 + (toe - 0.8) * 0.6);
     }
     const l = 0.2126 * out[0] + 0.7152 * out[1] + 0.0722 * out[2], sh = Math.max(0, 1 - l * 2.4);
     // the darks go towards a neutral grey (photographic shadows carry little chroma)
-    for (let i = 0; i < 3; i++) out[i] = out[i] + (l - out[i]) * 0.75 * sh;
+    for (let i = 0; i < 3; i++) out[i] = out[i] + (l - out[i]) * 0.5 * sh;
   }, 'miami-dusk');
 }
 
@@ -229,12 +230,14 @@ async function boot() {
   // below the horizon the moon is the caster: its shadows are faint, so trees, buildings and street furniture stop
   // casting (the car, the props and the palms by the beach still do); re-applied every 60 frames (tiles stream in)
   let casterLow = null, casterT = 0; // casterT: frames since the last full pass
+  const litFoliageRef = { fn: null }; // set once the plants are built (lit foliage, below)
   const casterRe = /^(veg-|buildings|building-|context-blocks|street-furniture|parked-cars|deco-trim|sidewalks)/;
   const syncCasters = (force) => {
     const low = atmo.sunDir.y < 0;
     if (!force && low === casterLow) return;
     casterLow = low;
     scene.traverse((o) => { if ((o.isMesh || o.isInstancedMesh || o.isBatchedMesh) && casterRe.test(o.name)) { if (o.userData.cast0 === undefined) o.userData.cast0 = o.castShadow; o.castShadow = low ? false : o.userData.cast0; } });
+    if (force && litFoliageRef.fn) litFoliageRef.fn();
   };
   let shadowFrame = 0, probeFrame = 0;
   const hold = { still: false }; // the bench harness holds TAA still (quiet): every harness frame resolves from a fresh history
@@ -271,7 +274,7 @@ async function boot() {
   placeCar(START.x, START.z, START.heading);
   // the photographic dusk sky (sky.js), its glow at the Dune Road's vanishing point
   const sky = await new DuskSky({ scene, renderer, atmo, 
-    glowAzimuth: START.dir ? Math.atan2(START.dir[0], -START.dir[1]) : 0, exposure: 1 }).load().catch((e) => { console.warn('[miami] dusk sky unavailable', e); return null; });
+    glowAzimuth: START.dir ? Math.atan2(START.dir[0], -START.dir[1]) : 0, exposure: 0.84 }).load().catch((e) => { console.warn('[miami] dusk sky unavailable', e); return null; });
   if (sky) car.sceneEnvWhen = () => sky.active; // phones: the paint reflects the graded dome (desktop: the live probe)
   if (sky) { sky.update(camera); engine.addSystem({ lateUpdate: () => sky.update(camera) }, 'sky'); }
   // the roadside from free scans (roadside.js): gravel ground, scanned pebbles / rocks, scrub and grass impostors
@@ -286,6 +289,14 @@ async function boot() {
   const nearPalms = !MOBILE && plugin.palmInstances && plugin.palmInstances.length ? buildNearPalms(plugin.palmInstances, { near: 52, fade: plugin.palmFade }) : null;
   if (nearPalms) { scene.add(nearPalms.group); console.info('[miami] near palms', nearPalms.stats); engine.addSystem({ lateUpdate: (dt) => nearPalms.update(camera, hold.still ? 0 : dt || 1 / 60) }, 'near-palms'); if (car.probe) car.probe.hide.push(nearPalms.group); }
   if (roadside && car.probe) car.probe.hide.push(roadside.group); // (the paint's probe does not need the near-field plants)
+  // lit foliage (engine option, VegMaterials.js applyFoliageLighting): the scrub, grass and palm fronds take the
+  // afterglow key through their leaves and on their edges, and more sky light, instead of reading as black cut-outs;
+  // re-applied with the caster pass below (tiles stream in), a no-op on materials already patched
+  const FOLIAGE = /^(roadside-plants|roadside-grass|near-palms|coconut-palms|veg-|dune-scrub|dune-grass)/;
+  const FOLIAGE_MAT = /^(nearPalmTrunk|coconutTrunk)$/; // trunks stay solid
+  const isFoliage = (m, o) => { if (FOLIAGE_MAT.test(m.name)) return false; for (let x = o; x; x = x.parent) if (FOLIAGE.test(x.name)) return true; return false; };
+  const litFoliage = () => applyFoliageLightingTo(scene, { wrap: 0.5, translucency: 0.35, rim: 1.0, ambient: 0.3, tint: [1.0, 0.72, 0.55] }, isFoliage);
+  litFoliage(); litFoliageRef.fn = litFoliage;
   if (roadside) { console.info('[miami] roadside', roadside.stats); engine.addSystem({ lateUpdate: (dt) => roadside.update(camera, atmo.darkness, hold.still ? 0 : dt || 1 / 60) }, 'roadside'); } // (the wind holds still for harness captures)
 
   // ---------------------------------------------------------------- props: cones down Ocean Drive, café sets by the neon, bins, the beach stack

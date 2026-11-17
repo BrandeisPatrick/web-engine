@@ -25,7 +25,7 @@ export { TrafficSim, TRAFFIC_TYPES, POSE_STRIDE, buildSignalInfos, playerInfoFro
 export { buildTreeMeshes, bakeVegImpostors, IMP_VIEWS, impostorView } from './Vegetation.js';
 export { SPECIES, getVegModels } from './VegModels.js';
 export { makeVegAtlas, vegUV, VEG_ATLAS_SIZE, VEG_REGIONS } from './VegTextures.js';
-export { createVegMaterial, createImpostorMaterial as createVegImpostorMaterial } from './VegMaterials.js';
+export { createVegMaterial, createImpostorMaterial as createVegImpostorMaterial, applyFoliageLighting, applyFoliageLightingTo, DEFAULT_FOLIAGE_LIGHT } from './VegMaterials.js';
 export {
   Water, WAVES, NWAVES, waveHeight, waveSlope, waveUniforms, WAVE_GLSL, makeWaterNormalMap, makeNoiseTexture, shoreSegments, buildShoreField, createWaterMaterial,
   // refraction (0.8.0): the scene behind the surface from a render/SceneCopy (MapWorld({ water: { refraction } }))

@@ -32,6 +32,18 @@ const LIGHT_PATCH_TO = /* glsl */`reflectedLight.directDiffuse += irradiance * B
 		reflectedLight.directDiffuse += directLight.color * BRDF_Lambert( material.diffuseColor ) * vLeaf * ( vWrap + vBack * 1.1 * vec3( 1.0, 1.15, 0.5 ) );
 	}
 	#endif
+	#ifdef FOLIAGE_LIGHT
+	{ // applyFoliageLighting: uFoliage = (wrap, translucency, rim, ambient lift), uFoliageTint = transmitted colour
+		float fnl = dot( geometryNormal, directLight.direction );
+		float fWrap = saturate( ( fnl + uFoliage.x ) / ( 1.0 + uFoliage.x ) ) - saturate( fnl );
+		float fToward = saturate( dot( - geometryViewDir, directLight.direction ) );
+		float fBack = pow( fToward, 4.0 ) * 0.7 + pow( fToward, 16.0 ) * 0.6;
+		float fRim = pow( 1.0 - saturate( abs( dot( geometryNormal, geometryViewDir ) ) ), 2.5 ) * ( 0.25 + 0.75 * fToward );
+		vec3 fAlb = material.diffuseColor;
+		reflectedLight.directDiffuse += directLight.color * ( BRDF_Lambert( fAlb ) * ( fWrap + fBack * uFoliage.y * uFoliageTint * 3.0 )
+			+ fRim * uFoliage.z * ( fAlb * 0.6 + 0.03 ) * uFoliageTint );
+	}
+	#endif
 }`;
 
 function patchLights(fs) {
@@ -334,4 +346,65 @@ export function createImpostorMaterial(albedo, normalTex, U, species, layout, fa
   m.customProgramCacheKey = () => 'veg-impostor-v1';
   m.userData.uFade = uFade;
   return m;
+}
+
+// ------------------------------------------------------------------ lit foliage for any material (opt-in)
+/**
+ * Default look of applyFoliageLighting: `wrap` (0..1) lets light reach past the terminator, `translucency` is the
+ * light seen through leaves when looking toward a light (scaled by `tint`, the colour leaves pass), `rim` the bright
+ * edge of a plant against a light, `ambient` lifts the sky light a plant receives (leaves are lit from all sides).
+ */
+export const DEFAULT_FOLIAGE_LIGHT = { wrap: 0.6, translucency: 0.7, rim: 1.2, ambient: 0.35, tint: [1.0, 0.82, 0.5] };
+
+/**
+ * Light foliage like foliage instead of like solid, opaque cards: wrap diffuse, light through the leaves toward each
+ * direct light (the sun, a twilight key, lamps, headlights; shadowed like the light itself), a rim against the light,
+ * and more sky light. Patches a MeshStandardMaterial / MeshPhysicalMaterial in place, chaining its own
+ * onBeforeCompile and program cache key; idempotent. Off unless called (no default changes anywhere).
+ *   applyFoliageLighting(material, true | { wrap, translucency, rim, ambient, tint })
+ * @param {THREE.Material} material
+ * @param {boolean|Partial<typeof DEFAULT_FOLIAGE_LIGHT>} [opts=true]  false: nothing
+ * @returns {{ uFoliage: { value: THREE.Vector4 }, uFoliageTint: { value: THREE.Color } }|null}  the uniforms (shared by
+ *   later programs of the material; change their values to retune live)
+ */
+export function applyFoliageLighting(material, opts = true) {
+  if (!opts || !material || !material.isMeshStandardMaterial) return null;
+  if (material.userData.foliageLight) return material.userData.foliageLight;
+  const f = { ...DEFAULT_FOLIAGE_LIGHT, ...(opts === true ? {} : opts) };
+  const U = {
+    uFoliage: { value: new THREE.Vector4(f.wrap, f.translucency, f.rim, f.ambient) },
+    uFoliageTint: { value: new THREE.Color(f.tint[0], f.tint[1], f.tint[2]) },
+  };
+  material.userData.foliageLight = U;
+  material.defines = { ...(material.defines || {}), FOLIAGE_LIGHT: '' };
+  const prev = material.onBeforeCompile;
+  const ownKey = material.customProgramCacheKey !== THREE.Material.prototype.customProgramCacheKey ? material.customProgramCacheKey : null;
+  const prevSrc = prev ? prev.toString() : '';
+  material.onBeforeCompile = function (sh, renderer) {
+    if (prev) prev.call(this, sh, renderer);
+    Object.assign(sh.uniforms, U);
+    let fs = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec4 uFoliage;\nuniform vec3 uFoliageTint;');
+    fs = patchLights(fs); // a no-op when the chunk was patched already (vegetation materials)
+    sh.fragmentShader = fs.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.indirectDiffuse *= 1.0 + uFoliage.w;');
+  };
+  material.customProgramCacheKey = function () { return (ownKey ? ownKey.call(this) : prevSrc) + '|foliage-light-v1'; };
+  material.needsUpdate = true;
+  return U;
+}
+
+/**
+ * applyFoliageLighting on every MeshStandardMaterial under `root` (e.g. a tree group: `buildTreeMeshes(...).group`),
+ * optionally only where `filter(material, object)` is true. Returns the number of materials patched.
+ * @param {THREE.Object3D} root
+ * @param {boolean|Partial<typeof DEFAULT_FOLIAGE_LIGHT>} [opts=true]
+ * @param {(m: THREE.Material, o: THREE.Object3D) => boolean} [filter]
+ */
+export function applyFoliageLightingTo(root, opts = true, filter = null) {
+  let n = 0;
+  if (!root || !opts) return n;
+  root.traverse((o) => {
+    const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+    for (const m of ms) if (m.isMeshStandardMaterial && !m.userData.foliageLight && (!filter || filter(m, o)) && applyFoliageLighting(m, opts)) n++;
+  });
+  return n;
 }

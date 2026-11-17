@@ -1,6 +1,6 @@
 // Render layer: lighting / sky / post-processing, texture sets, impostors, material patches and the
 // allocation-free instancing / culling / effects utilities. No game knowledge; nothing here imports src/.
-export { Atmosphere, TIME_PRESETS, DEFAULT_SUN, DEFAULT_LOOKS, DEFAULT_FLARE, sunPosition } from './Atmosphere.js';
+export { Atmosphere, TIME_PRESETS, DEFAULT_SUN, DEFAULT_LOOKS, DEFAULT_FLARE, DEFAULT_TWILIGHT_KEY, DEFAULT_LOW_SUN_ENV, sunPosition } from './Atmosphere.js';
 export { PostFX, DEFAULT_GRADE, gradeAt, resolveAA, AA_MODES } from './PostFX.js';
 // G-buffer path (0.7.0): TAA over the MRT scene pass, camera jitter / history matrices shared with later passes
 export { GBuffer, GBUFFER_UNIFORMS, GBUFFER_DEFINES, GBUFFER_VERTEX_TAIL, GBUFFER_CHUNK_TAILS, GBUFFER_GLSL_DECODE, installGBufferChunks, createGBufferTarget, updateGBufferView } from './GBuffer.js';
