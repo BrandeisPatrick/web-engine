@@ -1,6 +1,33 @@
 # Changelog
 
 ## Unreleased
+- Sound kit (audio): `SoundBank` with 18 named sounds rendered in plain JavaScript (`SOUND_PRESETS`), `Footsteps`, a
+  voice policy (`VoicePool`), the 'safe' master chain and `setPaused` / `setMuffle` / `duck` on `AudioBus`,
+  `audioSelfTest` / `analyseMix` / `encodeWav`, and the `samples/sound-check/` page (a card per sound, the measured
+  ten-second mix, a WAV download). Every sound and the mix are measured; no one has listened yet. `VehicleAudio`
+  gains `wind` / `tyres` options (default on). Tests: `audio-dsp`, `audio-voices`, `audio-bank`; smoke runs the page's
+  self-test.
+- GameShell (ui): loading bar that keeps moving, start card over the blurred scene, pause card with volume, game
+  toggles / sliders and quality tiers, saved settings (`createSettings`); the start click is the audio gesture; touch
+  controls hide while a card is up. `LoadingScreen({ compositor: true })`. `QualityMenu` exports its tier rows
+  (`buildTierRows`, `chooseTier`). Tests: `shell` (Node), `test/browser/shell.mjs` (now on starter-walk's own shell
+  with its real `AudioBus({ master: 'safe' })`).
+- Drive feel: `SteeringAssist` (opt-in through `VehicleInput { assist }` and `update(dt, car)`), `TyreFx` (skid marks
+  and thin smoke from tyre sliding heat; puffs rise as they grow so the road does not cut them), `VehicleHaptics`
+  (gamepad rumble), and `VehicleController` tyre outputs (`steerLimit`, slip angles and peaks, `wheels[i].slideHeat`);
+  dynamics unchanged bit for bit. Tests: `steering-assist`, `tyre-fx`, `test/browser/drive-feel.mjs`.
+- Car and camera: `createCarVisual(type)` (world), an HD car with wheels on the physics, lamps and a contact shadow,
+  whose `spec` is `ROAD_CAR_SPEC` resized to the body; `rig.addTrauma(x)` on every rig, `ChaseRig({ feel: 'road' })`,
+  `landingDip` / `sprintFov` and `rig.land(speed)` on the character rigs; all off by default (main's poses, pinned).
+  Tests: `car-visual`, `camera-feel`, `test/browser/car-camera.mjs`. Asset catalogue entry `engine-car-visual`.
+- Starters: both open with the game shell (title, controls, start click, Esc / P pause with volume and quality,
+  saved). starter-drive drives the hatchback with the steering assist on (pause-card toggle), skid marks and smoke,
+  the road-feel chase camera with a short shake and a thud on a hit, the motor, road roar, wind and squeal; a 30 m
+  asphalt apron over the first 120 m, distance haze, marker posts (two instanced meshes). starter-walk has footsteps,
+  a landing thump with a camera dip, a dusk bed, a hooded lamp that hums and pools light, a contact shadow under the
+  walker and distance haze. New HOWTO recipes: "Loading, a start screen and pause", "Car sounds", "Steering assist,
+  skid marks and smoke"; "Play a sound" and "Drive a car" rewritten. Browser scripts that press keys load the
+  starters with `?autostart=1`. `npm test` runs 55 suites.
 - input: `VehicleInput.enabled` (get / set), the InputMap's `enabled` as on CharacterInput: false silences every
   vehicle action (additive; nothing else changes). Tested in test/character-input.mjs.
 - docs/HOWTO.md: new recipes "Get in and out of a vehicle" (two inputs, two rigs with `active: false` /

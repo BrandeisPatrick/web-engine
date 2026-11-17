@@ -9,8 +9,8 @@ audio and DOM HUD widgets. You write the game; the engine has no scene editor an
 
 | Starter | What it is |
 |---|---|
-| `samples/starter-walk/` | Third-person walker: animated GLB, controller, camera rig, input, textured ground, a lamp, HUD readout, sound |
-| `samples/starter-drive/` | Box car on `VehicleController(ROAD_CAR_SPEC)`, chase camera, textured road, static posts, speed readout |
+| `samples/starter-walk/` | Third-person walker: animated GLB, controller, camera rig with a landing dip, input, textured ground, a lamp, HUD readout, game shell (start card, pause, saved settings), footsteps, a dusk bed and a lamp hum |
+| `samples/starter-drive/` | HD hatchback (`createCarVisual`) on `VehicleController(visual.spec)`, steering assist, skid marks and smoke, chase camera with road feel, textured road, static posts, car sounds, game shell, speed readout |
 
 In this repository: copy the folder to `samples/<name>/`, run `npm run dev` and open `http://localhost:5190/<name>/`.
 No registration is needed (`vite.config.js` finds every `samples/<name>/index.html`); add a link on
@@ -27,7 +27,8 @@ No registration is needed (`vite.config.js` finds every `samples/<name>/index.ht
 | `npm run types && npm run types:check` | Emit `types/` from the JSDoc, then compile a strict TypeScript consumer |
 | `npm run build` | Build every page into `dist/` |
 | `npm run smoke` | Every demo and starter on both quality tiers in headless Chrome (needs Chrome and a GPU) |
-| `node test/browser/check-page.mjs <name>` | Load one page headlessly, hold W for 2 s, fail on any console or page error |
+| `node test/browser/check-page.mjs <name>` | Load one page headlessly (`?autostart=1`), hold W for 2 s, fail on any console or page error |
+| `node test/browser/sound-check.mjs --wav=mix.wav` | Render the sound kit's ten-second self-test scene in headless Chrome, print its measurements and save the mix |
 
 **The page contract.** The browser scripts wait for `window.__sample.ready`; a page without it fails after the timeout.
 End `boot()` with `window.__sample = createBenchHarness(engine, { name: '<name>' }).setReady();` (core), as the
@@ -61,7 +62,11 @@ expose state that changes through a function (`{ game: () => ({ mode, score }) }
 | Post-processing | `PostFX` (render) | `new PostFX(renderer, scene, camera, { atmosphere, width, height, pixelRatio, ...S.postfx })`; `engine.renderFn = (sc, cam, dt) => postfx.render(dt)` | HOWTO "Engine and quality tiers" |
 | Walk a character | `CharacterController` (physics), `CharacterInput` (input), `ThirdPersonRig` (camera) | `cc.step(dt, moveX, moveZ, jump, sprint, physics)` | `samples/starter-walk/main.js` |
 | Load a GLB, play clips | `Assets` (core), `registerRenderLoaders` (render), `AnimationController` (anim) | `assets.get(key).instantiate()`; states name clips by exact string | `samples/starter-walk/main.js` |
-| Drive a car | `VehicleController`, `ROAD_CAR_SPEC` (physics), `VehicleInput` (input), `ChaseRig` (camera) | `car.step(dt, { throttle, brake, steer, handbrake }, physics)` | `samples/starter-drive/main.js` |
+| Drive a car | `VehicleController` (physics), `createCarVisual` (world), `VehicleInput` (input), `ChaseRig` (camera) | `const visual = createCarVisual('hatchback'); car = new VehicleController(visual.spec); car.step(dt, { throttle, brake, steer, handbrake }, physics); visual.update(dt, car, { darkness })` | `samples/starter-drive/main.js` |
+| Keyboard steering that holds the grip limit and catches slides | `VehicleInput`, `SteeringAssist` (input) | `new VehicleInput(el, { assist: true })`; per frame `input.update(dt, car)`; `input.assist.enabled` toggles it | `samples/starter-drive/main.js` |
+| Skid marks and tyre smoke | `TyreFx` (render) | `new TyreFx({ scene, atmosphere })`; per frame `tyres.update(dt, car, body)`; `tyres.clear()` on reset | `samples/starter-drive/main.js` |
+| A car body with wheels and lamps | `createCarVisual` (world) | `createCarVisual(type, { color })` -> `{ root, spec, update(dt, car, { darkness }) }` | `samples/starter-drive/main.js` |
+| A camera that reacts | `ChaseRig`, `ThirdPersonRig` (camera) | `new ChaseRig(cam, el, { feel: 'road' })` + `state.accel = car.localAccel`; `rig.addTrauma(x)` on a hit; `ThirdPersonRig({ landingDip: 1 })` + `rig.land(speed)` | starters |
 | Drive and walk on one page | `VehicleInput`, `CharacterInput` (input), `ChaseRig`, `ThirdPersonRig` (camera) | `input.enabled = false`, `rig.activate()`: HOWTO "Get in and out of a vehicle" | `test/howto/recipes.js` |
 | Headlights | `THREE.SpotLight`, or `ClusteredLights` (render) | `cl.setSpot(...)` per frame: HOWTO "Headlights" | `test/howto/recipes.js` |
 | Smooth motion | `PoseInterpolator` (core) | `save()` / `apply(obj, alpha)` / `snap()` | HOWTO "Smooth rendering" |
@@ -69,12 +74,14 @@ expose state that changes through a function (`{ game: () => ({ mode, score }) }
 | Many lamps | `ClusteredLights`, `installClusteredChunks`, `syncClustered` (render) | five calls: HOWTO "Clustered lights" | `test/howto/recipes.js` |
 | Texture a mesh | `loadTextureSet`, `loadTextureManifest` (render) | `loadTextureSet(id, { renderer, base, manifest })` -> `{ map, normalMap, roughnessMap, size }` | `samples/starter-walk/main.js` |
 | HUD text | `UILayer`, `Panel`, `Readout` (ui) | `panel.add(new Readout({ label, unit })).set(value)` | starters |
-| A sound | `AudioBus`, `playTone` (audio) | `bus.unlockOnGesture()`; `playTone(bus.ctx, bus.bus('ui'), { pitch, peak, decay })` | `samples/starter-walk/main.js` |
-| Car engine sound | `VehicleAudio` (audio) | `audio.start()` in a gesture; per frame `audio.update(dt, { speedKmh, rpmLike, grounded, ... })` | `test/howto/recipes.js` |
+| Loading, start screen, pause, saved settings | `GameShell` (ui) | `new GameShell({ title, controls, quality, storageKey })`, `shell.use({ engine, audio, inputs })`, `await shell.ready()` | starters |
+| A sound | `AudioBus`, `SoundBank` (audio) | `new AudioBus({ master: 'safe' })` started by `GameShell`'s start click (or `bus.unlockOnGesture()`); `new SoundBank(bus, { listener: camera }).play('impact.wood', { at })`; hear and check them on `samples/sound-check/` | `samples/starter-walk/main.js` |
+| Footsteps, ambience | `Footsteps`, `SoundBank` (audio) | `steps.update(dt, { speed, grounded, landed, landingSpeed })`; `sfx.loop('amb.dusk', { gain: 0.14 })` | `samples/starter-walk/main.js` |
+| Car sounds | `VehicleAudio`, `SoundBank` (audio) | `motor.update(dt, { speedKmh, rpmLike, grounded })`; loops `road.roar`, `wind.rush`, `tyre.squeal` with `setGain` | `samples/starter-drive/main.js` |
 | Particles | `GpuParticleSystem` (render) | `dust.emit(params)`; per frame `dust.update(dt, camera)` | `test/howto/recipes.js` |
 | Walls and crates | `PhysicsWorld`, `DynamicsWorld`, `attachToPhysicsWorld`, `boxShape` (physics) | `physics.addStaticBox({ center, size })`; `dyn.addBody({ shape, position, mass })` | `test/howto/recipes.js` |
 | Hills, a small track | `PhysicsWorld` (physics) | `new PhysicsWorld({ heightfield: (x, z) => y })`, `setSurfaceProvider(fn)` | `test/howto/recipes.js` |
-| Desktop / phone tiers | `resolveQuality` (core), `QualityMenu` (ui) | `const S = resolveQuality().settings`; `new QualityMenu({ quality })` | starters |
+| Desktop / phone tiers | `resolveQuality` (core), `GameShell` / `QualityMenu` (ui) | `const S = resolveQuality().settings`; `new GameShell({ quality })` puts the tiers in the pause card (or `new QualityMenu({ quality })` without a shell) | starters |
 | A whole city | `MapWorld` (world) | only for map-scale cities from baked OpenStreetMap data | `samples/nyc-night/main.js` |
 
 Everything else, layer by layer: [ENGINE.md](ENGINE.md). Every source file starts with a header documenting its API.
@@ -96,7 +103,18 @@ Everything else, layer by layer: [ENGINE.md](ENGINE.md). Every source file start
 - Tier `passes` (AO, bloom) are applied by the game, not by `PostFX`.
 - `addStaticBox` positional order is `minX, minY, maxX, maxY, minZ, maxZ`; prefer `{ center, size }`. Shape builders
   (`boxShape`) take half extents.
-- Audio needs a user gesture: `bus.bus(name)` is null and nothing plays until then.
+- Audio needs a user gesture: `bus.bus(name)` is null and nothing plays until `bus.start()` runs inside a click or a
+  key press. `GameShell` does it on its start click (pass `audio: bus`); without a shell call `bus.unlockOnGesture()`.
+  Before that `SoundBank.play` returns an inert voice (never null) and `SoundBank.loop` waits and starts with the bus.
+  Mix quietly: the kit's beds sit near -30 dBFS, so start loops at the gains the starters use, not at 1.
+- Sound names are exact (`step.gravel`, not `gravel`); an unknown name throws and lists the 18.
+- Behind the `GameShell` start card the inputs are off: a script that presses keys must load the page with
+  `?autostart=1`.
+- `VehicleInput.update(dt)` without the car never runs the assist, even with `{ assist: true }`: pass the car,
+  `input.update(dt, car)`.
+- `createCarVisual`'s spec is the body's: build the controller from `visual.spec` (or spread it), not from
+  `ROAD_CAR_SPEC`, or the wheels float off their arches. Place `visual.root` on the car's pose before
+  `visual.update`. Only `VEHICLE_HD_TYPES` have separate wheels (a bus / box truck throws).
 - The world layer (`MapWorld`) wants a baked `city.json`; given little data it builds a procedural city instead.
 
 ## Assets
@@ -130,7 +148,11 @@ there:
 ## What nobody has verified
 
 - Touch controls (`touch: 'auto'`) are wired in both starters but have not been tested on a touch device.
-- Audio output: the sounds start without errors in headless Chrome, but no one has listened to them.
+- Audio is measured, not listened to: every preset's peak, DC, loop seam and spectral band, and a ten-second mix
+  (`samples/sound-check/`: no clipping, peak <= 0.85, no silent or over-loud half-second) are checked by machine, and
+  the starters' sound was measured flowing in headless Chrome. No person has listened to any of it.
+- The steering assist, the chase camera's road feel and the gamepad rumble were checked by scripted drives and numbers;
+  nobody has driven them by hand.
 - Neither starter has been run on a real phone; the mobile tier was checked only through `?quality=mobile`.
 - The "using from another project" steps above were checked against what `npm pack` ships, not by installing into a
   fresh project.

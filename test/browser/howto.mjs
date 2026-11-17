@@ -22,7 +22,7 @@ const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok 
 async function open(tier) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const errors = watchErrors(page);
-  const session = await loadSample(page, vite.base + (await resolvePage(vite, 'starter-drive')) + `?quality=${tier}`, errors);
+  const session = await loadSample(page, vite.base + (await resolvePage(vite, 'starter-drive')) + `?quality=${tier}&autostart=1`, errors); // autostart: no start card, the keys drive
   if (session.status !== 'ready') throw new Error(`starter-drive (${tier}) not ready: ${session.note}`);
   return { page, errors };
 }
@@ -54,7 +54,7 @@ try {
     const out = await page.evaluate(async ([U, probe]) => {
       eval(probe); // eslint-disable-line no-eval
       const R = await import(U.recipes), { PostFX } = await import(U.render), { resolveQuality } = await import(U.core);
-      const { ROAD_CAR_SPEC: SPEC } = await import(U.physics);  // the starter's car
+      const SPEC = window.__sample.visual.spec;  // the starter's car: the hatchback's spec (createCarVisual)
       const h = window.__sample, engine = h.engine, { scene, camera, renderer } = engine;
       const S = resolveQuality().settings;
       // a second PostFX only to read the internal size from (the starter's own is not exposed); the starter's renders
@@ -118,7 +118,7 @@ try {
       for (let z = -300; z > -500; z -= 12) garden.push([-7, 4, z], [7, 4, z]);
       for (let z = -300; z > -500; z -= 40) street.push([0, 8, z]);
       const cl = R.clusteredLights({ scene, camera, postfx, engine, lamps: garden, streetLamps: street });
-      const { ROAD_CAR_SPEC: SPEC } = await import(U.physics);
+      const SPEC = h.visual.spec;  // the starter's car: the hatchback's spec (createCarVisual)
       const head = R.headlights({ engine, body: h.body, SPEC, cl: null, slot: 0 });
       await new Promise((r) => setTimeout(r, 2500));
       const pool = []; scene.traverse((o) => { if (o.isPointLight && o.visible) pool.push(o); });
@@ -135,13 +135,13 @@ try {
       const [ahead, behind] = window.__probe(h, on1, off, on2, pts);
       return {
         tierCl: tierCl === null, pool: pool.length, clCount: cl.count, clLights: cl.stats.lights,
-        spot: !!head.spot, targetLocal: local.toArray().map((v) => +v.toFixed(2)), ahead, behind,
+        spot: !!head.spot, targetLocal: local.toArray().map((v) => +v.toFixed(2)), len: SPEC.length, ahead, behind,
       };
     }, [urls, LIGHT_PROBE]);
     console.log('[mobile]', JSON.stringify(out));
     check('lamps-tier (mobile): no ClusteredLights, a pool of 4 real lights', out.tierCl && out.pool === 4, `${out.pool} point lights`);
     check('clustered-lights: 34 garden + 5 street lamps listed', out.clCount === 39 && out.clLights >= 0, `count ${out.clCount}`);
-    check('headlights (SpotLight): the target rides with the body, 20 m ahead', out.spot && Math.abs(out.targetLocal[2] - (-4.3 / 2 - 0.05 - 20)) < 0.01, `local ${out.targetLocal}`);
+    check('headlights (SpotLight): the target rides with the body, 20 m ahead', out.spot && Math.abs(out.targetLocal[2] - (-out.len / 2 - 0.05 - 20)) < 0.01, `local ${out.targetLocal}, car length ${out.len}`);
     check('headlights (SpotLight): the road 14 m ahead gets brighter', out.ahead > 1, `+${out.ahead}`);
     check('headlights (SpotLight): the road 3.5 m behind (between the car and the camera) does not', Number.isFinite(out.behind) && Math.abs(out.behind) < 0.25, `${out.behind}`);
     check('mobile page: no console or page errors', errors.length === 0);
@@ -157,7 +157,12 @@ try {
       const h = window.__sample, engine = h.engine, { scene, camera, renderer } = engine;
       engine.setSystemEnabled('game', false);                   // the starter's own loop: the recipe drives the car now
       const player = new h.body.constructor();             // a THREE.Group
-      const capsule = h.body.children[0].clone(); capsule.scale.set(0.3, 3, 0.15); capsule.position.set(0, 0.9, 0);
+      // a stand-in walker: a capsule made with the page's own three (the module URL the starter loaded)
+      const threeUrl = performance.getEntriesByType('resource').map((e) => e.name).find((n) => /\/deps\/three\.js/.test(n));
+      if (!threeUrl) throw new Error('the page\'s three module was not found');
+      const THREE = await import(threeUrl);
+      const capsule = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 1.2, 4, 12), new THREE.MeshStandardMaterial({ color: 0x8a8f96 }));
+      capsule.position.set(0, 0.9, 0); capsule.castShadow = true;
       player.add(capsule); scene.add(player);
       const cc = new CharacterController({ radius: 0.32, height: 1.8 });
       const g = R.getInOut({ engine, camera, renderer, physics: engine.physics, car: h.car, carBody: h.body, cc, player });

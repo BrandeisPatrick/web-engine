@@ -211,13 +211,17 @@ Installed as a git submodule listed in a game's `workspaces`, the engine resolve
   (bit-identical since 0.4.0).
 - `test/world-build.mjs`, `world-lights`, `vehicles-hd`: the procedural city built headless, its stats, queries and
   10 s of traffic; the vehicle detail levels.
-- `test/core.mjs`, `quality`, `look-stats`, `memory`, `texture-manifest`, `assets`, `rigs`, `character-input`, `anim`,
-  `character-sim`: core services, the quality tiers, the look statistics, memory trimming, loaders, camera rigs,
-  input, animation and the character controller.
+- `test/core.mjs`, `quality`, `shell`, `look-stats`, `memory`, `texture-manifest`, `assets`, `rigs`, `camera-feel`,
+  `character-input`, `steering-assist`, `anim`, `character-sim`, `car-visual`: core services, the quality tiers, the
+  game shell's state and settings, the look statistics, memory trimming, loaders, camera rigs and their road feel,
+  input and the steering assist, animation, the character controller and the drivable car body.
+- `test/audio-dsp.mjs`, `audio-voices`, `audio-bank`: the sound kit's presets measured one by one, the voice policy and
+  the mixer graphs.
 - `test/dyn-*.mjs`, `cloth-mesh`, `character-dyn`, `ragdoll`: the dynamics, from shapes and joints to cloth, soft
   bodies, buoyancy and fracture.
 - `test/gpu-particles.mjs`, `clustered`, `shadows`, `skip-unlit`, `postfx-options`, `render-scale`, `gbuffer-chunks`,
-  `ssr-ao`, `volumetric`, `blur-dof-lut`, `water`: the render pipeline's shaders, options and defaults.
+  `ssr-ao`, `volumetric`, `blur-dof-lut`, `water`, `tyre-fx`: the render pipeline's shaders, options and defaults, and
+  the tyre marks and smoke.
 - `test/halloween-enemies.mjs`, `halloween-depth`, `miami-car`, `nyc-traffic-mix`: the demos' rules and engine
   options.
 - `test/agent-usability.mjs`: the APIs the starters rely on (road-car spec, texture ids, clip errors, static boxes).
@@ -226,8 +230,8 @@ Installed as a git submodule listed in a game's `workspaces`, the engine resolve
 - `test/asset-catalog.mjs`: the asset catalogue is in step with the files (every `samples/public` file covered,
   credits complete, generated `catalog.json` and `docs/ASSETS.md` current).
 
-`test/browser/` (`smoke`, `bench`, `perf`, `halloween`, `halloween-media`, `howto`, `check-page`) needs Chrome and
-runs locally. `smoke` covers the demos and the starters, each also as a `-mobile` page (the same page on the mobile
+`test/browser/` (`smoke`, `bench`, `perf`, `halloween`, `halloween-media`, `howto`, `check-page`, `shell`,
+`sound-check`, `drive-feel`, `car-camera`) needs Chrome and runs locally. `smoke` covers the demos and the starters, each also as a `-mobile` page (the same page on the mobile
 tier); `bench` takes `nyc-night`, `miami-drive` and their `-mobile` pages. `howto` runs the browser-only recipes
 (clustered lights, GPU particles, vehicle sound) on the starter-drive page; `check-page <name>` loads one page and
 fails on any error. The scripts share `test/browser/playwright.config.mjs` (`startVite`, `launchChrome`,

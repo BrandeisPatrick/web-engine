@@ -1,27 +1,34 @@
 // Starter: a third-person walker. Copy this folder to start a game: flat textured ground, an animated GLB character
-// (idle / walk), a lamp, dusk sky, post-processing, the desktop / mobile quality tiers, one HUD readout and one sound.
-// Every block says what it is and what a game would change. Controls: WASD / arrows, mouse (right-drag or click to
-// lock), Space jumps, Shift runs; gamepad and touch work too.
+// (idle / walk / run) with a contact shadow, a street lamp, dusk sky with distance haze, post-processing, a game shell
+// (loading bar, start card, pause with volume and quality, saved), one HUD readout, and sound: footsteps, a landing
+// thump, a dusk bed and the lamp's hum. Every block says what it is and what a game would change. Controls: WASD /
+// arrows, mouse (right-drag or click to lock), Space jumps, Shift runs, Esc / P pause; gamepad and touch work too.
+// ?autostart=1 skips the start card (tests that press keys need it).
 // The `// #region howto:` markers are for docs/HOWTO.md, which copies those blocks (test/docs.mjs checks the copies).
 import * as THREE from 'three';
 import { Engine, Assets, PoseInterpolator, resolveQuality, createBenchHarness } from '@vibe/engine/core';
 import { PhysicsWorld, CharacterController } from '@vibe/engine/physics';
-import { Atmosphere, PostFX, NearestLights, registerRenderLoaders, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+import { Atmosphere, PostFX, NearestLights, registerRenderLoaders, loadTextureManifest, loadTextureSet, softDotTexture } from '@vibe/engine/render';
 import { AnimationController } from '@vibe/engine/anim';
 import { CharacterInput } from '@vibe/engine/input';
 import { ThirdPersonRig } from '@vibe/engine/camera';
-import { AudioBus, playTone } from '@vibe/engine/audio';
-import { UILayer, Panel, Readout, QualityMenu } from '@vibe/engine/ui';
+import { AudioBus, SoundBank, Footsteps } from '@vibe/engine/audio';
+import { UILayer, Panel, Readout, GameShell } from '@vibe/engine/ui';
 
 const BASE = import.meta.env.BASE_URL; // asset URLs go through it, so the page also works under a sub-path
 
-// ---- quality tier: 'desktop' or 'mobile' (?quality=mobile forces one; the gear button stores a choice)
+// ---- quality tier: 'desktop' or 'mobile' (?quality=mobile forces one; the pause card stores a choice)
 // #region howto:quality
 const Q = resolveQuality();
 const S = Q.settings;
 // #endregion howto:quality
 
 async function boot() {
+  // ---- loading bar, start card, pause with volume and quality (saved). The start click also starts the audio
+  // #region howto:game-shell
+  const shell = new GameShell({ title: 'Starter Walk', quality: Q, storageKey: 'starter-walk',
+    controls: [['W A S D', 'Walk'], ['Right-drag', 'Look'], ['Space', 'Jump'], ['Shift', 'Run']] });
+  // #endregion howto:game-shell
   // #region howto:walk-engine
   // ---- engine + physics. PhysicsWorld() is flat ground at y = 0; add a heightfield / static boxes for a real level
   const physics = new PhysicsWorld();
@@ -31,27 +38,33 @@ async function boot() {
   // ---- sky, sun, fog and shadows. timeOfDay: hours 0..24 or 'dawn' | 'noon' | 'golden' | 'dusk' | 'night'
   const atmosphere = new Atmosphere({ scene, renderer, camera, timeOfDay: 'dusk', shadows: S.shadows });
   // #endregion howto:walk-engine
+  atmosphere.fogParams.haze = 0.004; // distance haze (PostFX's fog): the ground's far edge fades into the sky
 
   // ---- ground with a PBR texture set. `base` is the folder holding manifest.json and one folder per set id
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(80, 80).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x6f7a5a }));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x6f7a5a }));
   ground.receiveShadow = true;
   scene.add(ground);
+  shell.setProgress(0.1, 'Textures');
   // #region howto:ground-texture
   const texBase = `${BASE}nyc/textures/`;
   const grass = await loadTextureSet('leafy_grass', { renderer, base: texBase, manifest: await loadTextureManifest(texBase) });
   if (grass) {
-    for (const t of [grass.map, grass.normalMap, grass.roughnessMap]) if (t) t.repeat.set(80 / grass.size, 80 / grass.size); // size: metres per tile
+    for (const t of [grass.map, grass.normalMap, grass.roughnessMap]) if (t) t.repeat.set(6000 / grass.size, 6000 / grass.size); // size: metres per tile
     Object.assign(ground.material, { map: grass.map, normalMap: grass.normalMap, roughnessMap: grass.roughnessMap, color: new THREE.Color(0xffffff) });
   }
   // #endregion howto:ground-texture
 
-  // ---- one lamp: a post with a glowing bulb, lit by NearestLights (a pool of real lights; give it many positions)
+  // ---- one lamp: a post on a base with a hooded lantern, lit by NearestLights (a pool of real lights; give it many
+  // positions). The glass glows softly; the light itself comes from the point light, so it pools on the ground
   const lampAt = new THREE.Vector3(3, 3.2, -6);
-  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 3.2, 8), new THREE.MeshStandardMaterial({ color: 0x222428, metalness: 0.6, roughness: 0.5 }));
-  post.position.set(lampAt.x, 1.6, lampAt.z); post.castShadow = true;
-  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8), new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffc070, emissiveIntensity: 6 }));
-  bulb.position.copy(lampAt).y += 0.15;
-  scene.add(post, bulb);
+  const iron = new THREE.MeshStandardMaterial({ color: 0x1e2023, metalness: 0.6, roughness: 0.45 });
+  const lamp = new THREE.Group();
+  const parts = [[new THREE.CylinderGeometry(0.05, 0.07, 3.1, 10), 1.55], [new THREE.CylinderGeometry(0.16, 0.2, 0.3, 12), 0.15], [new THREE.ConeGeometry(0.26, 0.2, 12), 3.42]];
+  for (const [geo, y] of parts) { const p = new THREE.Mesh(geo, iron); p.position.y = y; p.castShadow = true; lamp.add(p); }
+  const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.11, 0.26, 12), new THREE.MeshStandardMaterial({ color: 0x302820, emissive: 0xffb466, emissiveIntensity: 1.6 }));
+  glass.position.y = 3.19; lamp.add(glass);
+  lamp.position.set(lampAt.x, 0, lampAt.z);
+  scene.add(lamp);
   physics.addStaticBox({ center: [lampAt.x, 1.6, lampAt.z], size: [0.2, 3.2, 0.2] }); // the walker cannot pass through it
   // #region howto:lamp
   const lamps = new NearestLights({ count: 1, color: 0xffb070, distance: 12, decay: 1.5, parent: scene });
@@ -64,7 +77,7 @@ async function boot() {
   registerRenderLoaders(assets, renderer);
   assets.add('hero', { type: 'gltf', url: 'ManInSuit.glb' });
   engine.addSystem(assets.system(), 'assets');
-  await engine.load();
+  await engine.load((p, label) => shell.setProgress(0.3 + 0.6 * p, label));
   /** @type {import('@vibe/engine/render').GltfAsset} */
   const gltf = assets.get('hero');
   const model = gltf.instantiate(); // an Object3D (a skinning-safe clone)
@@ -76,6 +89,9 @@ async function boot() {
   const player = new THREE.Group();
   player.add(model);
   scene.add(player);
+  // a soft contact shadow on the ground under the feet (the sun's shadow alone leaves the walker floating at dusk)
+  const blob = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x000000, map: softDotTexture(), transparent: true, opacity: 0.85, depthWrite: false }));
+  scene.add(blob);
   // #endregion howto:glb-load
   // #region howto:glb-anim
   // states name clips by string (the GLB's names; a wrong name throws and lists the right ones); the tree blends by speed
@@ -107,20 +123,22 @@ async function boot() {
   // ---- input and camera
   // #region howto:character-camera
   const input = new CharacterInput({ element: renderer.domElement });
-  const rig = new ThirdPersonRig(camera, renderer.domElement, { physics, distance: 4.2, height: 1.6 });
+  const rig = new ThirdPersonRig(camera, renderer.domElement, { physics, distance: 4.2, height: 1.6, landingDip: 1 }); // dips on landing
   rig.setTarget(player, () => state);
   // #endregion howto:character-camera
 
-  // ---- HUD (one readout), the quality menu, and a sound (Web Audio starts on the first click / key)
+  // ---- HUD (one readout; the quality tiers are in the pause card) and sound (it starts with the start click)
   // #region howto:hud
   const panel = new Panel({ parent: new UILayer(), corner: 'tl' });
   const distance = panel.add(new Readout({ label: 'WALKED', value: '0', unit: 'm' }));
-  new QualityMenu({ quality: Q, corner: 'tr' });
   // #endregion howto:hud
   // #region howto:sound
-  const audio = new AudioBus({ volume: 0.7 });
-  audio.unlockOnGesture();
-  const hop = () => { if (audio.started) playTone(audio.ctx, audio.bus('ui'), { type: 'triangle', pitch: [[0, 660], [0.08, 990]], peak: 0.2, decay: 0.2 }); };
+  const audio = new AudioBus({ master: 'safe', volume: 0.7 }); // compressor + soft clipper: nothing can clip
+  const sfx = new SoundBank(audio, { listener: camera });        // the named sounds (SOUND_PRESETS)
+  const steps = new Footsteps(sfx, { surface: 'grass', at: player });
+  sfx.loop('amb.dusk', { gain: 0.14 });                          // a quiet dusk bed
+  sfx.loop('lamp.hum', { at: lampAt, gain: 0.2 });               // the lamp hums when you are near it
+  shell.use({ engine, audio, inputs: [input] }); // the start click calls audio.start(); pause mutes, Esc / P pause
   // #endregion howto:sound
 
   // ---- the game loop: input per frame, simulation per fixed step, drawing per frame
@@ -141,7 +159,8 @@ async function boot() {
       smooth.save(); // before the step: the pose PoseInterpolator blends from
       const c = input.controls;
       cc.step(dt, move.x, move.z, c.jumpHeld, c.sprint, physics);
-      if (cc.jumpedThisStep) hop();
+      steps.update(dt, { speed: cc.speed, grounded: cc.grounded, landed: cc.landedThisStep, landingSpeed: cc.landingSpeed });
+      if (cc.landedThisStep) rig.land(cc.landingSpeed); // a small camera dip on landing
       walked += cc.speed * dt;
     },
     // #endregion howto:walk-step
@@ -155,6 +174,7 @@ async function boot() {
       player.rotation.y = state.facing;
       anim.setParam('speed', cc.speed).update(dt);
       rig.update(dt);
+      sfx.update(dt);
     },
     // #endregion howto:walk-draw
     lateUpdate(dt) {
@@ -162,14 +182,17 @@ async function boot() {
       // #region howto:lamp-update
       lamps.update(dt, { position: camera.position }, 8); // PointLight intensity: ~8 for a garden lamp at 12 m reach
       // #endregion howto:lamp-update
+      blob.position.set(player.position.x, 0.015, player.position.z); // the contact shadow fades as the feet leave the ground
+      blob.material.opacity = 0.85 * Math.max(0, 1 - player.position.y / 1.2);
       distance.set(walked.toFixed(0));
     },
   }, 'game');
   engine.start();
+  await shell.ready(); // shaders compiled, first frame drawn, the start card up (it does not wait for the click)
 
   // ---- page contract for the browser tests (npm run smoke): window.__sample with `ready`
   // #region howto:page-contract
-  window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-walk' }), { cc, anim }).setReady();
+  window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-walk' }), { cc, anim, shell, audio }).setReady();
   // #endregion howto:page-contract
 }
 
