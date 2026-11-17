@@ -152,13 +152,13 @@ await engine.load((p, label) => shell.setProgress(0.3 + 0.6 * p, label));
 /** @type {import('@vibe/engine/render').GltfAsset} */
 const gltf = assets.get('hero');
 const model = gltf.instantiate(); // an Object3D (a skinning-safe clone)
-model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+// this GLB (converted from FBX) has metalness 0.4 on cloth, skin and hair: the hair mirrored the sky as a grey patch
+model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; Object.assign(o.material, { metalness: 0, roughness: 0.75 }); } });
 model.updateMatrixWorld(true); // bones too: the skinned bounds below read them
 const box = new THREE.Box3().setFromObject(model), k = 1.8 / (box.max.y - box.min.y); // fit to 1.8 m, feet at y = 0
 model.scale.multiplyScalar(k); model.position.y = -box.min.y * k;
 model.rotation.y = Math.PI; // this GLB faces +Z; the engine's forward is -Z
-const player = new THREE.Group();
-player.add(model);
+const player = new THREE.Group().add(model); // the game moves and turns this group
 scene.add(player);
 // a soft contact shadow on the ground under the feet (the sun's shadow alone leaves the walker floating at dusk)
 const blob = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x000000, map: softDotTexture(), transparent: true, opacity: 0.85, depthWrite: false }));
@@ -210,7 +210,7 @@ const van = new VehicleController({ ...ROAD_CAR_SPEC, mass: 2200, motorPower: 90
 <!-- from: samples/starter-drive/main.js#drive-car -->
 ```js
 const car = new VehicleController(SPEC);
-const START = new THREE.Vector3(0, 0, 0);
+const START = new THREE.Vector3(1.75, 0, 0); // the middle of the right-hand lane
 car.reset(START, 0, physics); // heading 0 faces -Z (down the road)
 ```
 
@@ -578,8 +578,8 @@ audio.bus('ui'), { pitch, peak, decay })` is a one-off synth tone.
 ```js
 const audio = new AudioBus({ master: 'safe', volume: 0.7 }); // compressor + soft clipper: nothing can clip
 const sfx = new SoundBank(audio, { listener: camera });        // the named sounds (SOUND_PRESETS)
-const steps = new Footsteps(sfx, { surface: 'grass', at: player });
-sfx.loop('amb.dusk', { gain: 0.14 });                          // a quiet dusk bed
+const steps = new Footsteps(sfx, { surface: 'grass', at: player, gain: 2.4 }); // gain: footfalls and landings over the bed
+sfx.loop('amb.dusk', { gain: 0.1 });                           // a quiet dusk bed
 sfx.loop('lamp.hum', { at: lampAt, gain: 0.2 });               // the lamp hums when you are near it
 shell.use({ engine, audio, inputs: [input] }); // the start click calls audio.start(); pause mutes, Esc / P pause
 ```

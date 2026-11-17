@@ -11,6 +11,8 @@
 // Thresholds (LibreCorsa's tyre-slide-fx): marks fade in from `markHeat[0]` kW to full at `markHeat[1]`, smoke from
 // `smokeHeat[0]` to `smokeHeat[1]`. Restraint is the default: marks are near-black and soft-edged, smoke is pale grey
 // at alpha <= ~0.12 per puff, about twenty puffs per second per sliding tyre, so a slide reads as a thin haze, not a cloud.
+// The puffs are ragged wisps (smokeWispTexture), born faint behind the tyre and densest only once they have grown and
+// risen, so the smoke trails up and back from the wheels instead of sitting on the road as a bright blob.
 //
 // Budget (draw and fill): one draw call each for marks and smoke. `budget.marks` caps the ring of mark quads (the
 // oldest fade out and are reused), `budget.smoke` caps the live puffs (each a camera-facing quad of up to ~3 m, so it
@@ -35,6 +37,36 @@ const boxed = (xs) => { const a = [null, ...xs]; a.shift(); return a; };
 const LEVELS = boxed(Array.from({ length: 65 }, (_, k) => k / 64));
 const ss = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
+let _wisp;
+/**
+ * A ragged smoke wisp sprite (128 px canvas, white with alpha): a dozen soft lobes inside a round falloff, so
+ * overlapping puffs read as thin, torn smoke rather than round dots. Shared; null without a 2D canvas (Node).
+ * @returns {THREE.CanvasTexture|null}
+ */
+export function smokeWispTexture() {
+  if (_wisp !== undefined) return _wisp;
+  _wisp = null;
+  try {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const g = c.getContext('2d');
+    if (!g || !g.createRadialGradient) return _wisp;
+    let seed = 0x5eed;
+    const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+    for (let i = 0; i < 14; i++) { // lobes: off-centre, of different sizes and weights
+      const a = rnd() * 6.283, d = Math.sqrt(rnd()) * 30, x = 64 + Math.cos(a) * d, y = 64 + Math.sin(a) * d, r = 14 + rnd() * 26;
+      const gr = g.createRadialGradient(x, y, 0, x, y, r);
+      gr.addColorStop(0, `rgba(255,255,255,${(0.16 + rnd() * 0.22).toFixed(3)})`); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+    }
+    g.globalCompositeOperation = 'destination-in'; // fade to nothing at the quad's edge
+    const fall = g.createRadialGradient(64, 64, 10, 64, 64, 63);
+    fall.addColorStop(0, 'rgba(255,255,255,1)'); fall.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = fall; g.fillRect(0, 0, 128, 128);
+    _wisp = new THREE.CanvasTexture(c); _wisp.colorSpace = THREE.SRGBColorSpace;
+  } catch { _wisp = null; }
+  return _wisp;
+}
+
 /**
  * @typedef {object} TyreFxBudget
  * @property {number} [marks=1200]  ring capacity of mark quads (segments of ~0.25 m; 4 tyres share it)
@@ -52,7 +84,7 @@ const ss = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
  * @property {number} [markOpacity=0.72]  mark alpha at full heat
  * @property {number} [tyreWidth=0.2]  m, mark width
  * @property {number} [lift=0.03]  m, ribbons raised off the contact point
- * @property {number} [smokeShade=0.78]  smoke grey level (linear, 0..1): pale
+ * @property {number} [smokeShade=0.68]  smoke grey level (linear, 0..1): pale
  * @property {number} [smokeAlpha=0.12]  puff alpha at full smoke
  * @property {((x: number, z: number) => number)|null} [groundAt]  surface height under a mark (default the contact point)
  * @property {number} [seed=1]  puff jitter (deterministic)
@@ -75,7 +107,7 @@ export class TyreFx {
     this.markHeat = o.markHeat || [12, 90];
     this.smokeHeat = o.smokeHeat || [25, 150];
     this.tyreWidth = o.tyreWidth ?? 0.2;
-    this.smokeShade = o.smokeShade ?? 0.78;
+    this.smokeShade = o.smokeShade ?? 0.68;
     this.smokeAlpha = o.smokeAlpha ?? 0.12;
     this.rate = B.rate ?? 22;
     this.groundAt = typeof o.groundAt === 'function' ? o.groundAt : null;
@@ -86,7 +118,8 @@ export class TyreFx {
     });
     /** the smoke puffs (one CPU ParticleSystem, normal blending, sun-lit) */
     this.smoke = new ParticleSystem({
-      max: Math.max(8, Math.round(B.smoke ?? 240)), blending: 'normal', drag: 1.3, fadeIn: 0.25, spin: 0.5, name: 'tyreSmoke',
+      max: Math.max(8, Math.round(B.smoke ?? 240)), blending: 'normal', drag: 1.3, fadeIn: 0.5, spin: 0.5, name: 'tyreSmoke',
+      map: smokeWispTexture() || undefined,
       lit: true, litAmbient: 0.45, sun: o.atmosphere ?? 1,
     });
     this.smoke.mesh.renderOrder = 9;
@@ -97,7 +130,7 @@ export class TyreFx {
     this._r = new Float64Array(4);                          // four jitter values per puff (written by _jitter)
     // one reused puff record, written into the smoke's arrays by _writePuff
     this._hw = boxed([this.tyreWidth * 0.5, 0]);
-    this._puff = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, life: 1, size0: 0.5, size1: 1, alpha: 0.1, r: 0.5, g: 0.5, b: 0.5, r1: 0.5, g1: 0.5, b1: 0.5, drag: 1.3, gravity: -0.08, rot: 0, rotV: 0 };
+    this._puff = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, life: 1, size0: 0.5, size1: 1, alpha: 0.1, r: 0.5, g: 0.5, b: 0.5, r1: 0.5, g1: 0.5, b1: 0.5, drag: 1.3, gravity: -0.35, rot: 0, rotV: 0 };
     /** per wheel 0..1: the mark and smoke intensities of the last update (read-only, for HUDs / tests) */
     this.markLevel = new Float32Array(4);
     this.smokeLevel = new Float32Array(4);
@@ -137,16 +170,17 @@ export class TyreFx {
       if (level > 1) this.stats.marked++;
       if (puff > 0) {
         let acc = this._acc[i] + puff * this.rate * dt;
+        const ib = 1 / Math.max(0.5, Math.sqrt(v.x * v.x + v.z * v.z)); // 1 / speed: the unit backward direction
         const g = this.smokeShade;
         while (acc >= 1) {
           acc -= 1;
           this._jitter();
           const r0 = R[0], r1 = R[1], r2 = R[2], r3 = R[3];
-          // the puffs rise about as fast as they grow, so a quad's dense middle never meets the ground (a camera-facing
-          // quad cut by the road shows a hard straight edge: there are no soft particles)
-          P.x = _p.x + (r1 - 0.5) * 0.3; P.y = _p.y + 0.25; P.z = _p.z + (r2 - 0.5) * 0.3;
-          P.vx = v.x * 0.2 + (r3 - 0.5) * 1.2; P.vy = 0.55 + r0 * 0.5; P.vz = v.z * 0.2 + (r0 - 0.5) * 1.2;
-          P.life = 1.6 + r0 * 1.2; P.size0 = 0.35 + r1 * 0.25; P.size1 = 1.1 + puff * 0.8 + r2 * 0.4;
+          // born faint 0.3 m behind the tyre (against the car's motion) and lifting as they grow, so a quad's dense middle
+          // never meets the ground (a camera-facing quad cut by the road shows a hard straight edge: no soft particles)
+          P.x = _p.x - v.x * ib * 0.3 + (r1 - 0.5) * 0.3; P.y = _p.y + 0.35; P.z = _p.z - v.z * ib * 0.3 + (r2 - 0.5) * 0.3;
+          P.vx = v.x * 0.12 + (r3 - 0.5) * 0.9; P.vy = 1.0 + r0 * 0.6; P.vz = v.z * 0.12 + (r0 - 0.5) * 0.9;
+          P.life = 2.2 + r0 * 1.4; P.size0 = 0.4 + r1 * 0.2; P.size1 = 1.4 + puff * 0.6 + r2 * 0.4;
           P.alpha = this.smokeAlpha * (0.5 + 0.5 * puff);
           P.r = g; P.g = g; P.b = g * 1.02; P.r1 = g * 0.97; P.g1 = g * 0.97; P.b1 = g;
           P.rot = r3 * 6.283; P.rotV = (r1 * 2 - 1) * 0.5;

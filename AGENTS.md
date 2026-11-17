@@ -9,8 +9,8 @@ audio and DOM HUD widgets. You write the game; the engine has no scene editor an
 
 | Starter | What it is |
 |---|---|
-| `samples/starter-walk/` | Third-person walker: animated GLB, controller, camera rig with a landing dip, input, textured ground, a lamp, HUD readout, game shell (start card, pause, saved settings), footsteps, a dusk bed and a lamp hum |
-| `samples/starter-drive/` | HD hatchback (`createCarVisual`) on `VehicleController(visual.spec)`, steering assist, skid marks and smoke, chase camera with road feel, textured road, static posts, car sounds, game shell, speed readout |
+| `samples/starter-walk/` | Third-person walker: animated GLB, controller, camera rig with a landing dip, input, a park corner at dusk (`parkCorner`: path, bench, fence, boulders, trees; `groundCover` grass patches), a lamp, HUD readout, game shell (start card, pause, saved settings), footsteps, a dusk bed and a lamp hum |
+| `samples/starter-drive/` | HD hatchback (`createCarVisual`) on `VehicleController(visual.spec)`, steering assist, skid marks and smoke, chase camera with road feel, a country road (`countryRoad`: lay-by, lane lines, verges, fences, poles, trees) with textured asphalt, static posts, car sounds, game shell, speed readout |
 
 In this repository: copy the folder to `samples/<name>/`, run `npm run dev` and open `http://localhost:5190/<name>/`.
 No registration is needed (`vite.config.js` finds every `samples/<name>/index.html`); add a link on
@@ -88,6 +88,7 @@ expose state that changes through a function (`{ game: () => ({ mode, score }) }
 | Facade windows with dim rooms, shades and panes that differ | `createFacadeMaterials`, `enableFacadeDetail` (world) | `enableFacadeDetail(createFacadeMaterials(...), { dimRooms: 0.22 })` | `samples/nyc-night/facades.js` |
 | AO only on the ambient, a lifted black, TAA sharpen | `PostFX` (render) | `new PostFX(..., { look: { aoLit: 0.8, aoTint: [0, 0.03, 0.07], lift: [0.002, 0.003, 0.004] }, taa: { sharpen: 0.25 } })` | `samples/nyc-night/main.js` |
 | Lamp light in round pools on the ground | `NearestLights` (render) | `new NearestLights({ mode: 'clustered', clustered, spot: { cosInner: 0.82, cosOuter: 0.12 } })` | `samples/nyc-night/main.js` |
+| A small place to start in: a road or a park corner | `countryRoad`, `parkCorner`, `groundCover` (world) | `const place = countryRoad({ physics }); scene.add(place.group)`; per frame `place.update(dt, camera.position, darkness)`; `applyPatches(ground.material, [groundCover({ paths: place.paths })])` | starters |
 | A whole city | `MapWorld` (world) | only for map-scale cities from baked OpenStreetMap data | `samples/nyc-night/main.js` |
 
 Everything else, layer by layer: [ENGINE.md](ENGINE.md). Every source file starts with a header documenting its API.
