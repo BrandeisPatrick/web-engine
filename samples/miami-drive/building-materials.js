@@ -54,11 +54,12 @@ const WEATHER = /* glsl */`
       float ph = mbH(pc + 7.7);
       fCol *= 1.0 + step(0.86, ph) * (ph - 0.93) * 1.1;
       // the engine's weathering (MaterialPatches GLSL_WEATHERING): blotchy repaint and render at two scales, a warm /
-      // cool drift, salt-and-rain streaks down the walls, dirt and damp splashed up from the pavement, dust on ledges,
-      // sun-fading (south / west faces more), chipped paint showing the grey render near the camera
+      // cool drift, dirt and damp splashed up from the pavement, dust on ledges, sun-fading (south / west faces more),
+      // chipped paint showing the grey render near the camera (its streaks are off: the dirt runs below are cheaper and
+      // start where water really runs from, the coping and the ledges)
       float sunF = clamp(wN.z * 0.8 - wN.x * 0.5, 0.0, 1.0) * (1.0 - abs(wN.y));
       float fRoughW = fRough;
-      wxWeather(fCol, fRoughW, vWPos, wN, hs, pw, vec4(0.17, 0.04, 0.12, 0.75), vec4(0.62, 1.25, 0.7, 1.0 / 5.0),
+      wxWeather(fCol, fRoughW, vWPos, wN, hs, pw, vec4(0.17, 0.04, 0.12, 0.75), vec4(0.62, 1.25, 0.0, 1.0 / 5.0),
         vec4(0.18 + 0.3 * sunF, 0.35, 0.45, wxC0.w), vec3(0.6, 0.57, 0.5), vec3(0.55, 0.54, 0.51));
       fRough = fRoughW;
       // the darker damp band right at the pavement (ragged top)
@@ -93,12 +94,12 @@ const WEATHER = /* glsl */`
       fCol *= mix(vec3(1.0), vec3(0.78, 0.77, 0.74), drip * 0.6);
       if (wN.y < -0.5) fCol *= mix(1.0, 0.82, smoothstep(0.4, 0.8, mbN(p * 0.9)));
       fRough = 0.88;
-      wxWeather(fCol, fRough, vWPos, wN, hs, pw, vec4(0.16, 0.03, 0.1, 1.3), vec4(0.5, 1.0, 0.6, 1.0 / 2.5),
+      wxWeather(fCol, fRough, vWPos, wN, hs, pw, vec4(0.16, 0.03, 0.1, 1.3), vec4(0.5, 1.0, 0.0, 1.0 / 2.5),
         vec4(0.0, 0.0, 0.6, wxC0.w + 3.0), vec3(0.58, 0.55, 0.49), vec3(0.5, 0.49, 0.47));
     } else if (mbC > 2.5 && mbC < 3.5) {
       // ---- trim: gloss paint, dulled and chipped (the grey render shows at the chips), dust on its tops
       fRough = 0.42; fNStr = 0.15;
-      if (uMbWeather > 0.5) wxWeather(fCol, fRough, vWPos, wN, hs, pw, vec4(0.07, 0.02, 0.12, 1.6), vec4(0.35, 0.8, 0.25, 1.0 / 2.0),
+      if (uMbWeather > 0.5) wxWeather(fCol, fRough, vWPos, wN, hs, pw, vec4(0.07, 0.02, 0.12, 1.6), vec4(0.35, 0.8, 0.0, 1.0 / 2.0),
         vec4(0.1, 0.5, 0.55, wxC0.w + 5.0), vec3(0.62, 0.58, 0.5), vec3(0.52, 0.51, 0.49));
     } else if (mbC > 3.5 && mbC < 4.5) {
       // ---- glass block

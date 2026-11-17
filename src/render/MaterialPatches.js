@@ -162,7 +162,7 @@ void wxWeather( inout vec3 col, inout float rough, vec3 p, vec3 n, float h, floa
 		rough += st * 0.08;
 	}
 	// grime rising from the ground (ragged top, patchy)
-	if ( B.x > 0.0 ) {
+	if ( B.x > 0.0 && h < B.y * 1.45 ) {
 		float e = wxNoise( vec3( p.x * s * 1.9, p.z * s * 1.9, sd + 5.0 ) );
 		float g = 1.0 - smoothstep( 0.0, B.y * ( 0.5 + 0.9 * e ), h );
 		g *= ( 0.7 + 0.6 * m1 ) * mix( 0.35, 1.0, wall );
