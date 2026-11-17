@@ -38,7 +38,7 @@ import { buildWindowKit } from './windowkit.js';
 import { buildCrowns } from './crowns.js';
 import { AirGlow } from './airglow.js';
 import { buildRooftops } from './rooftops.js';
-import { nightLooks, nightGrade, nightLook, nightLut, cityNightSky, duskLooks, cityDuskSky, NYC_SUN, DUSK_HOURS } from './look.js';
+import { nightLooks, nightGrade, nightLook, nightLut, cityNightSky, duskLooks, cityDuskSky, OPEN_DUSK_SKY, NYC_SUN, DUSK_HOURS } from './look.js';
 import { HUD, ACCENT } from './hud.js';
 
 const params = new URLSearchParams(location.search);
@@ -74,6 +74,8 @@ const Q = resolveQuality({
 });
 const S = Q.settings, NY = S.nyc, DESK = Q.tier === 'desktop';
 const NIGHT = params.get('t') === 'night';
+// ?look=open: the brighter two-temperature grade (look.js); default 'low', the low-key dusk look the smoke gate holds
+const LOOK = params.get('look') === 'open' ? 'open' : 'low';
 // A/B knobs: ?cascades=1..4, ?shadowkernel=fast|pcf|pcss, ?shadownear=<m> (near cascade half size)
 if (params.has('cascades')) S.shadows.cascades = +params.get('cascades') || 1;
 if (params.has('shadowkernel')) S.shadows.kernel = params.get('shadowkernel');
@@ -130,7 +132,7 @@ async function boot() {
     // late dusk by default (the afterglow down the cross streets); ?t=night = 1 a.m., ?t=<hours> any hour
     timeOfDay: NIGHT ? 'night' : params.has('t') && Number.isFinite(+params.get('t')) ? +params.get('t') : DUSK_HOURS,
     atmosphere: {
-      camera, shadows: S.shadows, sun: NYC_SUN, looks: NIGHT ? nightLooks() : duskLooks(), moonScatter: DESK ? 0.35 : 0.2, moonIntensity: 0.14, // a weak moon: its building shadows edge the lamp pools softly, not as hard bright slabs
+      camera, shadows: S.shadows, sun: NYC_SUN, looks: NIGHT ? nightLooks() : duskLooks(LOOK), moonScatter: DESK ? 0.35 : 0.2, moonIntensity: 0.14, // a weak moon: its building shadows edge the lamp pools softly, not as hard bright slabs
       moon: { azimuth: 200, elevation: 48 }, maxCasterHeight: 420, skyGain: 0.2,
     },
     spawn: { road: /^7th Avenue$/ },
@@ -174,7 +176,7 @@ async function boot() {
   const geo = (lat, lon) => ({ x: (lon - C.lon) * DEG * R_EARTH * COS0 - world.offset.x, z: -(lat - C.lat) * DEG * R_EARTH - world.offset.z });
   const SQUARE = geo(40.7576, -73.9857);
 
-  if (NIGHT) cityNightSky(world.atmo); else cityDuskSky(world.atmo);
+  if (NIGHT) cityNightSky(world.atmo); else cityDuskSky(world.atmo, LOOK === 'open' ? OPEN_DUSK_SKY : undefined);
   memlog('sky');
   const trim = params.has('keepcpu') ? null : world.trimMemory(renderer); // ?keepcpu = A/B of the heap trim
   // ---------------------------------------------------------------- wet streets, signs, steam
@@ -200,7 +202,7 @@ async function boot() {
   signs.uniforms.uSignGain.value = signGain;
   // open shops spill warm light onto the pavement in front (the warm half of the two-temperature night)
   // (signage.js gives them ~1 cd, invisible beside a 9 m street lamp's pool: here a lit shop window's few candela)
-  for (const l of signs.lights) if (l.kind === 'shop') { const k = 6.5 / Math.max(0.3, l.r); l.r *= k; l.g *= k * 0.95; l.b *= k * 0.85; l.range = 10; }
+  for (const l of signs.lights) if (l.kind === 'shop') { const k = (LOOK === 'open' ? 6.5 : 3) / Math.max(0.3, l.r); l.r *= k; l.g *= k * 0.95; l.b *= k * 0.85; l.range = 10; }
   // cars: contact shadows, and glossy paint that picks up the sky glow and the lamps
   const carShadows = world.traffic ? new CarShadows({ scene, world, max: DESK ? 48 : 24 }) : null;
   if (world.traffic && world.traffic.material) world.traffic.material.envMapIntensity = 2.2;
@@ -224,7 +226,7 @@ async function boot() {
   { const LP = world.props && world.props.lightPool; if (LP) { LP.color.setRGB(1.0, 0.62, 0.3).multiplyScalar(DESK ? 3.0 : 1.8); LP.reach = 15; LP.spot = { cosInner: 0.85, cosOuter: 0.3 }; LP._fresh = true; for (const l of LP.lights || []) { l.color.copy(LP.color); l.distance = 15; } } }
   // facade light (facades.js), roof lines and wall clutter (rooftops.js), light in the air (airglow.js)
   const westAz = (NYC_SUN.azimuthStart + NYC_SUN.azimuthSpan * Math.min(1.15, (DUSK_HOURS - NYC_SUN.rise) / (NYC_SUN.set - NYC_SUN.rise))) * DEG;
-  const facadeGrade = gradeFacades({ world, west: { x: Math.sin(westAz), z: -Math.cos(westAz) }, lamps: 4, skyGain: NIGHT ? 0.3 : 1, canyon: DESK ? [0.62, 1.25] : [0.72, 1.25] }); // the canyon floor a dark grey, not black
+  const facadeGrade = gradeFacades({ world, west: { x: Math.sin(westAz), z: -Math.cos(westAz) }, lamps: 4, skyGain: NIGHT ? 0.3 : 1, canyon: LOOK === 'open' ? (DESK ? [0.62, 1.25] : [0.72, 1.25]) : (DESK ? [0.45, 1.25] : [0.58, 1.25]) }); // the canyon floor dark, never black
   // wall relief in the dusk light, grime, curtains (walls.js; mobile: no streaks under the sills)
   const walls = params.has('nowalls') ? null : dressWalls({ world, west: { x: Math.sin(westAz), z: -Math.cos(westAz) }, sills: DESK }); // A/B: ?nowalls
   const roofs = buildRooftops({ world, scene, center: SQUARE, skip: crowns.crowned, facades: signs.facades, max: DESK ? 900 : 450, ac: 0 }); // window AC units: windowkit.js (real window layout)
@@ -302,10 +304,10 @@ async function boot() {
   let postfx = null;
   try {
     const { width, height } = engine.size;
-    const lut = nightLut();
+    const lut = nightLut(24, LOOK);
     postfx = new PostFX(renderer, scene, camera, {
       atmosphere: world.atmo, width, height, pixelRatio: engine.pixelRatio,
-      ...S.postfx, ao: { radius: 1.2, thickness: 1.2, samples: 6, maxPixels: 0.25e6 }, grade: nightGrade({ exposure: DESK ? 1.8 : 1.65 }), look: nightLook(), lut: { texture: lut.texture, size: lut.size, strength: 1 }, // mobile a touch lower: no SSR / TAA there
+      ...S.postfx, ao: { radius: 1.2, thickness: 1.2, samples: 6, maxPixels: 0.25e6 }, grade: nightGrade({ look: LOOK, exposure: LOOK === 'open' ? (DESK ? 1.8 : 1.65) : (DESK ? 1.5 : 1.4) }), look: nightLook(LOOK), lut: { texture: lut.texture, size: lut.size, strength: 1 }, // mobile a touch lower: no SSR / TAA there
     });
     if (!S.passes.ao) postfx.aoPass.enabled = false;
     postfx.setTimeOfDay(world.atmo.darkness);
