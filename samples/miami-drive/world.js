@@ -589,7 +589,7 @@ float sdN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f)
   return mix(mix(sdH(i), sdH(i + vec2(1.0, 0.0)), f.x), mix(sdH(i + vec2(0.0, 1.0)), sdH(i + vec2(1.0, 1.0)), f.x), f.y); }`)
       // the wet band's edge wanders (tongues of the last swash, ~2-6 m) instead of following the mesh's columns
       .replace('#include <color_fragment>', `#include <color_fragment>
-float sWet = clamp(vWet + (sdN(vSandXZ * 0.21) * 0.7 + sdN(vSandXZ * 0.9) * 0.3 - 0.5) * 0.45, 0.0, 1.0);
+float sWet = clamp(vWet + (sdN(vSandXZ * 0.25) - 0.5) * 0.45, 0.0, 1.0);
 // dry sand close to neutral (the texture's grain kept, its brown cast pulled toward a warm grey: uSandLook), the
 // wet band darker
 vec3 sDry = diffuseColor.rgb * 2.1;
@@ -817,14 +817,6 @@ function beachDressing(P, rows, r, o, world) {
       const x = h.x + 7 + (k % 2) * 3.2, z = h.z - 8 + Math.floor(k / 2) * 2.4;
       P.beachProps.push({ type: 'lounger', x, z, yaw: Math.PI / 2 });
       if (k % 2 === 0) P.beachProps.push({ type: 'parasol', x: x + 1.6, z: z + 0.6, yaw: 0 });
-    }
-    // things for scale on the open sand: a bin at the foot of the ramp, a pair of loungers with a furled umbrella
-    // left out further along (the beach pose looks over them)
-    P.beachProps.push({ type: 'bin', x: h.x - 7.2, z: h.z + 1.4 });
-    if (!low) {
-      const bx = h.x + 4.5, bz = h.z + 17;
-      P.beachProps.push({ type: 'lounger', x: bx, z: bz, yaw: Math.PI / 2 + 0.25 }, { type: 'lounger', x: bx + 1.4, z: bz + 0.9, yaw: Math.PI / 2 + 0.1 });
-      P.beachProps.push({ type: 'parasol', x: bx + 0.7, z: bz - 1.3, yaw: 0 }, { type: 'bin', x: bx - 9, z: bz + 6 });
     }
   }
 }
