@@ -188,7 +188,7 @@ class Fliers {
     g.setIndex(I);
     const A = new Float32Array(n * 4), Bv = new Float32Array(n * 4), C = new Float32Array(n * 4), D = new Float32Array(n * 4);
     for (let i = 0; i < this.crowBase; i++) {
-      A[i * 4] = rng(); A[i * 4 + 1] = rng(); A[i * 4 + 2] = rng(); A[i * 4 + 3] = 0.15 + rng() * 0.11;
+      A[i * 4] = rng(); A[i * 4 + 1] = rng(); A[i * 4 + 2] = rng(); A[i * 4 + 3] = 0.11 + rng() * 0.07;
       Bv[i * 4] = rng() * Math.PI; Bv[i * 4 + 1] = rng() * Math.PI * 2; Bv[i * 4 + 2] = 0.7 + rng() * 0.6; Bv[i * 4 + 3] = rng() * 100;
       C[i * 4 + 3] = i < count ? -1 : -1e6; // ambient / a kick slot never used
     }
@@ -203,7 +203,7 @@ class Fliers {
     g.setAttribute('lfA', new THREE.InstancedBufferAttribute(A, 4));
     g.setAttribute('lfB', new THREE.InstancedBufferAttribute(Bv, 4));
     g.setAttribute('lfC', this.aC); g.setAttribute('lfD', this.aD);
-    this.u = { uLfC: { value: new THREE.Vector3() }, uLfO: { value: new THREE.Vector4() }, uLfP: { value: new THREE.Vector4(13, 4.5, 0.5, 0.3) }, uLfFill: { value: 0.07 } };
+    this.u = { uLfC: { value: new THREE.Vector3() }, uLfO: { value: new THREE.Vector4() }, uLfP: { value: new THREE.Vector4(13, 4.5, 0.5, 0.3) }, uLfFill: { value: 0.02 } };
     const mat = new THREE.MeshLambertMaterial({ color: '#ffffff', side: THREE.DoubleSide });
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, this.u, { uEnvT: U });
@@ -219,7 +219,7 @@ class Fliers {
     mat.customProgramCacheKey = () => 'hwFliers';
     this.mesh = new THREE.InstancedMesh(g, mat, n); // identity instance matrices: the shader places everything
     this.mesh.name = 'windLeavesCrows'; this.mesh.frustumCulled = false;
-    const col = new THREE.Color(), PAL = [[0.34, 0.11, 0.03], [0.5, 0.21, 0.04], [0.4, 0.26, 0.06], [0.28, 0.07, 0.05], [0.55, 0.34, 0.08], [0.22, 0.14, 0.05]];
+    const col = new THREE.Color(), PAL = [[0.2, 0.1, 0.05], [0.26, 0.15, 0.07], [0.22, 0.16, 0.08], [0.17, 0.08, 0.05], [0.28, 0.2, 0.1], [0.15, 0.11, 0.07]]; // muted: browns, rust, dull ochre
     for (let i = 0; i < this.crowBase; i++) { const p = PAL[Math.floor(rng() * PAL.length)], k = 0.8 + rng() * 0.4; this.mesh.setColorAt(i, col.setRGB(p[0] * k, p[1] * k, p[2] * k)); }
     for (let i = this.crowBase; i < n; i++) this.mesh.setColorAt(i, col.setRGB(0.022, 0.02, 0.03));
     this.mesh.instanceColor.needsUpdate = true;
@@ -749,7 +749,7 @@ export class Environment {
     const L = this.leaves.u;
     L.uLfC.value.set(cam.x + fx * 8, gy - 0.2, cam.z + fz * 8);
     L.uLfO.value.copy(O);
-    L.uLfP.value.set(13, 4.5, clamp((0.42 + 0.58 * S) * (this.reduced ? 0.6 : 1), 0, 1), (0.18 + 0.3 * W) * calm);
+    L.uLfP.value.set(13, 4.5, clamp((0.06 + 0.45 * S) * (this.reduced ? 0.6 : 1), 0, 1), (0.18 + 0.3 * W) * calm); // (a few leaves, more as the storm builds)
     // ---- kicked leaves: the kid running through the grass
     if (this._kidHave) {
       const dx = kid.x - this._kidPrev.x, dz = kid.z - this._kidPrev.z, dy = kid.y - this._kidPrev.y, sp = Math.hypot(dx, dz) / dt;

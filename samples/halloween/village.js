@@ -73,7 +73,7 @@ export function hauntedPorch(B, G, ctx, physics, groundAt, p, house) {
   for (const [a, b] of [[-0.95, 0.35], [2.05, 3.35]]) box(a - 0.08, b + 0.08, pz - 0.08, pz + 0.08, deckTop + 0.95);
   // the doormat on the porch, its glowing border in the lamp's group
   const mat = h.at(1.2, 0.5, d / 2 + 0.85);
-  P.doormat(B, G, { x: mat[0], y: deckTop, z: mat[2], yaw: p.yaw, rug: '#3a2232' });
+  P.doormat(B, { x: mat[0], y: deckTop, z: mat[2], yaw: p.yaw, rug: '#3a2232' });
   ctx.use(h.lamp);
   P.doormatGlow(G, { x: mat[0], y: deckTop, z: mat[2], yaw: p.yaw });
   const mh = ctx.spot(mat[0], deckTop + 0.35, mat[2], 2.3, 0.2, 0.16, 0.09, 0.1, h.lamp);

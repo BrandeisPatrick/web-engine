@@ -143,7 +143,10 @@ const wrapPi = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.P
 // lanterns, windows and candy are the only saturated things in the frame; exposure kept off the clip (no light source
 // burns to white), small glow cores with a modest bloom, fine grain and a vignette. `?look=classic` keeps the first
 // look (a saturated violet wash) for comparison: the same numbers it always had.
+// `?look=open` (2026-11 look pass) is a brighter alternative of the same look for comparison: lifted exposure and
+// fill, a lighter vignette (outside the smoke test's low-key look gate, which the default keeps to).
 const CLASSIC = params.get('look') === 'classic';
+const OPEN = !CLASSIC && params.get('look') === 'open';
 const TAA_WANTED = !CLASSIC && !(params.has('taa') && params.get('taa') === '0');
 const NIGHT = CLASSIC ? {
   grade: { exp: 1.45, aeMax: 1.45, bT: 0.8, bS: 0.85, bR: 0.66, sat: 1.18, con: 0.24, split: 1.25, sh: [0.002, -0.004, 0.03], hi: [0.036, 0.016, -0.018], vig: 0.5, grain: 0.018, wb: [0.97, 0.97, 1.06] },
@@ -151,10 +154,12 @@ const NIGHT = CLASSIC ? {
   zen: [0.004, 0.0045, 0.022], hor: [0.042, 0.028, 0.09], pollution: [0.032, 0.012, 0.04],
   hemi: ['#5b5ccf', '#2c2230', 0.34], moon: [0.68, 0.74, 1.0], env: 0.55, mist: [0.065, 0.06, 0.11],
 } : {
-  grade: { exp: 1.7, aeMax: 1.3, bT: 1.15, bS: 0.42, bR: 0.5, sat: 0.86, con: 0.2, split: 0.7, sh: [0.004, 0.0, 0.009], hi: [0.03, 0.014, -0.012], vig: 0.58, grain: 0.03, wb: [0.975, 0.985, 1.02] },
+  // (2026-11 look pass: the darks lifted and cooled (sh), a stronger moon key, less vignette; the default stays low key)
+  grade: OPEN ? { exp: 1.85, aeMax: 1.5, bT: 1.15, bS: 0.42, bR: 0.5, sat: 0.9, con: 0.2, split: 0.8, sh: [0.004, 0.007, 0.016], hi: [0.03, 0.014, -0.012], vig: 0.4, grain: 0.03, wb: [0.975, 0.985, 1.02] }
+    : { exp: 1.36, aeMax: 1.3, bT: 1.15, bS: 0.42, bR: 0.5, sat: 0.9, con: 0.2, split: 0.8, sh: [0.006, 0.009, 0.019], hi: [0.03, 0.014, -0.012], vig: 0.55, grain: 0.03, wb: [0.975, 0.985, 1.02] },
   clouds: { cover: params.get('clouds') === '1' ? 0.2 : 0.36, cop: 0.92, cs: [0.05, 0.056, 0.072], ca: [0.006, 0.0068, 0.0095] },
   zen: [0.0052, 0.0052, 0.0088], hor: [0.036, 0.033, 0.048], pollution: [0.013, 0.012, 0.016],
-  hemi: ['#5f5f7c', '#211f21', 0.48], moon: [0.66, 0.73, 0.9], env: 0.5, mist: [0.05, 0.056, 0.068],
+  hemi: ['#56627e', '#262123', OPEN ? 0.56 : 0.44], moon: [0.66, 0.75, 0.95], env: OPEN ? 0.58 : 0.5, mist: [0.05, 0.056, 0.068],
 };
 // night grade: moonlit shadows, warm lantern highlights, more contrast than the stock night grade, bloom, a vignette
 // (the remaster on phones: a touch more exposure, for the moonlit mist the volumetric pass adds on desktop)
@@ -222,7 +227,7 @@ async function boot() {
   const { scene, camera, renderer } = engine;
   const atmo = new Atmosphere({
     scene, renderer, camera, timeOfDay: 23.6, skyRadius: 1000, flare: false, cloudWind: [4, 1.5], looks: LOOKS,
-    moon: { azimuth: 22, elevation: 13 }, moonIntensity: 1.9, moonColor: NIGHT.moon, fogDensity: [0.022, 0],
+    moon: { azimuth: 22, elevation: 13 }, moonIntensity: CLASSIC ? 1.9 : OPEN ? 2.4 : 2.3, moonColor: NIGHT.moon, fogDensity: [0.022, 0],
     moonScatter: 0.05, // the ground mist glows toward the moon (and the desktop volumetric pass marches moonlight)
     shadows: { ...(LOW ? { cascades: 1, single: 24, singleMapSize: 1024, kernel: 'fast' } : { cascades: 1, single: 34, singleMapSize: 2048, kernel: 'fast' }), skipUnlit: QUALITY.settings.shadows.skipUnlit },
     maxCasterHeight: 24,
@@ -1158,7 +1163,7 @@ async function boot() {
 
   const _pm = new THREE.Matrix4(), _frustum = new THREE.Frustum(), _dir = new THREE.Vector3();
   const lightView = { position: camera.position, frustum: _frustum, direction: _dir };
-  const WISPS = 14;
+  const WISPS = CLASSIC ? 14 : 6;
   let cloudT = 0;
   const worldLate = (dt) => {
       camera.updateMatrixWorld();
@@ -1177,8 +1182,13 @@ async function boot() {
       for (let k = 0; k < WISPS; k++) { // will-o'-wisps drifting over the graveyard
         const a = t * (0.13 + k * 0.011) + k * 2.4;
         const x = 27 + Math.sin(a) * 15 + Math.sin(a * 2.3 + k) * 3, z = -28 + Math.cos(a * 0.8 + k) * 14;
-        const y = heightAt(x, z) + 1.1 + Math.sin(t * 1.7 + k) * 0.5, f = 0.75 + 0.25 * Math.sin(t * 5 + k * 3);
-        glows.set(n++, x, y, z, 0.7, 0.25 * f, 0.9 * f, 0.4 * f);
+        if (CLASSIC) {
+          const y = heightAt(x, z) + 1.1 + Math.sin(t * 1.7 + k) * 0.5, f = 0.75 + 0.25 * Math.sin(t * 5 + k * 3);
+          glows.set(n++, x, y, z, 0.7, 0.25 * f, 0.9 * f, 0.4 * f);
+        } else { // (2026-11 look pass) a few warm fireflies low over the grass, each blinking on for a moment now and then
+          const y = heightAt(x, z) + 0.6 + Math.sin(t * 1.3 + k) * 0.25, f = Math.pow(Math.max(0, Math.sin(t * (0.7 + k * 0.09) + k * 1.9)), 6);
+          glows.set(n++, x, y, z, 0.16, 0.9 * f, 0.62 * f, 0.22 * f);
+        }
       }
       n += fx.glow(glows, n);
       n += porches.update(dt, glows, n, t); // doors, lamps (on the env's flicker), railing pumpkins, doorways

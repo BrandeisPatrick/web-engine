@@ -303,14 +303,27 @@ export function patchRim(mat, { color = new THREE.Color(0.32, 0.36, 0.62), power
 }
 
 /** Grass tufts sway in the wind: the blade tips (local y) move, the roots stay; per-instance phase from its position. */
-export function patchGrass(mat, fade = null) {
+export function patchGrass(mat, fade = null, tips = 0) {
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uTimeHw = LOOK.time;
     sh.uniforms.uWindHw = LOOK.wind;
     sh.uniforms.uCamHw = LOOK.cam;
+    if (tips) { // (2026-11 look pass) the blades' tips catch the moon: a cool sheen, strongest seen against the moon
+      sh.uniforms.uMoonHw = LOOK.moonView;
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform vec3 uMoonHw;\nvarying float vTipHw;')
+        .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
+  normal = normalize( normal + uMoonHw * ( 0.1 + 0.5 * vTipHw ) ); // (the upper blade turned toward the moon: it takes its light)`)
+        .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+  {
+    float hwBack = max( 0.0, dot( - normalize( vViewPosition ), uMoonHw ) );
+    totalEmissiveRadiance += vec3( 0.62, 0.68, 0.82 ) * ( vTipHw * vTipHw ) * ${tips.toFixed(3)} * ( 0.25 + 0.5 * hwBack * hwBack );
+  }`);
+    }
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float uTimeHw;\nuniform vec2 uWindHw;\nuniform vec3 uCamHw;')
+      .replace('#include <common>', `#include <common>\nuniform float uTimeHw;\nuniform vec2 uWindHw;\nuniform vec3 uCamHw;${tips ? '\nvarying float vTipHw;' : ''}`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
+  ${tips ? 'vTipHw = clamp( position.y / 0.4, 0.0, 1.0 );' : ''}
   {
   #ifdef USE_INSTANCING
     vec2 hwO = instanceMatrix[ 3 ].xz;
@@ -330,7 +343,7 @@ export function patchGrass(mat, fade = null) {
     ${fade ? `transformed *= 1.0 - smoothstep( ${fade[0].toFixed(1)}, ${fade[1].toFixed(1)}, length( hwO - uCamHw.xz ) ); // (far clumps fold away: thin far blades cost the most per pixel)` : ''}
   }`);
   };
-  mat.customProgramCacheKey = () => (fade ? `hwGrassF${fade[0]}` : 'hwGrass');
+  mat.customProgramCacheKey = () => (fade ? `hwGrassF${fade[0]}` : 'hwGrass') + (tips ? `T${tips}` : '');
   return mat;
 }
 
@@ -397,6 +410,11 @@ export function patchRibs(mat, lobes, strength = 0.5, key = 'hwRibs', skin = fal
     float hwSt = smoothstep( 0.3, 0.75, hwK1.a ) * 0.7 + 0.3 * hwK1.r;
     diffuseColor.rgb = mix( vec3( hwL ), diffuseColor.rgb, 0.8 ) * ( 0.55 + 0.75 * hwSt );
     diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * vec3( 1.35, 1.25, 0.7 ), smoothstep( 0.58, 0.74, hwK2.b ) * 0.7 );
+    ${typeof skin === 'number' ? `// (2026-11 look pass) a field pumpkin, not a plastic one: dull bruised blotches, a greenish-brown bottom
+    // where it sat on the soil, and fine pocks
+    diffuseColor.rgb *= mix( 1.0, 0.68, smoothstep( 0.52, 0.72, hwK1.g ) );
+    diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.16, 0.11, 0.04 ) * ( 0.7 + 0.6 * hwK2.r ), ( 1.0 - smoothstep( 0.0, ${(0.32 * skin).toFixed(4)}, hwH ) ) * 0.55 );
+    diffuseColor.rgb *= 1.0 - 0.35 * smoothstep( 0.62, 0.8, texture2D( tSkinHw, vec2( hwA * 5.3, hwH * 9.0 ) ).b );` : ''}
     roughnessFactor = clamp( roughnessFactor * ( 0.7 + 0.6 * hwK2.r ), 0.2, 1.0 );
     ${typeof skin === 'number' ? `// the lid's cut: a zigzag ring round the stem (skin = the pumpkin's radius)
     float hwR = length( vRibHw.xz ), hwZ = ${(0.42 * skin).toFixed(4)} * ( 1.0 + 0.1 * sign( sin( hwA * 7.0 ) ) );

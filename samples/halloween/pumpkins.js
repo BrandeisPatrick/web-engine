@@ -42,7 +42,9 @@ const FACE_X = 0.6 * R, FACE_Y0 = 0.28 * R, FACE_Y1 = 1.24 * R, FACE_DEPTH = 0.0
 let _faceTex = null;
 function faceTexture() {
   if (_faceTex) return _faceTex;
-  const W = 516, H = 128, CW = W / 3, c = makeCanvas(W, H), g = c.getContext('2d');
+  // (2026-11 look pass) drawn at 3x and softened: the parallax march finds the cut wall where the mask crosses 0.5,
+  // and a hard 1-bit edge at the old size gave it stair steps along every curve
+  const SC = 3, W = 516 * SC, H = 128 * SC, CW = W / 3, c = makeCanvas(W, H), g = c.getContext('2d');
   g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
   g.fillStyle = '#fff';
   // face-plane units: x in R (-0.6 .. 0.6), y in R (0.28 .. 1.24) above the base
@@ -73,7 +75,12 @@ function faceTexture() {
   poly(2, [[-0.44, 1.02], [-0.1, 0.9], [-0.14, 0.8], [-0.38, 0.86]]); poly(2, [[0.44, 1.02], [0.1, 0.9], [0.14, 0.8], [0.38, 0.86]]);
   poly(2, [[-0.06, 0.68], [0.06, 0.68], [0, 0.78]]);
   grin(2, -0.48, 0.48, 0.58, 0.34, [], 0.06);
-  const t = new THREE.CanvasTexture(c);
+  let out = c;
+  try {
+    const c2 = makeCanvas(W, H), g2 = c2.getContext('2d');
+    if (g2 && 'filter' in g2) { g2.fillStyle = '#000'; g2.fillRect(0, 0, W, H); g2.filter = `blur(${(1.4 * SC).toFixed(1)}px)`; g2.drawImage(c, 0, 0); out = c2; }
+  } catch { /* no canvas filter: the sharp mask */ }
+  const t = new THREE.CanvasTexture(out);
   t.colorSpace = THREE.NoColorSpace; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
   t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter;
   _faceTex = t;
@@ -139,6 +146,16 @@ float hwMask( vec2 p ) {
       if ( hit > 1.5 && m < 0.5 ) hit = ( float( i ) - 1.0 + clamp( ( mPrev - 0.5 ) / max( mPrev - m, 1e-3 ), 0.0, 1.0 ) ) / ${hollow ? '12.0' : '6.0'};
       mPrev = m;
     }
+    ${hollow ? `// (2026-11 look pass) refine the crossing by bisection inside its step: the coarse march left stair steps
+    // along the cut wall's edge wherever the ray ran at a grazing angle
+    if ( hit < 1.5 ) {
+      float lo = max( 0.0, hit - 1.0 / 12.0 ), hi = min( 1.0, hit + 1.0 / 12.0 );
+      for ( int k = 0; k < 5; k ++ ) {
+        float mid = 0.5 * ( lo + hi );
+        if ( hwMask( vFuvHw + dir * uFaceHw.w * mid ) < 0.5 ) hi = mid; else lo = mid;
+      }
+      hit = 0.5 * ( lo + hi );
+    }` : ''}
     // the cut wall: flesh, dim near the rind's skin, bright toward the candle; past it the glowing inside
     ${hollow ? `// (the remaster) past the wall the HOLLOW: its far side seen through the opening, lit by a candle low in the
     // middle (hot and yellow there, deep orange at the edges and up under the lid), the skin's edge a dark line
@@ -146,7 +163,7 @@ float hwMask( vec2 p ) {
     float cand = exp( - dot( back - vec2( 0.0, ${(0.5 * R).toFixed(3)} ), back - vec2( 0.0, ${(0.5 * R).toFixed(3)} ) ) * 26.0 );
     vec3 hollowC = mix( vec3( 0.75, 0.24, 0.05 ), vec3( 1.0, 0.72, 0.32 ), cand ) * ( 0.55 + 0.6 * cand );
     float edge = smoothstep( 0.0, 0.12, hit );
-    diffuseColor.rgb = hit > 1.5 ? hollowC : vec3( 1.0, 0.6, 0.27 ) * mix( 0.04, 0.55, hit * hit ) * edge;` : 'diffuseColor.rgb = hit > 1.5 ? vec3( 1.0 ) : vec3( 1.0, 0.62, 0.3 ) * mix( 0.1, 0.5, hit * hit );'}
+    diffuseColor.rgb = hit > 1.5 ? hollowC : vec3( 1.0, 0.5, 0.2 ) * mix( 0.03, 0.42, hit * hit ) * edge; // (2026-11: deeper, warmer flesh; the hollow beyond stays the hottest)` : 'diffuseColor.rgb = hit > 1.5 ? vec3( 1.0 ) : vec3( 1.0, 0.62, 0.3 ) * mix( 0.1, 0.5, hit * hit );'}
   }
 #include <color_fragment>`);
   };
@@ -244,9 +261,9 @@ export class Lanterns {
     // intact lanterns: body (lit, instanced) + face (unlit HDR, instanced)
     // the body: ribbed, a curved stem and a curly vine; the rind round the carving glows (light through the thin rind)
     // (the remaster: a deeper orange with a skin, streaks and scars, looks.js patchRibs skin)
-    this.bodyMat = patchRibs(patchGlow(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: remaster ? 0.42 : 0.5, metalness: 0, emissive: '#ff4a00', emissiveIntensity: remaster ? 0.07 : 0.12 }), 'hwLanternBody'), LOBES, 0.5, 'hwRibs', skin ? R : false); // (a number: the skin with a lid's cut)
+    this.bodyMat = patchRibs(patchGlow(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: remaster ? 0.7 : 0.5, metalness: 0, emissive: '#ff4a00', emissiveIntensity: remaster ? 0.07 : 0.12 }), 'hwLanternBody'), LOBES, 0.5, 'hwRibs', skin ? R : false); // (a number: the skin with a lid's cut)
     const glow = (x, y, z) => 0.015 + 0.3 * Math.exp(-((x / (0.5 * R)) ** 2) - (((y - 0.76 * R) / (0.42 * R)) ** 2)) * smooth(z / (0.6 * R));
-    this.body = new THREE.InstancedMesh(pumpkinGeometry(R, remaster ? (skin ? 72 : 48) : 32, 0, remaster ? '#e8681c' : '#ff7a1a', '#5a5a24', { lobes: LOBES, depth: DEPTH, vine: true, glow, seed: 11, fine: skin ? 28 : 0 }), this.bodyMat, n);
+    this.body = new THREE.InstancedMesh(pumpkinGeometry(R, remaster ? (skin ? 72 : 48) : 32, 0, remaster ? '#d2601e' : '#ff7a1a', '#5a5a24', { lobes: LOBES, depth: DEPTH, vine: true, glow, seed: 11, fine: skin ? 28 : 0 }), this.bodyMat, n);
     this.body.name = 'lanterns'; this.body.castShadow = true; this.body.receiveShadow = true;
     this.faceMat = patchFace(new THREE.MeshBasicMaterial({ color: '#ffffff', polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), skin); // (the hollow: desktop)
     const fg = faceGeometry(skin ? 0.016 : 0.004), fv = new Float32Array(n); // (the smooth body bulges a little past the old rings)
@@ -383,6 +400,14 @@ export class Lanterns {
       }
     }
     this.pool.update(dt, view, 7.5);
+    // (2026-11 look pass) each lit lantern's light breathes with its own candle (the face's flicker), gently
+    const PL = this.pool;
+    if (PL.lights) for (let j = 0; j < PL.lights.length; j++) {
+      const s = PL.slot[j];
+      if (s < 0) continue;
+      const f = this.flick[s] + time;
+      PL.lights[j].intensity *= 0.88 + 0.07 * Math.sin(f * 9.1) + 0.05 * Math.sin(f * 23.7 + 1.3);
+    }
   }
 
   _sync(lightsToo) {
