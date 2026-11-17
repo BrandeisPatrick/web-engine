@@ -835,8 +835,13 @@ export class VehicleController {
     const lock = handbrake && u > 2 ? clamp(1 - Math.abs(this.wheelSpeed) / u, 0, 1) : 0;
     const ndF = Math.abs(aF) / this.slipPeakFront;
     const ndR = Math.max(Math.abs(aR) / this.slipPeakRear, lock * 10); // a locked wheel slides far past its peak
-    const kF = Math.abs(this._latF) * smooth01((ndF - 1.1) / 0.9) / 1000;
-    const kR = Math.hypot(this._latR, lock * u) * smooth01((ndR - 1.1) / 0.9) * (1 + 3 * lock) / 1000;
+    // smoothstep(1.1, 2, nd), written out: a helper call returning a double costs a 16 B box when V8 does not inline it
+    let tF = (ndF - 1.1) / 0.9, tR = (ndR - 1.1) / 0.9;
+    tF = tF <= 0 ? 0 : tF >= 1 ? 1 : tF * tF * (3 - 2 * tF);
+    tR = tR <= 0 ? 0 : tR >= 1 ? 1 : tR * tR * (3 - 2 * tR);
+    const latR = this._latR, lu = lock * u;
+    const kF = Math.abs(this._latF) * tF / 1000;
+    const kR = Math.sqrt(latR * latR + lu * lu) * tR * (1 + 3 * lock) / 1000;
     for (let i = 0; i < 4; i++) {
       const w = W[i];
       w.slideHeat = w.contact && w.load > 300 ? w.load * (i < 2 ? kF : kR) : 0;
@@ -1187,7 +1192,6 @@ export class VehicleController {
 
 // ---- helpers ------------------------------------------------------------------
 const pac = (C, B, alpha) => Math.sin(C * Math.atan(B * alpha));
-const smooth01 = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
 function basis(q) {
   _fwd.set(0, 0, -1).applyQuaternion(q);

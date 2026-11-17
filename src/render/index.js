@@ -63,6 +63,10 @@ export { releaseStaticGeometry, releaseTextureData, createMemoryTrim } from './M
 export { LODGroup } from './LODGroup.js';
 export { ChunkCuller } from './Culling.js';
 export { DecalTrail } from './Decals.js';
+// skid marks and tyre smoke from VehicleController's wheels[i].slideHeat (one DecalTrail + one ParticleSystem)
+export { TyreFx } from './TyreFx.js';
+/** @typedef {import('./TyreFx.js').TyreFxOptions} TyreFxOptions */
+/** @typedef {import('./TyreFx.js').TyreFxBudget} TyreFxBudget */
 export { ParticleSystem, ParticleEmitter, softDotTexture, atmosphereSunFactor } from './Particles.js';
 // procedural noise: seeded simplex 2D / 3D, RNG, hash, tileable value noise; the whole module (incl. the
 // clamp / lerp / smoothstep easing helpers) is also available namespaced as Noise
