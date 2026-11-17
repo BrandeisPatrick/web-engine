@@ -59,7 +59,7 @@ vec3 skyAt(vec3 d) {
   vec2 w = d.xz / (d.y + 0.07);                                           // the deck in perspective
   vec2 p = vec2(dot(w, ax) * 1.25, dot(w, ay) * 0.5) + vec2(uSeed, -uSeed * 0.6);  // streaks run across the glow
   p += (vec2(n2(p * 0.45 + 7.1), n2(p * 0.45 + 2.9)) - 0.5) * 1.3;       // domain warp: rolls, not stripes
-  float dens = fbm3(p);
+  float dens = fbm4(p);
   float body = dens * 0.7 + n2(p * 0.17 + 3.7) * 0.42 + n2(p * 0.07 - 1.3) * 0.12 - 0.06;  // groups, clear sky between
   // coverage: patchy, a clear gap low over the glow, thinning overhead
   float gap = glowA * exp(-e / 0.06) * 0.22;
