@@ -3,7 +3,8 @@
 // horizon around the glow) with separate cumulus puffs: value-noise fbm on a cloud layer seen in perspective (puffs
 // grow overhead and shrink to thin dark strips toward the horizon), grouped by a low-frequency cluster field so they
 // stand apart with clear sky between them, shaded darker than the sky behind them and rim-lit warm near the glow.
-// No texture: nothing is downloaded. The glow sits at glowAzimuth (the Dune Road's vanishing point). The dome is the
+// No texture is downloaded (the lit deck's value-noise lattice is a 1024 x 1024 R32F table rendered once at load with
+// the shader's own hash, so it reads the same values for a fetch instead of a sin per corner). The glow sits at glowAzimuth (the Dune Road's vanishing point). The dome is the
 // scene's ambient / reflection environment (a PMREM of it), so the car reflects the same sky, and it is rendered into
 // the Atmosphere's post-fog colour cube (atmo.cubeCam) so distant haze matches it. The Atmosphere keeps its sun /
 // moon light, fog and shadows; its own sky mesh is hidden while the dome is on (dusk only).
@@ -29,11 +30,17 @@ float n2(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
 const mat2 ROT = mat2(1.6, 1.2, -1.2, 1.6);
 float fbm3(vec2 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 3; i++) { s += a * n2(p); p = ROT * p + 17.3; a *= 0.5; } return s / 0.875; }
 // the lit deck's value noise reads h2 from a table baked once on this GPU with the same expression (HASH_FS): same values
+// (HASH_TEX: when the GPU can render to a float target; otherwise the deck hashes per pixel as before, the same picture)
+#ifdef HASH_TEX
 uniform highp sampler2D tHash;
 float hT(vec2 i) { return texelFetch(tHash, ivec2(i) + HASH_HALF, 0).r; }
 float nT(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(hT(i), hT(i + vec2(1.0, 0.0)), f.x), mix(hT(i + vec2(0.0, 1.0)), hT(i + vec2(1.0, 1.0)), f.x), f.y); }
 float fbm3T(vec2 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 3; i++) { s += a * nT(p); p = ROT * p + 17.3; a *= 0.5; } return s / 0.875; }
+#else
+#define nT n2
+#define fbm3T fbm3
+#endif
 vec3 skyAt(vec3 d) {
   d = normalize(d);
   float phi = atan(d.x, -d.z), el = asin(clamp(d.y, -1.0, 1.0));
@@ -130,8 +137,8 @@ export class DuskSky {
   }
 
   async load() {
-    this.hashRT = bakeHash(this.renderer);
-    this.uniforms = { uExposure: { value: this.exposure }, uGlowAz: { value: this.glowAzimuth }, uSeed: { value: 3.7 }, uClouds: { value: 1 }, uCloudLit: { value: this.cloudLit ? 1 : 0 }, tHash: { value: this.hashRT.texture } };
+    this.hashRT = this.renderer && this.renderer.extensions.has('EXT_color_buffer_float') ? bakeHash(this.renderer) : null;
+    this.uniforms = { uExposure: { value: this.exposure }, uGlowAz: { value: this.glowAzimuth }, uSeed: { value: 3.7 }, uClouds: { value: 1 }, uCloudLit: { value: this.cloudLit ? 1 : 0 }, tHash: { value: this.hashRT ? this.hashRT.texture : null } };
     const mat = this._material();
     this.mesh = new THREE.Mesh(new THREE.SphereGeometry(10, 64, 32), mat);
     this.mesh.name = 'dusk-sky'; this.mesh.renderOrder = -100; this.mesh.frustumCulled = false;
@@ -140,7 +147,7 @@ export class DuskSky {
     return this;
   }
 
-  _material() { return new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: VS, fragmentShader: FS, side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false, name: 'duskSky' }); }
+  _material() { return new THREE.ShaderMaterial({ uniforms: this.uniforms, defines: this.hashRT ? { HASH_TEX: '' } : {}, vertexShader: VS, fragmentShader: FS, side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false, name: 'duskSky' }); }
 
   /** The dome on for the dusk hours (sun 5 deg above to 8 deg below the horizon), the Atmosphere sky otherwise. */
   wantActive() { const el = Math.asin(this.atmo.sunDir.y); return el < 0.09 && el > -0.14; }
