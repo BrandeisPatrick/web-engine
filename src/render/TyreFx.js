@@ -10,7 +10,7 @@
 //
 // Thresholds (LibreCorsa's tyre-slide-fx): marks fade in from `markHeat[0]` kW to full at `markHeat[1]`, smoke from
 // `smokeHeat[0]` to `smokeHeat[1]`. Restraint is the default: marks are near-black and soft-edged, smoke is pale grey
-// at alpha <= ~0.12 per puff, a few puffs per second per tyre, so a long slide reads as a thin haze, not a cloud.
+// at alpha <= ~0.12 per puff, about twenty puffs per second per sliding tyre, so a slide reads as a thin haze, not a cloud.
 //
 // Budget (draw and fill): one draw call each for marks and smoke. `budget.marks` caps the ring of mark quads (the
 // oldest fade out and are reused), `budget.smoke` caps the live puffs (each a camera-facing quad of up to ~3 m, so it
@@ -39,7 +39,7 @@ const ss = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
  * @typedef {object} TyreFxBudget
  * @property {number} [marks=1200]  ring capacity of mark quads (segments of ~0.25 m; 4 tyres share it)
  * @property {number} [smoke=240]  live smoke puffs at most
- * @property {number} [rate=14]  puffs per second per tyre at full smoke
+ * @property {number} [rate=22]  puffs per second per tyre at full smoke
  */
 /**
  * @typedef {object} TyreFxOptions
@@ -53,7 +53,7 @@ const ss = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
  * @property {number} [tyreWidth=0.2]  m, mark width
  * @property {number} [lift=0.03]  m, ribbons raised off the contact point
  * @property {number} [smokeShade=0.78]  smoke grey level (linear, 0..1): pale
- * @property {number} [smokeAlpha=0.1]  puff alpha at full smoke
+ * @property {number} [smokeAlpha=0.12]  puff alpha at full smoke
  * @property {((x: number, z: number) => number)|null} [groundAt]  surface height under a mark (default the contact point)
  * @property {number} [seed=1]  puff jitter (deterministic)
  */
@@ -76,8 +76,8 @@ export class TyreFx {
     this.smokeHeat = o.smokeHeat || [25, 150];
     this.tyreWidth = o.tyreWidth ?? 0.2;
     this.smokeShade = o.smokeShade ?? 0.78;
-    this.smokeAlpha = o.smokeAlpha ?? 0.1;
-    this.rate = B.rate ?? 14;
+    this.smokeAlpha = o.smokeAlpha ?? 0.12;
+    this.rate = B.rate ?? 22;
     this.groundAt = typeof o.groundAt === 'function' ? o.groundAt : null;
     /** the skid-mark ribbons (one DecalTrail, one trail per wheel) */
     this.marks = new DecalTrail({

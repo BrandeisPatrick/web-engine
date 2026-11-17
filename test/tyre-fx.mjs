@@ -67,7 +67,7 @@ function run({ seconds, v0, controls, budget, seed = 1 }) {
 // ---- 3. a handbrake slide: 20 m/s, steer left with the handbrake for 1.2 s, then release ---------------------------
 let slide;
 {
-  const budget = { marks: 600, smoke: 120, rate: 14 };
+  const budget = { marks: 600, smoke: 120 };
   slide = run({ seconds: 3, v0: 20, budget, controls: (t) => (t < 1.2 ? { steer: -1, handbrake: true } : { throttle: 0.2 }) });
   const r = slide, hw = r.heatPerWheel;
   note(`handbrake slide: max slideHeat ${r.heatMax.toFixed(0)} kW, heat x s per wheel [${hw.map((h) => h.toFixed(0)).join(', ')}], marks ${r.fx.marks.count} segments, puffs ${r.fx.stats.puffs} (live max ${r.liveMax}), puff alpha max ${r.alphaMax.toFixed(3)}`);
