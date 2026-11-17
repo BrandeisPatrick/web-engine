@@ -38,7 +38,8 @@ export const DEFAULT_BUSES = ['engine', 'effects', 'ambience', 'ui'];
  * @property {number} clip  where the soft clipper leaves linear (0..1)
  */
 /** @type {SafeMasterSettings} */
-export const SAFE_MASTER = Object.freeze({ threshold: -12, knee: 6, ratio: 4, attack: 0.003, release: 0.15, makeup: 1.4, clip: 0.6 });
+// makeup 1: Chrome's DynamicsCompressorNode already adds its own make-up gain (about +1.8 dB at these settings)
+export const SAFE_MASTER = Object.freeze({ threshold: -12, knee: 6, ratio: 4, attack: 0.003, release: 0.15, makeup: 1, clip: 0.6 });
 
 /**
  * Soft-clipper curve for a WaveShaper fed with x / 2 (so inputs up to +-2 are shaped): linear to `clip`, then

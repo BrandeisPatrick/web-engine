@@ -38,11 +38,15 @@ export class VehicleAudio {
    * @param {AudioBus} [opts.bus]          share a bus (else one is created)
    * @param {boolean|object} [opts.ambience=true]  CityAmbience (options object allowed)
    * @param {number} [opts.topSpeed=400/3.6]   m/s at which pitch / wind reach their max
+   * @param {boolean} [opts.wind=true]   its own wind layer (false: leave wind to the sound kit's wind.rush loop)
+   * @param {boolean} [opts.tyres=true]  its own tyre-slip layer (false: leave it to the kit's tyre.squeal loop)
    */
   constructor(opts = {}) {
     this.bus = opts.bus || new AudioBus({ volume: opts.volume ?? 0.7 });
     if (!opts.bus && opts.volume != null) this.bus.volume = opts.volume;
     this.topSpeed = opts.topSpeed ?? 400 / 3.6;
+    this.windLayer = opts.wind !== false;
+    this.tyreLayer = opts.tyres !== false;
     this.started = false;
     this._prevDamage = null;
     this._lastImpact = -1;
@@ -184,14 +188,14 @@ export class VehicleAudio {
     this._set(n.iGain.gain, 0.018 * power, 0.08);
 
     // tyres
-    const tyre = grounded ? slip * clamp(speed / 4, 0, 1) : 0;
+    const tyre = grounded && this.tyreLayer ? slip * clamp(speed / 4, 0, 1) : 0;
     this._set(n.tGain.gain, 0.32 * tyre * tyre + 0.08 * tyre, 0.04);
     this._set(n.tBP.frequency, 850 + 400 * slip, 0.05);
     this._set(n.tSq.frequency, 1700 + 500 * slip + 300 * sN, 0.08);
 
     // wind ~ speed^2
     const wind = sN * sN;
-    this._set(n.wind.output.gain, 0.55 * wind + (grounded ? 0 : 0.03 * clamp(speed / 10, 0, 1)), 0.1);
+    this._set(n.wind.output.gain, this.windLayer ? 0.55 * wind + (grounded ? 0 : 0.03 * clamp(speed / 10, 0, 1)) : 0, 0.1);
     this._set(n.wind.filters[1].frequency, 350 + 3200 * sN, 0.1);
 
     // thrusters
