@@ -749,7 +749,7 @@ export class Environment {
     const L = this.leaves.u;
     L.uLfC.value.set(cam.x + fx * 8, gy - 0.2, cam.z + fz * 8);
     L.uLfO.value.copy(O);
-    L.uLfP.value.set(13, 4.5, clamp((0.06 + 0.4 * S) * (this.reduced ? 0.6 : 1), 0, 1), (0.18 + 0.3 * W) * calm); // (a few leaves, more as the storm builds)
+    L.uLfP.value.set(13, 4.5, clamp((0.06 + 0.45 * S) * (this.reduced ? 0.6 : 1), 0, 1), (0.18 + 0.3 * W) * calm); // (a few leaves, more as the storm builds)
     // ---- kicked leaves: the kid running through the grass
     if (this._kidHave) {
       const dx = kid.x - this._kidPrev.x, dz = kid.z - this._kidPrev.z, dy = kid.y - this._kidPrev.y, sp = Math.hypot(dx, dz) / dt;

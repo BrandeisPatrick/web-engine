@@ -317,7 +317,7 @@ export function patchGrass(mat, fade = null, tips = 0) {
         .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
   {
     float hwBack = max( 0.0, dot( - normalize( vViewPosition ), uMoonHw ) );
-    totalEmissiveRadiance += vec3( 0.62, 0.68, 0.82 ) * ( vTipHw * vTipHw ) * ${tips.toFixed(3)} * ( 0.25 + 0.9 * hwBack * hwBack );
+    totalEmissiveRadiance += vec3( 0.62, 0.68, 0.82 ) * ( vTipHw * vTipHw ) * ${tips.toFixed(3)} * ( 0.25 + 0.5 * hwBack * hwBack );
   }`);
     }
     sh.vertexShader = sh.vertexShader

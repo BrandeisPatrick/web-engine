@@ -311,8 +311,8 @@ function epitaphs(list, low) {
   const NAMES = ['E. HOLLOWAY', 'MARTHA GRIMM', 'SILAS CROW', 'ADA WICK', 'J. BLACKTHORN', 'O. MOURNE', 'ELIAS VANE', 'R. GLOOM'];
   const carve = (k, draw) => {
     const ox = (k % 4) * S, oy = Math.floor(k / 4) * S;
-    // (2026-11 look pass: a brighter, wider lit lip and a deeper groove, so the inscription reads at arm's length)
-    for (const [dy, col] of [[S * 0.016, 'rgba(222,218,230,0.8)'], [-S * 0.006, 'rgba(0,0,0,0.35)'], [0, 'rgba(6,5,9,0.95)']]) { // the lit lower lip, a shadowed upper edge, then the groove
+    // (2026-11 look pass: pale worn letters with dark edges, so the inscription reads at arm's length on a dark stone)
+    for (const [dy, col] of [[-S * 0.006, 'rgba(0,0,0,0.6)'], [S * 0.004, 'rgba(10,9,14,0.7)'], [0, 'rgba(198,194,208,0.86)']]) { // a shadowed upper edge, a dark lower edge, then the worn letter (lighter than the weathered face)
       g.save(); g.translate(ox, oy + dy); g.fillStyle = col; g.strokeStyle = col; g.lineWidth = S * 0.02; g.lineCap = 'round'; draw(g); g.restore();
     }
   };
@@ -340,6 +340,9 @@ function epitaphs(list, low) {
   const geo = new THREE.PlaneGeometry(1, 1);
   const cell = new Float32Array(list.length);
   const mat = new THREE.MeshStandardMaterial({ map: tex, transparent: true, depthWrite: false, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  // (2026-11 look pass) the lit lips keep a faint cool sheen of their own (the sky over the stone): the inscription reads
+  // even on a stone with its face away from the moon
+  if (!low) { mat.emissiveMap = tex; mat.emissive.set('#9aa2c0'); mat.emissiveIntensity = 0.1; }
   mat.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float cell;')
       .replace('#include <uv_vertex>', '#include <uv_vertex>\n\tvMapUv = ( uv + vec2( mod( cell, 4.0 ), 1.0 - floor( cell / 4.0 ) ) ) * vec2( 0.25, 0.5 );');
