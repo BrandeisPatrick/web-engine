@@ -97,33 +97,39 @@ const TOUCH = [
 // After sunset the frame is a near-silhouette lit by the sky: fixed low exposure (no eye adaptation brightening the
 // dark), neutral-warm blacks (no teal / blue split toning), restrained saturation, bloom only on lamp cores (high
 // threshold, small radius), a slight vignette and fine grain. DUSK_EXPOSURE is the look knob (?exposure= overrides).
-const DUSK_EXPOSURE = +(new URLSearchParams(location.search).get('exposure') || (MOBILE ? 0.55 : 0.62)); // (phones: no SSR / volumetrics, a brighter, smoother road under the afterglow key)
+// ?look=open: the alternative, brighter dusk (the owner compares the two): exposure up, eye adaptation on, a softer
+// toe and natural saturation, a little more lifted black; still a calm dusk, not daylight. The smoke look gate holds
+// only the default ('low').
+const LOOK = params.get('look') === 'open' ? 'open' : 'low';
+const OPEN = LOOK === 'open';
+const DUSK_EXPOSURE = +(params.get('exposure') || (OPEN ? (MOBILE ? 1.0 : 1.1) : (MOBILE ? 0.55 : 0.62))); // (phones: no SSR / volumetrics, a brighter, smoother road under the afterglow key)
 const DUSK_GRADE = DEFAULT_GRADE.map((g) => {
   const dusk = g.el < 6 && g.el > -20;
   return {
     ...g,
-    aeS: 0,
+    aeS: OPEN ? 0.7 : 0,
     exp: dusk ? g.exp * DUSK_EXPOSURE : g.exp,
-    sat: dusk ? 0.85 : g.sat, con: dusk ? g.con + 0.04 : g.con,
+    sat: dusk ? (OPEN ? 1.0 : 0.85) : g.sat, con: dusk ? g.con + (OPEN ? 0.02 : 0.04) : g.con,
     wb: dusk ? [1.04, 1.0, 0.94] : g.wb,
-    sh: dusk ? [0.004, 0.001, -0.004] : g.sh, hi: dusk ? [0.01, 0.004, -0.01] : g.hi, split: dusk ? 0.6 : g.split,
+    sh: dusk ? (OPEN ? [-0.004, 0.0, 0.008] : [0.004, 0.001, -0.004]) : g.sh, hi: dusk ? [0.01, 0.004, -0.01] : g.hi, split: dusk ? 0.6 : g.split,
     bT: dusk ? 4.5 : g.bT, bS: dusk ? 0.2 : g.bS, bR: dusk ? 0.28 : g.bR,
-    vig: dusk ? 0.5 : g.vig, grain: dusk ? 0.03 : g.grain,
+    vig: dusk ? (OPEN ? 0.42 : 0.5) : g.vig, grain: dusk ? 0.03 : g.grain,
   };
 });
-/** A filmic display LUT: a long toe (the darks sink without crushing), warm-neutral shadows, a soft shoulder. */
+/** A filmic display LUT: a toe (the darks sink without crushing; shorter in the open look), warm-neutral shadows, a soft shoulder. */
 function duskLut() {
+  const k = OPEN ? 0.012 : 0.025, grey = OPEN ? 0.25 : 0.5;
   return lutFromFunction(17, (r, g, b, out) => {
     const c = [r, g, b];
     for (let i = 0; i < 3; i++) {
       const v = Math.min(1, Math.max(0, c[i]));
-      const toe = v * v / (v + 0.025) * 1.025;            // a short toe: the darks keep their value and colour
+      const toe = v * v / (v + k) * (1 + k);              // a short toe: the darks keep their value and colour
       out[i] = Math.min(1, toe < 0.8 ? toe : 0.8 + (toe - 0.8) * 0.6);
     }
     const l = 0.2126 * out[0] + 0.7152 * out[1] + 0.0722 * out[2], sh = Math.max(0, 1 - l * 2.4);
     // the darks go towards a neutral grey (photographic shadows carry little chroma)
-    for (let i = 0; i < 3; i++) out[i] = out[i] + (l - out[i]) * 0.5 * sh;
-  }, 'miami-dusk');
+    for (let i = 0; i < 3; i++) out[i] = out[i] + (l - out[i]) * grey * sh;
+  }, `miami-dusk-${LOOK}`);
 }
 
 const nextFrame = () => new Promise((r) => setTimeout(r, 0));
@@ -219,7 +225,11 @@ async function boot() {
       postfx = new PostFX(renderer, scene, camera, {
         atmosphere: atmo, width, height, pixelRatio: engine.pixelRatio, grade: DUSK_GRADE,
         ao: { radius: 1.4, thickness: 1.2, samples: 6, maxPixels: 0.45e6 }, bloom: { strength: 0.2, radius: 0.28, threshold: 4.5 }, autoExposure: false,
-        ...QS.postfx, lut: { texture: lut.texture, size: lut.size, strength: 1 },
+        ...QS.postfx, lut: { texture: lut.texture, size: lut.size, strength: 1 }, autoExposure: OPEN,
+        // AO on the ambient only (lit pixels keep their light), a cool tint in what AO leaves, a floor black lifted a
+        // little (a third of the open look's in the low-key default), TAA sharpened back after its blend
+        look: { aoLit: 0.8, aoTint: [0, 0.03, 0.07], lift: OPEN ? [0.006, 0.0085, 0.011] : [0.002, 0.0028, 0.0037] },
+        ...(QS.postfx.aa === 'taa' || QS.postfx.taa ? { taa: { ...(QS.postfx.taa || {}), sharpen: 0.25 } } : {}),
       });
       postfx.aoPass.enabled = !!QS.passes.ao; postfx.bloomPass.enabled = QS.passes.bloom !== false;
     } catch (e) { console.warn('[miami] post-processing unavailable', e); atmo.setFogMode('scene'); postfx = null; }

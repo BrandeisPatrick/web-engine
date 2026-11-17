@@ -49,8 +49,8 @@ const physics = new PhysicsWorld();
 const engine = new Engine({ container: document.getElementById('app'), physics, renderer: { antialias: false }, ...S.engine });
 const { scene, camera, renderer } = engine;
 
-// ---- sky, sun, fog and shadows. timeOfDay: hours 0..24 or 'dawn' | 'noon' | 'golden' | 'dusk' | 'night'
-const atmosphere = new Atmosphere({ scene, renderer, camera, timeOfDay: 'dusk', shadows: S.shadows });
+// ---- sky, sun, fog, shadows (timeOfDay: hours or 'dawn'..'night'); opt-in: lit clouds, afterglow key, low-sun fill
+const atmosphere = new Atmosphere({ scene, renderer, camera, timeOfDay: 'dusk', shadows: S.shadows, cloudStyle: 'lit', twilightKey: true, lowSunEnv: true });
 ```
 
 Post-processing, the `passes` group (nothing applies it for you) and resize handling. Without `onResize`, PostFX keeps
@@ -59,8 +59,8 @@ its first size when the window changes:
 <!-- from: samples/starter-walk/main.js#postfx -->
 ```js
 const { width, height } = engine.size;
-const postfx = new PostFX(renderer, scene, camera, { atmosphere, width, height, pixelRatio: engine.pixelRatio, ...S.postfx });
-if (postfx.aoPass) postfx.aoPass.enabled = S.passes.ao;          // `passes` is the game's to apply
+const postfx = new PostFX(renderer, scene, camera, { atmosphere, width, height, pixelRatio: engine.pixelRatio, ...S.postfx, look: { aoLit: 0.8, aoTint: [0, 0.03, 0.07] } });
+if (postfx.aoPass) postfx.aoPass.enabled = S.passes.ao;          // look.aoLit: AO only on the ambient light; `passes` is the game's
 if (postfx.bloomPass) postfx.bloomPass.enabled = S.passes.bloom;
 postfx.track(player); // per-object velocity for TAA / motion blur on moving meshes
 engine.renderFn = (sc, cam, dt) => postfx.render(dt);

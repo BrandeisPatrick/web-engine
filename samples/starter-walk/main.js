@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { Engine, Assets, PoseInterpolator, resolveQuality, createBenchHarness } from '@vibe/engine/core';
 import { PhysicsWorld, CharacterController } from '@vibe/engine/physics';
-import { Atmosphere, PostFX, NearestLights, registerRenderLoaders, loadTextureManifest, loadTextureSet, softDotTexture } from '@vibe/engine/render';
+import { Atmosphere, PostFX, NearestLights, registerRenderLoaders, loadTextureManifest, loadTextureSet, softDotTexture, applyPatches, weathering } from '@vibe/engine/render';
 import { AnimationController } from '@vibe/engine/anim';
 import { CharacterInput } from '@vibe/engine/input';
 import { ThirdPersonRig } from '@vibe/engine/camera';
@@ -35,15 +35,14 @@ async function boot() {
   const engine = new Engine({ container: document.getElementById('app'), physics, renderer: { antialias: false }, ...S.engine });
   const { scene, camera, renderer } = engine;
 
-  // ---- sky, sun, fog and shadows. timeOfDay: hours 0..24 or 'dawn' | 'noon' | 'golden' | 'dusk' | 'night'
-  const atmosphere = new Atmosphere({ scene, renderer, camera, timeOfDay: 'dusk', shadows: S.shadows });
+  // ---- sky, sun, fog, shadows (timeOfDay: hours or 'dawn'..'night'); opt-in: lit clouds, afterglow key, low-sun fill
+  const atmosphere = new Atmosphere({ scene, renderer, camera, timeOfDay: 'dusk', shadows: S.shadows, cloudStyle: 'lit', twilightKey: true, lowSunEnv: true });
   // #endregion howto:walk-engine
   atmosphere.fogParams.haze = 0.004; // distance haze (PostFX's fog): the ground's far edge fades into the sky
 
   // ---- ground with a PBR texture set. `base` is the folder holding manifest.json and one folder per set id
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x6f7a5a }));
-  ground.receiveShadow = true;
-  scene.add(ground);
+  ground.receiveShadow = true; scene.add(ground);
   shell.setProgress(0.1, 'Textures');
   // #region howto:ground-texture
   const texBase = `${BASE}nyc/textures/`;
@@ -53,6 +52,8 @@ async function boot() {
     Object.assign(ground.material, { map: grass.map, normalMap: grass.normalMap, roughnessMap: grass.roughnessMap, color: new THREE.Color(0xffffff) });
   }
   // #endregion howto:ground-texture
+  // weathering (render): world-space breakup, no UVs. The ground gets broad patches (a tiled texture alone reads as carpet)
+  applyPatches(ground.material, [weathering({ scale: 0.12, macro: 0.3, hue: 0.08, grime: 0, streaks: 0, dust: 0 })]);
 
   // ---- one lamp: a post on a base with a hooded lantern, lit by NearestLights (a pool of real lights; give it many
   // positions). The glass glows softly; the light itself comes from the point light, so it pools on the ground
@@ -63,8 +64,8 @@ async function boot() {
   for (const [geo, y] of parts) { const p = new THREE.Mesh(geo, iron); p.position.y = y; p.castShadow = true; lamp.add(p); }
   const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.11, 0.26, 12), new THREE.MeshStandardMaterial({ color: 0x302820, emissive: 0xffb466, emissiveIntensity: 1.6 }));
   glass.position.y = 3.19; lamp.add(glass);
-  lamp.position.set(lampAt.x, 0, lampAt.z);
-  scene.add(lamp);
+  lamp.position.set(lampAt.x, 0, lampAt.z); scene.add(lamp);
+  applyPatches(iron, [weathering({ grime: 0.5, grimeHeight: 0.6, streaks: 0.2, seed: 4 })]); // dirt at its foot, rain runs
   physics.addStaticBox({ center: [lampAt.x, 1.6, lampAt.z], size: [0.2, 3.2, 0.2] }); // the walker cannot pass through it
   // #region howto:lamp
   const lamps = new NearestLights({ count: 1, color: 0xffb070, distance: 12, decay: 1.5, parent: scene });
@@ -112,8 +113,8 @@ async function boot() {
   // ---- post-processing with the tier's settings (desktop: G-buffer + TAA + SSR; mobile: FXAA), resize hook
   // #region howto:postfx
   const { width, height } = engine.size;
-  const postfx = new PostFX(renderer, scene, camera, { atmosphere, width, height, pixelRatio: engine.pixelRatio, ...S.postfx });
-  if (postfx.aoPass) postfx.aoPass.enabled = S.passes.ao;          // `passes` is the game's to apply
+  const postfx = new PostFX(renderer, scene, camera, { atmosphere, width, height, pixelRatio: engine.pixelRatio, ...S.postfx, look: { aoLit: 0.8, aoTint: [0, 0.03, 0.07] } });
+  if (postfx.aoPass) postfx.aoPass.enabled = S.passes.ao;          // look.aoLit: AO only on the ambient light; `passes` is the game's
   if (postfx.bloomPass) postfx.bloomPass.enabled = S.passes.bloom;
   postfx.track(player); // per-object velocity for TAA / motion blur on moving meshes
   engine.renderFn = (sc, cam, dt) => postfx.render(dt);
@@ -142,8 +143,7 @@ async function boot() {
   // #endregion howto:sound
 
   // ---- the game loop: input per frame, simulation per fixed step, drawing per frame
-  const move = { x: 0, z: 0 }, fwd = new THREE.Vector3(), right = new THREE.Vector3();
-  let walked = 0;
+  const move = { x: 0, z: 0 }, fwd = new THREE.Vector3(), right = new THREE.Vector3(); let walked = 0;
   engine.addSystem({
     // #region howto:walk-input
     earlyUpdate(dt) {

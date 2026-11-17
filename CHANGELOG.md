@@ -1,6 +1,22 @@
 # Changelog
 
 ## Unreleased
+- Look options (render / world, all off by default; the picture is unchanged without them): `weathering()` material
+  patch (`src/render/MaterialPatches.js`: macro value / hue / roughness breakup, grime from the ground, rain streaks,
+  dust, optional fading and chips; `GLSL_WEATHERING`, `bakeWeathering`, `weatheringAt`, `WEATHERING_DEFAULTS`; test
+  `surface-detail`); Atmosphere `cloudStyle: 'lit'` (a soft cloud deck lit by its relief), `twilightKey` (the
+  afterglow stays the key light after sunset) and `lowSunEnv` (warmer, brighter environment light at low sun);
+  `applyFoliageLighting` / `applyFoliageLightingTo` and `buildTreeMeshes({ foliageLight })` (leaves lit as leaves);
+  `enableFacadeDetail` on `createFacadeMaterials` (dim rooms, street spill, panes that differ, shades, weathered
+  curtain walls); PostFX `look: { aoLit, aoTint, lift }` (AO on the ambient only, its tint, a lifted floor black);
+  `NearestLights({ spot })` (clustered lamps as downward spots: round pools). HOWTO "Weathered walls and props";
+  AGENTS rows for each; `npm test` runs 56 suites.
+- Demos: each default look stays inside the smoke look gate, and each has `?look=open`, a brighter two-temperature
+  alternative the gate does not check. NYC: cool sky and shade against warm lamps, lamp spots, lifted darks, glass
+  that reflects the street, lit and dim rooms, wall drips and damp, lit street trees, weathered street kit. Miami:
+  a soft lit cloud deck, the afterglow key, lit foliage, aged stucco with dirt runs, shrubs, the neon tubes off
+  (`?neon=1`), AO on the ambient. Halloween: see its own entry. Starters: lit clouds and the low-sun fill (walk also
+  the twilight key), AO on the ambient, weathered posts and lamp, broad patches on the walk's ground.
 - Sound kit (audio): `SoundBank` with 18 named sounds rendered in plain JavaScript (`SOUND_PRESETS`), `Footsteps`, a
   voice policy (`VoicePool`), the 'safe' master chain and `setPaused` / `setMuffle` / `duck` on `AudioBus`,
   `audioSelfTest` / `analyseMix` / `encodeWav`, and the `samples/sound-check/` page (a card per sound, the measured

@@ -17,11 +17,11 @@
 import * as THREE from 'three';
 import { Engine, Assets, createBenchHarness, readBenchParams, resolveQuality } from '@vibe/engine/core';
 import { CharacterController } from '@vibe/engine/physics';
-import { PostFX, registerRenderLoaders, TextureSets, ClusteredLights, installClusteredChunks } from '@vibe/engine/render';
+import { PostFX, registerRenderLoaders, TextureSets, ClusteredLights, installClusteredChunks, applyPatches, weathering } from '@vibe/engine/render';
 import { CharacterInput, PointerLock, CHARACTER_ACTIONS } from '@vibe/engine/input';
 import { ThirdPersonRig, FirstPersonRig } from '@vibe/engine/camera';
 import { LoadingScreen, QualityMenu } from '@vibe/engine/ui';
-import { MapWorld, roadStyle } from '@vibe/engine/world';
+import { MapWorld, roadStyle, applyFoliageLightingTo } from '@vibe/engine/world';
 import { makeStreetsWet, makeCityEnv } from './wet.js';
 import { buildSignage, updateSignage, quietBuildingSigns } from './signage.js';
 import { ExtraLights } from './lights.js';
@@ -206,11 +206,17 @@ async function boot() {
   // cars: contact shadows, and glossy paint that picks up the sky glow and the lamps
   const carShadows = world.traffic ? new CarShadows({ scene, world, max: DESK ? 48 : 24 }) : null;
   if (world.traffic && world.traffic.material) world.traffic.material.envMapIntensity = 2.2;
-  // street trees at dusk: near-black masses (the engine's foliage albedo is a daylight green), a little rim from lamps
-  world.group.traverse((o) => { if (o.isMesh && /^veg-/.test(o.name) && o.material && o.material.color) o.material.color.setRGB(0.22, 0.24, 0.2); });
+  // street trees at dusk: a dark foliage albedo (the engine's is a daylight green), lit as leaves (VegMaterials.js
+  // applyFoliageLighting: wrap, lamp light through the leaves, a rim against the glow, more sky) instead of black masses
+  const isTree = (m, o) => /^veg-/.test(o.name);
+  world.group.traverse((o) => { if (o.isMesh && isTree(o.material, o) && o.material && o.material.color) o.material.color.setRGB(0.24, 0.26, 0.21); });
+  applyFoliageLightingTo(world.group, { wrap: 0.5, translucency: 0.5, rim: 1.0, ambient: 0.35, tint: [1.0, 0.8, 0.5] }, isTree);
   // rooftop water tanks and sidewalk sheds (their under-deck tubes join the sign lights)
   // shop fronts, lobbies and what is fixed to the wall at street level, as geometry (groundfloors.js)
   const streetKit0 = new Kit(), streetMat = groundMaterial();
+  // weathering (MaterialPatches.js) on the street furniture and wall kit: broad value / roughness breakup, rain runs, dust on
+  // the tops (no ground grime: the kit is one material over sloping ground)
+  applyPatches(streetMat, [weathering({ grime: 0, streaks: 0.25, dust: 0.3, macro: 0.12, seed: 11 })]);
   const ground = buildGroundFloors({ world, scene, signs, kit: streetKit0, material: streetMat, center: SQUARE, radius: DESK ? 220 : 150, lobbyIndex: interiors.length === INTERIORS.length ? INTERIORS.length - 1 : 0, clutter: DESK ? 1 : 0.5 });
   // window frames and AC units placed from the engine's real window layout (windowkit.js)
   const kit = buildWindowKit({ world, scene, kit: streetKit0, material: streetMat, center: SQUARE, frameRadius: DESK ? 150 : 0, acRadius: DESK ? 230 : 140, frames: DESK });
@@ -648,6 +654,16 @@ async function boot() {
           const gy = world.getGroundHeight(l.sx, l.sz);
           cam.position.set(l.sx + l.nx * 6, gy + 1.65, l.sz + l.nz * 6); cam.up.set(0, 1, 0);
           cam.lookAt(l.sx, gy + 2.6, l.sz);
+          player.entity.visible = false;
+        },
+        shutter(cam) { // square on to the closed roller shutter nearest the sidewalk pose, 5 m out
+          const l = SIDE || { sx: START.x, sz: START.z }, L = (ground && ground.closed) || [];
+          let b = null, bd = Infinity;
+          for (const c of L) { const d = Math.hypot(c.p[0] - l.sx, c.p[2] - l.sz); if (d < bd) { bd = d; b = c; } }
+          if (!b) return;
+          const x = b.p[0] + b.n[0] * 5, z = b.p[2] + b.n[2] * 5, gy = world.getGroundHeight(x, z);
+          cam.position.set(x, gy + 1.65, z); cam.up.set(0, 1, 0);
+          cam.lookAt(b.p[0], b.p[1], b.p[2]);
           player.entity.visible = false;
         },
         facade(cam) { // from one sidewalk across the street at the facades opposite (the darkest walls)
