@@ -726,7 +726,7 @@ async function boot() {
     THREE, engine, world, postfx, atmo: world.atmo, clustered, extra, signs, steam, wet, player, cc, input, hud, menu, harness,
     quality: Q, facadeGrade, walls, ground, kit, crowns, air, roofs, get rig() { return rig; }, setRig, START, SQUARE, loadMs, loadWorldMs, geo, streetAt,
   };
-  console.info(`[nyc] ready in ${loadMs} ms (world ${loadWorldMs} ms, warm-up ${warm.ms} ms) · tier ${Q.tier} (${Q.source}${Q.lighter ? ', lighter after a graphics reset' : ''}) · ${signs.lights.length} sign lights · ${world.stats.lamps} lamps · ${world.stats.vehicles} vehicles`);
+  console.info(`[nyc] ready in ${loadMs} ms (world ${loadWorldMs} ms, warm-up ${warm.ms} ms: compile ${warm.compileMs}, fence ${warm.fence}) · tier ${Q.tier} (${Q.source}${Q.lighter ? ', lighter after a graphics reset' : ''}) · ${signs.lights.length} sign lights · ${world.stats.lamps} lamps · ${world.stats.vehicles} vehicles`);
   engine.start();
   loading.hide(400);
   harness.setReady();

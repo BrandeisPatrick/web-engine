@@ -456,7 +456,7 @@ async function boot() {
   // bench: renderFn only (the poses' state stays as loaded), 12 frames (renderFn's every-2nd / 3rd / 4th-frame counters
   // end in the phase they started in, so the poses draw the same passes as without the warm-up)
   const warm = await engine.warmUp(bp.enabled ? { systems: false, frames: 12 } : {});
-  console.info(`[miami] ready in ${loadMs} ms (warm-up ${warm.ms} ms) · tier ${Q.tier} (${Q.source}, recommended ${Q.recommended}: ${Q.reason}) · car ${W.model.stats.triangles} tris · props ${props.bodies.length} · neon ${plugin.stats.signs} signs`);
+  console.info(`[miami] ready in ${loadMs} ms (warm-up ${warm.ms} ms: compile ${warm.compileMs}, fence ${warm.fence}) · tier ${Q.tier} (${Q.source}, recommended ${Q.recommended}: ${Q.reason}) · car ${W.model.stats.triangles} tris · props ${props.bodies.length} · neon ${plugin.stats.signs} signs`);
   harness.setReady();
   engine.start();
   if (bp.enabled) harness.freeze();
