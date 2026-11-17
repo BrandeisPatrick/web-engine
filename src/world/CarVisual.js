@@ -22,8 +22,8 @@
 // wheelSpin, braking, reversing; all optional, null leaves the car parked).
 //   wheels   hub y = wheelRadius + wheels[i].y (the contact point's suspension travel), front hubs steer by steerAngle,
 //            spinners roll by -wheelSpin (forward)
-//   lamps    brake lamps from car.braking (or opts.brake 0..1), eased in ~50 ms; reverse lamps from car.reversing (or
-//            opts.reverse); head and tail lamps from opts.darkness (an Atmosphere's 0..1 darkness: off until 0.12,
+//   lamps    brake lamps from car.braking (or opts.brake 0..1), eased in ~50 ms; reverse lamps (on / off) from
+//            car.reversing (or opts.reverse); head and tail lamps from opts.darkness (an Atmosphere's 0..1 darkness: off until 0.12,
 //            full from 0.57, as samples/dev/vehicles.js), or opts.lights: true / false to force them
 //   shadow   fitted to the four wheel supports in the car's frame (so it stays on the ground under dive and roll),
 //            fading out and spreading as the car leaves the ground (mean wheel gap 0 .. 1.5 m)
@@ -195,8 +195,9 @@ export function createCarVisual(type = 'hatchback', opts = {}) {
   }
 
   // reverse lamps: warm-white quads just proud of the reflectors, behind the clear lens
-  const revMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  const revColor = new THREE.Color(1, 0.96, 0.88);
+  // constant colour, switched by visibility: PostFX.track() gives a shared material a per-mesh copy, so a colour set on
+  // revMat later would not reach the quads
+  const revMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.96, 0.88).multiplyScalar(2.6) });
   const reverseLamps = findReverseLamps(parts.body).map((b) => {
     const q = new THREE.Mesh(new THREE.PlaneGeometry(b[2] - b[0], b[3] - b[1]), revMat);
     q.position.set((b[0] + b[2]) / 2, (b[1] + b[3]) / 2, b[4] + 0.002); // the plane faces +Z (backward): no turn
@@ -245,8 +246,7 @@ export function createCarVisual(type = 'hatchback', opts = {}) {
       const rT = (o.reverse != null ? o.reverse : car && car.reversing) ? 1 : 0;
       lamps.reverse += (rT - lamps.reverse) * kb;
       if (Math.abs(lamps.reverse - rT) < 1e-3) lamps.reverse = rT;
-      for (const q of reverseLamps) q.visible = lamps.reverse > 0.01;
-      revMat.color.copy(revColor).multiplyScalar(0.3 + 2.7 * lamps.reverse);
+      for (const q of reverseLamps) q.visible = lamps.reverse > 0.5;
       const d = Number.isFinite(o.darkness) ? o.darkness : 0;
       const auto = Math.min(1, Math.max(0, (d - 0.12) / 0.45));
       const u = o.lights === true ? Math.max(auto, 0.35) : o.lights === false ? 0 : auto;
