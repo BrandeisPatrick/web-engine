@@ -765,13 +765,13 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp 
         continue;
       }
       const pts = axis === 'x' ? [[-len / 2, yy, at], [len / 2, yy, at]] : [[at, yy, -len / 2], [at, yy, len / 2]];
-      lineOn(L, pts, 0.014, '#1d1724', nrm);
+      lineOn(L, pts, DETAIL.rocks ? 0.032 : 0.014, '#1d1724', nrm); // (fix pass: a shadow line that holds at 20 m on desktop)
       // (2026-11 look pass) each board's lower edge stands proud: the moon catches its top and leaves a dark line
       // under it, so a lit wall reads as clapboard instead of a flat grey plane
       if (DETAIL.rocks) {
         const o = 0.014, sg = nrm[0] + nrm[1] + nrm[2];
-        if (axis === 'x') L.add(new THREE.BoxGeometry(len, 0.03, 0.028), WALL2, 0, yy + 0.02, at + sg * o);
-        else L.add(new THREE.BoxGeometry(0.028, 0.03, len), WALL2, at + sg * o, yy + 0.02, 0);
+        if (axis === 'x') L.add(new THREE.BoxGeometry(len, 0.05, 0.03), WALL2, 0, yy + 0.04, at + sg * o);
+        else L.add(new THREE.BoxGeometry(0.03, 0.05, len), WALL2, at + sg * o, yy + 0.04, 0);
       }
     }
   };

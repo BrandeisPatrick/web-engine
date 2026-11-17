@@ -156,7 +156,7 @@ const NIGHT = CLASSIC ? {
 } : {
   // (2026-11 look pass: the darks lifted and cooled (sh), a stronger moon key, less vignette; the default stays low key)
   grade: OPEN ? { exp: 1.85, aeMax: 1.5, bT: 1.15, bS: 0.42, bR: 0.5, sat: 0.9, con: 0.2, split: 0.8, sh: [0.004, 0.007, 0.016], hi: [0.03, 0.014, -0.012], vig: 0.4, grain: 0.03, wb: [0.975, 0.985, 1.02] }
-    : { exp: 1.36, aeMax: 1.3, bT: 1.15, bS: 0.42, bR: 0.5, sat: 0.9, con: 0.2, split: 0.8, sh: [0.006, 0.009, 0.019], hi: [0.03, 0.014, -0.012], vig: 0.55, grain: 0.03, wb: [0.975, 0.985, 1.02] },
+    : { exp: 1.44, aeMax: 1.3, bT: 1.15, bS: 0.42, bR: 0.5, sat: 0.9, con: 0.26, split: 0.8, sh: [0.002, 0.004, 0.011], hi: [0.03, 0.014, -0.012], vig: 0.55, grain: 0.03, wb: [0.975, 0.985, 1.02] },
   clouds: { cover: params.get('clouds') === '1' ? 0.2 : 0.36, cop: 0.92, cs: [0.05, 0.056, 0.072], ca: [0.006, 0.0068, 0.0095] },
   zen: [0.0052, 0.0052, 0.0088], hor: [0.036, 0.033, 0.048], pollution: [0.013, 0.012, 0.016],
   hemi: ['#56627e', '#262123', OPEN ? 0.56 : 0.44], moon: [0.66, 0.75, 0.95], env: OPEN ? 0.58 : 0.5, mist: [0.05, 0.056, 0.068],
