@@ -142,9 +142,11 @@ export class TyreFx {
           acc -= 1;
           this._jitter();
           const r0 = R[0], r1 = R[1], r2 = R[2], r3 = R[3];
-          P.x = _p.x + (r1 - 0.5) * 0.3; P.y = _p.y + 0.15; P.z = _p.z + (r2 - 0.5) * 0.3;
-          P.vx = v.x * 0.2 + (r3 - 0.5) * 1.2; P.vy = 0.35 + r0 * 0.5; P.vz = v.z * 0.2 + (r0 - 0.5) * 1.2;
-          P.life = 1.6 + r0 * 1.2; P.size0 = 0.35 + r1 * 0.25; P.size1 = 1.6 + puff * 1.2 + r2 * 0.6;
+          // the puffs rise about as fast as they grow, so a quad's dense middle never meets the ground (a camera-facing
+          // quad cut by the road shows a hard straight edge: there are no soft particles)
+          P.x = _p.x + (r1 - 0.5) * 0.3; P.y = _p.y + 0.25; P.z = _p.z + (r2 - 0.5) * 0.3;
+          P.vx = v.x * 0.2 + (r3 - 0.5) * 1.2; P.vy = 0.55 + r0 * 0.5; P.vz = v.z * 0.2 + (r0 - 0.5) * 1.2;
+          P.life = 1.6 + r0 * 1.2; P.size0 = 0.35 + r1 * 0.25; P.size1 = 1.1 + puff * 0.8 + r2 * 0.4;
           P.alpha = this.smokeAlpha * (0.5 + 0.5 * puff);
           P.r = g; P.g = g; P.b = g * 1.02; P.r1 = g * 0.97; P.g1 = g * 0.97; P.b1 = g;
           P.rot = r3 * 6.283; P.rotV = (r1 * 2 - 1) * 0.5;

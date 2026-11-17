@@ -76,6 +76,7 @@ const CSS = `
 .ui-shell-pause{position:fixed;z-index:45;width:44px;height:44px;border-radius:50%;display:none;place-items:center;cursor:pointer;padding:0;color:var(--ui-text);
   pointer-events:auto}
 .ui-shell-pause.show{display:grid}
+body.ui-shell-carded .ui-touch{display:none}
 .ui-shell-pause.tr{top:max(14px,env(safe-area-inset-top));right:max(14px,env(safe-area-inset-right))}
 .ui-shell-pause.tl{top:max(14px,env(safe-area-inset-top));left:max(14px,env(safe-area-inset-left))}
 .ui-shell-pause.tc{top:max(14px,env(safe-area-inset-top));left:calc(50% - 22px)}
@@ -301,6 +302,7 @@ export class GameShell {
     if (this._canvas) this._canvas.classList.remove('ui-shell-canvas', 'ui-shell-veil', 'paused');
     this._setInputs(true);
     this.root.remove(); this.pauseButton.remove();
+    if (typeof document !== 'undefined') document.body.classList.remove('ui-shell-carded');
   }
 
   // ------------------------------------------------------------------ DOM
@@ -394,6 +396,7 @@ export class GameShell {
     this._show(this.startCard, title);
     this._show(this.pauseCard, paused);
     this.root.classList.toggle('open', title || paused);
+    if (typeof document !== 'undefined') document.body.classList.toggle('ui-shell-carded', title || paused); // touch sticks hide behind the cards
     const c = this._canvas;
     if (c) { c.classList.toggle('ui-shell-veil', title || paused); c.classList.toggle('paused', paused); }
     this.pauseButton.classList.toggle('show', playing && (this.options.pauseButton === true || (this.options.pauseButton !== false && this._touch)));
