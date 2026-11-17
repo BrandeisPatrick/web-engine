@@ -38,7 +38,7 @@ import { buildWindowKit } from './windowkit.js';
 import { buildCrowns } from './crowns.js';
 import { AirGlow } from './airglow.js';
 import { buildRooftops } from './rooftops.js';
-import { nightLooks, nightGrade, nightLut, cityNightSky, duskLooks, cityDuskSky, NYC_SUN, DUSK_HOURS } from './look.js';
+import { nightLooks, nightGrade, nightLook, nightLut, cityNightSky, duskLooks, cityDuskSky, NYC_SUN, DUSK_HOURS } from './look.js';
 import { HUD, ACCENT } from './hud.js';
 
 const params = new URLSearchParams(location.search);
@@ -79,6 +79,25 @@ if (params.has('cascades')) S.shadows.cascades = +params.get('cascades') || 1;
 if (params.has('shadowkernel')) S.shadows.kernel = params.get('shadowkernel');
 if (params.has('shadownear')) S.shadows.near = +params.get('shadownear');
 
+// The night HDRI (a Berlin plaza at blue hour) as this city's environment: its sky is a saturated royal blue and a blue
+// floodlight burns on the left. Mirrored in the damp gutters at a grazing angle they showed as electric-blue streaks
+// and a bright blue speck. Here the blues are pulled toward the dusk sky's slate blue-violet (half the saturation)
+// and the cold highlights are capped; warm lights and the neutral stone are left as they are.
+function tameNightEnv(im) {
+  const c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
+  const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(im, 0, 0);
+  const D = g.getImageData(0, 0, c.width, c.height), d = D.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], gg = d[i + 1], b = d[i + 2], l = 0.2126 * r + 0.7152 * gg + 0.0722 * b;
+    const blue = Math.max(0, Math.min(1, (b - Math.max(r, gg)) / 60)); // 0 neutral / warm .. 1 strongly blue
+    if (blue <= 0) continue;
+    const k = 1 - 0.5 * blue, cap = l > 150 ? 1 - 0.45 * blue * Math.min(1, (l - 150) / 80) : 1; // desaturate; dim hot blues
+    d[i] = (l + (r - l) * k + 6 * blue) * cap; d[i + 1] = (l + (gg - l) * k) * cap; d[i + 2] = (l + (b - l) * k) * cap;
+  }
+  g.putImageData(D, 0, 0);
+  return c;
+}
+
 const nextFrame = () => new Promise((r) => setTimeout(r, 0));
 // ?memlog=1: JS heap (MB) at each boot stage, after a GC when the page runs with --js-flags=--expose-gc
 const memlog = params.has('memlog') ? (label) => { if (globalThis.gc) globalThis.gc(); if (performance.memory) console.info(`[nyc] heap ${label}: ${Math.round(performance.memory.usedJSHeapSize / 1e6)} MB`); } : () => {};
@@ -111,7 +130,8 @@ async function boot() {
     // late dusk by default (the afterglow down the cross streets); ?t=night = 1 a.m., ?t=<hours> any hour
     timeOfDay: NIGHT ? 'night' : params.has('t') && Number.isFinite(+params.get('t')) ? +params.get('t') : DUSK_HOURS,
     atmosphere: {
-      camera, shadows: S.shadows, sun: NYC_SUN, looks: NIGHT ? nightLooks() : duskLooks(), moonScatter: DESK ? 0.35 : 0.2, moonIntensity: 0.22,
+      camera, shadows: S.shadows, sun: NYC_SUN, looks: NIGHT ? nightLooks() : duskLooks(), moonScatter: DESK ? 0.35 : 0.2, moonIntensity: 0.14, // a weak moon: its building shadows edge the lamp pools softly, not as hard bright slabs
+     
       moon: { azimuth: 200, elevation: 48 }, maxCasterHeight: 420, skyGain: 0.2,
     },
     spawn: { road: /^7th Avenue$/ },
@@ -166,7 +186,7 @@ async function boot() {
   { // a real night city as the environment (PMREM of the HDRI panorama), dimmed; the procedural one if it failed to load
     const im = await nightEnvP;
     if (im) {
-      const t = new THREE.Texture(im); t.mapping = THREE.EquirectangularReflectionMapping; t.colorSpace = THREE.SRGBColorSpace; t.needsUpdate = true;
+      const t = new THREE.Texture(tameNightEnv(im)); t.mapping = THREE.EquirectangularReflectionMapping; t.colorSpace = THREE.SRGBColorSpace; t.needsUpdate = true;
       const pm = new THREE.PMREMGenerator(renderer); cityEnv = pm.fromEquirectangular(t).texture; pm.dispose(); t.dispose();
     } else cityEnv = makeCityEnv(renderer);
   }
@@ -179,6 +199,9 @@ async function boot() {
   const signs = buildSignage({ world, square: SQUARE, squareRadius: 210, shopRadius: DESK ? 560 : 380, maxScreens: NY.maxScreens, lightScale: 0.6, interiors });
   scene.add(signs.group);
   signs.uniforms.uSignGain.value = signGain;
+  // open shops spill warm light onto the pavement in front (the warm half of the two-temperature night)
+  // (signage.js gives them ~1 cd, invisible beside a 9 m street lamp's pool: here a lit shop window's few candela)
+  for (const l of signs.lights) if (l.kind === 'shop') { const k = 6.5 / Math.max(0.3, l.r); l.r *= k; l.g *= k * 0.95; l.b *= k * 0.85; l.range = 10; }
   // cars: contact shadows, and glossy paint that picks up the sky glow and the lamps
   const carShadows = world.traffic ? new CarShadows({ scene, world, max: DESK ? 48 : 24 }) : null;
   if (world.traffic && world.traffic.material) world.traffic.material.envMapIntensity = 2.2;
@@ -197,10 +220,12 @@ async function boot() {
   // the street: worn asphalt, flags, granite kerbs, what is set into them, scanned furniture with contact shadows (street.js)
   const streetKit = params.has('nostreet') ? null : await buildStreet({ world, scene, base: NYC, desk: DESK, center: SQUARE }); // A/B: ?nostreet
   // street lamps: sodium-warm pools with real falloff (a little brighter and shorter-reaching than the engine's dusk tuning)
-  { const LP = world.props && world.props.lightPool; if (LP) { LP.color.setRGB(1.0, 0.62, 0.3).multiplyScalar(DESK ? 2.6 : 1.8); LP.reach = 15; LP._fresh = true; for (const l of LP.lights || []) { l.color.copy(LP.color); l.distance = 15; } } }
+  // desktop (clustered): each lamp a spot aimed down, so it lays a round pool with a soft rim on the pavement and leaves
+  // the wall above its head alone (a point light smeared the facade behind the pole)
+  { const LP = world.props && world.props.lightPool; if (LP) { LP.color.setRGB(1.0, 0.62, 0.3).multiplyScalar(DESK ? 3.0 : 1.8); LP.reach = 15; LP.spot = { cosInner: 0.85, cosOuter: 0.3 }; LP._fresh = true; for (const l of LP.lights || []) { l.color.copy(LP.color); l.distance = 15; } } }
   // facade light (facades.js), roof lines and wall clutter (rooftops.js), light in the air (airglow.js)
   const westAz = (NYC_SUN.azimuthStart + NYC_SUN.azimuthSpan * Math.min(1.15, (DUSK_HOURS - NYC_SUN.rise) / (NYC_SUN.set - NYC_SUN.rise))) * DEG;
-  const facadeGrade = gradeFacades({ world, west: { x: Math.sin(westAz), z: -Math.cos(westAz) }, lamps: 4, skyGain: NIGHT ? 0.3 : 1, canyon: DESK ? [0.32, 1.25] : [0.5, 1.25] });
+  const facadeGrade = gradeFacades({ world, west: { x: Math.sin(westAz), z: -Math.cos(westAz) }, lamps: 4, skyGain: NIGHT ? 0.3 : 1, canyon: DESK ? [0.62, 1.25] : [0.72, 1.25] }); // the canyon floor a dark grey, not black
   // wall relief in the dusk light, grime, curtains (walls.js; mobile: no streaks under the sills)
   const walls = params.has('nowalls') ? null : dressWalls({ world, west: { x: Math.sin(westAz), z: -Math.cos(westAz) }, sills: DESK }); // A/B: ?nowalls
   const roofs = buildRooftops({ world, scene, center: SQUARE, skip: crowns.crowned, facades: signs.facades, max: DESK ? 900 : 450, ac: 0 }); // window AC units: windowkit.js (real window layout)
@@ -281,7 +306,7 @@ async function boot() {
     const lut = nightLut();
     postfx = new PostFX(renderer, scene, camera, {
       atmosphere: world.atmo, width, height, pixelRatio: engine.pixelRatio,
-      ...S.postfx, ao: { radius: 1.2, thickness: 1.2, samples: 6, maxPixels: 0.25e6 }, grade: nightGrade({ exposure: DESK ? 1.45 : 1.3 }), lut: { texture: lut.texture, size: lut.size, strength: 1 }, // mobile a touch lower: no SSR / TAA there
+      ...S.postfx, ao: { radius: 1.2, thickness: 1.2, samples: 6, maxPixels: 0.25e6 }, grade: nightGrade({ exposure: DESK ? 1.8 : 1.65 }), look: nightLook(), lut: { texture: lut.texture, size: lut.size, strength: 1 }, // mobile a touch lower: no SSR / TAA there
     });
     if (!S.passes.ao) postfx.aoPass.enabled = false;
     postfx.setTimeOfDay(world.atmo.darkness);
@@ -598,6 +623,40 @@ async function boot() {
         cam.position.set(px - WEST.x * back + nx * 0.9, gy + 1.8, pz - WEST.z * back + nz * 0.9); cam.up.set(0, 1, 0);
         cam.lookAt(px + WEST.x * 40 - nx * 2, gy + 4.5, pz + WEST.z * 40 - nz * 2);
       },
+      // ?lookposes=1 only (picture review, not the perf bench): the close views where exposure and lamp pools show
+      ...(params.has('lookposes') ? {
+        road(cam) { // the middle of the crosstown carriageway, looking west down the street
+          const A = XTOWN, gy = world.getGroundHeight(A.x, A.z);
+          cam.position.set(A.x - A.dx * 6, gy + 1.6, A.z - A.dz * 6); cam.up.set(0, 1, 0);
+          cam.lookAt(A.x + A.dx * 200, gy + 9, A.z + A.dz * 200);
+          player.entity.visible = false;
+        },
+        kerb(cam) { // standing in the road by a street lamp, looking at the kerb and the pavement under it
+          const A = XTOWN;
+          let best = null, bd = Infinity;
+          for (const h of lampPos) { const d = Math.hypot(h[0] - A.x, h[2] - A.z); if (d < bd && d > 20) { bd = d; best = h; } }
+          const L = best || [A.x, 6, A.z];
+          const t = (L[0] - A.x) * A.dx + (L[2] - A.z) * A.dz, cx = A.x + A.dx * (t - 7), cz = A.z + A.dz * (t - 7);
+          const gy = world.getGroundHeight(cx, cz);
+          cam.position.set(cx + (L[0] - (A.x + A.dx * t)) * 0.3, gy + 1.7, cz + (L[2] - (A.z + A.dz * t)) * 0.3); cam.up.set(0, 1, 0);
+          cam.lookAt(L[0] + A.dx * 2, gy + 0.6, L[2] + A.dz * 2);
+          player.entity.visible = false;
+        },
+        shop(cam) { // square on to an open shop front, 6 m out
+          const l = SIDE || { sx: START.x, sz: START.z, nx: -WEST.z, nz: WEST.x };
+          const gy = world.getGroundHeight(l.sx, l.sz);
+          cam.position.set(l.sx + l.nx * 6, gy + 1.65, l.sz + l.nz * 6); cam.up.set(0, 1, 0);
+          cam.lookAt(l.sx, gy + 2.6, l.sz);
+          player.entity.visible = false;
+        },
+        facade(cam) { // from one sidewalk across the street at the facades opposite (the darkest walls)
+          const A = XTOWN, rx = -A.dz, rz = A.dx, off = A.hw + Math.min(1.6, (A.sw || 2) * 0.55);
+          const x = A.x + A.dx * 30 + rx * off, z = A.z + A.dz * 30 + rz * off, gy = world.getGroundHeight(x, z);
+          cam.position.set(x, gy + 1.65, z); cam.up.set(0, 1, 0);
+          cam.lookAt(x - rx * 30 + A.dx * 12, gy + 9, z - rz * 30 + A.dz * 12);
+          player.entity.visible = false;
+        },
+      } : {}),
     },
     after(cam) {
       // world past its throttles (culling, LODs, light lists), with the traffic held: its worker answers asynchronously,

@@ -128,7 +128,7 @@ export class AirGlow {
       this.coneA = new THREE.InstancedBufferAttribute(new Float32Array(N * 4), 4).setUsage(THREE.DynamicDrawUsage);
       this.coneB = new THREE.InstancedBufferAttribute(new Float32Array(N * 4), 4).setUsage(THREE.DynamicDrawUsage);
       ig.setAttribute('iA', this.coneA); ig.setAttribute('iB', this.coneB);
-      this.coneMat = additive(CONE_VS, CONE_FS, { uCol: { value: lampCol.clone() }, uGain: { value: 0.5 * (o.gain ?? 1) } });
+      this.coneMat = additive(CONE_VS, CONE_FS, { uCol: { value: lampCol.clone() }, uGain: { value: 0.3 * (o.gain ?? 1) } });
       this.cones = new THREE.Mesh(ig, this.coneMat);
       this.cones.frustumCulled = false; this.cones.name = 'lamp-cones'; this.cones.renderOrder = 5;
       this.coneMax = N;
