@@ -766,6 +766,13 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp 
       }
       const pts = axis === 'x' ? [[-len / 2, yy, at], [len / 2, yy, at]] : [[at, yy, -len / 2], [at, yy, len / 2]];
       lineOn(L, pts, 0.014, '#1d1724', nrm);
+      // (2026-11 look pass) each board's lower edge stands proud: the moon catches its top and leaves a dark line
+      // under it, so a lit wall reads as clapboard instead of a flat grey plane
+      if (DETAIL.lamps) {
+        const o = 0.014, sg = nrm[0] + nrm[1] + nrm[2];
+        if (axis === 'x') L.add(new THREE.BoxGeometry(len, 0.03, 0.028), WALL2, 0, yy + 0.02, at + sg * o);
+        else L.add(new THREE.BoxGeometry(0.028, 0.03, len), WALL2, at + sg * o, yy + 0.02, 0);
+      }
     }
   };
   siding(w, 'x', d / 2 + 0.003, [0, 0, 1], 0.75, 6.0); siding(w, 'x', -d / 2 - 0.003, [0, 0, -1], 0.75, 6.0);
@@ -915,10 +922,11 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp 
   const lean = (lx, ly) => lx + 0.03 * Math.max(0, ly - 0.6);
   const win = (lx, ly, lz, ww, hh, col, k) => { const [px, pz2] = W(lx, lz); G.add(new THREE.PlaneGeometry(ww, hh), col, px, y + ly, pz2, yaw, 0, 0, 1, 1, 1, k); };
   for (const [lx, ly] of winF) {
-    const green = ly > 4 && lx > 3, gw = ctx.glow('window', 0.2);
-    win(lean(lx, ly), ly, d / 2 + 0.02, 1, 1.3, green ? '#9dff7a' : '#ffb347', 3.2);
+    // (the one odd room: once a ghostly green, now a single low candle, a deep amber, dimmer than the rest)
+    const dim = ly > 4 && lx > 3, gw = ctx.glow('window', dim ? 0.35 : 0.2);
+    win(lean(lx, ly), ly, d / 2 + 0.02, 1, 1.3, dim ? '#d0652a' : '#ffb347', dim ? 1.7 : 3.2);
     const [px, pz2] = W(lean(lx, ly), d / 2 + 0.5); // a soft halo in the air just outside each lit window
-    ctx.spot(px, y + ly, pz2, 2.6, ...(green ? [0.08, 0.26, 0.06] : [0.32, 0.15, 0.04]), 0.2, gw);
+    ctx.spot(px, y + ly, pz2, 2.6, ...(dim ? [0.16, 0.06, 0.015] : [0.32, 0.15, 0.04]), 0.2, gw);
   }
   ctx.glow('window', 0.2); win(lean(tx, 7.6) - 0.018 * 7, 7.6, tz + TW / 2 + 0.02 + 0.008 * 7, 0.9, 1.2, '#ffcf6a', 4);
   ctx.glow('window', 0.2); win(lean(tx, 4.2) - 0.018 * 3.6, 4.2, tz + TW / 2 + 0.02 + 0.008 * 3.6, 0.8, 1.1, '#ff9a3a', 3);
@@ -1208,8 +1216,8 @@ function doorwayBlock(L, { w, d, y0, y1, hx0, hx1, ht, vest = 1.2, color, grad =
 
 const COTTAGE_PAL = [
   { wall: '#3a3247', roof: '#2a2231', trim: '#8a7a99', shutter: '#2e3d3a', rug: '#5a2028' }, // violet
-  { wall: '#2e3a3b', roof: '#2b2a25', trim: '#94897a', shutter: '#4a2f33', rug: '#24405c' }, // teal
-  { wall: '#443830', roof: '#212b2d', trim: '#a0947e', shutter: '#2a3a4a', rug: '#4f3c16' }, // brown
+  { wall: '#2e3a3b', roof: '#2b2a25', trim: '#94897a', shutter: '#4a2f33', rug: '#2e3a44' }, // teal
+  { wall: '#443830', roof: '#212b2d', trim: '#a0947e', shutter: '#33373a', rug: '#4f3c16' }, // brown
   { wall: '#3b3142', roof: '#2c2523', trim: '#7f8c94', shutter: '#3d2f45', rug: '#3c2a52' }, // plum
   { wall: '#34393f', roof: '#2c2330', trim: '#94826e', shutter: '#2f3a2c', rug: '#5c3020' }, // slate
 ];
@@ -1442,10 +1450,13 @@ export function bankWall(B, { x0, x1, zf, dir, topY, bedY }) {
   SURF.k = SURF_KIND.STONE;
   const r = rngAt(x0, zf, 101), L = new Parts(), len = x1 - x0, h = topY - bedY + 0.15;
   vgrad(L.add(chamferBox(len + 0.02, h, 0.42, 0.04), '#2e2722', (x0 + x1) / 2, bedY - 0.15 + h / 2, zf - dir * 0.21), 0.45, 0.95, 0.08, (r() * 1e6) | 0);
+  if (DETAIL.lamps) SURF.k = SURF_KIND.NONE; // (the capstones: the scan's planar projection smeared over their slopes)
   for (let xx = x0 + 0.2 + r() * 0.2; xx < x1 - 0.1; xx += 0.42 + r() * 0.25) {
-    const sz = 0.18 + r() * 0.1, g = L.add(new THREE.DodecahedronGeometry(sz, 0), r() < 0.5 ? '#4f4a56' : '#5a5560', xx, topY - 0.05, zf - dir * (0.1 + r() * 0.1), r() * 6, 0, 0, 1.3, 0.55, 1);
-    vgrad(g, 0.6, 1.15, 0.06, (r() * 1e6) | 0);
+    // (2026-11 look pass) capstones with a real shape: lumpy, flat-topped, faceted (were squashed dodecahedra)
+    const sz = 0.18 + r() * 0.1, k = r(), g = L.add(DETAIL.lamps ? rockGeometry(sz, (xx * 7.3 + zf) * 3.1) : new THREE.DodecahedronGeometry(sz, 0), k < 0.4 ? '#3a383d' : k < 0.75 ? '#423f3b' : '#333136', xx, topY - 0.05, zf - dir * (0.1 + r() * 0.1), r() * 6, 0, 0, 1.3, 0.55, 1);
+    vgrad(g, 0.5, 1.12, 0.1, (r() * 1e6) | 0);
   }
+  SURF.k = SURF_KIND.STONE;
   for (let k = 0; k < 2; k++) {
     const g = L.add(new THREE.DodecahedronGeometry(0.2 + r() * 0.12, 0), '#3f3b45', x0 + 0.4 + r() * (len - 0.8), bedY + 0.2 + r() * (topY - bedY - 0.6), zf + dir * 0.02, r() * 6, r(), 0, 1.2, 0.8, 0.6);
     vgrad(g, 0.5, 1.0, 0.06, (r() * 1e6) | 0);
@@ -1471,6 +1482,23 @@ export function reeds(B, { x, y, z, n = 7, h = 1.1 }) {
   L.into(B, x, y, z);
 }
 
+/**
+ * A fieldstone about `sz` in radius: an icosphere pushed in and out by lumpy noise, its top and bottom cut flatter,
+ * faceted (flat normals), so it reads as a stone with edges and planes rather than a smooth blob.
+ */
+export function rockGeometry(sz, seed = 0) {
+  const g = new THREE.IcosahedronGeometry(1, 1), p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    let x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const k = 1 + 0.22 * lump(x * 0.7, y * 0.7, z * 0.7, seed) + 0.08 * lump(x * 1.9, y * 1.9, z * 1.9, seed + 3);
+    x *= k; y *= k; z *= k;
+    if (y > 0.45) y = 0.45 + (y - 0.45) * 0.3; // a flat-ish top
+    if (y < -0.5) y = -0.5 + (y + 0.5) * 0.4;
+    p.setXYZ(i, x * sz, y * sz, z * sz);
+  }
+  g.computeVertexNormals();
+  return g;
+}
 /** Deterministic lumpy noise in about [-1, 1] at a point (rough stone). */
 const lump = (x, y, z, k) => Math.sin(x * 5.1 + k) * Math.sin(y * 3.7 + k * 2.3) * Math.cos(z * 4.3 + k * 0.7) * 0.6 + Math.sin(x * 11.3 - y * 7.9 + z * 9.1 + k) * 0.4;
 /**

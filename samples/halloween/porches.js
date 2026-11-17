@@ -114,7 +114,7 @@ export class Porches {
     this.hx = f(); this.hz = f();                 // the door's hinge
     this.trail = new Float32Array(n * PORCH.TRAIL * 2); this.trailN = new Uint8Array(n);
     this.startTrail = new Float32Array(PORCH.TRAIL * 2); this.startTrailN = 0;
-    this.stand = !spots.some((s) => s.lamp != null); // no cottages in the map yet: build the stand-in fronts
+    this.stand = !spots.some((s) => s.lamp != null && s.lamp >= 0); // no cottages in the map yet: build the stand-in fronts
     for (let k = 0; k < n; k++) {
       const S = spots[k], M = S.mat, c = Math.cos(S.yaw), s = Math.sin(S.yaw), at = (lx, lz, out) => { out[0] = M.x + lx * c + lz * s; out[1] = M.z - lx * s + lz * c; return out; };
       this.cs[k] = c; this.sn[k] = s;
@@ -127,7 +127,8 @@ export class Porches {
     // doors: one instanced mesh (a colour each), hinged
     this.doors = new THREE.InstancedMesh(doorGeometry(), patchDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0.02 }), { scale: 2.2, amount: 0.5, streak: 0.6 }), n);
     this.doors.name = 'porchDoors'; this.doors.receiveShadow = true; this.doors.castShadow = false;
-    const DOOR_COL = ['#8a2f2a', '#2f6a42', '#33497e', '#9a7428', '#64407a', '#2a2026'];
+    // aged, faded paint (2026-11 look pass: the saturated blue and green doors read as plastic primaries in the night)
+    const DOOR_COL = ['#5a302b', '#3a4339', '#3c4048', '#5c4a30', '#4a3b47', '#2a2026'];
     for (let k = 0; k < n; k++) this.doors.setColorAt(k, _c.set(spots[k].haunted ? DOOR_COL[5] : DOOR_COL[k % 5]));
     this.doors.instanceColor.needsUpdate = true;
     this.doors.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.doors.frustumCulled = false;

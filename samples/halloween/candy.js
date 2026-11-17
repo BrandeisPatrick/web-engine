@@ -152,6 +152,7 @@ export class Candy {
    *   draws: rng.js rng.candy; default Math.random)
    */
   constructor({ scene, heightAt, candySpot, floorAt = null, rnd = Math.random, crisp = false }) {
+    this.crisp = crisp;
     this.heightAt = heightAt; this.candySpot = candySpot; this.floorAt = floorAt; this.rnd = rnd;
     const f = (k = 1) => new Float32Array(MAX * k);
     this.p = f(3); this.v = f(3); this.age = f(); this.ttl = f(); this.spin = f();
@@ -172,7 +173,7 @@ export class Candy {
     });
     // light beams over the big lollipops (visible from far away)
     this.beams = [];
-    const beamMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.4, 0.5, 1.1), transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    const beamMat = new THREE.MeshBasicMaterial({ color: crisp ? new THREE.Color(1.1, 0.72, 0.5) : new THREE.Color(1.4, 0.5, 1.1), transparent: true, opacity: crisp ? 0.12 : 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
     const bg = new THREE.CylinderGeometry(0.35, 0.6, 14, 16, 1, true).translate(0, 7, 0);
     const a = new Float32Array(bg.attributes.position.count);
     // fade the beam toward its top (vertex alpha via colour: additive, so darker = more transparent)
@@ -323,10 +324,14 @@ export class Candy {
       if (this.state[i] === 0) continue;
       const i3 = i * 3, k = this.kind[i], c = k === 0 ? WRAP_COLORS[this.color[i]] : k === 1 ? CORN_GLOW : POP_GLOW;
       const bob = this.state[i] === 1 ? 0.32 + Math.sin((time + this.spin[i]) * 2.4) * 0.08 : 0.2;
+      // (2026-11 look pass) a small warm glint under each sweet, its own colour only as a tint: a field of big
+      // coloured halos read as confetti over the night. Not grown with distance (the far ones were the biggest orbs).
+      const a = this.crisp ? (k === 2 ? 0.16 : 0.07) : (k === 2 ? 0.5 : 0.19), w = this.crisp ? 0.75 : 0;
+      const r = c[0] + (1.0 - c[0]) * w, gg = c[1] + (0.62 - c[1]) * w, b = c[2] + (0.3 - c[2]) * w;
       let far = 1;
-      if (cam && k !== 2) { const d = Math.hypot(P[i3] - cam.x, P[i3 + 2] - cam.z); far = 1 + 1.2 * Math.min(1, Math.max(0, (d - 7) / 21)); }
-      const a = k === 2 ? 0.5 : 0.19;
-      glows.set(base + n++, P[i3], P[i3 + 1] + bob + (k === 2 ? 0.6 : 0), P[i3 + 2], k === 2 ? 2.4 : 1.0 * far, c[0] * a, c[1] * a, c[2] * a);
+      if (cam && k !== 2 && !this.crisp) { const d = Math.hypot(P[i3] - cam.x, P[i3 + 2] - cam.z); far = 1 + 1.2 * Math.min(1, Math.max(0, (d - 7) / 21)); }
+      const size = this.crisp ? (k === 2 ? 1.0 : 0.5) : (k === 2 ? 2.4 : 1.0 * far);
+      glows.set(base + n++, P[i3], P[i3 + 1] + bob + (k === 2 ? 0.6 : 0), P[i3 + 2], size, r * a, gg * a, b * a);
     }
     return n;
   }

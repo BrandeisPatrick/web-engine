@@ -306,13 +306,14 @@ function moonTexturesHD() {
  * over a lit lower lip (light), so the letters read cut into the stone under the moon; lit like the stone.
  */
 function epitaphs(list, low) {
-  const S = low ? 128 : 256, c = makeCanvas(S * 4, S * 2), g = c.getContext('2d'), rnd = mulberry32(1313);
+  const S = low ? 128 : 512, c = makeCanvas(S * 4, S * 2), g = c.getContext('2d'), rnd = mulberry32(1313);
   g.clearRect(0, 0, S * 4, S * 2);
   const NAMES = ['E. HOLLOWAY', 'MARTHA GRIMM', 'SILAS CROW', 'ADA WICK', 'J. BLACKTHORN', 'O. MOURNE', 'ELIAS VANE', 'R. GLOOM'];
   const carve = (k, draw) => {
     const ox = (k % 4) * S, oy = Math.floor(k / 4) * S;
-    for (const [dy, col] of [[S * 0.012, 'rgba(200,196,210,0.55)'], [0, 'rgba(10,9,14,0.9)']]) { // the lit lower lip, then the groove
-      g.save(); g.translate(ox, oy + dy); g.fillStyle = col; g.strokeStyle = col; g.lineWidth = S * 0.018; g.lineCap = 'round'; draw(g); g.restore();
+    // (2026-11 look pass: a brighter, wider lit lip and a deeper groove, so the inscription reads at arm's length)
+    for (const [dy, col] of [[S * 0.016, 'rgba(222,218,230,0.8)'], [-S * 0.006, 'rgba(0,0,0,0.35)'], [0, 'rgba(6,5,9,0.95)']]) { // the lit lower lip, a shadowed upper edge, then the groove
+      g.save(); g.translate(ox, oy + dy); g.fillStyle = col; g.strokeStyle = col; g.lineWidth = S * 0.02; g.lineCap = 'round'; draw(g); g.restore();
     }
   };
   for (let k = 0; k < 8; k++) {
@@ -330,9 +331,9 @@ function epitaphs(list, low) {
         q.beginPath(); q.moveTo(cx, my + S * 0.1); q.lineTo(cx, my - S * 0.08); q.stroke();
         for (let i = -4; i <= 4; i++) { q.beginPath(); q.moveTo(cx, my - S * 0.08); q.quadraticCurveTo(cx + i * S * 0.035, my - S * 0.1, cx + i * S * 0.04, my + S * 0.06); q.stroke(); }
       } else { q.beginPath(); q.moveTo(cx, my - S * 0.1); q.lineTo(cx, my + S * 0.1); q.moveTo(cx - S * 0.06, my - S * 0.03); q.lineTo(cx + S * 0.06, my - S * 0.03); q.stroke(); }
-      q.font = `600 ${S * 0.085}px Georgia, serif`; q.fillText(name, cx, S * 0.46);
-      q.font = `${S * 0.07}px Georgia, serif`; q.fillText(`${yr} \u2013 ${yr + age}`, cx, S * 0.6);
-      q.font = `italic ${S * 0.06}px Georgia, serif`; q.fillText(['REST IN PEACE', 'GONE BUT NOT FORGOTTEN', 'ASLEEP', 'BELOVED'][k % 4], cx, S * 0.76);
+      q.font = `700 ${S * 0.095}px Georgia, serif`; q.fillText(name, cx, S * 0.46);
+      q.font = `600 ${S * 0.075}px Georgia, serif`; q.fillText(`${yr} \u2013 ${yr + age}`, cx, S * 0.6);
+      q.font = `italic 600 ${S * 0.064}px Georgia, serif`; q.fillText(['REST IN PEACE', 'GONE BUT NOT FORGOTTEN', 'ASLEEP', 'BELOVED'][k % 4], cx, S * 0.76);
     });
   }
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = low ? 2 : 8;
@@ -468,7 +469,7 @@ function groundCover(scene, physics, low, R, trees, graves) {
       const sc = 0.4 + Math.pow(R(), 2) * 1.6;
       _q.setFromEuler(_e.set(R() * 6.28, R() * 6.28, R() * 6.28));
       m.setMatrixAt(c, _m.compose(_p.set(x, heightAt(x, z) + 0.01 * sc, z), _q, _s.set(sc, sc * 0.45, sc)));
-      m.setColorAt(c, tint.setRGB(0.2, 0.19, 0.18).multiplyScalar(0.7 + R() * 0.6)); c++;
+      m.setColorAt(c, tint.setRGB(0.13, 0.12, 0.11).multiplyScalar(0.7 + R() * 0.6)); c++; // (2026-11: darker; the moonlit facets read as paper)
     }
     m.count = c; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; m.computeBoundingSphere(); m.receiveShadow = true;
     scene.add(m); out.stones = m;
@@ -535,7 +536,7 @@ function skylineTexture() {
  * mipmaps. `layer` 0 is the far line (small trees, dense), 1 a nearer, sparser one with bigger crowns.
  */
 function skylineTextureHD(layer, low) {
-  const W = low ? 2048 : 4096, H = low ? 256 : 512, k = H / 128, c = makeCanvas(W, H), g = c.getContext('2d'), rnd = mulberry32(layer ? 77 : 5);
+  const W = low ? 2048 : 4096, H = low ? 256 : 512, k = H / 128, c = makeCanvas(W, H), g = c.getContext('2d'), rnd = mulberry32(layer === 2 ? 91 : layer ? 77 : 5);
   g.clearRect(0, 0, W, H);
   g.fillStyle = '#fff'; g.strokeStyle = '#fff'; g.lineCap = 'round'; g.lineJoin = 'round';
   const ground = (x) => H - (layer ? 10 : 16) * k - (layer ? 6 : 10) * k * Math.sin(x * 0.012 / k + layer * 2) - 5 * k * Math.sin(x * 0.041 / k + 1) - 1.5 * k * Math.sin(x * 0.23 / k);
@@ -560,7 +561,7 @@ function skylineTextureHD(layer, low) {
   };
   const step = layer ? [26, 60] : [10, 24];
   for (let x = 6 * k; x < W; x += (step[0] + rnd() * step[1]) * k / 2) {
-    if (rnd() < 0.15) continue;
+    if (rnd() < (layer === 2 ? 0.3 : 0.15)) continue;
     const base = ground(x) + 2 * k;
     if (rnd() < (layer ? 0.12 : 0.22)) { spruce(x, base, (layer ? 44 : 22 + rnd() * 18) * k * (0.7 + rnd() * 0.5)); continue; }
     const s = (layer ? 1.7 : 1) * (0.6 + rnd() * 0.6) * k;
@@ -715,6 +716,34 @@ function v1Trees(rnd, low, graves) {
   }
   return out;
 }
+/**
+ * (2026-11 look pass) A tree line along the hills' crests outside the fence: one alpha-tested strip round the square
+ * at 61 m standing on the terrain (bare crowns and a few spruces, the skyline's drawing), so the hills end in a ragged
+ * silhouette instead of a smooth dome against the sky. Unlit and dark; the post fog takes it back like the hills.
+ */
+function crestTrees(low) {
+  const R0 = 61, H = 8.5, STEP = 2, pos = [], uv = [], idx = [];
+  let u = 0, n = 0;
+  const corners = [[-R0, -R0], [R0, -R0], [R0, R0], [-R0, R0], [-R0, -R0]];
+  for (let c = 0; c < 4; c++) {
+    const [ax, az] = corners[c], [bx, bz] = corners[c + 1], len = Math.hypot(bx - ax, bz - az);
+    for (let d = 0; d <= len + 1e-6; d += STEP) {
+      const t = d / len, x = ax + (bx - ax) * t + Math.sin(d * 0.13 + c) * 1.5 * (1 - Math.abs(2 * t - 1)), z = az + (bz - az) * t;
+      const y = heightAt(x, z) - 1.2;
+      pos.push(x, y, z, x, y + H, z); uv.push(u / 140, 0, u / 140, 1);
+      if (d > 0) idx.push(n - 2, n, n - 1, n - 1, n, n + 1);
+      n += 2; u += STEP;
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  const tex = skylineTextureHD(2, low); tex.repeat.set(1, 1);
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: '#16181e', alphaMap: tex, alphaTest: 0.5, side: THREE.DoubleSide }));
+  m.name = 'crestTrees';
+  return m;
+}
 const insideFence = (x, z) => Math.abs(x) < PLAY + 0.5 && Math.abs(z) < PLAY + 0.5;
 /** A gnarled dead tree (props.js) from its drawn numbers; a trunk collider inside the fence. */
 function plantTree(B, physics, { x, z, s, bark, h, yaw0, lod }) {
@@ -868,12 +897,22 @@ export function buildWorld({ scene, physics, low, classic = true, ground = null,
     const p = tg.attributes.position, c = new Float32Array(p.count * 3), gm = new Float32Array(p.count * 2);
     const grass = new THREE.Color('#24331f'), grass2 = new THREE.Color('#2f3a1f'), dirt = new THREE.Color('#4a3729'), soil = new THREE.Color('#2a2a2c'), hill = new THREE.Color('#1d2420'), patch = new THREE.Color('#3a3420');
     const bed = new THREE.Color('#1e1a19'), mud = new THREE.Color('#2a2420'), dry = new THREE.Color('#38371f');
+    // (2026-11 look pass) ground cover in patches, not one even green: dark moss, dry straw, worn earth by the lane
+    const moss = new THREE.Color('#111912'), straw = new THREE.Color('#4c4429'), worn = new THREE.Color('#3a2f25'), scrub = new THREE.Color('#141a17');
     const tmp = new THREE.Color();
     for (let i = 0; i < p.count; i++) {
       const x = p.getX(i), z = p.getZ(i);
       p.setY(i, heightAt(x, z));
       const n = 0.5 + 0.5 * Math.sin(x * 0.31 + Math.sin(z * 0.23) * 2) * Math.cos(z * 0.27 - x * 0.05);
       tmp.copy(grass).lerp(grass2, n);
+      let nA = 0.5, nB = 0.5, nC = 0.5;
+      if (!classic) {
+        const u = x / 128 + 0.5, v = z / 128 + 0.5;
+        nA = pfbm(u, v, 14, 3, 301, 0.55); nB = pfbm(u, v, 22, 3, 317, 0.5); nC = pfbm(u, v, 40, 2, 331, 0.5);
+        tmp.lerp(moss, 0.75 * smooth((nA - 0.48) / 0.16));
+        tmp.lerp(straw, 0.8 * smooth((nB - 0.5) / 0.14));
+        tmp.lerp(worn, 0.6 * smooth((nC - 0.6) / 0.12)); // bare, trodden earth here and there
+      }
       const kh = knollH(x, z);
       if (kh > 0) tmp.lerp(dry, 0.45 * (kh / KNOLL.h) * (0.6 + 0.4 * n));
       // (gm: the ground scans' mask, patchGround: x gravel, y leaf litter; the rest is grass)
@@ -883,12 +922,15 @@ export function buildWorld({ scene, physics, low, classic = true, ground = null,
         tmp.lerp(soil, 0.55 * w); gy = Math.max(gy, 0.8 * w);
       }
       if (inPatch(x, z, 2)) { tmp.lerp(patch, 0.45); gy = Math.max(gy, 0.6); }
-      const pd = pathDist(x, z);
+      if (!classic) gy = Math.max(gy, 0.45 * smooth((nB - 0.55) / 0.15));
+      // the lane: ragged edges (not ruler-straight), and a fringe of trodden grass and bare earth along it
+      const pd = pathDist(x, z) + (classic ? 0 : (nC - 0.5) * 0.9);
+      if (!classic && pd < 3.4) tmp.lerp(worn, 0.55 * smooth((3.4 - pd) / 1.7) * smooth((nC - 0.35) / 0.3));
       if (pd < 1.7) { const w = smooth((1.7 - pd) / 0.8); tmp.lerp(dirt, w); gx = w; }
       const ce = Math.min(z - CREEK.z0, CREEK.z1 - z);
       if (ce > -1.2) { tmp.lerp(ce > 0.05 ? bed : mud, ce > 0.05 ? 0.92 : 0.5 * smooth((ce + 1.2) / 1.2)); gx = Math.max(gx, ce > 0.05 ? 1 : 0.6 * smooth((ce + 1.2) / 1.2)); }
       const r = Math.max(Math.abs(x), Math.abs(z));
-      if (r > PLAY) { tmp.lerp(hill, smooth((r - PLAY) / 8)); gy = Math.max(gy, 0.7 * smooth((r - PLAY) / 8)); }
+      if (r > PLAY) { tmp.lerp(hill, smooth((r - PLAY) / 8)); gy = Math.max(gy, 0.7 * smooth((r - PLAY) / 8)); if (!classic) tmp.lerp(scrub, 0.7 * smooth((r - PLAY) / 6) * smooth((nA - 0.42) / 0.2)); }
       gm[i * 2] = gx; gm[i * 2 + 1] = gy;
       c[i * 3] = tmp.r; c[i * 3 + 1] = tmp.g; c[i * 3 + 2] = tmp.b;
     }
@@ -1140,7 +1182,8 @@ export function buildWorld({ scene, physics, low, classic = true, ground = null,
       const a = k * (6.2832 / BL) * (BL > 5 ? 2.0 : 1) + 0.3 + (BL > 5 ? (k % 3) * 0.4 : 0), ca = Math.cos(a), sa = Math.sin(a);
       const w = BL > 5 ? 0.014 + (k % 4) * 0.004 : 0.022, lean = BL > 5 ? 0.04 + (k % 4) * 0.05 : 0.1 + (k % 2) * 0.06, h = BL > 5 ? 0.16 + ((k * 7) % 5) * 0.06 : 0.26 + (k % 3) * 0.07;
       blade.push(-sa * w + ca * 0.03, 0, ca * w + sa * 0.03, sa * w + ca * 0.03, 0, -ca * w + sa * 0.03, ca * lean, h, sa * lean);
-      shade.push(0.32, 0.36, 0.42, 0.32, 0.36, 0.42, 1.25, 1.3, 1.15); // dark roots, tips catching the moon
+      if (classic || low) shade.push(0.32, 0.36, 0.42, 0.32, 0.36, 0.42, 1.25, 1.3, 1.15); // dark roots, tips catching the moon
+      else shade.push(0.42, 0.45, 0.52, 0.42, 0.45, 0.52, 1.3, 1.32, 1.25); // (2026-11: lighter roots; the blades were black spikes)
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(blade, 3));
@@ -1149,7 +1192,7 @@ export function buildWorld({ scene, physics, low, classic = true, ground = null,
     const n = g.attributes.normal; for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0); // lit like the ground
     // swaying in the wind (looks.js: the tips move, the roots stay)
     // Lambert: no specular (up-facing blade normals caught the low moon as white glints), and cheaper per fragment
-    tufts = new THREE.InstancedMesh(g, patchGrass(new THREE.MeshLambertMaterial({ color: '#3d5a2c', vertexColors: true, side: THREE.DoubleSide }), classic || low ? null : [24, 38]), count);
+    tufts = new THREE.InstancedMesh(g, patchGrass(new THREE.MeshLambertMaterial({ color: '#3d5a2c', vertexColors: true, side: THREE.DoubleSide }), classic || low ? null : [24, 38], classic ? 0 : 0.05), count);
     tufts.name = 'grass';
     let n2 = 0;
     const _c0 = [];
@@ -1161,7 +1204,13 @@ export function buildWorld({ scene, physics, low, classic = true, ground = null,
         const s = 0.6 + R() * 0.9;
         _q.setFromEuler(_e.set((R() - 0.5) * 0.3, R() * 6.28, 0));
         tufts.setMatrixAt(n2, _m.compose(_p.set(x, heightAt(x, z) - 0.02, z), _q, _s.set(s, s * (0.8 + R() * 0.9), s)));
-        if (classic) tint.setHSL(0.22 + R() * 0.1, 0.45, 0.2 + R() * 0.12); else tint.setHSL(0.17 + R() * 0.12, 0.22 + R() * 0.12, 0.3 + R() * 0.16); // (remaster: dry, moonlit)
+        if (classic) tint.setHSL(0.22 + R() * 0.1, 0.45, 0.2 + R() * 0.12); else { // (remaster: dry, moonlit; 2026-11: a mix of straw, olive and dark green clumps, not one even tone)
+          // (the same three draws as before from R, the level's stream for the first scatter; the kind from the spot)
+          const h1 = R(), h2 = R(), h3 = R(), v = Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
+          if (v < 0.3) tint.setHSL(0.1 + h1 * 0.04, 0.3 + h2 * 0.1, 0.42 + h3 * 0.14);         // straw
+          else if (v < 0.75) tint.setHSL(0.15 + h1 * 0.08, 0.16 + h2 * 0.1, 0.32 + h3 * 0.14); // olive
+          else tint.setHSL(0.24 + h1 * 0.06, 0.15 + h2 * 0.08, 0.22 + h3 * 0.08);               // dark green
+        }
         tufts.setColorAt(n2, tint);
         n2++;
       }
@@ -1224,6 +1273,7 @@ export function buildWorld({ scene, physics, low, classic = true, ground = null,
     sky2.name = 'skyline2'; sky2.renderOrder = 3; sky2.frustumCulled = false;
     scene.add(sky2);
   }
+  if (!classic) scene.add(crestTrees(low));
   const _moonDir = new THREE.Vector3();
 
 
