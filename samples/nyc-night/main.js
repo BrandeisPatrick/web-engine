@@ -204,7 +204,15 @@ async function boot() {
   signs.uniforms.uSignGain.value = signGain;
   // open shops spill warm light onto the pavement in front (the warm half of the two-temperature night)
   // (signage.js gives them ~1 cd, invisible beside a 9 m street lamp's pool: here a lit shop window's few candela)
-  for (const l of signs.lights) if (l.kind === 'shop') { const k = (LOOK === 'open' ? 6.5 : 3) / Math.max(0.3, l.r); l.r *= k; l.g *= k * 0.95; l.b *= k * 0.85; l.range = 10; }
+  // Where: signage.js puts it 1.6 m out and 2.2 m up, which is inside the awning's valance (1.25-1.6 m out, its hem
+  // 2.1-2.3 m up): the inverse square from a few cm lit the stripes there into a white blob with a bloom halo. Here it
+  // stands 2.3 m out (0.65 m or more clear of every valance) and 2.3 m up, and falls off as 1 / d (decay 1: the window
+  // is a broad source, not a bulb) at 0.475x the level, which keeps its light on the pavement below and on the awning
+  // a metre or two away as it was, without a hot spot at the nearest stripe.
+  for (const l of signs.lights) if (l.kind === 'shop') {
+    const k = (LOOK === 'open' ? 6.5 : 3) / Math.max(0.3, l.r) * 0.475; l.r *= k; l.g *= k * 0.95; l.b *= k * 0.85; l.range = 10;
+    l.x = l.sx + l.nx * 1.75; l.z = l.sz + l.nz * 1.75; l.y += 0.1; l.decay = 1;
+  }
   // cars: contact shadows, and glossy paint that picks up the sky glow and the lamps
   const carShadows = world.traffic ? new CarShadows({ scene, world, max: DESK ? 48 : 24 }) : null;
   if (world.traffic && world.traffic.material) world.traffic.material.envMapIntensity = 2.2;
@@ -232,10 +240,14 @@ async function boot() {
   // desktop (clustered): each lamp a spot aimed down, so it lays a round pool with a soft rim on the pavement and leaves
   // the wall above its head alone (a point light smeared the facade behind the pole); the spot sits in the lamp head,
   // not 35 cm under it, so the pole's top is not lit white from a hand's breadth away. The cone is a real luminaire's
-  // (full to ~20 deg off straight down, gone by ~44 deg: a pool about 8 m across under a 9 m head, with a rim; the old
-  // 72 deg cone lit the whole street evenly, so no pool read), twice as bright inside it (1.5x in ?look=open, whose exposure is higher), and shielded over its first
+  // (full to ~14 deg off straight down, gone by ~37 deg: a bright core about 4 m across under a 9 m head that falls off
+  // over the next few metres; the old 72 deg cone lit the whole street evenly, so no pool read, and a 20 / 44 deg one
+  // still lit the asphalt round a lamp flat beige in the kerb view), twice as bright inside it (1.5x in ?look=open, whose exposure is higher), and shielded over its first
   // 5 m below the head (ClusteredLights setSpot near): the pole and the wall at head height stay out of it
-  { const LP = world.props && world.props.lightPool; if (LP) { LP.color.setRGB(1.0, 0.62, 0.3).multiplyScalar(DESK ? (LOOK === 'open' ? 4.5 : 6.0) : 1.8); LP.reach = 15; LP.spot = { cosInner: 0.94, cosOuter: 0.72, near: 5 }; if (DESK) LP.yOffset = 0.15; LP._fresh = true; for (const l of LP.lights || []) { l.color.copy(LP.color); l.distance = 15; } } }
+  // pedestrian signal lenses (Props: a flat 8-sided disc, unlit colour): the engine's WALK white (1.7) and hand orange
+  // (3.0) are daytime levels; under this grade's exposure the WALK disc clipped flat white. Night levels: lit, not blown.
+  { const PC = world.props && world.props._colors; if (PC && PC.walk) { PC.walk.setRGB(0.3, 0.34, 0.33); PC.dont.setRGB(1.0, 0.34, 0.03); } }
+  { const LP = world.props && world.props.lightPool; if (LP) { LP.color.setRGB(1.0, 0.62, 0.3).multiplyScalar(DESK ? (LOOK === 'open' ? 4.5 : 6.0) : 1.8); LP.reach = 15; LP.spot = { cosInner: 0.97, cosOuter: 0.8, near: 5 }; if (DESK) LP.yOffset = 0.15; LP._fresh = true; for (const l of LP.lights || []) { l.color.copy(LP.color); l.distance = 15; } } }
   // facade light (facades.js), roof lines and wall clutter (rooftops.js), light in the air (airglow.js)
   const westAz = (NYC_SUN.azimuthStart + NYC_SUN.azimuthSpan * Math.min(1.15, (DUSK_HOURS - NYC_SUN.rise) / (NYC_SUN.set - NYC_SUN.rise))) * DEG;
   const facadeGrade = gradeFacades({ world, west: { x: Math.sin(westAz), z: -Math.cos(westAz) }, lamps: 4, skyGain: NIGHT ? 0.3 : 1, canyon: LOOK === 'open' ? (DESK ? [0.62, 1.25] : [0.72, 1.25]) : (DESK ? [0.45, 1.25] : [0.58, 1.25]) }); // the canyon floor dark, never black
