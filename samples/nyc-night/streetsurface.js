@@ -58,14 +58,27 @@ const ROAD = /* glsl */`
   float longZone = smoothstep(0.3, 0.55, sNoise(P * 0.045 + 5.0) * 0.7 + age * 0.3);
   float crack = 0.0, seal = 0.0;
   if (longZone > 0.0) {
-    float cf = sNoise(P * 0.21 + vec2(n2, n1) * 0.55) * 0.75 + sNoise(P * 0.9 + 3.0) * 0.25;
-    float cw = abs(cf - 0.5);
+    vec2 wp = vec2(n2, n1) * 0.55;
+    float cf = sNoise(P * 0.21 + wp) * 0.75 + sNoise(P * 0.9 + 3.0) * 0.25;
+    // distance to the iso-line in metres (value / gradient, the gradient by finite differences, the warp held): a
+    // threshold on the value alone widened the line into a black blob wherever the field runs flat (a squiggle of
+    // tar half a metre wide)
+    float cfx = sNoise((P + vec2(0.05, 0.0)) * 0.21 + wp) * 0.75 + sNoise((P + vec2(0.05, 0.0)) * 0.9 + 3.0) * 0.25;
+    float cfz = sNoise((P + vec2(0.0, 0.05)) * 0.21 + wp) * 0.75 + sNoise((P + vec2(0.0, 0.05)) * 0.9 + 3.0) * 0.25;
+    float cw = abs(cf - 0.5) / max(length(vec2(cfx - cf, cfz - cf)) * 20.0, 0.12);
     float sealZone = step(0.5, sNoise(P * 0.03 + 11.0));
-    crack = (1.0 - smoothstep(0.0025, 0.007, cw)) * longZone * (1.0 - sealZone);
-    seal = (1.0 - smoothstep(0.008, 0.016, cw)) * longZone * sealZone;
+    crack = (1.0 - smoothstep(0.008, 0.022, cw)) * longZone * (1.0 - sealZone);
+    seal = (1.0 - smoothstep(0.03, 0.055, cw)) * longZone * sealZone;
   }
   float gator = smoothstep(0.74, 0.82, n3 * 0.5 + age * 0.35 + n2 * 0.25); // only the most tired patches
-  if (gator > 0.0) { vec3 vo = sVoronoi(P * 1.1); crack = max(crack, (1.0 - smoothstep(0.008, 0.022, vo.x + (n1 - 0.5) * 0.03)) * gator * step(0.25, sHash(vo.yz))); }
+  // (0.3 m cells in a warped domain, edges that wander and break off: at 0.9 m with straight edges they read as a
+  // giant hexagonal paving)
+  if (gator > 0.0) {
+    vec2 gq = P * 3.2 + (vec2(sNoise(P * 1.3 + 2.0), sNoise(P * 1.3 + 9.0)) - 0.5) * 1.6;
+    vec3 vo = sVoronoi(gq);
+    float run = smoothstep(0.3, 0.45, sNoise(P * 2.3 + 4.0));
+    crack = max(crack, (1.0 - smoothstep(0.02, 0.06, vo.x + (sNoise(P * 9.0) - 0.5) * 0.04)) * gator * run * step(0.2, sHash(vo.yz)) * 0.8);
+  }
   // longitudinal joint just beside the lane lines, transverse cracks every few metres
   float joint = 0.0, trans = 0.0;
   if (hw > 0.5) {
@@ -94,7 +107,8 @@ const ROAD = /* glsl */`
   // polished wheel tracks: darker, a little sheen (roughness below)
   c *= 1.0 - 0.14 * rTrack;
   // gutter: grime band along the kerb, grit and leaf litter caught in it
-  float gut = hw > 0.5 ? smoothstep(hw - 0.55, hw - 0.08, ad) : 0.0;
+  // (not across a junction box: there is no kerb there, and the band of grit and paper scraps ran on across it)
+  float gut = hw > 0.5 ? smoothstep(hw - 0.55, hw - 0.08, ad) * box : 0.0;
   float grit = step(0.82, sHash(floor(P * 34.0))) * gut;
   c *= 1.0 - 0.38 * gut;
   c = mix(c, vec3(0.09, 0.075, 0.055), grit * 0.6);

@@ -241,15 +241,16 @@ export async function buildStreetKit(o) {
         }
       }
       // garbage at the kerb: black and clear bags in a heap, now and then a crate or flattened cardboard
-      if (commercial || st.base === 'residential') for (let s = 12 + R() * 30; s < L - 10; s += 26 + R() * 40) {
-        if (R() > (desk ? 0.5 : 0.28) || nearInt(Rd, s, 4)) continue;
+      // (desktop: denser than first tuned; the critique found the street sparse, nothing at the kerb for scale)
+      if (commercial || st.base === 'residential') for (let s = desk ? 10 + R() * 24 : 12 + R() * 30; s < L - 10; s += (desk ? 18 : 26) + R() * (desk ? 30 : 40)) {
+        if (R() > (desk ? 0.72 : 0.28) || nearInt(Rd, s, 4)) continue;
         const p = along(Rd, s, side * (hw + 0.62 + R() * 0.25));
         if (!sw(p.x, p.z) || busy(p.x, p.z, 1.6) || !kerbAt(s) || !inArea(p.x, p.z)) continue;
         pile(p, side, s);
       }
       // trash cans at the corners (NYC: one per corner on most avenues)
       for (const it of Rd.ints) {
-        if (R() > (desk ? 0.4 : 0.25)) continue;
+        if (R() > (desk ? 0.75 : 0.25)) continue;
         const dS = (R() < 0.5 ? -1 : 1) * (Math.abs(it.r) + 3.5 + R() * 2);
         const p = along(Rd, it.s + dS, side * (hw + 0.6));
         if (it.s + dS < 1 || it.s + dS > L - 1 || !sw(p.x, p.z) || busy(p.x, p.z, 1.2) || !inArea(p.x, p.z)) continue;

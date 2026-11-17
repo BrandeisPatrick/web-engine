@@ -63,10 +63,14 @@ if (fGlass > 0.5 && uNycGrade.z > 0.0) {
   if (uNycOpp.x > 0.0) {
     // below the far roofline the glass mirrors the block across the street, not black: a dark wall with its few lit
     // windows, and the street lamps (the nearest heads, as points)
-    float Rn = dot(R, gN);
+    // looked up with the pane's own plane (only a fifth of the per-pane bow): at the 24 m to the opposite wall the
+    // full bow sheared the mirrored windows into tilted pale squares floating in the panes
+    vec3 gO = normalize(mix(inverseTransformDirection(normalize(vNormal), viewMatrix), gN, 0.2));
+    vec3 Ro = reflect(wV, gO);
+    float Rn = dot(Ro, gO);
     if (Rn > 0.02) {
-      vec2 tw = normalize(vec2(-gN.z, gN.x));
-      vec3 Hp = vWPos + R * (uNycOpp.x / Rn);
+      vec2 tw = normalize(vec2(-gO.z, gO.x));
+      vec3 Hp = vWPos + Ro * (uNycOpp.x / Rn);
       float hg = Hp.y - nycGround(), u = dot(Hp.xz, tw);
       float roof = uNycOpp.y + uNycOpp.z * nycNoise(vec2(u / 35.0, 7.0 + fract(vInfo.z * 3.0) * 9.0));
       float wall = smoothstep(roof + 2.0, roof - 2.0, hg);
@@ -75,6 +79,9 @@ if (fGlass > 0.5 && uNycGrade.z > 0.0) {
       float on = step(0.82, fHash(ci + 7.7 + floor(u / 60.0)));
       vec3 wc = mix(vec3(1.0, 0.68, 0.4), vec3(0.72, 0.84, 1.0), step(0.7, fHash(ci + 3.1))) * (0.4 + 0.8 * fHash(ci + 1.3));
       float aa = clamp(max(fwidth(wq.x), fwidth(wq.y)) * 1.5, 0.0, 1.0);
+      // a pane close by (looked up at from the pavement) shows one or two mirrored windows, sharp, in a black pane:
+      // they read as loose squares, so near panes keep only the soft average of the wall across
+      aa = max(aa, 1.0 - smoothstep(16.0, 32.0, length(vWPos - cameraPosition)));
       vec3 lw = mix(wc * win * on, vec3(0.8, 0.66, 0.5) * 0.055, aa);
       vec3 opp = uNycSkyHor * 0.12 + lw * uNycOpp.w;
       opp *= step(0.0, hg); // the street itself: dark (its own lamps below)

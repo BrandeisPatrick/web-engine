@@ -29,7 +29,8 @@
 //                   row 0  view-space position xyz, w = reach (> 0 point: its range, or with `cutoff` the
 //                          distance where it stops showing; < 0 spot: -range)                rewritten every frame
 //                   row 1  linear colour * intensity rgb, w = decay, or -(decay + 1) for a point cut short of its
-//                          range (row 2 x then holds the range)                              on setLight / setSpot
+//                          range (row 2 x then holds the range); a spot with a near shield: decay + 8 * round(near
+//                          * 4) (spot decay < 8)                                             on setLight / setSpot
 //                   row 2  spot: view-space direction towards the light * k, w = -cosOuter * k with
 //                          k = 1 / (cosInner - cosOuter), so k = length(xyz), cosOuter = -w / k and
 //                          cosInner = cosOuter + 1 / k (exact, one fetch)                     every frame
@@ -151,6 +152,7 @@ const PARS = /* glsl */`
 		float coneCos;
 		float penumbraCos;
 		float cut;
+		float near;
 		bool spot;
 	};
 	highp ivec2 engineClLightTexel( const in highp int li, const in int row ) {
@@ -174,6 +176,7 @@ const PARS = /* glsl */`
 		l.color = row1.rgb;
 		l.decay = row1.a;
 		l.cut = 0.0;
+		l.near = 0.0;
 		if ( row1.a < 0.0 ) { // a point cut at its reach (row0.w): decay stored as -(decay + 1), row 2 = range, cutoff
 			vec2 cut = texelFetch( engineClLights, engineClLightTexel( li, 2 ), 0 ).xy;
 			l.decay = - row1.a - 1.0;
@@ -189,6 +192,10 @@ const PARS = /* glsl */`
 			l.direction = row2.xyz / k;
 			l.coneCos = - row2.w / k;
 			l.penumbraCos = l.coneCos + 1.0 / k;
+			// a spot's near shield (setSpot near): decay stored as decay + 8 * (near in quarter metres)
+			float q = floor( l.decay * 0.125 );
+			l.decay -= 8.0 * q;
+			l.near = 0.25 * q;
 		}
 		return l;
 	}
@@ -198,6 +205,9 @@ const PARS = /* glsl */`
 		float lightDistance = length( lVector );
 		if ( l.spot ) {
 			float spotAttenuation = getSpotAttenuation( l.coneCos, l.penumbraCos, dot( light.direction, l.direction ) );
+			// near shield: nothing within near m of the apex along the axis (a luminaire's housing; the pole beside a
+			// street lamp's head is not lit white), fading in to full at near
+			if ( l.near > 0.0 ) spotAttenuation *= smoothstep( 0.0, l.near, dot( lVector, l.direction ) );
 			light.color = l.color * spotAttenuation;
 		} else {
 			light.color = l.color;
@@ -432,8 +442,11 @@ export class ClusteredLights {
    * penumbraCos (cosInner = cos(angle * (1 - penumbra))) and coneCos (cosOuter = cos(angle)). cosInner is floored at
    * cosOuter + 1e-4, so a penumbra = 0 spot gets a 1e-4-wide smoothstep edge where three's smoothstep with equal
    * edges is undefined (driver-dependent, a hard step in practice): its rim can differ from a real SpotLight's.
+   * `near` (m, default 0 = off; quantised to 0.25 m, decay must be < 8): a shield at the apex: the light fades in
+   * along the axis over its first `near` m (smoothstep), so what stands beside the source (a lamp's own pole, the
+   * wall at head height) is not lit by it while the ground below is.
    */
-  setSpot(i, x, y, z, range, r, g, b, decay, dx, dy, dz, cosInner, cosOuter) {
+  setSpot(i, x, y, z, range, r, g, b, decay, dx, dy, dz, cosInner, cosOuter, near = 0) {
     this._check(i);
     const len = Math.hypot(dx, dy, dz);
     if (!(len > 0)) { this.setLight(i, x, y, z, range, r, g, b, decay); return; }
@@ -449,7 +462,7 @@ export class ClusteredLights {
     let c = 0, rad = range;
     if (co >= Math.SQRT1_2) { c = range / (2 * co); rad = c; } else if (co > 0) { c = range * co; rad = range * Math.sqrt(1 - co * co); }
     this._wb[i * 2] = c; this._wb[i * 2 + 1] = rad;
-    this._row1(i, r, g, b, decay);
+    this._row1(i, r, g, b, near > 0 && decay < 8 ? decay + 8 * Math.min(4096, Math.round(near * 4)) : decay);
     this._setFlags(i, range > 0 && range < Infinity ? ACTIVE | SPOT | (r === 0 && g === 0 && b === 0 ? BLACK : 0) : 0);
   }
 

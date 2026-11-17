@@ -44,7 +44,10 @@ function patch(mat, kind, U, env) {
 float wetK = uWet, wetP = 0.0, wetUp = 1.0;
 {
 ${road ? `  float wAd = abs(vRoad.x), wHw = vRoad.z;
-  float gutter = wHw > 0.5 ? smoothstep(wHw - 1.4, wHw - 0.15, wAd) : 0.0;           // water runs to the kerbs
+  // water runs to the kerbs (not across a junction box, where there is no kerb: the road shader's own box mask)
+  float wDP = vRoad.y - vInt.x, wDN = vInt.z - vRoad.y, wDI = min(wDP, wDN), wRA = abs(wDP < wDN ? vInt.y : vInt.w);
+  float wBox = mix(1.0, smoothstep(wRA - 0.4, wRA + 1.0, wDI), step(0.01, wRA));
+  float gutter = wHw > 0.5 ? smoothstep(wHw - 1.4, wHw - 0.15, wAd) * wBox : 0.0;
   float lanePos = fract(wAd / 3.3);
   float track = (1.0 - smoothstep(0.08, 0.3, abs(abs(lanePos - 0.5) - 0.24))) * 0.12; // ruts hold water
   wetP = wPuddle(vWetP.xz, gutter * 0.5 + track, uWetCover) * wetK; // standing water mostly in the gutters
