@@ -93,7 +93,9 @@ function tameNightEnv(im) {
     const r = d[i], gg = d[i + 1], b = d[i + 2], l = 0.2126 * r + 0.7152 * gg + 0.0722 * b;
     const blue = Math.max(0, Math.min(1, (b - Math.max(r, gg)) / 60)); // 0 neutral / warm .. 1 strongly blue
     if (blue <= 0) continue;
-    const k = 1 - 0.5 * blue, cap = l > 150 ? 1 - 0.45 * blue * Math.min(1, (l - 150) / 80) : 1; // desaturate; dim hot blues
+    // desaturate (nearly grey: a half-saturated blue building in the panorama showed as a bright blue patch in the
+    // glossy gutter puddles, where nothing blue stands), dim the blues a little, hot blues more
+    const k = 1 - 0.85 * blue, cap = (1 - 0.2 * blue) * (l > 150 ? 1 - 0.45 * blue * Math.min(1, (l - 150) / 80) : 1);
     d[i] = (l + (r - l) * k + 6 * blue) * cap; d[i + 1] = (l + (gg - l) * k) * cap; d[i + 2] = (l + (b - l) * k) * cap;
   }
   g.putImageData(D, 0, 0);
