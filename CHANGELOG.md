@@ -1,6 +1,14 @@
 # Changelog
 
 ## Unreleased
+- Halloween (Midnight Candy Run) is retired: `samples/halloween/`, `samples/public/halloween/` and its tests
+  (`test/halloween-enemies.mjs`, `test/halloween-depth.mjs`, `test/browser/halloween.mjs`,
+  `test/browser/halloween-media.mjs`) are removed, and the game is kept on the branch `archive/halloween` (the round's
+  Halloween work and the phone start-up fix included). It is gone from the samples index, the smoke pages and look
+  gate, phone-start, the perf views (`bench/budgets.json`) and baseline (its two views only; every other pose's numbers
+  unchanged), the asset registry and catalogue (its texture sets, props, characters and their thumbnails), the deploy
+  script, README, AGENTS.md, ENGINE.md, HOWTO and docs/BEFORE-AFTER.md (with its images). Engine code in `src/` is
+  unchanged. `npm test` runs 56 suites; `npm run perf` scores NYC and Miami only (14 poses).
 - Merge of the phone start-up fix into the round, for pages with a `GameShell`: `shell.ready()` now runs
   `engine.warmUp()` under the shell's own loading bar ("Compiling shaders…"; with `?bench=1` the demos' 12
   renderFn-only frames), then `engine.start()`, waits until the loop has drawn, and only then shows the start card

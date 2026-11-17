@@ -443,8 +443,8 @@ Per frame, after the camera moved (in `lateUpdate`):
 lamps.update(dt, { position: camera.position }, 12); // PointLight intensity: 8-12 for a garden lamp at 12 m reach
 ```
 
-Intensity is three.js `PointLight` intensity. Garden lamps take about 8 to 12 (reach 9 to 12 m, decay 1.5): Halloween's
-lanterns 7.5 over pale ground, the walk starter 12 because its pool falls on dark gravel and bare earth. A lamp's glass
+Intensity is three.js `PointLight` intensity. Garden lamps take about 8 to 12 (reach 9 to 12 m, decay 1.5): about 8 over pale
+ground, the walk starter 12 because its pool falls on dark gravel and bare earth. A lamp's glass
 needs an emissive intensity of about 8 to glow (the dusk bloom threshold); at 1.6 it reads as switched off. City street
 lamps take up to 260 (reach 48 m, decay 2, 6 m up). At 1 a lamp is invisible at dusk. Keep the
 pool at 8 or fewer: every real light costs on every lit pixel. For more lamps, use clustered lights.

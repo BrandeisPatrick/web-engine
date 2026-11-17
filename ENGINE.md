@@ -196,7 +196,7 @@ recommendation, each loss steps the next `resolveQuality()` down one rung: deskt
 mobile) goes straight to the cap. `?quality=` and a stored choice are never changed. The result then has
 `lighter: true`, `contextLosses` (the count) and a `reason` ending in `'; lighter after a graphics reset'`
 (`recommended` stays what the device would get). A game whose Engine does not spread `settings.engine` applies
-`settings.engine.maxPixelRatio` itself (the Halloween demo does).
+`settings.engine.maxPixelRatio` itself.
 
 ### Bench harness and the page contract
 
@@ -466,9 +466,9 @@ surface above.
     `buildTreeMeshes(..., { foliageLight })` light leaves as foliage (wrap, light through the leaves, rim, more sky);
     `enableFacadeDetail(createFacadeMaterials(...), opts)` gives facade windows dim rooms, street spill, panes that
     differ, roller shades and weathered curtain walls.
-- The three demos turn these on in their default look, which stays inside the look gate in `test/browser/smoke.mjs`
-  (low key: dark mean, nothing clipped, one warm hue family). Each also has `?look=open` (nyc-night, miami-drive,
-  halloween): a brighter, two-temperature grade of the same scene (more exposure, cooler shade against warm lamps,
+- The demos turn these on in their default look, which stays inside the look gate in `test/browser/smoke.mjs`
+  (low key: dark mean, nothing clipped, one warm hue family). Each also has `?look=open` (nyc-night, miami-drive):
+  a brighter, two-temperature grade of the same scene (more exposure, cooler shade against warm lamps,
   a small lifted black) that the gate does not check, there to compare against and to start a brighter game from.
 - Moonlit scattering (opt-in, `new Atmosphere({ moonScatter: amount })`, default 0 = off): at night, while the moon
   is the shadow-casting light (`lightDir = moonDir`), the post fog's forward-scatter glow (`fogParams.sunScatter`,
@@ -476,8 +476,8 @@ surface above.
   `moonColor`). PostFX's fog glow and the volumetric pass read those fields (falling back to `sunDir` / `sunColor`),
   so with `volumetric` on the pass marches moonlight shafts through the cascades that follow the moon, coloured
   `moonColor * moonIntensity`. Without the option both fields ARE the `sunDir` / `sunColor` objects: output
-  unchanged, and by day nothing differs with it either (`test/volumetric.mjs`). The Halloween sample uses it (phones:
-  the analytic glow only; desktop: the volumetric pass at `intensity` 0.07, 50 m).
+  unchanged, and by day nothing differs with it either (`test/volumetric.mjs`). nyc-night sets `moonScatter` (0.35
+  desktop, 0.2 mobile).
 
 ### Render pipeline (0.7.0): G-buffer, TAA, clustered lights, cascades, GPU particles
 Two paths, chosen per `PostFX` instance; the forward path is the default and renders bit-identically to 0.6.0.
@@ -630,8 +630,8 @@ cost are in [the design notes](docs/DESIGN-NOTES.md#textures-pbr-sets-ktx2).
   `env(safe-area-inset-*)`), per-entry `portrait` overrides re-applied on rotation, `floating` sticks (the base follows
   the thumb inside a zone), `TouchControls.setProgress(id, p)` cooldown rings, button `hitSlop` (an invisible hit
   ring around a button), touchpad `slop` (a drag counts from that many px), `touchReveal` (controls on the first
-  touch, hidden on a key press) and `isTouchDevice({ multiTouch: true })` (iPads with a keyboard); `samples/halloween/`
-  uses them all.
+  touch, hidden on a key press) and `isTouchDevice({ multiTouch: true })` (iPads with a keyboard). No current page uses
+  them all (the retired Halloween game did; it is on the branch `archive/halloween`).
 - `anim` layer: `AnimationController` (states, 1D blend trees, transition table, markers, root motion with the
   hips' horizontal track neutralised) and `TwoBoneIK` / CCD helpers.
 - `AnimationController(model, clips, { states, trees })`: a state's `clip` is the clip's exact name (or an

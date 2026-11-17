@@ -100,7 +100,7 @@ expose state that changes through a function (`{ game: () => ({ mode, score }) }
 | AO only on the ambient, a lifted black, TAA sharpen | `PostFX` (render) | `new PostFX(..., { look: { aoLit: 0.8, aoTint: [0, 0.03, 0.07], lift: [0.002, 0.003, 0.004] }, taa: { sharpen: 0.25 } })` | `samples/nyc-night/main.js` |
 | Lamp light in round pools on the ground, the pole left dark | `NearestLights` (render) | `new NearestLights({ mode: 'clustered', clustered, spot: { cosInner: 0.82, cosOuter: 0.12, near: 5 } })`; `near` (m) shields the first metres below the head; a spot's decay must stay below 8 for it (`ClusteredLights.setSpot(..., near)`) | `samples/nyc-night/main.js` |
 | A small place to start in: a road or a park corner | `countryRoad`, `parkCorner`, `groundCover` (world) | `const place = countryRoad({ physics }); scene.add(place.group)`; per frame `place.update(dt, camera.position, darkness)`; `applyPatches(ground.material, [groundCover({ paths: place.paths })])` | starters |
-| See a demo's brighter grade | the demos' own flag | open `nyc-night/`, `miami-drive/` or `halloween/` with `?look=open` (the default look is the low-key one the smoke look gate checks) | `samples/nyc-night/main.js` (`LOOK`) |
+| See a demo's brighter grade | the demos' own flag | open `nyc-night/` or `miami-drive/` with `?look=open` (the default look is the low-key one the smoke look gate checks) | `samples/nyc-night/main.js` (`LOOK`) |
 | A whole city | `MapWorld` (world) | only for map-scale cities from baked OpenStreetMap data | `samples/nyc-night/main.js` |
 
 Everything else, layer by layer: [ENGINE.md](ENGINE.md). Every source file starts with a header documenting its API.
@@ -148,7 +148,7 @@ downloading something. After adding an asset, add it to `tools/asset-registry.mj
 then run `npm run catalog`; `test/asset-catalog.mjs` fails until the catalogue covers every file in `samples/public/`.
 
 Use only what is in `samples/public/`. Each demo folder lists every file, author and licence in its `CREDITS.md`
-(`samples/public/nyc/CREDITS.md`, `samples/public/miami/CREDITS.md`, `samples/public/halloween/CREDITS.md`).
+(`samples/public/nyc/CREDITS.md`, `samples/public/miami/CREDITS.md`).
 
 ## Using the engine from another project
 

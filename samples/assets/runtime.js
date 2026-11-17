@@ -32,7 +32,7 @@ const MODULES = {
   'three/addons/environments/RoomEnvironment.js': () => Promise.resolve({ RoomEnvironment }),
 };
 // the demos' modules, loaded only when a snippet imports one (their entry points and viewers are left out: they boot)
-const DEMO = import.meta.glob(['../nyc-night/*.js', '../miami-drive/*.js', '../halloween/*.js',
+const DEMO = import.meta.glob(['../nyc-night/*.js', '../miami-drive/*.js',
   '!../*/main.js', '!../*/hud.js', '!../miami-drive/car-viewer.js']);
 
 const IMPORT_RE = /^\s*import\s+(.+?)\s+from\s+['"]([^'"]+)['"];?\s*$/;

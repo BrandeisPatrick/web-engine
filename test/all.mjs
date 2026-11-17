@@ -71,10 +71,6 @@ const SUITES = [
   { file: 'dyn-fracture.mjs' },
   { file: 'character-dyn.mjs' },
   { file: 'ragdoll.mjs', shim: true },
-  // the Halloween sample: its enemies' rules and per-frame allocation (samples/halloween/hands.js, thief.js), its
-  // depth and replay rules (potions.js, chain.js, secrets.js, badges.js, rng.js)
-  { file: 'halloween-enemies.mjs', shim: true },
-  { file: 'halloween-depth.mjs', shim: true },
   // the Miami drive sample: its road-car spec (samples/miami-drive/spec.js) on the VehicleController
   { file: 'miami-car.mjs' },
   // the NYC night walk sample's engine options: traffic fleet mix and the spawn area (TrafficSim)

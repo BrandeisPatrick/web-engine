@@ -12,13 +12,12 @@
 //       veil), the loop stops (engine.contextLost), and no page error or console error arrives in the SETTLE_MS after
 //       it. In play mode the starters are on the GameShell's start card when it happens: the shell steps aside (no card
 //       shown, shell.lost) and neither shell.start() nor Enter restarts the loop;
-//   (c) clicking Reload loads the page again in the same tab, lighter: its resolved quality (window.__sample.quality,
-//       the Halloween game's window.__game.QUALITY) has lighter: true, contextLosses 1 and, on a desktop-recommended
-//       machine, tier 'mobile'; on the phone profile (iPhone 15 Pro emulation: recommended 'mobile') the engine's
-//       pixel ratio is capped at 1.
+//   (c) clicking Reload loads the page again in the same tab, lighter: its resolved quality (window.__sample.quality)
+//       has lighter: true, contextLosses 1 and, on a desktop-recommended machine, tier 'mobile'; on the phone profile
+//       (iPhone 15 Pro emulation: recommended 'mobile') the engine's pixel ratio is capped at 1.
 // Every page runs on the desktop profile; starter-walk also on the phone profile. Exit code 1 on any failure.
 //
-//   node test/browser/phone-start.mjs                       # nyc-night miami-drive halloween starter-walk starter-drive (+ starter-walk phone)
+//   node test/browser/phone-start.mjs                       # nyc-night miami-drive starter-walk starter-drive (+ starter-walk phone)
 //   node test/browser/phone-start.mjs nyc-night --phone     # the given pages on the phone profile only
 //   node test/browser/phone-start.mjs --shots=<dir>         # also save the loading label, the first frame and the notice
 import fs from 'node:fs';
@@ -30,7 +29,7 @@ import {
 
 const LONG_MS = 250, MIN_LUMA = 8, SETTLE_MS = 3000, WATCH_MS = 1500;
 const args = parseArgs();
-const PAGES = ['nyc-night', 'miami-drive', 'halloween', 'starter-walk', 'starter-drive'];
+const PAGES = ['nyc-night', 'miami-drive', 'starter-walk', 'starter-drive'];
 const runs = args._.length
   ? args._.map((page) => ({ page, profile: args.phone ? 'phone' : 'desktop' }))
   : [...PAGES.map((page) => ({ page, profile: args.phone ? 'phone' : 'desktop' })), ...(args.phone ? [] : [{ page: 'starter-walk', profile: 'phone' }])];
@@ -87,9 +86,9 @@ function probe() {
   };
   const iv = setInterval(() => { if (document.body && watch()) clearInterval(iv); }, 2);
 }
-const engineOf = () => (window.__sample && window.__sample.engine) || (window.__game && window.__game.engine) || null;
+const engineOf = () => (window.__sample && window.__sample.engine) || null;
 const qualityOf = () => {
-  const q = (window.__sample && window.__sample.quality) || (window.__game && window.__game.QUALITY) || null;
+  const q = (window.__sample && window.__sample.quality) || null;
   return q && { tier: q.tier, source: q.source, reason: q.reason, lighter: q.lighter, contextLosses: q.contextLosses };
 };
 
@@ -171,7 +170,7 @@ try {
       // ---- (b) a lost context: the notice, the loop stopped, no further errors
       const nErr = errors.length;
       const lost = await page.evaluate(() => {
-        const e = (window.__sample && window.__sample.engine) || (window.__game && window.__game.engine);
+        const e = window.__sample && window.__sample.engine;
         const ext = e.renderer.getContext().getExtension('WEBGL_lose_context');
         if (!ext) return false;
         window.__loseExt = ext; ext.loseContext();
@@ -199,11 +198,11 @@ try {
       if (shots && profile === 'phone' || shots && id === 'nyc-night') await page.screenshot({ path: path.join(shots, `${id}-${profile}-context-lost.png`) });
       await page.waitForTimeout(SETTLE_MS);
       const after = await page.evaluate(() => {
-        const e = (window.__sample && window.__sample.engine) || (window.__game && window.__game.engine);
+        const e = window.__sample && window.__sample.engine;
         return { lost: e.contextLost, running: e._running, frames: e.frameCount };
       });
       await page.waitForTimeout(300);
-      const frames2 = await page.evaluate(() => ((window.__sample && window.__sample.engine) || (window.__game && window.__game.engine)).frameCount);
+      const frames2 = await page.evaluate(() => window.__sample.engine.frameCount);
       if (!after.lost || after.running || frames2 !== after.frames) fail(`the loop did not stop: ${JSON.stringify(after)} -> ${frames2} frames`);
       row.errors_after = errors.length - nErr;
       if (errors.length > nErr) fail(`errors after the context loss: ${errors.slice(nErr).join(' | ')}`);
@@ -211,8 +210,8 @@ try {
       // ---- (c) Reload: the same tab comes up lighter
       await Promise.all([page.waitForEvent('load', { timeout: readyTimeoutMs }), page.click('.engine-notice-notice button')]);
       const next = await waitFor(page, (qf) => {
-        const q = (window.__sample && window.__sample.ready && window.__sample.quality) || (window.__game && window.__game.QUALITY);
-        const e = (window.__sample && window.__sample.engine) || (window.__game && window.__game.engine);
+        const q = window.__sample && window.__sample.ready && window.__sample.quality;
+        const e = window.__sample && window.__sample.engine;
         return q && e && window.__start.goneAt > 0 ? { tier: q.tier, source: q.source, reason: q.reason, lighter: q.lighter, contextLosses: q.contextLosses, maxPR: e.maxPR, pr: e.renderer.getPixelRatio() } : null;
       }, null, readyTimeoutMs, 'the reloaded page');
       row.next = `${next.tier}${next.lighter ? ' lighter' : ''} pr ${next.maxPR}`;

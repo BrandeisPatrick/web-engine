@@ -47,21 +47,6 @@ form and aged paint, the neon tubes off by default (`?neon=1`).
 
 <img src="before-after/miami-chase-look-open.jpg" alt="Miami drive, the chase view in the open look" width="720">
 
-### Midnight Candy Run
-
-Regraded inside the gate: the candy's coloured halos cut to small warm glints, night jack-o'-lanterns with breathing
-candle light, a readable moonlit ground, real lane stones, inscriptions, shaped capstones and clapboard (desktop).
-
-<table><tr><th>Before (main)</th><th>This round</th></tr><tr><td><img src="before-after/halloween-gate-look-before.jpg" alt="Before (main)"></td><td><img src="before-after/halloween-gate-look-after.jpg" alt="This round"></td></tr></table>
-
-<table><tr><th>Before (main)</th><th>This round</th></tr><tr><td><img src="before-after/halloween-house-look-before.jpg" alt="Before (main)"></td><td><img src="before-after/halloween-house-look-after.jpg" alt="This round"></td></tr></table>
-
-<table><tr><th>Before (main)</th><th>This round</th></tr><tr><td><img src="before-after/halloween-grave-closeup-look-before.jpg" alt="Before (main)"></td><td><img src="before-after/halloween-grave-closeup-look-after.jpg" alt="This round"></td></tr></table>
-
-`?look=open`:
-
-<img src="before-after/halloween-gate-look-open.jpg" alt="Midnight Candy Run, the gate view in the open look" width="720">
-
 ### Starters
 
 `starter-walk` is set in a park corner (`parkCorner`, `groundCover`) and `starter-drive` on a country road
@@ -146,30 +131,6 @@ the real OpenStreetMap footprints and heights.
 <img src="before-after/miami-hotel-row.jpg" alt="The hotel row from 120 m" width="720">
 
 <img src="before-after/miami-hotel-entrance.jpg" alt="A hotel entrance at 8 m" width="720">
-
-
-## Midnight Candy Run (`samples/halloween`)
-
-A look remaster only: rules, layout, controls and scoring are unchanged, and `?look=classic` shows the first look.
-
-<table><tr><th>Classic look</th><th>1.1.0-beta.1</th></tr><tr><td><img src="before-after/halloween-gate-before.jpg" alt="Classic look"></td><td><img src="before-after/halloween-gate-after.jpg" alt="1.1.0-beta.1"></td></tr></table>
-
-<table><tr><th>Classic look</th><th>1.1.0-beta.1</th></tr><tr><td><img src="before-after/halloween-graveyard-before.jpg" alt="Classic look"></td><td><img src="before-after/halloween-graveyard-after.jpg" alt="1.1.0-beta.1"></td></tr></table>
-
-<table><tr><th>Classic look</th><th>1.1.0-beta.1</th></tr><tr><td><img src="before-after/halloween-village-before.jpg" alt="Classic look"></td><td><img src="before-after/halloween-village-after.jpg" alt="1.1.0-beta.1"></td></tr></table>
-
-<table><tr><th>Classic look</th><th>1.1.0-beta.1</th></tr><tr><td><img src="before-after/halloween-house-before.jpg" alt="Classic look"></td><td><img src="before-after/halloween-house-after.jpg" alt="1.1.0-beta.1"></td></tr></table>
-
-
-### Close up
-
-Scanned boards, slate, stone and bark; engraved gravestones; smooth carved pumpkins; real porch lanterns.
-
-<table><tr><th>Before</th><th>After</th></tr><tr><td><img src="before-after/halloween-wall-closeup-before.jpg" alt="Before"></td><td><img src="before-after/halloween-wall-closeup-after.jpg" alt="After"></td></tr></table>
-
-<table><tr><th>Before</th><th>After</th></tr><tr><td><img src="before-after/halloween-grave-closeup-before.jpg" alt="Before"></td><td><img src="before-after/halloween-grave-closeup-after.jpg" alt="After"></td></tr></table>
-
-<table><tr><th>Before</th><th>After</th></tr><tr><td><img src="before-after/halloween-pumpkin-closeup-before.jpg" alt="Before"></td><td><img src="before-after/halloween-pumpkin-closeup-after.jpg" alt="After"></td></tr></table>
 
 
 ## Engine: high-detail vehicles
