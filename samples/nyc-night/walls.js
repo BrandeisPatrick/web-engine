@@ -11,6 +11,8 @@
 //   - grime: rain streaks under the sills of the texture windows and in long runs down the wall, soot rising from the
 //     street, lighter patches of repointing (smoother, paler mortar), a slow per-wall dirt variation;
 //   - curtains behind some windows (the engine draws blinds only): drawn from the sides, with folds, lit through.
+//   - detail (o.detail, both tiers): tone at two scales, fine drip runs down from every floor line (damp: darker and
+//     smoother, so they catch the lamps), the sill streaks stronger and damp, rising damp at the foot of the wall.
 // Both tiers (mobile: no streaks under the sills, the cheaper noise).
 import * as THREE from 'three';
 import { WIN_RECTS } from '@vibe/engine/world';
@@ -20,6 +22,7 @@ uniform vec4 uWbWin[24];   // window rects per facade layer (WIN_RECTS: x0, x1, 
 uniform vec4 uWbGrime;     // x streaks, y soot, z repointing, w relief
 uniform vec3 uWbSky;       // world direction the ambient comes from (up, leaning to the afterglow)
 uniform float uWbContrast; // extra albedo contrast around the scan's mean (0 = as scanned)
+uniform vec4 uWbDetail;   // x drip runs, y rising damp
 float wbH(vec2 p) { p = fract(p * vec2(234.34, 435.345)); p += dot(p, p + 34.23); return fract(p.x * p.y); }
 float wbN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(wbH(i), wbH(i + vec2(1.0, 0.0)), f.x), mix(wbH(i + vec2(0.0, 1.0)), wbH(i + vec2(1.0, 1.0)), f.x), f.y); }
@@ -37,7 +40,22 @@ if (vWall.z > 0.5 && fGlass < 0.5 && (fMode == 0 || fMode == 1 || fMode == 3)) {
   }
   // a slow per-wall variation: no wall one even tone
   float slow = wbN(wq * vec2(0.09, 0.05) + vInfo.z * 13.0);
+#ifdef WB_DETAIL
+  // two scales of tone (patches of a few metres inside the slow drift), and fine drip runs from every floor line
+  float mid = wbN(wq * vec2(0.42, 0.3) + vInfo.z * 5.0);
+  fCol *= (0.8 + 0.4 * slow) * (0.86 + 0.28 * mid);
+  float dcol = wq.x * 8.0, dc = floor(dcol), band = floor(hsW / 3.6), d = 3.6 - (hsW - band * 3.6);
+  float len = 0.35 + 3.0 * pow(wbH(vec2(dc, band + vInfo.z * 17.0)), 2.0);
+  float drip = step(0.5, wbH(vec2(dc * 1.7, band * 3.1 + vInfo.z))) * (1.0 - smoothstep(len * 0.4, len, d));
+  float cx = fract(dcol);
+  drip *= smoothstep(0.0, 0.4, cx) * smoothstep(1.0, 0.6, cx) * (0.6 + 0.4 * wbN(vec2(dcol * 3.0, hsW * 4.0)));
+  float dfar = smoothstep(0.25, 0.7, fwidth(dcol));
+  drip = mix(drip, 0.09, dfar) * uWbDetail.x;
+  fCol *= 1.0 - 0.5 * drip;
+  fRough = mix(fRough, fRough * 0.55, drip);         // the runs are damp: they catch the lamps
+#else
   fCol *= 0.86 + 0.28 * slow;
+#endif
   // repointing: paler, smoother patches (fresh mortar flattens the joints)
   float rp = smoothstep(0.7, 0.8, wbN(wq * vec2(0.32, 0.45) + vInfo.z * 7.0)) * uWbGrime.z;
   fCol = mix(fCol, fCol * 1.16 + 0.015, rp); fNStr *= 1.0 - 0.45 * rp;
@@ -62,7 +80,15 @@ if (vWall.z > 0.5 && fGlass < 0.5 && (fMode == 0 || fMode == 1 || fMode == 3)) {
   }
 #endif
   st *= uWbGrime.x;
+#ifdef WB_DETAIL
+  st *= 1.0 + 0.6 * uWbDetail.x;
+  fCol *= 1.0 - st; fRough = mix(fRough, fRough * 0.6, st);
+  // rising damp at the foot of the wall: darker, smoother, a ragged tide line
+  float damp = 1.0 - smoothstep(0.15, 0.55 + 0.6 * wbN(vec2(wq.x * 1.3, 9.0)), hsW);
+  fCol *= 1.0 - 0.4 * damp * uWbDetail.y; fRough = mix(fRough, 0.42, damp * uWbDetail.y);
+#else
   fCol *= 1.0 - st; fRough = mix(fRough, min(1.0, fRough + 0.15), st);
+#endif
   // soot rising from the street (traffic, steam): ragged top, heavier near the corners of the block
   float soot = 1.0 - smoothstep(0.0, 2.6 + 2.4 * wbN(vec2(wq.x * 0.6, 3.0)), hsW);
   fCol *= 1.0 - 0.3 * soot * uWbGrime.y;
@@ -105,6 +131,7 @@ function rep(src, a, b, what) {
 
 /**
  * o: { world, sills = true (streaks under the texture windows), grime: [streaks, soot, repointing], relief = 2.2,
+ * detail = true (two-scale tone, drip runs from the floor lines, damp streaks, rising damp), drips = 1, damp = 1,
  * west: {x, z} (unit, toward the afterglow) }. Returns { uniforms }.
  */
 export function dressWalls(o) {
@@ -121,8 +148,9 @@ export function dressWalls(o) {
     uWbGrime: { value: new THREE.Vector4(g[0], g[1], g[2], o.relief ?? 2.2) },
     uWbSky: { value: sky },
     uWbContrast: { value: o.contrast ?? 0.45 },
+    uWbDetail: { value: new THREE.Vector4(o.drips ?? 1, o.damp ?? 1, 0, 0) },
   };
-  const sills = o.sills !== false;
+  const sills = o.sills !== false, detail = o.detail !== false;
   for (const m of [world.mat.facade, world.mat.facadeWin]) {
     if (!m) continue;
     const prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey.bind(m);
@@ -130,13 +158,13 @@ export function dressWalls(o) {
       prev.call(m, sh, r);
       Object.assign(sh.uniforms, U);
       let f = sh.fragmentShader;
-      f = rep(f, 'float fHash(vec2 p)', `${sills ? '#define WB_SILLS\n' : ''}${HEAD}\nfloat fHash(vec2 p)`, 'head');
+      f = rep(f, 'float fHash(vec2 p)', `${sills ? '#define WB_SILLS\n' : ''}${detail ? '#define WB_DETAIL\n' : ''}${HEAD}\nfloat fHash(vec2 p)`, 'head');
       f = rep(f, 'diffuseColor.rgb *= fCol;', `${GRIME}\ndiffuseColor.rgb *= fCol;`, 'grime');
       f = rep(f, 'reflectedLight.directDiffuse *= mix(1.0, fAO, 0.35);\n}', `reflectedLight.directDiffuse *= mix(1.0, fAO, 0.35);\n}\n${RELIEF}`, 'relief');
       f = rep(f, CURTAIN_ANCHOR, CURTAIN_ANCHOR + CURTAIN, 'curtains');
       sh.fragmentShader = f;
     };
-    m.customProgramCacheKey = () => `${prevKey()}-nyc-walls-${sills ? 1 : 0}`;
+    m.customProgramCacheKey = () => `${prevKey()}-nyc-walls-${sills ? 1 : 0}${detail ? 1 : 0}`;
     m.needsUpdate = true;
   }
   return { uniforms: U };
