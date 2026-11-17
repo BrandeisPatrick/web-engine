@@ -718,7 +718,9 @@ async function boot() {
   // nothing moves) and finished on the GPU, so the first live frame does not stall with the city already showing
   memlog('before warm-up');
   loading.setProgress(1, 'Compiling shaders…');
-  const warm = await engine.warmUp({ systems: !bp.enabled }); // bench: renderFn only (the poses' state stays as loaded)
+  // bench: renderFn only (the poses' state stays as loaded), 12 frames (renderFn's every-2nd / 3rd / 4th-frame counters
+  // end in the phase they started in, so the poses draw the same passes as without the warm-up)
+  const warm = await engine.warmUp(bp.enabled ? { systems: false, frames: 12 } : {});
   const loadMs = Math.round(performance.now() - t0);
   window.__nyc = {
     THREE, engine, world, postfx, atmo: world.atmo, clustered, extra, signs, steam, wet, player, cc, input, hud, menu, harness,

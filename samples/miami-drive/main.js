@@ -453,7 +453,9 @@ async function boot() {
   // the programs, pipelines and uploads of the first frames, drawn under the loading screen at the final size (Engine
   // warmUp: dt 0, nothing moves) and finished on the GPU, so the first live frame does not stall
   loading.setProgress(1, 'Compiling shaders…');
-  const warm = await engine.warmUp({ systems: !bp.enabled }); // bench: renderFn only (the poses' state stays as loaded)
+  // bench: renderFn only (the poses' state stays as loaded), 12 frames (renderFn's every-2nd / 3rd / 4th-frame counters
+  // end in the phase they started in, so the poses draw the same passes as without the warm-up)
+  const warm = await engine.warmUp(bp.enabled ? { systems: false, frames: 12 } : {});
   console.info(`[miami] ready in ${loadMs} ms (warm-up ${warm.ms} ms) · tier ${Q.tier} (${Q.source}, recommended ${Q.recommended}: ${Q.reason}) · car ${W.model.stats.triangles} tris · props ${props.bodies.length} · neon ${plugin.stats.signs} signs`);
   harness.setReady();
   engine.start();

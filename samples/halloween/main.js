@@ -1417,7 +1417,9 @@ async function boot() {
   // the programs, pipelines and uploads of the first frames, drawn under the loading screen (Engine warmUp: dt 0,
   // nothing moves) and finished on the GPU, so the first live frame does not stall with the title already showing
   loading.setProgress(1, 'Compiling shaders…');
-  const warm = await engine.warmUp({ systems: !harness }); // bench: renderFn only (the poses' state stays as loaded)
+  // bench: renderFn only (the poses' state stays as loaded), 12 frames (renderFn's every-2nd / 3rd / 4th-frame counters
+  // end in the phase they started in, so the poses draw the same passes as without the warm-up)
+  const warm = await engine.warmUp(harness ? { systems: false, frames: 12 } : {});
   console.info(`[halloween] ready in ${loadMs} ms (warm-up ${warm.ms} ms) · touch ${TOUCH} · quality ${QUALITY.tier} (${QUALITY.source}${QUALITY.lighter ? ', lighter after a graphics reset' : ''}) · ${lanterns.n} lanterns · ${ghosts.list.length} ghosts · ${physics.staticBoxes.length} colliders · pr ${engine.pixelRatio}`);
   engine.start();
   loading.hide(450);
