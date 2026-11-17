@@ -281,7 +281,7 @@ export function countryRoad(o = {}) {
   const LB = o.layby || { from: 10, to: -110, width: 7 }, rnd = mulberry32(o.seed ?? 3), physics = o.physics || null;
   const group = new THREE.Group(); group.name = 'countryRoad';
   const B = new PartBuilder();
-  const asphalt = new THREE.MeshStandardMaterial({ color: 0x9a9a9a, roughness: 1 }); // x the set's roughness map: dry
+  const asphalt = new THREE.MeshStandardMaterial({ color: 0xb4b4b4, roughness: 0.9 }); // x the set's maps: dry, worn grey
   // asphalt: the road (UVs 0..1 over w x l) and the lay-by, a tapered strip on the left (UVs in metres)
   const road = new THREE.Mesh(new THREE.PlaneGeometry(W, from - to).rotateX(-Math.PI / 2), asphalt);
   road.position.set(0, 0.02, (from + to) / 2);
@@ -327,7 +327,8 @@ export function countryRoad(o = {}) {
   // a few boulders by the lay-by and the verges
   for (const [x, z, sc] of [[-hw - LB.width - 2.2, LB.from - 26, 0.55], [-hw - LB.width - 1.8, LB.from - 31, 0.35], [hw + 2.4, -36, 0.4], [-hw - 2.2, LB.to - 18, 0.5], [hw + 2.8, tz - 9, 0.6]]) rockInto(B, x, z, sc, rnd);
   // trees: a few near the start beyond the fences, field trees, and a tree line 150-250 m out on both sides
-  const near = [[-21, -18, 1.25], [-24, -31, 1.05], [-19.5, -46, 1.3], [-23, 12, 1.1], [20, -10, 1.15], [24, -24, 0.95], [21, tz - 26, 1.2], [19.5, -150, 1.1]];
+  // (the low sun is on the left: trees there sit where their swaying shadows miss the first 50 m of road ahead)
+  const near = [[-23, 12, 1.1], [-26, 24, 1.2], [-21, -66, 1.25], [-24, -80, 1.05], [20, -10, 1.15], [24, -24, 0.95], [21, tz - 26, 1.2], [19.5, -150, 1.1]];
   for (let i = 0; i < 26; i++) { const side = i % 2 ? 1 : -1; near.push([side * (30 + rnd() * 110), 40 - rnd() * 850, 0.9 + rnd() * 0.5]); }
   const line = [];
   for (let z = from + 150; z > to - 400; z -= 7 + rnd() * 5) for (const side of [-1, 1]) line.push([side * (150 + rnd() * 90 + 30 * Math.sin(z * 0.004 + side)), z, 1 + rnd() * 0.6, rnd()]);
