@@ -44,7 +44,8 @@ const noop = function () { return this; };
  * @typedef {import('three').Object3D | { x: number, y: number, z: number } | number[]} SoundPosition
  */
 
-/** The voice play() returns while nothing can play. */
+/** The voice play() returns while nothing can play.
+ * @type {SoundVoice} */
 export const INERT_VOICE = Object.freeze({ playing: false, name: '', stop: noop, setGain: noop, setRate: noop });
 
 function readPos(at, out) {
@@ -158,9 +159,9 @@ export class SoundBank {
   get voices() { return this.pool.size; }
 
   /**
-   * Add or replace a sound.
+   * Add or replace a sound. Missing fields default to a one-shot of 1 s, 1 variant, bus 'effects', peak 0.5.
    * @param {string} name
-   * @param {import('./presets.js').SoundPreset} spec
+   * @param {Partial<import('./presets.js').SoundPreset> & { render: (c: import('./presets.js').RenderContext) => Float32Array }} spec
    */
   define(name, spec) {
     if (!spec || typeof spec.render !== 'function') throw new Error(`SoundBank.define('${name}'): spec.render(c) must return a Float32Array`);
