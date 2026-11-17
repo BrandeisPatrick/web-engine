@@ -52,7 +52,7 @@ export const rngAt = (x, z, salt = 0) => mulberry32(seedOf(x, z, salt));
 export const SURF_KIND = { NONE: 0, WOOD: 1, ROOF: 2, MASONRY: 3, STONE: 4, BARK: 5, IRON: 6 };
 export const SURF = { k: 0 };
 /** Geometry detail switches the remaster sets on desktop (trees: rounder trunks, a third level of branches). */
-export const DETAIL = { trees: false, lamps: false, graves: false };
+export const DETAIL = { trees: false, lamps: false, graves: false, rocks: false }; // rocks: shaped capstones, proud clapboard (desktop)
 /** (DETAIL.graves) Where the carved epitaphs go: { x, y, z, yaw, tilt, roll (the stone's placement), lx, ly, lz (the
  * panel's centre on the front face, local), w, h (its size), seed }; world.js draws them as one instanced decal. */
 export const EPITAPHS = [];
@@ -768,7 +768,7 @@ export function hauntedHouse(B, G, ctx, { x, y, z, w, d, yaw, door = true, lamp 
       lineOn(L, pts, 0.014, '#1d1724', nrm);
       // (2026-11 look pass) each board's lower edge stands proud: the moon catches its top and leaves a dark line
       // under it, so a lit wall reads as clapboard instead of a flat grey plane
-      if (DETAIL.lamps) {
+      if (DETAIL.rocks) {
         const o = 0.014, sg = nrm[0] + nrm[1] + nrm[2];
         if (axis === 'x') L.add(new THREE.BoxGeometry(len, 0.03, 0.028), WALL2, 0, yy + 0.02, at + sg * o);
         else L.add(new THREE.BoxGeometry(0.028, 0.03, len), WALL2, at + sg * o, yy + 0.02, 0);
@@ -1450,10 +1450,10 @@ export function bankWall(B, { x0, x1, zf, dir, topY, bedY }) {
   SURF.k = SURF_KIND.STONE;
   const r = rngAt(x0, zf, 101), L = new Parts(), len = x1 - x0, h = topY - bedY + 0.15;
   vgrad(L.add(chamferBox(len + 0.02, h, 0.42, 0.04), '#2e2722', (x0 + x1) / 2, bedY - 0.15 + h / 2, zf - dir * 0.21), 0.45, 0.95, 0.08, (r() * 1e6) | 0);
-  if (DETAIL.lamps) SURF.k = SURF_KIND.NONE; // (the capstones: the scan's planar projection smeared over their slopes)
+  if (DETAIL.rocks) SURF.k = SURF_KIND.NONE; // (the capstones: the scan's planar projection smeared over their slopes)
   for (let xx = x0 + 0.2 + r() * 0.2; xx < x1 - 0.1; xx += 0.42 + r() * 0.25) {
     // (2026-11 look pass) capstones with a real shape: lumpy, flat-topped, faceted (were squashed dodecahedra)
-    const sz = 0.18 + r() * 0.1, k = r(), g = L.add(DETAIL.lamps ? rockGeometry(sz, (xx * 7.3 + zf) * 3.1) : new THREE.DodecahedronGeometry(sz, 0), k < 0.4 ? '#3a383d' : k < 0.75 ? '#423f3b' : '#333136', xx, topY - 0.05, zf - dir * (0.1 + r() * 0.1), r() * 6, 0, 0, 1.3, 0.55, 1);
+    const sz = 0.18 + r() * 0.1, k = r(), g = L.add(DETAIL.rocks ? rockGeometry(sz, (xx * 7.3 + zf) * 3.1) : new THREE.DodecahedronGeometry(sz, 0), k < 0.4 ? '#3a383d' : k < 0.75 ? '#423f3b' : '#333136', xx, topY - 0.05, zf - dir * (0.1 + r() * 0.1), r() * 6, 0, 0, 1.3, 0.55, 1);
     vgrad(g, 0.5, 1.12, 0.1, (r() * 1e6) | 0);
   }
   SURF.k = SURF_KIND.STONE;

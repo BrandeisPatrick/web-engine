@@ -1017,7 +1017,7 @@ export function buildWorld({ scene, physics, low, classic = true, ground = null,
   Object.assign(SECRETS.crypt, { door: cr.door, group: cr.crack, halo: cr.crackHalo });
 
   // ---- the village (village.js): the porches, the creek and its bridges, the hollow, the Bale Yard, the oak ...
-  P.DETAIL.lamps = !classic;
+  P.DETAIL.lamps = !classic; P.DETAIL.rocks = !classic && !low; // (rocks: the look pass's shaped capstones and clapboard, desktop)
   for (const p of PORCHES) {
     if (p.haunted) V.hauntedPorch(B, G, ctx, physics, heightAt, p, HOUSE);
     else V.porchCottage(B, G, ctx, physics, heightAt, p);
