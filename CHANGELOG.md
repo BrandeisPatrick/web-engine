@@ -15,7 +15,7 @@
   alternative the gate does not check. NYC: cool sky and shade against warm lamps, lamp spots, lifted darks, glass
   that reflects the street, lit and dim rooms, wall drips and damp, lit street trees, weathered street kit. Miami:
   a soft lit cloud deck, the afterglow key, lit foliage, aged stucco with dirt runs, shrubs, the neon tubes off
-  (`?neon=1`), AO on the ambient. Halloween: see its own entry. Starters: lit clouds (drive also the low-sun fill), AO on the ambient, weathered posts and lamp, broad patches on the walk's ground.
+  (`?neon=1`), AO on the ambient. Halloween: regraded inside the gate, the candy's coloured halos cut to small warm glints, smoother carved pumpkin edges and breathing candle light, the green window and blue door calmed, inscriptions, shaped capstones and clapboard (desktop), AO on the ambient, `?look=open` with a small black lift. Starters: lit clouds (drive also the low-sun fill), AO on the ambient, weathered posts and lamp, broad patches on the walk's ground.
 - Sound kit (audio): `SoundBank` with 18 named sounds rendered in plain JavaScript (`SOUND_PRESETS`), `Footsteps`, a
   voice policy (`VoicePool`), the 'safe' master chain and `setPaused` / `setMuffle` / `duck` on `AudioBus`,
   `audioSelfTest` / `analyseMix` / `encodeWav`, and the `samples/sound-check/` page (a card per sound, the measured
