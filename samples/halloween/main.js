@@ -1345,7 +1345,10 @@ async function boot() {
           },
         } : {}),
       },
-      after: () => { glowAt.set(world.glowLevels); rig.deactivate(); orbit.deactivate(); rigOn = null; worldLate(0); }, // the rigs off: the pose places the camera
+      // the rigs off: the pose places the camera. The lantern light pool reselects for the view and snaps its lights to
+      // full: a newly picked light fades in over 0.3 s, which never advances at dt 0 (in pose order the knoll's
+      // lantern in 'house' was picked after a short move and rendered with its candle light off)
+      after: () => { glowAt.set(world.glowLevels); rig.deactivate(); orbit.deactivate(); rigOn = null; lanterns.pool._timer = 0; lanterns.pool._fresh = true; worldLate(0); },
       // captures hash equal frame to frame: the eye adaptation reset to this view (as play settles to it; held at dt 0),
       // the volumetric march without jitter or history
       quiet: () => {
