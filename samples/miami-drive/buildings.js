@@ -29,6 +29,8 @@
 // NEON_NAMES) are lettered on canopies, shop boards and roof signs from one canvas atlas (building-materials.js), lit at
 // dusk. The weathering (stucco float texture, patches, cracks, streaks, damp, fading, mildew, formwork, roof stains)
 // and the far level's window bays are a shader pass in building-materials.js.
+// Shrubs in pots are a few lumpy clumps (blob), not clipped stacks. afterProps quietens the `miami` plugin's neon (no
+// cornice tubes, warm sign letters, dimmer warm light; ?neon=1 keeps the old look).
 // Colliders for the claimed footprints are registered here (MapWorld skips claimed ones).
 import * as THREE from 'three';
 import { GeoBuf, NullBuf, BuildingBuilder, MODE, enc, PBR, FACADE, WIN_RECTS, tintBytes, insetRing, RBIT, signedArea, pointInRing, localizeMeshOrigin } from '@vibe/engine/world';

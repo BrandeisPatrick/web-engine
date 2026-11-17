@@ -269,8 +269,8 @@ export function weathering(o = {}) {
   };
 }
 
-// ---- CPU twin of the GLSL (same hash and noise in float64; matches the shader to a few 1e-3): bake weathering into
-// vertex colours (phones, far LODs, merged props) or sample it in tests
+// ---- CPU twin of the GLSL (same hash and noise in float64; matches the shader to a few 1e-3, without the near-camera
+// parts: mottling, chips, fading): bake weathering into vertex colours (phones, far LODs, merged props) or sample it
 const fract = (x) => x - Math.floor(x);
 function wxHashJS(x, y, z) {
   let px = fract(x * 0.1031), py = fract(y * 0.103), pz = fract(z * 0.0973);

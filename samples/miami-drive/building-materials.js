@@ -3,7 +3,11 @@
 // canopies and roof signs.
 //
 // Weathering: a class in aInfo.x of PLAIN-mode vertices (the engine ignores x there) picks the treatment, all in
-// world / wall-plane space, so it costs no texture and no download:
+// world / wall-plane space, so it costs no texture and no download. The broad part (macro value / hue / roughness,
+// dirt from the pavement, dust on ledges, sun-fading, chips) is the engine's weathering library (MaterialPatches
+// GLSL_WEATHERING); on top of it, dirt runs down from the coping and every floor line (walls carry the wall top and
+// the floor rhythm in their uv, buildings.js walls()) and under sills / air-conditioners (streak quads, aInfo.y < 0).
+// Phones get a broad mottle and the dirt runs. Distant window glass reflects less sky and keeps more lit rooms.
 //   1 stucco   float texture (fine normal) + unevenness (broad normal), repainted patches a shade off, hairline
 //              cracks, rain / salt streaks, a damp band at the pavement, sun-fading on the south / west faces,
 //              mildew on the north faces and low down
