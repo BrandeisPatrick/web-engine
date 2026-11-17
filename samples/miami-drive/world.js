@@ -569,8 +569,8 @@ function decoFrontage(deco, tubes, best, ux, uz, nx, nz, gy, h, tag, neonCol, r)
 // ------------------------------------------------------------------ beach
 /**
  * The dry sand's look: x = dusk fill strength, y = brightness, z = how far the texture's cast goes to neutral beige.
- * The smoke look gate (default look, beach pose: under40 >= 50 %) pins the dry sand's value at about what it was; the
- * fill and the neutral cast turn it from the violet hemisphere's mauve-brown to a dim sand grey at that value.
+ * The low-key look gate (until 2026-11-17, beach pose: under40 >= 50 %) pinned the dry sand's value at about what it
+ * was; the fill and the neutral cast turn it from the violet hemisphere's mauve-brown to a dim sand grey at that value.
  */
 const SAND_LOOK = { value: new THREE.Vector3(0.05, 0.68, 0.75) };
 function sandMaterial(pbr, lod) {

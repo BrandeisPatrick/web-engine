@@ -1,21 +1,34 @@
 # Before and after
 
-What changed on screen in 1.1.0-beta.1, and (first section) in the unreleased round after it. Every image is a capture of the samples in this repository, taken in Chrome on
+What changed on screen in 1.1.0-beta.1, and (first two sections) in the unreleased round after it. Every image is a capture of the samples in this repository, taken in Chrome on
 an Apple M4 (the desktop quality tier unless noted). "Before" is the first working pass of each demo or the engine's
 earlier output; "after" is this release. The city demos' camera poses moved between the two, so the pairs show the
 same place and subject rather than the same pixel.
 
 The work was held to a reference standard for tone (a low-key dusk frame: dark, nothing clipped, one warm hue family),
-which is now a gate in `npm run smoke`, and then to asset detail: materials, construction and objects that hold up
-close. `CHANGELOG.md` has the full list.
+which became a gate in `npm run smoke`, and then to asset detail: materials, construction and objects that hold up
+close. On 2026-11-17 the brighter open look became the demos' default (next section) and the gate now holds that
+look. `CHANGELOG.md` has the full list.
+
+## Unreleased: the open look is the default
+
+On 2026-11-17 the owner compared the two looks side by side and made the brighter, two-temperature open look the
+default in nyc-night and miami-drive. The low-key look is still there with `?look=low`. Each sheet shows every bench
+pose at 1280 x 720 on the desktop tier: on the left the low-key look, on the right the open look. The labels are the
+ones from the comparison, made before the switch.
+
+<img src="before-after/nyc-night-looks.jpg" alt="Night NYC walk, every bench pose: the low-key look on the left, the open look on the right" width="960">
+
+<img src="before-after/miami-drive-looks.jpg" alt="Miami drive, every bench pose: the low-key look on the left, the open look on the right" width="960">
 
 ## Unreleased: the look pass and the fix pass
 
 The round after 1.1.0-beta.1 (see `CHANGELOG.md`, Unreleased). "Before" is `main` before the round, "this round" is
-the default look, each captured in the same bench pose at 1280 x 720 on the desktop tier. Each demo's default look
-stays inside the smoke test's look gate (low key: a dark mean, nothing clipped, one warm hue family). Each also has
-`?look=open`, a brighter two-temperature grade of the same scene (more exposure, cool shade against warm lamps, a
-small lifted black) that the gate does not check: one example per demo below.
+the low-key look that was the default then (now `?look=low`), each captured in the same bench pose at 1280 x 720 on
+the desktop tier. It stayed inside the smoke test's look gate of the time (low key: a dark mean, nothing clipped, one
+warm hue family). The round also added the open look, a brighter two-temperature grade of the same scene (more
+exposure, cool shade against warm lamps, a small lifted black), the default since the section above: one example
+per demo below.
 
 ### Night NYC walk
 
@@ -28,7 +41,7 @@ rooms, lit street trees, weathered street kit, shop interiors with a counter and
 
 <table><tr><th>Before (main)</th><th>This round</th></tr><tr><td><img src="before-after/nyc-shop-look-before.jpg" alt="Before (main)"></td><td><img src="before-after/nyc-shop-look-after.jpg" alt="This round"></td></tr></table>
 
-`?look=open`:
+The open look (`?look=open` then, the default now):
 
 <img src="before-after/nyc-avenue-look-open.jpg" alt="Night NYC walk, the avenue in the open look" width="720">
 
@@ -43,7 +56,7 @@ form and aged paint, the neon tubes off by default (`?neon=1`).
 
 <table><tr><th>Before (main)</th><th>This round</th></tr><tr><td><img src="before-after/miami-beach-look-before.jpg" alt="Before (main)"></td><td><img src="before-after/miami-beach-look-after.jpg" alt="This round"></td></tr></table>
 
-`?look=open`:
+The open look (`?look=open` then, the default now):
 
 <img src="before-after/miami-chase-look-open.jpg" alt="Miami drive, the chase view in the open look" width="720">
 

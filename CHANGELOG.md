@@ -1,6 +1,18 @@
 # Changelog
 
 ## Unreleased
+- The open look is the default in nyc-night and miami-drive: the owner chose it on 2026-11-17 after comparing the two
+  looks side by side (docs/BEFORE-AFTER.md, first section; the sheets are `docs/before-after/nyc-night-looks.jpg` and
+  `miami-drive-looks.jpg`). The earlier low-key grade is `?look=low`; `?look=open` is still accepted. One line per
+  demo picks the look (`LOOK` in each `main.js`); `samples/nyc-night/look.js`'s functions keep 'low' as their parameter
+  default (the asset catalogue's snippets). The smoke look gate (`test/browser/smoke.mjs`) now holds the open look,
+  limits measured on every pose on both tiers: nyc-night mean luminance 44..75, at most 51 % of the frame under 40;
+  miami-drive mean 54..100, at most 36 % under 40 (both floors halfway to the low-key frames, so a frame that dark
+  fails); over160 at most 3 / 4 %, over240 at most 0.2 %; warm and cool hues allowed (azure, blue, violet with the
+  warm family), at most 4 % in any other hue, and a new `hue` limit (20 / 35 %) for a cast in one hue. Two new smoke
+  pages, `nyc-night-low` and `miami-drive-low`, load `?look=low` on one pose and check only for a black or blown-out
+  frame. `npm run perf`'s image guard flags every NYC and Miami pose as changed (on purpose) until the owner accepts
+  the new pictures. Docs: README, AGENTS.md, ENGINE.md, HOWTO, bench/README.md.
 - Halloween (Midnight Candy Run) is retired: `samples/halloween/`, `samples/public/halloween/` and its tests
   (`test/halloween-enemies.mjs`, `test/halloween-depth.mjs`, `test/browser/halloween.mjs`,
   `test/browser/halloween-media.mjs`) are removed, and the game is kept on the branch `archive/halloween` (the round's

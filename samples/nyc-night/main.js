@@ -13,7 +13,8 @@
 // Quality tiers (core/Quality.js + ui/QualityMenu.js): 'desktop' (G-buffer, TAA, SSR, volumetrics, clustered lights)
 // and 'mobile' (forward, FXAA, 8-lamp pool, smaller textures / radius / traffic); ?quality=desktop|mobile forces one.
 // Query: ?bench=1&size=WxH (window.__sample: poses avenue / square / sidewalk, settings below), ?notraffic,
-// ?nostream=1, ?nofiller, ?nostreet (street.js kit off), ?nowalls (walls.js off), ?keepcpu, ?memlog=1, ?cascades=N, ?touch=1, ?profile=N, ?fps=60. window.__nyc for the console.
+// ?nostream=1, ?nofiller, ?nostreet (street.js kit off), ?nowalls (walls.js off), ?keepcpu, ?memlog=1, ?cascades=N, ?touch=1, ?profile=N, ?fps=60,
+// ?look=low (the earlier low-key grade). window.__nyc for the console.
 import * as THREE from 'three';
 import { Engine, Assets, createBenchHarness, readBenchParams, resolveQuality } from '@vibe/engine/core';
 import { CharacterController } from '@vibe/engine/physics';
@@ -74,8 +75,9 @@ const Q = resolveQuality({
 });
 const S = Q.settings, NY = S.nyc, DESK = Q.tier === 'desktop';
 const NIGHT = params.get('t') === 'night';
-// ?look=open: the brighter two-temperature grade (look.js); default 'low', the low-key dusk look the smoke gate holds
-const LOOK = params.get('look') === 'open' ? 'open' : 'low';
+// The look (look.js): 'open' by default, the brighter two-temperature grade (the owner chose it on 2026-11-17; the smoke
+// look gate holds it); ?look=low gives the earlier low-key dusk grade (?look=open is accepted too)
+const LOOK = params.get('look') === 'low' ? 'low' : 'open';
 // A/B knobs: ?cascades=1..4, ?shadowkernel=fast|pcf|pcss, ?shadownear=<m> (near cascade half size)
 if (params.has('cascades')) S.shadows.cascades = +params.get('cascades') || 1;
 if (params.has('shadowkernel')) S.shadows.kernel = params.get('shadowkernel');
@@ -242,7 +244,7 @@ async function boot() {
   // not 35 cm under it, so the pole's top is not lit white from a hand's breadth away. The cone is a real luminaire's
   // (full to ~14 deg off straight down, gone by ~37 deg: a bright core about 4 m across under a 9 m head that falls off
   // over the next few metres; the old 72 deg cone lit the whole street evenly, so no pool read, and a 20 / 44 deg one
-  // still lit the asphalt round a lamp flat beige in the kerb view), twice as bright inside it (1.5x in ?look=open, whose exposure is higher), and shielded over its first
+  // still lit the asphalt round a lamp flat beige in the kerb view), twice as bright inside it in ?look=low (1.5x in the default open look, whose exposure is higher), and shielded over its first
   // 5 m below the head (ClusteredLights setSpot near): the pole and the wall at head height stay out of it
   // pedestrian signal lenses (Props: a flat 8-sided disc, unlit colour): the engine's WALK white (1.7) and hand orange
   // (3.0) are daytime levels; under this grade's exposure the WALK disc clipped flat white. Night levels: lit, not blown.

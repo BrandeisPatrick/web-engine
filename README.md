@@ -197,8 +197,9 @@ Installed as a git submodule listed in a game's `workspaces`, the engine resolve
 - Render flags shared by the demos are in `samples/shared/fx-flags.js`: `?gbuffer=1`, `?aa=taa|fxaa|msaa`,
   `?shadows=pcf|fast|pcss`, `?cascades=2|3|4`, `?ssr=1`, `?volumetric=1`, `?motionblur=1`, `?dof=1`,
   `?lut=warm|bleach`, `?aonormals=gbuffer`, `?fps=60`.
-- `?look=open` (nyc-night, miami-drive): a brighter, two-temperature grade of the same scene. The default
-  look is the low-key one the smoke look gate checks; `open` is not gated.
+- `?look=low` (nyc-night, miami-drive): the earlier low-key grade of the same scene (darker, one warm hue family).
+  The default is the brighter, two-temperature open look (`?look=open` still works), the one the smoke look gate
+  checks; `low` is checked only for a black or blown-out frame.
 - The earlier test samples (Canyon Run, the procedural city, Character, the physics sandbox) were removed in favour
   of the current demos; they are in git history (`git show fc73161:samples/<name>/main.js`). The Halloween game
   (Midnight Candy Run) is retired and kept on the branch `archive/halloween`.
@@ -231,7 +232,8 @@ Installed as a git submodule listed in a game's `workspaces`, the engine resolve
 
 `test/browser/` (`smoke`, `bench`, `perf`, `howto`, `check-page`, `phone-start`,
 `shell`, `sound-check`, `drive-feel`, `car-camera`) needs Chrome and runs locally. `smoke` covers the demos and the
-starters, each also as a `-mobile` page (the same page on the mobile tier); `bench` takes `nyc-night`, `miami-drive`
+starters, each also as a `-mobile` page (the same page on the mobile tier), and the two demos once more as a `-low`
+page (`?look=low`, one pose); `bench` takes `nyc-night`, `miami-drive`
 and their `-mobile` pages. `howto` runs the browser-only recipes (clustered lights, GPU particles, vehicle sound) on
 the starter-drive page; `check-page <name>` loads one page and
 fails on any error; `phone-start` loads every demo and starter in play mode and checks the start-up (the loading

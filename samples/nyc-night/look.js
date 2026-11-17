@@ -1,7 +1,7 @@
 // The night look: atmosphere keyframes for a wet city night (heavier haze and low mist, an overcast deck lit orange
 // from below by the city), the post grade (exposure, bloom tuned for small bright sources, cool shadows / warm
-// highlights, vignette, grain) and a 3D LUT generated in code (no file), each in two looks: 'low' (default, the
-// low-key dusk reference) and 'open' (brighter, two temperatures); see nightGrade.
+// highlights, vignette, grain) and a 3D LUT generated in code (no file), each in two looks: 'open' (brighter, two
+// temperatures: the demo's default) and 'low' (the earlier low-key dusk reference, ?look=low); see nightGrade.
 import { DEFAULT_LOOKS, DEFAULT_GRADE, lutFromFunction } from '@vibe/engine/render';
 
 /** Atmosphere `looks`: the two night keyframes replaced (sun more than 12 deg below the horizon). */
@@ -14,17 +14,20 @@ export function nightLooks({ haze = 0.0011, mist = 0.0009 } = {}) {
   return DEFAULT_LOOKS.map((k) => (k.el <= -12 ? { ...k, ...night, el: k.el } : k));
 }
 
-// Two looks (main.js: ?look=open picks the second):
-//   'low'  (default) the owner's low-key dusk reference (test/browser/smoke.mjs look gate: mean luminance 22..48 / 255,
-//          at least half the frame under 40, nothing clipped, one warm hue family): darks lifted just enough that the
-//          darkest wall keeps its brick and mullions, a cool tint only in the deepest shade (too dark to count as a hue),
-//          AO only on the ambient, a little halation around the lamps;
-//   'open' the brighter two-temperature grade the critique and the render-gap study argue for: exposure up, eye
-//          adaptation on, no toe, a cool blue-violet sky and shade against warm lamps and windows.
+// Two looks (main.js LOOK passes one: 'open' unless ?look=low; the functions below default to 'low' when called
+// without one, as the asset catalogue's snippets do):
+//   'open' the demo's default since 2026-11-17 (the owner chose it from side-by-side pictures; the
+//          test/browser/smoke.mjs look gate holds it): the brighter two-temperature grade the critique and the
+//          render-gap study argue for: exposure up, eye adaptation on, no toe, a cool blue-violet sky and shade against
+//          warm lamps and windows;
+//   'low'  the earlier low-key dusk reference (?look=low; the look gate held it until 2026-11-17: mean luminance
+//          22..48 / 255, at least half the frame under 40, nothing clipped, one warm hue family): darks lifted just
+//          enough that the darkest wall keeps its brick and mullions, a cool tint only in the deepest shade (too dark to
+//          count as a hue), AO only on the ambient, a little halation around the lamps.
 
 /**
- * PostFX `grade`: night keyframes (sun below -3 deg) for the city after dark. `look` 'low' (default) or 'open' (see
- * above); exposure overrides the look's own.
+ * PostFX `grade`: night keyframes (sun below -3 deg) for the city after dark. `look` 'open' or 'low' (the parameter's
+ * default; see above); exposure overrides the look's own.
  */
 export function nightGrade({ look = 'low', exposure, bloomThreshold, bloomStrength, bloomRadius, grain = 0.025 } = {}) {
   const n = look === 'open' ? {
@@ -114,9 +117,10 @@ export function duskLooks(look = 'low') {
  *  only low toward the set sun (the haze down the cross streets stays warm, the rest of the fog takes the cool sky). */
 export const OPEN_DUSK_SKY = { zenith: [0.022, 0.026, 0.062], horizon: [0.075, 0.082, 0.125], glow: [0.85, 0.32, 0.1] };
 
-/** The dusk sky colours on the Atmosphere's twilight uniforms (default, the 'low' look): mauve-grey overhead, dull rose
- *  low down, a salmon-orange afterglow on the horizon toward the set sun (the reference's 46/39/43 top, 90/70/70 mid,
- *  115/70/52 horizon after the grade); OPEN_DUSK_SKY for the 'open' look. Rebuilds the environment / fog for it. */
+/** The dusk sky colours on the Atmosphere's twilight uniforms (the parameter defaults are the 'low' look's): mauve-grey
+ *  overhead, dull rose low down, a salmon-orange afterglow on the horizon toward the set sun (the reference's 46/39/43
+ *  top, 90/70/70 mid, 115/70/52 horizon after the grade); pass OPEN_DUSK_SKY for the 'open' look (the demo's default).
+ *  Rebuilds the environment / fog for it. */
 export function cityDuskSky(atmo, { zenith = [0.034, 0.028, 0.036], horizon = [0.2, 0.11, 0.1], glow = [0.9, 0.34, 0.11] } = {}) {
   for (const s of [atmo.sky, atmo.envSky]) {
     const u = s && s.material && s.material.uniforms; if (!u) continue;
