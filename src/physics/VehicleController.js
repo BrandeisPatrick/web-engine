@@ -294,6 +294,11 @@ const mult = (x) => (typeof x === 'number' && x >= 0 && x < Infinity ? x : 1); /
  * suspensionTravel (m), flight (false: no thrusters), airControl ('flight' | 'arcade' | 'none').
  * Outputs to read: position, quaternion, velocity (Vector3), speed / forwardSpeed (m/s), steerAngle (rad), grounded,
  * mode ('ground' | 'flight'), gForce, wheelSlip, heading, wheels[i].compression.
+ * Tyre outputs (read-only, written by each grounded step, 0 in the air; they change nothing in the simulation):
+ * steerLimit (rad: the speed-sensitive lock the step allowed, |steerAngle| at full input), slipFront / slipRear (rad:
+ * the axle's slip angle, signed), slipPeakFront / slipPeakRear (rad: the slip angle of peak grip, tan(pi / 2C) / B,
+ * fixed by the spec), wheels[i].slideHeat (kW: load x sliding speed once the tyre is past 1.1 x its peak slip, x4 for
+ * a handbrake-locked rear wheel; 0 while it grips: skid marks from ~12 kW, smoke from ~25 kW, see render/TyreFx).
  */
 export class VehicleController {
   /**
@@ -305,7 +310,10 @@ export class VehicleController {
     const S = this.spec = resolveVehicleSpec(spec || ROADSTER_SPEC);
     this.hoverAssist = (options.hoverAssist ?? S.hoverAssist) !== false;
     // local wheel contact points [FL, FR, RL, RR] at the static load, also carrying the per-wheel outputs
-    this.wheels = S.wheels.map((w) => Object.assign(v3(w), { y: 0, load: 0, compression: 0, contact: true, mu: 1, crr: 1, tag: null }));
+    this.wheels = S.wheels.map((w) => Object.assign(v3(w), { y: 0, load: 0, compression: 0, contact: true, mu: 1, crr: 1, tag: null, slideHeat: 0 }));
+    /** Slip angle of peak front / rear grip (rad): the Pacejka curve sin(C atan(B a)) peaks at a = tan(pi / 2C) / B. */
+    this.slipPeakFront = Math.tan(Math.PI / (2 * S.C)) / S.Bf;
+    this.slipPeakRear = Math.tan(Math.PI / (2 * S.C)) / S.Br;
     this.hold = false;                       // true: frozen in place (countdowns); see step()
     this._surf = { mu: 1, crr: 1, tag: null };
     this.bodyPoints = S.bodyPoints.map(v3);  // local body points kept above the surface
@@ -394,7 +402,14 @@ export class VehicleController {
     this.localAccel.set(0, 0, 0);
     this.speed = 0;
     this.forwardSpeed = 0;
+    this._clearTyreOutputs();
     return this;
+  }
+
+  /** Zero the tyre outputs (steerLimit, slip angles, slideHeat): the vehicle is not on its wheels. */
+  _clearTyreOutputs() {
+    this.steerLimit = 0; this.slipFront = 0; this.slipRear = 0;
+    for (let i = 0; i < 4; i++) this.wheels[i].slideHeat = 0;
   }
 
   get heading() {
@@ -613,9 +628,12 @@ export class VehicleController {
 
     if (this.grounded) {
       this._groundStep(dt, throttle, brake, steer, handbrake, powerScale, vf, vr);
+      this._tyreOutputs(handbrake);
     } else if (this.upsideDown) {
+      this._clearTyreOutputs();
       this._upsideStep(dt);
     } else {
+      this._clearTyreOutputs();
       aa = this._flightStep(dt, pitchIn, rollIn, yawIn, tankFrac, flying); // airborne attitude (auto-level only when unarmed)
       // wheels spin down in the air
       this.wheelSpeed *= Math.exp(-dt / 2.5);
@@ -804,6 +822,25 @@ export class VehicleController {
     this.wheelSlip = absU > 2 || Math.abs(wLat) > 1 ? clamp(Math.max(slipLat, slipLong) - 0.25, 0, 1) : 0;
     this.wheelSpeed = handbrake ? this.wheelSpeed * Math.exp(-dt * 10) : u;
     this._alphaF = alphaF; this._alphaR = alphaR;
+    // tyre outputs only (read by _tyreOutputs; nothing in the simulation reads these)
+    this.steerLimit = dMax; this._latF = latF; this._latR = latR; this._absU = absU;
+  }
+
+  // Tyre outputs after a ground step: slip angles and per-wheel sliding heat (kW). Reads the step's values, writes
+  // only output fields, allocates nothing.
+  _tyreOutputs(handbrake) {
+    const W = this.wheels, aF = this._alphaF, aR = this._alphaR, u = this._absU;
+    this.slipFront = aF; this.slipRear = aR;
+    // a handbrake-locked rear wheel: 0 rolling .. 1 locked (the step decays wheelSpeed while the handbrake is held)
+    const lock = handbrake && u > 2 ? clamp(1 - Math.abs(this.wheelSpeed) / u, 0, 1) : 0;
+    const ndF = Math.abs(aF) / this.slipPeakFront;
+    const ndR = Math.max(Math.abs(aR) / this.slipPeakRear, lock * 10); // a locked wheel slides far past its peak
+    const kF = Math.abs(this._latF) * smooth01((ndF - 1.1) / 0.9) / 1000;
+    const kR = Math.hypot(this._latR, lock * u) * smooth01((ndR - 1.1) / 0.9) * (1 + 3 * lock) / 1000;
+    for (let i = 0; i < 4; i++) {
+      const w = W[i];
+      w.slideHeat = w.contact && w.load > 300 ? w.load * (i < 2 ? kF : kR) : 0;
+    }
   }
 
   _upsideStep(dt) {
@@ -1136,6 +1173,7 @@ export class VehicleController {
     this.bodyContact = false;
     this.boosting = false; this.braking = false; this.reversing = false;
     this.boostLevel = Math.min(1, this.boostLevel + dt / S.boostRechargeSeconds);
+    this._clearTyreOutputs();
     this.tank = S.flight === false ? 1 : Math.min(1, this.tank + dt / S.tankRechargeSeconds);
     this.thrustCmd = 0; this.liftCmd = 0; this.thrusters.fill(0);
     this.wheelSlip = 0; this.wheelSpeed = 0; this.speed = 0; this.forwardSpeed = 0;
@@ -1149,6 +1187,7 @@ export class VehicleController {
 
 // ---- helpers ------------------------------------------------------------------
 const pac = (C, B, alpha) => Math.sin(C * Math.atan(B * alpha));
+const smooth01 = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
 function basis(q) {
   _fwd.set(0, 0, -1).applyQuaternion(q);

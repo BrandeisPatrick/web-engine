@@ -19,9 +19,15 @@
 // missing actions read as 0 / false.
 // `enabled` (default true) is the map's: false silences every action (pedals, steer and edges read 0 / false), e.g.
 // while the player is out of the car; as CharacterInput.enabled.
+// Steering assist (opt-in): new VehicleInput(el, { assist: true }) and update(dt, car) with the VehicleController it
+// drives: `steer` then comes out of a SteeringAssist (lock held at the front tyres' grip limit, self-steer that catches
+// slides; see SteeringAssist.js) and `rawSteer` keeps the player's value. `input.assist` always exists, so
+// `input.assist.enabled = true / false` switches it live (a pause-menu toggle). Without a car, or with the assist
+// off, steer is the raw value exactly as before.
 import { InputMap, ramp } from './InputMap.js';
 import { TouchControls, isTouchDevice } from './TouchControls.js';
 import { PAD_BUTTONS as B, PAD_AXES as AX } from './Gamepad.js';
+import { SteeringAssist } from './SteeringAssist.js';
 
 const STEER = ramp(0.15, 0.07);   // full deflection in ~0.15 s, faster re-centring
 const PEDAL = ramp(0.12, 0.06);
@@ -77,6 +83,8 @@ export class VehicleInput {
    * @param {object} [opts.actions=VEHICLE_ACTIONS]
    * @param {'auto'|boolean} [opts.touch='auto']  on-screen controls ('auto' = touch-first devices only)
    * @param {Array} [opts.touchLayout=VEHICLE_TOUCH_LAYOUT]
+   * @param {boolean|import('./SteeringAssist.js').SteeringAssistOptions} [opts.assist=false]  steering assist on
+   *   (true or an option bag; `enabled: false` in the bag keeps it built but off). Applied by update(dt, car).
    */
   constructor(domElement = null, opts = {}) {
     this.domElement = domElement;
@@ -87,6 +95,12 @@ export class VehicleInput {
     this.toggleCamera = false; this.reset = false; this.toggleHelp = false;
     this.gamepadConnected = false;
     this.flightMode = false;
+    /** the player's steer before the assist (-1..1, +1 = right); equals `steer` when no assist ran */
+    this.rawSteer = 0;
+    const ao = opts.assist;
+    /** the steering assist; off unless opts.assist. Toggle live with `input.assist.enabled`. */
+    this.assist = new SteeringAssist(ao && typeof ao === 'object' ? { ...ao, enabled: ao.enabled ?? true } : { enabled: !!ao });
+    this._src = { mouse: 0, virtual: 0, pad: 0, keyPos: 0, keyNeg: 0 };
 
     this.map = new InputMap({ pointerTarget: domElement || undefined, deadzone: 0.12, actions: opts.actions || VEHICLE_ACTIONS });
     this.touch = null;
@@ -109,11 +123,18 @@ export class VehicleInput {
     return this.touch;
   }
 
-  /** Call once per rendered frame (dt optional; measured internally otherwise). */
-  update(dt) {
+  /**
+   * Call once per rendered frame (dt optional; measured internally otherwise). Pass the car to run the steering
+   * assist (when `assist.enabled`): `steer` is then the assisted value and `rawSteer` the player's.
+   * @param {number} [dt]
+   * @param {import('./SteeringAssist.js').SteeringAssistCar|null} [car]  the VehicleController being driven
+   * @returns {this}
+   */
+  update(dt, car) {
     const m = this.map.update(dt);
     const A = m.actions;
     this.steer = val(A, 'steer');
+    this.rawSteer = this.steer;
     this.roll = this.steer;
     this.throttle = val(A, 'throttle');
     this.brake = val(A, 'brake');
@@ -127,6 +148,13 @@ export class VehicleInput {
     this.reset = pressed(A, 'reset');
     this.toggleHelp = pressed(A, 'toggleHelp');
     this.gamepadConnected = m.gamepadConnected;
+    if (car && this.assist.enabled && this.map.enabled) {
+      // analog: a stick or touch input moves the wheel and no key does (keys get the slide catch)
+      const src = this.map.readSources('steer', this._src);
+      const analog = src.keyPos === 0 && src.keyNeg === 0 && (src.pad !== 0 || src.virtual !== 0);
+      const step = typeof dt === 'number' && dt > 0 ? dt : 1 / 60;
+      this.steer = this.assist.apply(step, this.steer, car, analog, this.handbrake);
+    }
     return this;
   }
 
