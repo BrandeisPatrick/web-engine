@@ -222,8 +222,8 @@ export class CameraCollision {
 /**
  * Landing dip spring (Saltline's values): land(speed) kicks the spring downward by gain * min(0.36 * speed, 3.2) m/s;
  * step(dt) integrates stiffness 150 / damping 17 (damping ratio 0.69) in sub-steps of at most 1/240 s, so it is the
- * same at any frame rate. `y` is the vertical offset in metres (negative = down). Gain 1 dips ~7 cm after a 4.4 m/s
- * landing (a 1 m fall) and ~13 cm at the cap.
+ * same at any frame rate. `y` is the vertical offset in metres (negative = down). Gain 1 dips ~6 cm after a 4.4 m/s
+ * landing (a 1 m fall) and ~11 cm at the cap.
  */
 export class LandingSpring {
   /** @param {number} [gain=1] */

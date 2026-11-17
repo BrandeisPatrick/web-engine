@@ -104,7 +104,7 @@ export function defaultChaseModes(rig) {
 export class ChaseRig extends CameraRig {
   /**
    * @param {THREE.PerspectiveCamera} camera
-   * @param {HTMLElement} [domElement]
+   * @param {HTMLElement|null} [domElement]
    * @param {{ feel?: null|'road'|Partial<ChaseFeel>, [key: string]: any }} [opts]  minY, getGroundHeight, queryColliders, physics, occlusion, collisionMargin,
    *                          offsets: { hood, cockpit }, modes: { name: config }, modeOrder: [names],
    *                          active (false = start inactive), flightFraming (true | false | 'auto'),

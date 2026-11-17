@@ -18,7 +18,7 @@
 // so every walk starts on the same stride. No allocations per frame.
 //
 // Opt-in feel (both default 0 = off, pose for pose as without them): landingDip (gain, 1 = the reference feel) dips the
-// eye on rig.land(fallSpeed) with a spring (CameraRig LandingSpring: ~7 cm after a 1 m fall), sprintFov (degrees)
+// eye on rig.land(fallSpeed) with a spring (CameraRig LandingSpring: ~6 cm after a 1 m fall), sprintFov (degrees)
 // widens the FOV while state.sprint is true (or a number 0..1), eased at 6 1/s. rig.addTrauma(x) shakes (CameraRig).
 //
 // Also exports the small helpers ThirdPersonRig shares: bindLook, targetPosition, targetFacing, SprintFov.
@@ -104,7 +104,7 @@ export class FirstPersonRig extends CameraRig {
    * @param {number} [o.bobFreq=2]          steps per second at bobSpeed
    * @param {number} [o.bobSpeed=4]         horizontal speed (m/s) of full bob
    * @param {boolean} [o.active=true] [o.invertY=false] [o.pointerLock=false]
-   * @param {number} [o.landingDip=0]       landing dip gain for land(speed) (0 = off; 1 = ~7 cm after a 1 m fall)
+   * @param {number} [o.landingDip=0]       landing dip gain for land(speed) (0 = off; 1 = ~6 cm after a 1 m fall)
    * @param {number} [o.sprintFov=0]        degrees added to the camera's FOV while state.sprint (0 = off)
    */
   constructor(camera, domElement, o = {}) {

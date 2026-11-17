@@ -23,7 +23,7 @@
 // zooms (wheelZoom). look() / turn() are ignored while inactive (and for NaN deltas); activate() snaps. No allocations per frame (apart from what
 // queryColliders returns).
 // Opt-in feel (both default 0 = off, pose for pose as without them): landingDip (gain, 1 = the reference feel) dips the
-// camera on rig.land(fallSpeed) with a spring (CameraRig LandingSpring: ~7 cm after a 1 m fall), sprintFov (degrees)
+// camera on rig.land(fallSpeed) with a spring (CameraRig LandingSpring: ~6 cm after a 1 m fall), sprintFov (degrees)
 // widens the FOV while state.sprint is true (or a number 0..1), eased at 6 1/s. rig.addTrauma(x) shakes (CameraRig).
 import * as THREE from 'three';
 import { CameraRig, LandingSpring, clamp, damp, wrapPi, springStep } from './CameraRig.js';
@@ -61,7 +61,7 @@ export class ThirdPersonRig extends CameraRig {
    * @param {number} [o.autoRecentre=0]      seconds without look input before yaw eases to the target's facing (0 = off)
    * @param {number} [o.recentreRate=2.5]    easing rate of the auto-recentre (1/s)
    * @param {number} [o.collisionMargin=0.25] [o.collisionRecover=4]  stand-off from a hit (m), ease-out rate (1/s)
-   * @param {number} [o.landingDip=0]        landing dip gain for land(speed) (0 = off; 1 = ~7 cm after a 1 m fall)
+   * @param {number} [o.landingDip=0]        landing dip gain for land(speed) (0 = off; 1 = ~6 cm after a 1 m fall)
    * @param {number} [o.sprintFov=0]         degrees added to the camera's FOV while state.sprint (0 = off)
    */
   constructor(camera, domElement, o = {}) {
