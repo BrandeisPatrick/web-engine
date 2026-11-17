@@ -15,6 +15,11 @@ export {
   createFurnitureMaterial, createPanelMaterial, createShelterGlassMaterial, formatStreetName, buildSignAtlas, DEFAULT_SIGN_STYLE,
 } from './Furniture.js';
 export { PartBuilder, VM, VEHICLE_SPECS, VEHICLE_TYPES, VEHICLE_HD_TYPES, DEFAULT_BUS_LIVERY, makeVehicleGeometry, makeVehicleParts, getVehicleAtlas, geometryBytes, pickVehicleColor, createVehicleMaterial } from './Vehicles.js';
+// a drivable HD car matched to its VehicleController spec (wheels, lamps, contact shadow)
+export { createCarVisual, carSpecFor } from './CarVisual.js';
+/** @typedef {import('./CarVisual.js').CarVisual} CarVisual  what createCarVisual returns */
+/** @typedef {import('./CarVisual.js').CarVisualOptions} CarVisualOptions */
+/** @typedef {import('./CarVisual.js').CarVisualUpdateOptions} CarVisualUpdateOptions */
 export { Traffic } from './Traffic.js';
 export { TrafficSim, TRAFFIC_TYPES, POSE_STRIDE, buildSignalInfos, playerInfoFrom, typeCounts } from './TrafficSim.js';
 export { buildTreeMeshes, bakeVegImpostors, IMP_VIEWS, impostorView } from './Vegetation.js';
