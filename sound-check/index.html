@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="data:," />
+  <title>Sound check · @vibe/engine</title>
+  <meta name="description" content="The sound kit of @vibe/engine: every named sound with its waveform and measurements, and a measured ten-second mix." />
+  <script type="module" crossorigin src="/web-engine/assets/sound-check-ZF5_j1au.js"></script>
+  <link rel="modulepreload" crossorigin href="/web-engine/assets/modulepreload-polyfill-B5Qt9EMX.js">
+  <link rel="modulepreload" crossorigin href="/web-engine/assets/AudioBus-B_WjIAG-.js">
+  <link rel="modulepreload" crossorigin href="/web-engine/assets/three.core-BG5Iv3B7.js">
+  <link rel="modulepreload" crossorigin href="/web-engine/assets/SoundBank-CivJzo-T.js">
+  <link rel="modulepreload" crossorigin href="/web-engine/assets/selfTest-CvmAOCMg.js">
+  <link rel="modulepreload" crossorigin href="/web-engine/assets/Synth-DMD6Zzmu.js">
+  <link rel="modulepreload" crossorigin href="/web-engine/assets/VehicleAudio-BTfdqbKn.js">
+  <link rel="modulepreload" crossorigin href="/web-engine/assets/Footsteps-BPWfKn7G.js">
+  <link rel="stylesheet" crossorigin href="/web-engine/assets/sound-check-BtzUuj0o.css">
+</head>
+<body>
+  <main>
+    <header class="top">
+      <a class="back" href="../">@vibe/engine samples</a>
+      <h1>Sound check</h1>
+      <p class="intro">The sound kit's 18 named sounds, made in code. Click a card to hear it (each click plays the next variant;
+        loops start and stop). The self-test renders a ten-second dusk-road scene offline through the safe master chain and
+        measures it.</p>
+    </header>
+
+    <section class="selftest" aria-labelledby="st-h">
+      <div class="st-head">
+        <h2 id="st-h">Self-test mix</h2>
+        <div class="st-actions">
+          <button type="button" id="run">Run the self-test</button>
+          <button type="button" id="play">Play the scene</button>
+          <a id="wav" class="wav" hidden download="sound-check-selftest.wav">Download WAV</a>
+        </div>
+      </div>
+      <p class="st-status" id="status" aria-live="polite">Not run yet.</p>
+      <table class="st-table" id="table" hidden>
+        <tbody></tbody>
+      </table>
+      <canvas class="st-chart" id="chart" width="1100" height="140" hidden aria-label="Loudness per half-second"></canvas>
+    </section>
+
+    <h2 class="sounds-h">Sounds</h2>
+    <ul class="grid" id="grid"></ul>
+  </main>
+</body>
+</html>
