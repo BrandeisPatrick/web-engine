@@ -1424,6 +1424,7 @@ async function boot() {
   engine.start();
   loading.hide(450);
   if (harness) { harness.setReady(); harness.freeze(); }
+  else createBenchHarness(engine, { name: 'halloween', quality: QUALITY }).setReady(); // play: the page contract, no poses (check-page, phone-start)
 }
 
 /** No page scroll / pinch / double-tap zoom / long-press menus on phones (the CSS does most of it; iOS needs these). */
