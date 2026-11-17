@@ -6,12 +6,14 @@
 //      2 s, sooner than without;
 //   3. an 8 s key slalom at 28 m/s (three periods) never spins;
 //   4. at 5 m/s the full-lock turning circle grows under 5 %;
-//   plus: off by default and identical to raw input, the live toggle, pass-through cases, determinism, no allocation.
+//   plus: off by default and identical to raw input, the live toggle, pass-through cases, determinism, no allocation;
+//   and VehicleHaptics' output values (rumble cannot be felt headless): quiet when driving clean, layered, ringing out.
 // Run: node test/steering-assist.mjs
 import { Vector3 } from 'three';
 import { VehicleController, ROAD_CAR_SPEC } from '../src/physics/index.js';
 import { VehicleInput } from '../src/input/VehicleInput.js';
 import { SteeringAssist } from '../src/input/SteeringAssist.js';
+import { VehicleHaptics } from '../src/input/VehicleHaptics.js';
 import { ALLOC, BOXED, bytesPerCall, gate, functionsOf } from './helpers/alloc.mjs';
 
 const DT = 1 / 120, FRAME = 1 / 60, DEG = 180 / Math.PI;
@@ -181,6 +183,41 @@ for (const per of [0.8, 1.0, 1.4]) {
   gate(check, note, 'SteeringAssist.apply() x1e4 (the boxed return value only)', m, { budget: 32 });
   if (!ALLOC.ok) note(ALLOC.reason);
   if (!Number.isFinite(sink)) failures++;
+}
+
+// ---- 6. VehicleHaptics: output values and what it sends (a fake pad records the effects) ---------------------------
+{
+  const effects = [];
+  const pad = { vibrationActuator: { playEffect: (type, fx) => { effects.push({ type, ...fx }); return Promise.resolve('complete'); } } };
+  const h = new VehicleHaptics();
+  const car = new VehicleController(ROAD_CAR_SPEC); car.reset(new Vector3(), 0, null);
+  for (let i = 0; i < 120; i++) { car.step(DT, {}, null); h.update(DT, car, pad); }
+  check('haptics: parked car is silent (weak + strong)', h.weak + h.strong, 0, 0.001);
+  check('haptics: nothing sent while silent', effects.length, 0, 0);
+  car.velocity.set(0, 0, -25);
+  for (let i = 0; i < 120; i++) { car.step(DT, { throttle: 0.3 }, null); h.update(DT, car, pad); }
+  const cruise = h.weak;
+  check('haptics: straight at 25 m/s: a light road buzz on the weak motor', cruise, 0.01, 0.05);
+  check('haptics: ... and nothing on the strong one', h.strong, 0, 0);
+  let wMax = 0, sMax = 0;
+  for (let i = 0; i < 120; i++) { car.step(DT, { steer: -1, handbrake: true }, null); h.update(DT, car, pad); wMax = Math.max(wMax, h.weak); sMax = Math.max(sMax, h.strong); }
+  check('haptics: handbrake slide: weak motor (slide texture)', wMax, 0.3, 0.6);
+  check('haptics: handbrake slide: strong motor (locked wheel)', sMax, 0.1, 0.4);
+  check('haptics: layered, never past 1', Math.max(...effects.map((e) => Math.max(e.weakMagnitude, e.strongMagnitude))), 0, 1);
+  check('haptics: dual-rumble effects sent, all of them', effects.filter((e) => e.type === 'dual-rumble').length, 3, effects.length);
+  const sentBefore = effects.length;
+  // a 6 m/s landing: a strong kick that rings out over ~0.3 s
+  const fake = { grounded: true, speed: 0, slipFront: 0, slipRear: 0, slipPeakFront: 0.2, slipPeakRear: 0.2, wheels: [], landedThisStep: true, landingImpact: 6, impact: 0 };
+  h.update(DT, fake, pad); const kick = h.strong;
+  fake.landedThisStep = false;
+  for (let i = 0; i < 36; i++) h.update(DT, fake, pad);
+  check('haptics: 6 m/s landing kicks the strong motor', kick, 0.6, 0.8);
+  check('haptics: ... rung out after 0.3 s (fraction left)', h.strong / kick, 0, 0.06);
+  for (let i = 0; i < 60; i++) h.update(DT, fake, pad);
+  check('haptics: a zero effect is sent when it falls quiet', effects.at(-1).weakMagnitude + effects.at(-1).strongMagnitude, 0, 0);
+  check('haptics: not re-sent every frame (sends per frame over the landing)', (effects.length - sentBefore) / 97, 0, 0.5);
+  const n = effects.length; h.update(DT, fake, pad); h.update(DT, fake, null); h.update(DT, null, {});
+  check('haptics: quiet frames, null car and padless calls send nothing', effects.length - n, 0, 0);
 }
 
 console.log(lines.join('\n'));

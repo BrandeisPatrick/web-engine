@@ -8,5 +8,8 @@ export { VehicleInput, VehicleInput as Input, VEHICLE_ACTIONS, VEHICLE_TOUCH_LAY
 export { SteeringAssist } from './SteeringAssist.js';
 /** @typedef {import('./SteeringAssist.js').SteeringAssistOptions} SteeringAssistOptions */
 /** @typedef {import('./SteeringAssist.js').SteeringAssistCar} SteeringAssistCar */
+// gamepad rumble from the car's slides, landings and hits (layered acc + m (1 - acc))
+export { VehicleHaptics } from './VehicleHaptics.js';
+/** @typedef {import('./VehicleHaptics.js').VehicleHapticsOptions} VehicleHapticsOptions */
 export { CharacterInput, CHARACTER_ACTIONS, CHARACTER_TOUCH_LAYOUT } from './CharacterInput.js';
 export { PointerLock } from './PointerLock.js';
