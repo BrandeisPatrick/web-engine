@@ -178,8 +178,10 @@ for (const per of [0.8, 1.0, 1.4]) {
   const sa = new SteeringAssist();
   const IN = BOXED(-1, -0.5, 0, 0.5, 1); let sink = 0;
   // apply() itself allocates nothing (0 B with its return replaced by `return 0`); the one cost is V8 boxing the
-  // returned fraction at a call it does not inline: one 16 B HeapNumber (25.6 B mean measured here, Node 26), short-lived
-  const m = bytesPerCall((n) => { for (let i = 0; i < n; i++) sink += sa.apply(FRAME, IN[i % 5], car, (i & 1) === 1); }, 1e4, { force: functionsOf(SteeringAssist) });
+  // returned fraction at a call it does not inline: one 16 B HeapNumber (25.6 B mean measured here, Node 26), short-lived.
+  // The budget goes to bytesPerCall too: without it the measurement took 25.6 B as over its default budget of 1 B,
+  // retried all 5 windows and kept only the last, so a GC in that one window read NaN and failed the gate.
+  const m = bytesPerCall((n) => { for (let i = 0; i < n; i++) sink += sa.apply(FRAME, IN[i % 5], car, (i & 1) === 1); }, 1e4, { budget: 32, force: functionsOf(SteeringAssist) });
   gate(check, note, 'SteeringAssist.apply() x1e4 (the boxed return value only)', m, { budget: 32 });
   if (!ALLOC.ok) note(ALLOC.reason);
   if (!Number.isFinite(sink)) failures++;
