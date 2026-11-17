@@ -48,9 +48,10 @@
 // renderFn(scene, camera, 0). The update phases let the first frame's per-frame state settle before it is drawn: a
 // camera rig places the camera, a light pool switches its lights on (a different light count is a different program
 // for every lit material: on a phone the first live frame would compile them again). `systems: false` draws renderFn
-// only, for a page whose state must not change before its captures (the bench harness's poses). The 4 frames reach a
-// renderFn's every-2nd- and every-4th-frame work once and end those schedules in the phase they started in. Not
-// counted in frameCount, the profiler or adaptive resolution. Resolves { frames, ms, compileMs, fence: 'signaled' |
+// only, for a page whose state must not change before its captures (the bench harness's poses). 4 frames reach a
+// renderFn's every-2nd-, 3rd- and 4th-frame work at least once and end the 2- and 4-frame schedules in the phase they
+// started in; a multiple of 12 ends all three in phase (the demos' bench pages use 12). Not counted in frameCount, the
+// profiler or adaptive resolution. Resolves { frames, ms, compileMs, fence: 'signaled' |
 // 'timeout' | 'none' (no fences) | 'lost', lost }; never rejects on a lost context (lost: true; onContextLost has
 // run). An error a frame throws rejects (the game's boot shows it).
 //
@@ -61,8 +62,8 @@
 // already lost (before the event arrives) takes the same path. start() does nothing afterwards. There is no
 // re-initialisation on `webglcontextrestored`: reloading is the robust path.
 // Frame errors: an exception in tick() is caught, logged with console.error (every one, as an uncaught error was) and
-// passed to `engine.onFrameError(error)`; its default (showFrameError) shows the first one as a line at the bottom of the page (a phone
-// user can screenshot it). The loop keeps running, as before.
+// passed to `engine.onFrameError(error)`; its default (showFrameError) shows the first one as a line at the bottom of
+// the page (a phone user can screenshot it). The loop keeps running, as before.
 // showNotice(text, { button, onButton, kind = 'notice' | 'error', id }) -> HTMLElement: plain DOM over the page (the
 // ui layer's CSS variables when its theme is on the page, its values as fallbacks); one element per id (default: the
 // kind), a second call replaces the text. Set the hooks to replace these with a game's own UI.
@@ -80,7 +81,7 @@ const nextPaint = () => new Promise((r) => {
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => setTimeout(() => { clearTimeout(t); r(); }, 0));
 });
 /** The default lost-context text. */
-export const CONTEXT_LOST_TEXT = 'The graphics were reset by the device, probably low on memory.';
+const CONTEXT_LOST_TEXT = 'The graphics were reset by the device, probably low on memory.';
 // notices (showNotice): the ui theme's variables with its values as fallbacks (core does not import the ui layer)
 const FONT = 'var(--ui-font,-apple-system,system-ui,"Segoe UI",Roboto,sans-serif)';
 const NOTICE_CSS = {
@@ -258,9 +259,10 @@ export class Engine {
     if (lost()) return out;
     if (compile && typeof R.compileAsync === 'function') {
       const tc = now();
+      let timer = 0;
       try {
-        await Promise.race([R.compileAsync(this.scene, this.camera), sleep(timeout)]);
-      } catch (e) { if (!lost()) throw e; }
+        await Promise.race([R.compileAsync(this.scene, this.camera), new Promise((r) => { timer = setTimeout(r, timeout); })]);
+      } catch (e) { if (!lost()) throw e; } finally { clearTimeout(timer); }
       out.compileMs = Math.round(now() - tc);
       if (lost()) return out;
     }
@@ -280,7 +282,7 @@ export class Engine {
         if (lost()) return out;
         const s = gl.clientWaitSync(sync, 0, 0);
         if (s === gl.ALREADY_SIGNALED || s === gl.CONDITION_SATISFIED) { out.fence = 'signaled'; break; }
-        if (s === gl.WAIT_FAILED) break;
+        if (s === gl.WAIT_FAILED) { out.fence = 'none'; break; }
       }
       if (sync) gl.deleteSync(sync);
     } else await nextPaint();

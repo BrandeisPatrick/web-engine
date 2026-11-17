@@ -72,6 +72,21 @@ const cascades: number = S.shadows.cascades;
 const ao: boolean = S.passes.ao, clustered: boolean = S.lights.clustered, aniso: number = S.textures.anisotropy;
 const lamps: number = S.walk.lamps; // a game's own group (any)
 void engine2; void cascades; void ao; void clustered; void aniso; void lamps;
+const lighter: boolean = q.lighter, losses: number = q.contextLosses; void lighter; void losses;
+const harnessQ = createBenchHarness(engine2, { name: 'q', quality: q }); const tierQ: string | undefined = harnessQ.quality?.tier; void tierQ;
+
+// start-up: warmUp() before start(); the lost-context and frame-error hooks; notices
+async function startUp() {
+  const w = await engine.warmUp({ frames: 4, systems: true });
+  const fence: 'signaled' | 'timeout' | 'none' | 'lost' = w.fence, wasLost: boolean = w.lost;
+  void fence; void wasLost;
+  if (!engine.contextLost) engine.start();
+  engine.onContextLost = (event: Event | null) => { void event; engine.showContextLost(); };
+  engine.onFrameError = (error: unknown) => { engine.showFrameError(error); };
+  const el: HTMLElement | null = engine.showNotice('Paused', { button: 'Resume', onButton: () => engine.start() });
+  void el;
+}
+void startUp;
 
 // Atmosphere: options form (legacy params optional); update(cameraPosition, dt)
 const atmo2 = new Atmosphere({ scene: engine.scene, renderer: engine.renderer, camera: engine.camera, timeOfDay: 'dusk', shadows: S.shadows });
