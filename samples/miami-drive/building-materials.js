@@ -16,6 +16,7 @@
 // The uniforms the engine drives per frame (night, lit fraction, window gain, time) are shared with the world's set.
 import * as THREE from 'three';
 import { createFacadeMaterials } from '@vibe/engine/world';
+import { GLSL_WEATHERING } from '@vibe/engine/render';
 import { NEON_NAMES } from './world.js';
 
 export const CL = { WALL: 1, CONCRETE: 2, TRIM: 3, GLASSBLOCK: 4, FAR: 5, ROOF: 6 };
@@ -28,7 +29,9 @@ const WEATHER = /* glsl */`
     vec2 p = vWuv;
     float pw = max(fwidth(p.x), fwidth(p.y));            // metres per pixel
     float nearK = 1.0 - smoothstep(0.012, 0.05, pw);     // fine detail fades out with distance
-    float hs = mbC < 1.5 ? vWPos.y - vInfo.y / 20.0 : (vWall.z > 0.5 ? vWPos.y - vWall.x : 10.0); // height above the street
+    float baseY = vInfo.y >= 0.0 ? vInfo.y / 20.0 : (-vInfo.y - 1.0) / 20.0;            // y < 0: a streak quad (buildings.js)
+    float hs = mbC < 1.5 ? vWPos.y - baseY : (vWall.z > 0.5 ? vWPos.y - vWall.x : 10.0); // height above the street
+    vec4 wxC0 = vec4(0.0, 0.0, 0.0, fract(vInfo.z * 7.31) * 100.0);
     if ((mbC < 1.5 || (mbC > 4.5 && mbC < 5.5)) && uMbWeather > 0.5) {
       // ---- stucco: float texture (fine) + unevenness (broad) as normal detail, repainted patches, hairline cracks;
       // the fine work only where a pixel is under ~2 cm (branch: distant walls skip it)
@@ -50,23 +53,53 @@ const WEATHER = /* glsl */`
       vec2 pc = floor((p + vec2(mbH(floor(p / 7.0)) * 3.0, 1.0)) / vec2(2.3, 1.6));
       float ph = mbH(pc + 7.7);
       fCol *= 1.0 + step(0.86, ph) * (ph - 0.93) * 1.1;
-      // rain / salt streaks running down from ledges and sills
-      float st = mbN(vec2(p.x * 2.2, p.y * 0.09 + mbH(vec2(floor(p.x * 2.2), 1.0)) * 9.0));
-      float streak = smoothstep(0.6, 0.9, st);
-      fCol *= mix(vec3(1.0), vec3(0.84, 0.82, 0.77), streak * 0.6);
-      // the damp band at the pavement (ragged top)
-      if (hs < 1.4) {
-        float damp = 1.0 - smoothstep(0.15, 0.6 + 0.6 * mbN(vec2(p.x * 1.4, 3.0)), hs);
-        fCol *= mix(vec3(1.0), vec3(0.74, 0.76, 0.7), damp * 0.85);
+      // the engine's weathering (MaterialPatches GLSL_WEATHERING): blotchy repaint and render at two scales, a warm /
+      // cool drift, salt-and-rain streaks down the walls, dirt and damp splashed up from the pavement, dust on ledges,
+      // sun-fading (south / west faces more), chipped paint showing the grey render near the camera
+      float sunF = clamp(wN.z * 0.8 - wN.x * 0.5, 0.0, 1.0) * (1.0 - abs(wN.y));
+      float fRoughW = fRough;
+      wxWeather(fCol, fRoughW, vWPos, wN, hs, pw, vec4(0.17, 0.04, 0.12, 0.75), vec4(0.62, 1.25, 0.7, 1.0 / 5.0),
+        vec4(0.18 + 0.3 * sunF, 0.35, 0.45, wxC0.w), vec3(0.6, 0.57, 0.5), vec3(0.55, 0.54, 0.51));
+      fRough = fRoughW;
+      // runs of dirt down from the parapet coping and from every floor's ledge / eyebrow line (buildings.js walls pack
+      // the wall top in vFuv.x and the floor rhythm in vFuv.y: floor height x 100 x 1000 + ground storey x 100)
+      if (mbC < 1.5 && vInfo.y >= 0.0 && vFuv.x > 0.5) {
+        float topY = vFuv.x, fhh = floor(vFuv.y / 1000.0) / 100.0, gH = mod(vFuv.y, 1000.0) / 100.0;
+        float cA = mbN(vec2(p.x * 3.3, 11.0 + vInfo.z * 7.0)) * 0.7 + mbN(vec2(p.x * 11.0, 5.0 + vInfo.z)) * 0.4;
+        float cols = smoothstep(0.38, 0.82, cA);
+        float dTop = topY - vWPos.y;
+        float runT = cols * (1.0 - smoothstep(0.0, 1.0 + 3.5 * mbN(vec2(p.x * 1.7, 2.0 + vInfo.z)), dTop)) * step(-0.05, dTop);
+        float runF = 0.0;
+        if (fhh > 1.5 && hs > gH + 0.2) {
+          float dB = fhh - mod(hs - gH, fhh);
+          float cB = smoothstep(0.45, 0.85, mbN(vec2(p.x * 4.1, 23.0 + vInfo.z * 3.0)) * 0.7 + mbN(vec2(p.x * 13.0, 9.0)) * 0.4);
+          runF = cB * (1.0 - smoothstep(0.0, 0.5 + 1.2 * mbN(vec2(p.x * 2.3, 7.0 + vInfo.z)), dB));
+        }
+        float run = clamp(max(runT * 0.95, runF * 0.75), 0.0, 1.0);
+        fCol *= mix(vec3(1.0), vec3(0.62, 0.6, 0.53), run * 0.62);
+        fRough = mix(fRough, 0.97, run * 0.3);
+      }
+      // the darker damp band right at the pavement (ragged top)
+      if (hs < 0.9) {
+        float damp = 1.0 - smoothstep(0.05, 0.25 + 0.5 * mbN(vec2(p.x * 1.4, 3.0)), hs);
+        fCol *= mix(vec3(1.0), vec3(0.72, 0.72, 0.66), damp * 0.7);
         fRough = mix(fRough, 0.97, damp);
       }
-      // sun-fading on the south / west faces (z is south), mildew on the north faces, low down and in patches
-      float sunF = clamp(wN.z * 0.8 - wN.x * 0.5, 0.0, 1.0) * (1.0 - abs(wN.y));
-      fCol = mix(fCol, vec3(dot(fCol, vec3(0.3, 0.59, 0.11))) * 1.06, 0.2 * sunF);
+      // a streak quad under a sill or bracket (buildings.js): runs of dirty water, uneven lengths, soft sides
+      if (vInfo.y < 0.0) {
+        vec2 sl = vec2(vFuv.x, vFuv.y - 1.0);
+        float colm = smoothstep(0.35, 0.75, mbN(vec2(p.x * 6.0, vInfo.z * 13.0))) * 0.7 + 0.3 * smoothstep(0.5, 0.8, mbN(vec2(p.x * 19.0, 4.0)));
+        float len = 0.25 + 0.75 * mbN(vec2(p.x * 2.6, vInfo.z * 5.0 + 9.0));
+        float run = smoothstep(1.0 - len, 1.0, sl.y) * smoothstep(0.0, 0.12, sl.x) * smoothstep(1.0, 0.88, sl.x);
+        float m = clamp(colm * run, 0.0, 1.0);
+        fCol *= mix(vec3(1.0), vec3(0.58, 0.55, 0.48), m * 0.8);
+        fRough = mix(fRough, 0.75, m * 0.5);
+      }
+      // mildew on the north faces, low down and in patches
       float north = smoothstep(0.15, 0.7, -wN.z) * (1.0 - abs(wN.y));
       float mil = north > 0.01 || hs < 5.0 ? (north * 0.7 + 0.3) * smoothstep(0.5, 0.85, mbN(p * 0.8 + 5.0)) * (0.35 + 0.65 * (1.0 - smoothstep(0.0, 5.0, hs))) : 0.0;
       fCol *= mix(vec3(1.0), vec3(0.8, 0.84, 0.76), mil * 0.55);
-      fRough = mix(fRough, 0.9, 0.3);
+      fRough = mix(fRough, 0.9, 0.2);
     } else if (mbC < 2.5 && mbC > 1.5 && uMbWeather > 0.5) {
       // ---- concrete: formwork board lines, drip marks, damp undersides
       float bl = 1.0 - smoothstep(0.0, max(0.008, pw), abs(fract(p.y / 0.15) - 0.5) * 0.15 - 0.065);
@@ -78,9 +111,13 @@ const WEATHER = /* glsl */`
       fCol *= mix(vec3(1.0), vec3(0.78, 0.77, 0.74), drip * 0.6);
       if (wN.y < -0.5) fCol *= mix(1.0, 0.82, smoothstep(0.4, 0.8, mbN(p * 0.9)));
       fRough = 0.88;
+      wxWeather(fCol, fRough, vWPos, wN, hs, pw, vec4(0.16, 0.03, 0.1, 1.3), vec4(0.5, 1.0, 0.6, 1.0 / 2.5),
+        vec4(0.0, 0.0, 0.6, wxC0.w + 3.0), vec3(0.58, 0.55, 0.49), vec3(0.5, 0.49, 0.47));
     } else if (mbC > 2.5 && mbC < 3.5) {
-      // ---- trim: gloss paint
-      fRough = 0.38; fNStr = 0.15;
+      // ---- trim: gloss paint, dulled and chipped (the grey render shows at the chips), dust on its tops
+      fRough = 0.42; fNStr = 0.15;
+      if (uMbWeather > 0.5) wxWeather(fCol, fRough, vWPos, wN, hs, pw, vec4(0.07, 0.02, 0.12, 1.6), vec4(0.35, 0.8, 0.25, 1.0 / 2.0),
+        vec4(0.1, 0.5, 0.55, wxC0.w + 5.0), vec3(0.62, 0.58, 0.5), vec3(0.52, 0.51, 0.49));
     } else if (mbC > 3.5 && mbC < 4.5) {
       // ---- glass block
       vec2 g = fract(p / 0.2), gi = floor(p / 0.2);
@@ -101,6 +138,7 @@ const WEATHER = /* glsl */`
       float stain = smoothstep(0.5, 0.82, mbN(p * 0.18 + 2.0)) * 0.7 + smoothstep(0.7, 0.9, mbN(p * 0.9)) * 0.3;
       fCol *= (0.92 + 0.16 * gr * nearK) * (1.0 - 0.07 * seam) * mix(vec3(1.0), vec3(0.62, 0.6, 0.55), stain * 0.7);
       fRough = 0.95;
+      fCol *= 1.0 + 0.2 * (wxNoise(vWPos * 0.21 + wxC0.w) - 0.5);
     }
     // ---- far facade: the window bays of the near version (uv: bays, floors; y: window width / height x100)
     if (mbC > 4.5 && mbC < 5.5) {
@@ -134,12 +172,28 @@ const WEATHER = /* glsl */`
       // shade under each window head (the eyebrow / reveal above)
       float under = smoothstep(sf + hf + 0.12, sf + hf, cf.y) * step(sf + hf, cf.y) * inX;
       fCol *= 1.0 - 0.25 * under;
+      // a dirty run under each sill
+      float runS = smoothstep(sf - 0.3, sf, cf.y) * step(cf.y, sf) * inX * smoothstep(0.4, 0.7, mbH(id + 13.1));
+      fCol *= 1.0 - 0.18 * runS;
+    }
+  }
+  // ---- window glass seen from afar (the skyline at dusk): less of the pale sky in it, so the openings read darker
+  // than the stucco, and the lit rooms keep a warm core instead of averaging into the glass
+  if (fMode == 7 && fGlass > 0.5) {
+    float farG = smoothstep(0.05, 0.3, max(fwidth(vFuv.x * 0.5), fwidth(vFuv.y)));
+    if (farG > 0.0) {
+      vec2 cell = vec2(floor(vFuv.x * 0.5), floor(vFuv.y)), id = cell + vec2(vInfo.z * 113.0, vInfo.z * 71.0);
+      float hp = mix(fHash(id + 3.7), fHash(vec2(vInfo.z * 17.0, cell.y)), 0.75);
+      float lit = step(1.0 - uLitFrac * (0.6 + 0.9 * fract(vInfo.z * 5.7)), hp);
+      fEnv *= 1.0 - 0.5 * farG;
+      fEmis += vec3(1.0, 0.74, 0.46) * lit * uNight * uWinGain * 0.22 * farG;
     }
   }
 }
 `;
 
 const NOISE = /* glsl */`
+${GLSL_WEATHERING}
 uniform float uMbWeather;
 float mbH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 uniform sampler2D uMbNoise; // 64 x 64 value-noise lattice, one cell per texel, repeating: bilinear = value noise
@@ -164,7 +218,7 @@ export function miamiFacadeMaterials(world, { weather = true } = {}) {
       .replace('varying vec3 vWall;', `varying vec3 vWall;\n${NOISE}`)
       .replace('diffuseColor.rgb *= fCol;', `${WEATHER}\ndiffuseColor.rgb *= fCol;`);
   };
-  m.customProgramCacheKey = () => 'roadster-facade-3-miami-weather';
+  m.customProgramCacheKey = () => 'roadster-facade-3-miami-weather-2';
   return set;
 }
 
