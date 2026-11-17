@@ -460,7 +460,7 @@ function groundCover(scene, physics, low, R, trees, graves) {
     // (2026-11 fix pass) a lumpy, flat-topped fieldstone (props.js rockGeometry) lying on its base and half sunk, not a
     // jittered icosahedron tumbled at random: those stood on edge and read as shards of debris on the path
     const g = P.rockGeometry(0.1, 7);
-    const n = Math.round(900 * k), m = new THREE.InstancedMesh(g, patchFold(new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9 }), 26, 40), n);
+    const n = low ? 180 : 400, m = new THREE.InstancedMesh(g, patchFold(new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9 }), 26, 40), n);
     m.name = 'laneStones';
     const segs = [];
     for (const Lp of PATHS) for (let i = 0; i < Lp.length - 1; i++) segs.push([Lp[i][0], Lp[i][1], Lp[i + 1][0], Lp[i + 1][1]]);
