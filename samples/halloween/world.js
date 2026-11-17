@@ -402,8 +402,8 @@ function groundCover(scene, physics, low, R, trees, graves) {
         x = A[0] + A[2] * d - A[3] * s; z = A[1] + A[3] * d + A[2] * s;
       } else { x = (R() * 2 - 1) * (PLAY + 2); z = (R() * 2 - 1) * (PLAY + 2); }
       if (!okGround(x, z) || !clear(x, z, 0.02)) continue;
-      const sc = 1.1 + R() * 1.4;
-      _q.setFromEuler(_e.set((R() - 0.5) * 0.9, R() * 6.28, (R() - 0.5) * 0.9));
+      const sc = 0.55 + R() * 0.55; // (2026-11 fix pass: leaf-sized, 6-13 cm; at up to 30 cm they read as flat cards round the graves)
+      _q.setFromEuler(_e.set((R() - 0.5) * 0.6, R() * 6.28, (R() - 0.5) * 0.6));
       m.setMatrixAt(c, _m.compose(_p.set(x, heightAt(x, z) + 0.012 + R() * 0.02, z), _q, _s.set(sc, sc, sc)));
       const v = R();
       tint.setRGB(...(v < 0.4 ? [0.2, 0.09, 0.035] : v < 0.7 ? [0.26, 0.16, 0.06] : v < 0.9 ? [0.13, 0.08, 0.05] : [0.3, 0.12, 0.04])).multiplyScalar(1.1 + R() * 0.6);
@@ -457,9 +457,10 @@ function groundCover(scene, physics, low, R, trees, graves) {
   }
   // ---- stones along the lane's edges: flattened, irregular, grey-brown
   {
-    const g = new THREE.IcosahedronGeometry(0.1, 0);
-    { const P = g.attributes.position.array, rr = mulberry32(5); for (let i = 0; i < P.length; i++) P[i] *= 0.75 + rr() * 0.5; g.computeVertexNormals(); }
-    const n = Math.round(900 * k), m = new THREE.InstancedMesh(g, patchFold(new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9 }), 26, 40), n);
+    // (2026-11 fix pass) a lumpy, flat-topped fieldstone (props.js rockGeometry) lying on its base and half sunk, not a
+    // jittered icosahedron tumbled at random: those stood on edge and read as shards of debris on the path
+    const g = P.rockGeometry(0.1, 7);
+    const n = low ? 180 : 400, m = new THREE.InstancedMesh(g, patchFold(new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9 }), 26, 40), n);
     m.name = 'laneStones';
     const segs = [];
     for (const Lp of PATHS) for (let i = 0; i < Lp.length - 1; i++) segs.push([Lp[i][0], Lp[i][1], Lp[i + 1][0], Lp[i + 1][1]]);
@@ -469,10 +470,10 @@ function groundCover(scene, physics, low, R, trees, graves) {
       const side = R() < 0.5 ? -1 : 1, off = 1.45 + R() * 0.7;
       const x = S0[0] + dx * f - (dz / l) * off * side, z = S0[1] + dz * f + (dx / l) * off * side;
       if (!okGround(x, z) || !clear(x, z, 0.1)) continue;
-      const sc = 0.4 + Math.pow(R(), 2) * 1.6;
-      _q.setFromEuler(_e.set(R() * 6.28, R() * 6.28, R() * 6.28));
-      m.setMatrixAt(c, _m.compose(_p.set(x, heightAt(x, z) + 0.01 * sc, z), _q, _s.set(sc, sc * 0.45, sc)));
-      m.setColorAt(c, tint.setRGB(0.13, 0.12, 0.11).multiplyScalar(0.7 + R() * 0.6)); c++; // (2026-11: darker; the moonlit facets read as paper)
+      const sc = 0.45 + Math.pow(R(), 2) * 1.4;
+      _q.setFromEuler(_e.set((R() - 0.5) * 0.25, R() * 6.28, (R() - 0.5) * 0.25));
+      m.setMatrixAt(c, _m.compose(_p.set(x, heightAt(x, z) - 0.012 * sc, z), _q, _s.set(sc * (0.8 + R() * 0.5), sc * (0.5 + R() * 0.25), sc)));
+      m.setColorAt(c, tint.setRGB(0.1, 0.095, 0.088).multiplyScalar(0.7 + R() * 0.6)); c++; // (2026-11: darker; the moonlit facets read as paper)
     }
     m.count = c; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; m.computeBoundingSphere(); m.receiveShadow = true;
     scene.add(m); out.stones = m;
@@ -902,6 +903,10 @@ export function buildWorld({ scene, physics, low, classic = true, ground = null,
     const bed = new THREE.Color('#1e1a19'), mud = new THREE.Color('#2a2420'), dry = new THREE.Color('#38371f');
     // (2026-11 look pass) ground cover in patches, not one even green: dark moss, dry straw, worn earth by the lane
     const moss = new THREE.Color('#111912'), straw = new THREE.Color('#4c4429'), worn = new THREE.Color('#3a2f25'), scrub = new THREE.Color('#141a17');
+    // (2026-11 fix pass) the open ground outside the graveyard a step lighter and cooler: under the low moon (13 deg) a
+    // near-black green albedo read as one black-green band; a dew-grey grass and a pale, dusty lane read by moonlight
+    const lawn = new THREE.Color('#4a5642');
+    if (!classic) { grass.set('#2f3b2c'); grass2.set('#3a4230'); moss.set('#1b241c'); dirt.set('#56483b'); worn.set('#463b30'); }
     const tmp = new THREE.Color();
     for (let i = 0; i < p.count; i++) {
       const x = p.getX(i), z = p.getZ(i);
@@ -916,6 +921,9 @@ export function buildWorld({ scene, physics, low, classic = true, ground = null,
         tmp.lerp(straw, 0.8 * smooth((nB - 0.5) / 0.14));
         tmp.lerp(worn, 0.6 * smooth((nC - 0.6) / 0.12)); // bare, trodden earth here and there
       }
+      // (2026-11 fix pass) Porch Row's side of the creek (south): mown, dewy lawns between the porches, a grey-green
+      // that holds the low moon (the village view looks south with the moon behind it: grazing light only)
+      if (!classic && z > 12) tmp.lerp(lawn, 0.7 * smooth((z - 12) / 8) * (0.75 + 0.25 * n));
       const kh = knollH(x, z);
       if (kh > 0) tmp.lerp(dry, 0.45 * (kh / KNOLL.h) * (0.6 + 0.4 * n));
       // (gm: the ground scans' mask, patchGround: x gravel, y leaf litter; the rest is grass)
@@ -945,7 +953,7 @@ export function buildWorld({ scene, physics, low, classic = true, ground = null,
   let terrainMat = patchDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }), ground ? { scale: 0.9, amount: 0.18, broad: 0.6, dew: low ? 0 : 1, spec: 0.2, lite: low ? 'none' : false } : { scale: 0.9, amount: 0.5, broad: 0.6, dew: 1, spec: 0.15 });
   // the remaster: the CC0 ground scans over the vertex colours (looks.js patchGround; normal maps on desktop)
   // (phones: one grass sample, no normal maps and no lamp pools: the mobile tier's frame time stays where it was)
-  if (ground) terrainMat = patchGround(terrainMat, ground, { normal: !low, strength: 1.2, hue: 0.45, breakup: !low });
+  if (ground) terrainMat = patchGround(terrainMat, ground, { normal: !low, strength: 1.2, hue: 0.45, breakup: !low, tilt: 0.4 });
   // (a variant without the normal maps, for the bench's cost knob; built on first use)
   const terrainFlat = ground && !low ? () => patchGround(patchDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }), { scale: 0.9, amount: 0.18, broad: 0.6, dew: 1, spec: 0.2 }), ground, { normal: false, hue: 0.45 }) : null;
   if (!classic && !low) terrainMat = patchPools(terrainMat);
@@ -1038,7 +1046,7 @@ export function buildWorld({ scene, physics, low, classic = true, ground = null,
   Object.assign(SECRETS.oak, { inside: oak.inside, group: oak.glint, halo: oak.glintHalo });
   V.wellAt(B, physics, heightAt, WELL[0], WELL[1]);
   const toward = (x, z) => Math.atan2(x - SIGNPOST[0], z - SIGNPOST[1]);
-  V.signpostAt(B, physics, heightAt, SIGNPOST[0], SIGNPOST[1], [[toward(16, -10), '#d9d2bf'], [toward(-20, -16), '#8a5aa8'], [toward(36, 10), '#5aa84e'], [toward(0, 29), '#d0913c']]);
+  V.signpostAt(B, physics, heightAt, SIGNPOST[0], SIGNPOST[1], [[toward(16, -10), '#b9b09c'], [toward(-20, -16), '#6c6272'], [toward(36, 10), '#646b58'], [toward(0, 29), '#9c7550']]);
   V.benchAt(B, physics, heightAt, -17.6, -17.6, 0); // on the rim by the vantage, off the path, facing the village
   V.rowFences(B, physics, heightAt, ROW_FENCE.z, ROW_FENCE.stretches);
   P.pathStones(B, [[-12.6, -9.6], [-17, -15], [-20.8, -16.0]], heightAt);
@@ -1195,7 +1203,7 @@ export function buildWorld({ scene, physics, low, classic = true, ground = null,
     const n = g.attributes.normal; for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0); // lit like the ground
     // swaying in the wind (looks.js: the tips move, the roots stay)
     // Lambert: no specular (up-facing blade normals caught the low moon as white glints), and cheaper per fragment
-    tufts = new THREE.InstancedMesh(g, patchGrass(new THREE.MeshLambertMaterial({ color: '#3d5a2c', vertexColors: true, side: THREE.DoubleSide }), classic || low ? null : [24, 38], classic ? 0 : 0.05), count);
+    tufts = new THREE.InstancedMesh(g, patchGrass(new THREE.MeshLambertMaterial({ color: classic ? '#3d5a2c' : '#6f7d58', vertexColors: true, side: THREE.DoubleSide }), classic || low ? null : [24, 38], classic ? 0 : 0.09), count);
     tufts.name = 'grass';
     let n2 = 0;
     const _c0 = [];

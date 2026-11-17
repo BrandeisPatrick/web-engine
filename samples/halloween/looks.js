@@ -115,7 +115,7 @@ export function patchDetail(mat, { scale = 1.4, amount = 0.55, broad = 0.35, dew
  * normal?, scale (1/m) };
  * o: normal (bool), strength (normal map strength, 1), hue (0..1: how much of each scan's own colour shows, 0.5).
  */
-export function patchGround(mat, sets, { normal = true, strength = 1, hue = 0.5, breakup = true } = {}) {
+export function patchGround(mat, sets, { normal = true, strength = 1, hue = 0.5, breakup = true, tilt = 0 } = {}) {
   const prev = mat.onBeforeCompile, S = [sets.grass, sets.litter, sets.gravel];
   const nrm = normal && S.every((t) => t.normal);
   mat.onBeforeCompile = (sh, r) => {
@@ -152,6 +152,14 @@ vec3 hwGrndDetail( vec3 c, vec3 m ) {
   if ( hwWl > 0.004 ) hwDet += hwGrndDetail( texture2D( tGrnd1, hwGUv * uGrndK.y ).rgb, uGrndM1 ) * hwWl;
   if ( hwWg > 0.004 ) hwDet += hwGrndDetail( texture2D( tGrnd2, hwGUv * uGrndK.z ).rgb, uGrndM2 ) * hwWg;
   diffuseColor.rgb *= hwDet;`);
+    if (tilt > 0) { // (2026-11 fix pass) a lawn is blades, not a plane: under a low moon they face it, so the grass
+      // takes the moonlight a flat ground would only graze (the shadow maps still cut it into lit and shaded stripes)
+      sh.uniforms.uMoonGrndHw = LOOK.moonView;
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', `#include <common>\nuniform vec3 uMoonGrndHw;`)
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+  normal = normalize( normal + uMoonGrndHw * ( ${tilt.toFixed(3)} * hwWa ) );`);
+    }
     if (nrm) {
       sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
   if ( hwNear > 0.0 ) {
@@ -166,7 +174,7 @@ vec3 hwGrndDetail( vec3 c, vec3 m ) {
     }
   };
   const prevKey = mat.customProgramCacheKey.bind(mat);
-  mat.customProgramCacheKey = () => `${prevKey()}|hwGround${nrm ? 'N' : ''}${breakup ? 'B' : ''}`;
+  mat.customProgramCacheKey = () => `${prevKey()}|hwGround${nrm ? 'N' : ''}${breakup ? 'B' : ''}${tilt > 0 ? `T${tilt}` : ''}`;
   return mat;
 }
 
@@ -199,12 +207,13 @@ export function patchSurfaces(mat, sets, { normal = true, strength = 1 } = {}) {
     sh.uniforms.uMoonSurfHw = LOOK.moonView;
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-  if ( hwSk >= 1 && hwSk <= 3 ) totalEmissiveRadiance += diffuseColor.rgb * vec3( 0.05, 0.055, 0.075 ) * clamp( - dot( normal, uMoonSurfHw ) + 0.3, 0.0, 1.0 ); // (bounce / sky fill: walls away from the moon keep their boards)`)
+  if ( hwSk >= 1 && hwSk <= 3 ) totalEmissiveRadiance += diffuseColor.rgb * vec3( 0.12, 0.135, 0.165 ) * clamp( - dot( normal, uMoonSurfHw ) + 0.3, 0.0, 1.0 ) * ( 0.55 + 0.45 * hwSside1 ); // (bounce / sky fill: walls away from the moon keep their boards and courses; 2026-11 fix pass: twice as strong on walls, a cool shade a quarter of the moonlit face's level instead of a black slab)`)
       .replace('#include <common>', `#include <common>\nvarying float vSurfHw;\n${decl}\nuniform float uSurfK;\nuniform vec3 uMoonSurfHw;`)
       .replace('#include <color_fragment>', `#include <color_fragment>
   int hwSk = int( vSurfHw + 0.5 );
   vec3 hwSn = normalize( vHwNrm ), hwSa = abs( hwSn );
   bool hwSside = hwSa.y < max( hwSa.x, hwSa.z );
+  float hwSside1 = hwSside ? 1.0 : 0.0;
   bool hwSx = hwSa.x > hwSa.z;
   vec2 hwSuv = hwSside ? ( hwSx ? vec2( vHwPos.z, vHwPos.y ) : vec2( vHwPos.x, vHwPos.y ) ) : vHwPos.xz;
   vec3 hwSt = hwSside ? ( hwSx ? vec3( 0.0, 0.0, 1.0 ) : vec3( 1.0, 0.0, 0.0 ) ) : vec3( 1.0, 0.0, 0.0 );
@@ -404,8 +413,14 @@ export function patchRibs(mat, lobes, strength = 0.5, key = 'hwRibs', skin = fal
         .replace('#include <common>', '#include <common>\nuniform sampler2D tSkinHw;')
         .replace('#include <lights_physical_fragment>', `if ( vRibHw.w > 0.5 ) {
     float hwA = atan( vRibHw.x, vRibHw.z ), hwH = vRibHw.y;
-    vec4 hwK1 = texture2D( tSkinHw, vec2( hwA * ${(lobes * 0.32).toFixed(3)}, hwH * 0.7 ) );
-    vec4 hwK2 = texture2D( tSkinHw, vec2( hwA * 1.9, hwH * 2.6 ) + 0.5 );
+    // (2026-11 fix pass) round the stem the angle wraps at the back: whole texture periods per turn (no colour step)
+    // and the screen derivatives of an angle that wraps at the front (no mip step), so no seam runs down the rind
+    float hwA2 = atan( - vRibHw.x, - vRibHw.z );
+    vec2 hwDx = vec2( dFdx( hwA ), dFdx( hwH ) ), hwDy = vec2( dFdy( hwA ), dFdy( hwH ) );
+    if ( abs( hwDx.x ) + abs( hwDy.x ) > abs( dFdx( hwA2 ) ) + abs( dFdy( hwA2 ) ) ) { hwDx.x = dFdx( hwA2 ); hwDy.x = dFdy( hwA2 ); }
+    #define HW_SKIN( ka, kh, o ) textureGrad( tSkinHw, vec2( hwA * ( ka ), hwH * ( kh ) ) + ( o ), hwDx * vec2( ka, kh ), hwDy * vec2( ka, kh ) )
+    vec4 hwK1 = HW_SKIN( ${(Math.max(1, Math.round(lobes * 0.32 * 2 * Math.PI)) / (2 * Math.PI)).toFixed(5)}, 0.7, 0.0 );
+    vec4 hwK2 = HW_SKIN( ${(12 / (2 * Math.PI)).toFixed(5)}, 2.6, 0.5 );
     float hwL = dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
     float hwSt = smoothstep( 0.3, 0.75, hwK1.a ) * 0.7 + 0.3 * hwK1.r;
     diffuseColor.rgb = mix( vec3( hwL ), diffuseColor.rgb, 0.8 ) * ( 0.55 + 0.75 * hwSt );
@@ -414,7 +429,7 @@ export function patchRibs(mat, lobes, strength = 0.5, key = 'hwRibs', skin = fal
     // where it sat on the soil, and fine pocks
     diffuseColor.rgb *= mix( 1.0, 0.68, smoothstep( 0.52, 0.72, hwK1.g ) );
     diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.16, 0.11, 0.04 ) * ( 0.7 + 0.6 * hwK2.r ), ( 1.0 - smoothstep( 0.0, ${(0.32 * skin).toFixed(4)}, hwH ) ) * 0.55 );
-    diffuseColor.rgb *= 1.0 - 0.35 * smoothstep( 0.62, 0.8, texture2D( tSkinHw, vec2( hwA * 5.3, hwH * 9.0 ) ).b );` : ''}
+    diffuseColor.rgb *= 1.0 - 0.35 * smoothstep( 0.62, 0.8, HW_SKIN( ${(33 / (2 * Math.PI)).toFixed(5)}, 9.0, 0.0 ).b );` : ''}
     roughnessFactor = clamp( roughnessFactor * ( 0.7 + 0.6 * hwK2.r ), 0.2, 1.0 );
     ${typeof skin === 'number' ? `// the lid's cut: a zigzag ring round the stem (skin = the pumpkin's radius)
     float hwR = length( vRibHw.xz ), hwZ = ${(0.42 * skin).toFixed(4)} * ( 1.0 + 0.1 * sign( sin( hwA * 7.0 ) ) );
