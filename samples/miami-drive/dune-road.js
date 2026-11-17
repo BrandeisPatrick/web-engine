@@ -432,8 +432,12 @@ float dRough = 0.88;
       .replace('#include <roughnessmap_fragment>', THREE.ShaderChunk.roughnessmap_fragment.replace('float roughnessFactor = roughness;', 'float roughnessFactor = dRough;') + `
 #ifdef ENGINE_GBUFFER
 engineGbRoughness = max(roughnessFactor, 0.6); // no screen-space reflections on the corridor: its sheen is the environment's
-#endif`);
+#endif`)
+      // the low afterglow key grazes the road straight toward the camera in the chase view: its direct highlight halved
+      // (a sheen along the lane, not a white streak); the environment's sheen is kept
+      .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.directSpecular *= 0.45;');
   };
+  m.envMapIntensity = 0.75; // the low-sun environment's bright horizon: a softer sheen on the lane toward the glow
   m.customProgramCacheKey = () => { const sc = m.userData.scan; return `miami-dune-road-${asphalt && asphalt.map ? 1 : 0}-${sc ? 1 : 0}${sc && sc.road ? 'r' : ''}${sc && sc.bank ? 'b' : ''}`; };
   return m;
 }

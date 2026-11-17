@@ -35,8 +35,8 @@ async function boot() {
   const engine = new Engine({ container: document.getElementById('app'), physics, renderer: { antialias: false }, ...S.engine });
   const { scene, camera, renderer } = engine;
 
-  // ---- sky, sun, fog, shadows (timeOfDay: hours or 'dawn'..'night'); opt-in: lit clouds, afterglow key, low-sun fill
-  const atmosphere = new Atmosphere({ scene, renderer, camera, timeOfDay: 'dusk', shadows: S.shadows, cloudStyle: 'lit', twilightKey: true, lowSunEnv: true });
+  // ---- sky, sun, fog, shadows (timeOfDay: hours or 'dawn'..'night'); opt-in: soft clouds lit from the afterglow
+  const atmosphere = new Atmosphere({ scene, renderer, camera, timeOfDay: 'dusk', shadows: S.shadows, cloudStyle: 'lit' });
   // #endregion howto:walk-engine
   atmosphere.fogParams.haze = 0.004; // distance haze (PostFX's fog): the ground's far edge fades into the sky
 
@@ -53,7 +53,7 @@ async function boot() {
   }
   // #endregion howto:ground-texture
   // weathering (render): world-space breakup, no UVs. The ground gets broad patches (a tiled texture alone reads as carpet)
-  applyPatches(ground.material, [weathering({ scale: 0.12, macro: 0.3, hue: 0.08, grime: 0, streaks: 0, dust: 0 })]);
+  applyPatches(ground.material, [weathering({ scale: 0.07, macro: 0.2, hue: 0.05, grime: 0, streaks: 0, dust: 0 })]);
 
   // ---- one lamp: a post on a base with a hooded lantern, lit by NearestLights (a pool of real lights; give it many
   // positions). The glass glows softly; the light itself comes from the point light, so it pools on the ground

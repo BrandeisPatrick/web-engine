@@ -49,8 +49,8 @@ const physics = new PhysicsWorld();
 const engine = new Engine({ container: document.getElementById('app'), physics, renderer: { antialias: false }, ...S.engine });
 const { scene, camera, renderer } = engine;
 
-// ---- sky, sun, fog, shadows (timeOfDay: hours or 'dawn'..'night'); opt-in: lit clouds, afterglow key, low-sun fill
-const atmosphere = new Atmosphere({ scene, renderer, camera, timeOfDay: 'dusk', shadows: S.shadows, cloudStyle: 'lit', twilightKey: true, lowSunEnv: true });
+// ---- sky, sun, fog, shadows (timeOfDay: hours or 'dawn'..'night'); opt-in: soft clouds lit from the afterglow
+const atmosphere = new Atmosphere({ scene, renderer, camera, timeOfDay: 'dusk', shadows: S.shadows, cloudStyle: 'lit' });
 ```
 
 Post-processing, the `passes` group (nothing applies it for you) and resize handling. Without `onResize`, PostFX keeps

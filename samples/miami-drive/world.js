@@ -572,7 +572,8 @@ function sandMaterial(pbr, lod) {
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aWet; varying float vWet;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvWet = aWet;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying float vWet;')
-      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb * 1.45, diffuseColor.rgb * 0.5, vWet);')
+      // dry sand pale (x2.1: it reads as sand under the dusk sky, not brown), the wet band darker
+      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb * 2.1, diffuseColor.rgb * 0.5, vWet);')
       // the wet band near the waterline is glossy (it mirrors the afterglow); written where three computes roughness
       .replace('#include <roughnessmap_fragment>', THREE.ShaderChunk.roughnessmap_fragment.replace('float roughnessFactor = roughness;', 'float roughnessFactor = mix(roughness, 0.12, smoothstep(0.35, 0.9, vWet));'));
   };

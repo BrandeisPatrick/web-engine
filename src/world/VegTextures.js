@@ -350,11 +350,13 @@ function paintBarkDark(ctx, R, rnd) {
 function paintBarkPalm(ctx, R, rnd) {
   ctx.save(); ctx.beginPath(); ctx.rect(R.x, R.y, R.w, R.h); ctx.clip();
   ctx.fillStyle = '#5d5142'; ctx.fillRect(R.x, R.y, R.w, R.h);
-  const cols = 9, dw = R.w / cols, dh = 15;
+  // leaf bases: small, irregular and low in contrast (a regular lattice of large diamonds reads as a pattern, not bark)
+  const cols = 14, dw = R.w / cols, dh = 10;
   for (let row = 0, y = R.y - dh; y < R.y + R.h + dh; row++, y += dh * 0.62) {
     for (let c = 0; c < cols; c++) {
-      const x = R.x + (c + (row % 2) * 0.5) * dw;
-      const k = 0.85 + rnd() * 0.3;
+      if (rnd() < 0.12) continue; // a few bases broken off
+      const x = R.x + (c + (row % 2) * 0.5 + (rnd() - 0.5) * 0.25) * dw;
+      const k = 0.78 + rnd() * 0.4;
       wrapDraw(R, x, (xx) => {
         const g = ctx.createLinearGradient(0, y - dh * 0.55, 0, y + dh * 0.55);
         g.addColorStop(0, `rgb(${(160 * k) | 0},${(142 * k) | 0},${(114 * k) | 0})`);
@@ -364,7 +366,7 @@ function paintBarkPalm(ctx, R, rnd) {
         ctx.beginPath();
         ctx.moveTo(xx, y - dh * 0.55); ctx.lineTo(xx + dw * 0.52, y); ctx.lineTo(xx, y + dh * 0.55); ctx.lineTo(xx - dw * 0.52, y);
         ctx.closePath(); ctx.fill();
-        ctx.strokeStyle = 'rgba(40,32,24,0.85)'; ctx.lineWidth = 1.4; ctx.stroke();
+        ctx.strokeStyle = 'rgba(40,32,24,0.55)'; ctx.lineWidth = 1.0; ctx.stroke();
       });
     }
   }
