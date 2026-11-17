@@ -9,7 +9,8 @@
 // clustered lights) + the `miamiBuildings` plugin (buildings.js: the district's buildings, ?bld=engine for the generic
 // builder). Car (car.js on car-model.js / car-sdf.js / spec.js). Props + ramps (props.js). Sound (audio.js).
 // HUD (hud.js). Harness: window.__sample (poses chase / strip / beach / car, knobs), window.__miami for the console.
-// Query: ?quality=desktop|mobile, ?t=dusk|night|noon|golden|<hours>, ?bench=1&size=WxH, ?notraffic, ?nofx=1, ?profile=N.
+// Query: ?quality=desktop|mobile, ?t=dusk|night|noon|golden|<hours>, ?bench=1&size=WxH, ?notraffic, ?nofx=1, ?profile=N,
+// ?look=low (the earlier low-key grade).
 import * as THREE from 'three';
 import {
   Engine, PostFX, ChaseRig, VehicleInput, PAD_BUTTONS as B, PAD_AXES as AX, inputRamp, LoadingScreen,
@@ -93,14 +94,15 @@ const TOUCH = [
   { type: 'button', id: 'help', label: '?', side: 'left', x: 36, y: 300, size: 40, top: true },
 ];
 
-// ------------------------------------------------------------------ the grade: low key, one warm hue family
-// After sunset the frame is a near-silhouette lit by the sky: fixed low exposure (no eye adaptation brightening the
-// dark), neutral-warm blacks (no teal / blue split toning), restrained saturation, bloom only on lamp cores (high
-// threshold, small radius), a slight vignette and fine grain. DUSK_EXPOSURE is the look knob (?exposure= overrides).
-// ?look=open: the alternative, brighter dusk (the owner compares the two): exposure up, eye adaptation on, a softer
-// toe and natural saturation, a little more lifted black; still a calm dusk, not daylight. The smoke look gate holds
-// only the default ('low').
-const LOOK = params.get('look') === 'open' ? 'open' : 'low';
+// ------------------------------------------------------------------ the grade: two looks
+// 'open' (the default since 2026-11-17, chosen by the owner from side-by-side pictures; the smoke look gate holds it):
+// a brighter dusk, exposure up, eye adaptation on, a softer toe and natural saturation, cooler shadows, a little more
+// lifted black; still a calm dusk, not daylight. ?look=low (?look=open is accepted too): the earlier low-key grade,
+// the frame after sunset a near-silhouette lit by the sky: fixed low exposure (no eye adaptation brightening the
+// dark), neutral-warm blacks (no teal / blue split toning), restrained saturation. Both: bloom only on lamp cores
+// (high threshold, small radius), a slight vignette and fine grain. DUSK_EXPOSURE is the look knob (?exposure=
+// overrides).
+const LOOK = params.get('look') === 'low' ? 'low' : 'open';
 const OPEN = LOOK === 'open';
 const DUSK_EXPOSURE = +(params.get('exposure') || (OPEN ? (MOBILE ? 1.0 : 1.1) : (MOBILE ? 0.55 : 0.62))); // (phones: no SSR / volumetrics, a brighter, smoother road under the afterglow key)
 const DUSK_GRADE = DEFAULT_GRADE.map((g) => {
@@ -227,7 +229,7 @@ async function boot() {
         ao: { radius: 1.4, thickness: 1.2, samples: 6, maxPixels: 0.45e6 }, bloom: { strength: 0.2, radius: 0.28, threshold: 4.5 }, autoExposure: false,
         ...QS.postfx, lut: { texture: lut.texture, size: lut.size, strength: 1 }, autoExposure: OPEN,
         // AO on the ambient only (lit pixels keep their light), a cool tint in what AO leaves, a floor black lifted a
-        // little (a third of the open look's in the low-key default), TAA sharpened back after its blend
+        // little (in ?look=low a third of the open look's), TAA sharpened back after its blend
         look: { aoLit: 0.8, aoTint: [0, 0.03, 0.07], lift: OPEN ? [0.006, 0.0085, 0.011] : [0.002, 0.0028, 0.0037] },
         ...(QS.postfx.aa === 'taa' || QS.postfx.taa ? { taa: { ...(QS.postfx.taa || {}), sharpen: 0.25 } } : {}),
       });
@@ -305,8 +307,8 @@ async function boot() {
   const FOLIAGE = /^(roadside-plants|roadside-grass|near-palms|coconut-palms|veg-|dune-scrub|dune-grass)/;
   const FOLIAGE_MAT = /^(nearPalmTrunk|coconutTrunk)$/; // trunks stay solid
   const isFoliage = (m, o) => { if (FOLIAGE_MAT.test(m.name)) return false; for (let x = o; x; x = x.parent) if (FOLIAGE.test(x.name)) return true; return false; };
-  // (?look=open: less light through the leaves and a cooler tint; under its higher exposure the street palms went
-  // yellow-green)
+  // (the open look: less light through the leaves and a cooler tint than ?look=low; under its higher exposure the
+  // street palms went yellow-green)
   const FOLIAGE_OPTS = OPEN ? { wrap: 0.5, translucency: 0.2, rim: 0.8, ambient: 0.3, tint: [0.92, 0.74, 0.6] } : { wrap: 0.5, translucency: 0.35, rim: 1.0, ambient: 0.3, tint: [1.0, 0.72, 0.55] };
   // the street palms' bark: fibrous grey-brown with fine rings instead of the atlas's leaf-base lattice (palm.js),
   // before the lit-foliage pass wraps the same material (re-applied with it: tiles stream in)

@@ -40,7 +40,7 @@ A faster frame that breaks a guard is not an improvement, and the tool refuses t
 | image | every pose's picture against the golden image of the baseline: the same hash, or a pixel difference inside the baseline's own load-to-load noise. "Faster" cannot mean "renders less". | `npm run perf` |
 | counters | draw calls and triangles (+5 %), JS heap (+10 %), asset bytes (+3 %) against the baseline | `npm run perf` |
 | noise | a pose whose runs spread more than 6 % is inconclusive (exit code 2): nothing is concluded from it | `npm run perf` |
-| look | tone and palette limits per pose (the art-direction standard: low-key exposure, nothing clipped, one hue family) | `npm run smoke` |
+| look | tone and palette limits per pose (the demos' default open look: neither dark nor blown out, warm lamps against cool shade, no colour cast) | `npm run smoke` |
 | stability | two captures of a pose are bit-identical | `npm run smoke` |
 | correctness | the engine suites, including the pinned shader hashes and the determinism of the physics | `npm test` |
 

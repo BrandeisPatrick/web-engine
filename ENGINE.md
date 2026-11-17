@@ -466,10 +466,11 @@ surface above.
     `buildTreeMeshes(..., { foliageLight })` light leaves as foliage (wrap, light through the leaves, rim, more sky);
     `enableFacadeDetail(createFacadeMaterials(...), opts)` gives facade windows dim rooms, street spill, panes that
     differ, roller shades and weathered curtain walls.
-- The demos turn these on in their default look, which stays inside the look gate in `test/browser/smoke.mjs`
-  (low key: dark mean, nothing clipped, one warm hue family). Each also has `?look=open` (nyc-night, miami-drive):
-  a brighter, two-temperature grade of the same scene (more exposure, cooler shade against warm lamps,
-  a small lifted black) that the gate does not check, there to compare against and to start a brighter game from.
+- The demos turn these on in their default look, the open look (nyc-night, miami-drive; the owner's choice on
+  2026-11-17): a brighter, two-temperature grade (more exposure, cooler shade against warm lamps, a small lifted
+  black) that stays inside the look gate in `test/browser/smoke.mjs` (neither dark nor blown out, warm lamps against
+  cool shade, no colour cast). `?look=low` gives the earlier low-key grade of the same scene (dark mean, nothing
+  clipped, one warm hue family), which the gate checks only for a black or blown-out frame.
 - Moonlit scattering (opt-in, `new Atmosphere({ moonScatter: amount })`, default 0 = off): at night, while the moon
   is the shadow-casting light (`lightDir = moonDir`), the post fog's forward-scatter glow (`fogParams.sunScatter`,
   otherwise 0 at night) is `amount`, and `atmo.scatterDir` / `atmo.scatterColor` follow the moon (`moonDir`,

@@ -252,7 +252,7 @@ export function buildNearPalms(instances, o = {}) {
  * material only, the texels of that strip with procedural fibrous grey-brown bark: fine uneven rings ~9 cm apart, a
  * few faint leaf-base scars, vertical fibres (resolution-free; the pattern fades to its average where it would
  * alias). Other species' texels and other demos are untouched. frond + frondTint (an atlas region and an rgb
- * multiplier): the fronds' texels tinted (?look=open: less yellow). Returns the number of materials patched.
+ * multiplier): the fronds' texels tinted (the default open look: less yellow). Returns the number of materials patched.
  */
 export function canaryBark(root, region, { frond = null, frondTint = null } = {}) {
   let n = 0;

@@ -15,8 +15,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /** The twilight key's amount (0 by day, up to 1 at dusk; set by the miami plugin's update): the sand's dusk fill
- *  (world.js) and the corridor's softer key highlight read it. (No fill on the corridor: the chase and car poses sit
- *  at the look gate's under40 limit.) */
+ *  (world.js) and the corridor's softer key highlight read it. (No fill on the corridor: in the low-key look, which the
+ *  look gate held until 2026-11-17, the chase and car poses sat at its under40 limit.) */
 export const DUSK_FILL = { value: 0 };
 
 const LANE = 3.35, HALF = 3.6, SHOULDER = 5.4;   // half width of the asphalt (with 25 cm of edge), gravel to 5.4 m

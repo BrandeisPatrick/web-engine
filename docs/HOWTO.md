@@ -809,4 +809,5 @@ process.exit(ok ? 0 : 1);
 ```
 
 `npm run smoke` loads every demo and starter on both quality tiers: the starters are checked for a clean boot and
-something drawn, the demos also for stable captures and look limits.
+something drawn, the demos also for stable captures and look limits (their default open look; `?look=low` on one pose
+only for a black or blown-out frame).
