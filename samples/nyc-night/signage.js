@@ -295,6 +295,12 @@ if (vAnim.w > 2.5) { roughnessFactor = 0.14; diffuseColor.rgb = vec3(0.004); } /
 #ifdef ENGINE_GBUFFER
 engineGbRoughness = roughnessFactor;
 #endif`)
+      // shop glass: a lamp's highlight in the pane held to a small warm point. At roughness 0.14 a shop light 2 m off the
+      // glass peaked in the hundreds and bloomed into a white ball the size of a pendant lamp. The direct specular's
+      // flanks are pulled in (s / (s + 0.6): the lobe reads narrower, as clear glass) and its peak is held under 0.8
+      // (a soft knee), so the point keeps its colour and only a little halo (street lamps in the panes too)
+      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+if (vAnim.w > 2.5) { float sM = max(reflectedLight.directSpecular.r, max(reflectedLight.directSpecular.g, reflectedLight.directSpecular.b)); reflectedLight.directSpecular *= sM / (sM + 0.6) / (1.0 + sM / 0.8); }`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 {
   // vAnim: x frames (1 = static), y phase s, z s per frame, w kind (0 LED, 1 marquee, 2 neon); vLook: x gain, y seed
@@ -385,7 +391,7 @@ engineGbRoughness = roughnessFactor;
   totalEmissiveRadiance = c * gain * uSignGain;
 }`);
   };
-  m.customProgramCacheKey = () => 'nyc-sign-5';
+  m.customProgramCacheKey = () => 'nyc-sign-6';
   return m;
 }
 

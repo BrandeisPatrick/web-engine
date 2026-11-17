@@ -21,7 +21,8 @@
 //   - engine: engine.clock.pause() / resume() while paused (the loop keeps rendering, systems get dt 0); the canvas,
 //     engine.renderer.domElement, is blurred behind the cards; renderer.compileAsync(scene, camera) before the card.
 //   - quality: from resolveQuality(); its tier rows sit in the pause card (a pick stores it and reloads, as QualityMenu).
-// Pause: Esc or P, the gamepad's Start button, the round pause button (shown on touch screens), and by itself when the
+// Pause: Esc or P, the gamepad's Start button, the round pause button (top right while playing, on every device: the
+// only visible way to pause and reach the settings once the start card is gone or skipped), and by itself when the
 // tab is hidden or the pointer lock is lost while playing. Esc or P again, or Resume, resumes. In the title, Enter or
 // Space (or the pad's A / Start) starts. The cards trap Tab focus and focus their button; focus rings are visible.
 // URL: ?autostart=1 and ?bench=1 skip the card (the shell goes straight to playing at ready()); with ?bench=1 the shell
@@ -111,7 +112,8 @@ const PAUSE_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="tr
  * @property {boolean} [loading=true]  show the loading screen (false: the game has its own)
  * @property {boolean} [autostart]  skip the start card (default: ?autostart=1 or ?bench=1 in the URL)
  * @property {boolean} [autoPause]  pause when the tab is hidden or the pointer lock is lost (default: true, false with ?bench=1)
- * @property {'auto' | boolean} [pauseButton='auto']  the round pause button: 'auto' shows it on touch screens
+ * @property {'auto' | boolean} [pauseButton=true]  the round pause button while playing: true on every device (it is
+ *   the visible way into the pause card and its settings, also with ?autostart=1), 'auto' only on touch screens, false never
  * @property {'tr' | 'tl' | 'tc'} [pauseCorner='tr']  where it sits (top right, top left, top centre); QualityMenu's gear
  *   also defaults to top right: drop the gear (the tiers are in the pause card) or move one of them
  * @property {HTMLElement} [parent=document.body]
@@ -334,9 +336,10 @@ export class GameShell {
     }
     pc.append(this._help(o));
     root.append(card, pc);
-    // the round pause button (touch screens)
+    // the round pause button (while playing; see pauseButton)
     const pb = this.pauseButton = document.createElement('button');
-    pb.type = 'button'; pb.className = `ui-shell-pause ui-glass ${o.pauseCorner || 'tr'}`; pb.innerHTML = PAUSE_ICON; pb.setAttribute('aria-label', 'Pause');
+    pb.type = 'button'; pb.className = `ui-shell-pause ui-glass ${o.pauseCorner || 'tr'}`; pb.innerHTML = PAUSE_ICON;
+    pb.setAttribute('aria-label', 'Pause and settings'); pb.title = 'Pause and settings (Esc)';
     pb.addEventListener('click', (e) => { e.stopPropagation(); this.pause('button'); });
     pb.addEventListener('pointerdown', (e) => e.stopPropagation());
     const parent = o.parent || document.body;
@@ -399,7 +402,8 @@ export class GameShell {
     if (typeof document !== 'undefined') document.body.classList.toggle('ui-shell-carded', title || paused); // touch sticks hide behind the cards
     const c = this._canvas;
     if (c) { c.classList.toggle('ui-shell-veil', title || paused); c.classList.toggle('paused', paused); }
-    this.pauseButton.classList.toggle('show', playing && (this.options.pauseButton === true || (this.options.pauseButton !== false && this._touch)));
+    const pbo = this.options.pauseButton ?? true;
+    this.pauseButton.classList.toggle('show', playing && (pbo === true || (pbo === 'auto' && this._touch)));
     // the clock and the sound
     const clock = this.engine && this.engine.clock, a = this.audio;
     if (paused) {

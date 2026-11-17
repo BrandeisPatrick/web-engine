@@ -20,8 +20,8 @@
 //
 // Intensity: three.js PointLight intensity (candela, physical units since three r155), multiplied by `color`; how
 // bright a value looks depends on `distance` and `decay` (decay 2: falls off as 1 / d^2). Values the demos use:
-// lanterns / garden lamps (distance 9-12 m, decay 1.5-1.6) 7.5-8 (Halloween's lanterns: 7.5); city street lamps
-// (distance 48 m, decay 2, 6 m up) up to 260 at full night (world Props). 1 is invisible against a dusk sky.
+// lanterns / garden lamps (distance 9-12 m, decay 1.5-1.6) 7.5-12 (Halloween's lanterns: 7.5, starter-walk: 12); city
+// street lamps (distance 48 m, decay 2, 6 m up) up to 260 at full night (world Props). 1 is invisible against a dusk sky.
 // Import it from '@vibe/engine/render' (it depends on three.js only); '@vibe/engine/world' re-exports it.
 import * as THREE from 'three';
 
@@ -123,7 +123,7 @@ export class NearestLights {
    * @param {number} dt  seconds
    * @param {{position: THREE.Vector3, frustum?: THREE.Frustum, direction?: THREE.Vector3}} view  the camera position
    *        (e.g. `{ position: camera.position }`); frustum / direction refine the choice of lights (optional)
-   * @param {number} intensity  three.js PointLight intensity of every light (candela; 0 = off). Typical: 7.5-8 for
+   * @param {number} intensity  three.js PointLight intensity of every light (candela; 0 = off). Typical: 7.5-12 for
    *        lanterns / garden lamps with distance ~10 m and decay ~1.5; 100-260 for street lamps with distance 48 m and
    *        decay 2. 1 is too dim to see at dusk.
    */

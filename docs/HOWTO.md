@@ -195,7 +195,7 @@ out from it, so start from `visual.spec` or `ROAD_CAR_SPEC`.
 // ---- the car: an HD hatchback body and its physics, ROAD_CAR_SPEC resized to that body (wheels where the body has them).
 // Other bodies: 'sedan', 'suv', 'pickup', 'minivan', 'taxi', 'police'. Tune by spreading: { ...visual.spec, motorPower: 200e3 }.
 // (Without a spec VehicleController is the Roadster, a 400 km/h car that flies on the thrust input.)
-const visual = createCarVisual('hatchback', { color: 0x8a1418 });
+const visual = createCarVisual('hatchback', { color: 0x8a1418, shadowOpacity: 0.9 });
 const SPEC = visual.spec; // ROAD_CAR_SPEC with this body's size, axles, track and wheel radius
 ```
 
@@ -416,11 +416,13 @@ Per frame, after the camera moved (in `lateUpdate`):
 
 <!-- from: samples/starter-walk/main.js#lamp-update -->
 ```js
-lamps.update(dt, { position: camera.position }, 8); // PointLight intensity: ~8 for a garden lamp at 12 m reach
+lamps.update(dt, { position: camera.position }, 12); // PointLight intensity: 8-12 for a garden lamp at 12 m reach
 ```
 
-Intensity is three.js `PointLight` intensity. The demos use about 7.5 to 8 for garden lamps (reach 9 to 12 m, decay
-1.5) and up to 260 for city street lamps (reach 48 m, decay 2, 6 m up). At 1 a lamp is invisible at dusk. Keep the
+Intensity is three.js `PointLight` intensity. Garden lamps take about 8 to 12 (reach 9 to 12 m, decay 1.5): Halloween's
+lanterns 7.5 over pale ground, the walk starter 12 because its pool falls on dark gravel and bare earth. A lamp's glass
+needs an emissive intensity of about 8 to glow (the dusk bloom threshold); at 1.6 it reads as switched off. City street
+lamps take up to 260 (reach 48 m, decay 2, 6 m up). At 1 a lamp is invisible at dusk. Keep the
 pool at 8 or fewer: every real light costs on every lit pixel. For more lamps, use clustered lights.
 
 ## Clustered lights
@@ -564,7 +566,9 @@ shell.setProgress(0.3 + 0.6 * p, label))`), `shell.use({ engine, audio, inputs: 
 click calls `audio.start()`, so no `unlockOnGesture()`), and `await shell.ready()` after `engine.start()`, before the
 page contract (it does not wait for the click). A game setting in the pause card: `shell.addToggle('assist', 'Steering
 assist')` and `shell.settings.on('assist', (on) => { input.assist.enabled = !!on; })`, which runs at once with the saved
-value. Esc or P pauses (`engine.clock` stops, the loop keeps drawing, the bus fades out); `shell.onPause((paused) =>
+value. Esc or P pauses (`engine.clock` stops, the loop keeps drawing, the bus fades out), and so does the round pause
+button at the top right (`pauseCorner`), shown on every device while playing so the settings are always one click
+away (`pauseButton: 'auto'` keeps it to touch screens); `shell.onPause((paused) =>
 ...)` to react, `shell.onStart(fn)` to start the run. The touch sticks hide while a card is up. Load the page with
 `?autostart=1` to skip the card in tests that press keys.
 

@@ -53,12 +53,12 @@ async function boot() {
   // #endregion howto:ground-texture
 
   // ---- one lamp: a post on a base with a hooded lantern, lit by NearestLights (a pool of real lights; give it many
-  // positions). The glass glows softly; the light itself comes from the point light, so it pools on the ground
+  // positions). The glass is emissive over the dusk bloom threshold (it glows); the light comes from the point light
   const lampAt = new THREE.Vector3(3, 3.2, -6);
   const iron = new THREE.MeshStandardMaterial({ color: 0x1e2023, metalness: 0.6, roughness: 0.45 }), lamp = new THREE.Group();
   const parts = [[new THREE.CylinderGeometry(0.05, 0.07, 3.1, 10), 1.55], [new THREE.CylinderGeometry(0.16, 0.2, 0.3, 12), 0.15], [new THREE.ConeGeometry(0.26, 0.2, 12), 3.42]];
   for (const [geo, y] of parts) { const p = new THREE.Mesh(geo, iron); p.position.y = y; p.castShadow = true; lamp.add(p); }
-  const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.11, 0.26, 12), new THREE.MeshStandardMaterial({ color: 0x302820, emissive: 0xffb466, emissiveIntensity: 1.6 }));
+  const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.11, 0.26, 12), new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffb466, emissiveIntensity: 8 }));
   glass.position.y = 3.19; lamp.add(glass);
   lamp.position.set(lampAt.x, 0, lampAt.z); scene.add(lamp);
   applyPatches(iron, [weathering({ grime: 0.5, grimeHeight: 0.6, streaks: 0.2, seed: 4 })]); // dirt at its foot, rain runs
@@ -179,7 +179,7 @@ async function boot() {
     lateUpdate(dt) {
       atmosphere.update(camera.position, dt);
       // #region howto:lamp-update
-      lamps.update(dt, { position: camera.position }, 8); // PointLight intensity: ~8 for a garden lamp at 12 m reach
+      lamps.update(dt, { position: camera.position }, 12); // PointLight intensity: 8-12 for a garden lamp at 12 m reach
       // #endregion howto:lamp-update
       place.update(dt, camera.position, atmosphere.darkness); // tree wind and the near / far tree split
       blob.position.set(player.position.x, 0.015, player.position.z); // the contact shadow fades as the feet leave the ground

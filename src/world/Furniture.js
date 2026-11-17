@@ -214,7 +214,7 @@ const BUILDERS = {
   /** Sidewalk A-frame (sandwich) board: two chalkboards leaning together; frame painted (instance colour). Boards face +-Z. */
   aframe: (B) => {
     for (const sg of [-1, 1]) {
-      const o = { pitch: sg * 0.2 };
+      const o = { pitch: -sg * 0.2 }; // tops lean in to meet under the hinge bar, feet splayed (+sg pitch stood it on its point)
       B.box(0, 0.47, sg * 0.1, 0.62, 0.94, 0.028, FM.paint, o);
       B.box(0, 0.5, sg * 0.117, 0.5, 0.66, 0.006, FM.chalk, o);
       for (let k = 0; k < 4; k++) B.box(-0.04 + (k % 2) * 0.06, 0.66 - k * 0.12, sg * 0.122, 0.34 - (k % 3) * 0.06, 0.035, 0.004, FM.chalkText, o);

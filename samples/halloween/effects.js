@@ -13,6 +13,7 @@ import { ParticleSystem, makeCanvas } from '@vibe/engine/render';
 const GLOW_VS = /* glsl */`
 attribute vec3 iPos;
 attribute vec4 iData; // rgb (linear, premultiplied intensity), size (m)
+attribute float iPull; // the least pull toward the eye (m): a halo round a solid body sets the body's radius and more
 uniform vec3 uGlowK; // size scale, intensity scale, falloff power (look())
 varying vec2 vUv;
 varying vec3 vCol;
@@ -24,8 +25,10 @@ void main() {
   vCol = iData.rgb * near * uGlowK.y;
   float sz = iData.w * uGlowK.x;
   // pull the quad toward the eye along the view ray (same spot and size on screen) by 0.45 of its size: a halo sits on
-  // the grass, and without this the ground cut its lower half off in a hard straight edge (a boxy glow on phones)
-  float k = max( 0.3, d - sz * 0.45 ) / max( d, 1e-3 );
+  // the grass, and without this the ground cut its lower half off in a hard straight edge (a boxy glow on phones).
+  // (fix pass 2) At least iPull: a halo centred inside a body (a lantern) must clear the body's near side, or the
+  // rind's closest bulge pokes through the quad and hides the halo there in a hard polygon (one vertex fan of the rind)
+  float k = max( 0.3, d - max( sz * 0.45, iPull ) ) / max( d, 1e-3 );
   mv.xyz *= k;
   mv.xy += position.xy * sz * k;
   gl_Position = projectionMatrix * mv;
@@ -46,10 +49,11 @@ export class Glows {
     const g = new THREE.InstancedBufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0], 3));
     g.setIndex([0, 1, 2, 0, 2, 3]);
-    this.pos = new Float32Array(max * 3); this.data = new Float32Array(max * 4);
+    this.pos = new Float32Array(max * 3); this.data = new Float32Array(max * 4); this.pull = new Float32Array(max);
     this.aPos = new THREE.InstancedBufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage);
     this.aData = new THREE.InstancedBufferAttribute(this.data, 4).setUsage(THREE.DynamicDrawUsage);
-    g.setAttribute('iPos', this.aPos); g.setAttribute('iData', this.aData);
+    this.aPull = new THREE.InstancedBufferAttribute(this.pull, 1).setUsage(THREE.DynamicDrawUsage);
+    g.setAttribute('iPos', this.aPos); g.setAttribute('iData', this.aData); g.setAttribute('iPull', this.aPull);
     g.instanceCount = 0;
     this.material = new THREE.ShaderMaterial({ uniforms: { uGlowK: { value: new THREE.Vector3(1, 1, 2) } }, vertexShader: GLOW_VS, fragmentShader: GLOW_FS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
     this.mesh = new THREE.Mesh(g, this.material);
@@ -58,9 +62,12 @@ export class Glows {
   }
   /** Every halo's size and intensity scaled, and its falloff power (2: the first look's soft disc; higher: a tighter core). */
   look(size = 1, gain = 1, power = 2) { this.material.uniforms.uGlowK.value.set(size, gain, power); return this; }
-  set(i, x, y, z, size, r, g, b) {
+  /** Halo i at (x, y, z), `size` m, colour (r, g, b); `pull` (m): the least distance it is drawn toward the eye (a
+   * halo centred inside a solid body: more than the body's radius, so the body's near side never cuts it). */
+  set(i, x, y, z, size, r, g, b, pull = 0) {
     if (i >= this.max) return;
     const p = i * 3, d = i * 4;
+    this.pull[i] = pull;
     this.pos[p] = x; this.pos[p + 1] = y; this.pos[p + 2] = z;
     this.data[d] = r; this.data[d + 1] = g; this.data[d + 2] = b; this.data[d + 3] = size;
   }
@@ -70,6 +77,7 @@ export class Glows {
     if (n > 0) {
       this.aPos.clearUpdateRanges(); this.aPos.addUpdateRange(0, n * 3); this.aPos.needsUpdate = true;
       this.aData.clearUpdateRanges(); this.aData.addUpdateRange(0, n * 4); this.aData.needsUpdate = true;
+      this.aPull.clearUpdateRanges(); this.aPull.addUpdateRange(0, n); this.aPull.needsUpdate = true;
     }
     this.mesh.visible = n > 0;
   }

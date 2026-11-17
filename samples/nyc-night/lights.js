@@ -10,7 +10,7 @@ const _cand = [];
 
 export class ExtraLights {
   /**
-   * @param {{ clustered, world, signs: Array<{x,y,z,range,r,g,b}>, signRange?: number, cars?: number, headK?: number,
+   * @param {{ clustered, world, signs: Array<{x,y,z,range,r,g,b,decay?}>, signRange?: number, cars?: number, headK?: number,
    *   player?: THREE.Object3D|null }} o
    */
   constructor(o) {
@@ -47,7 +47,7 @@ export class ExtraLights {
         const near = 40 + l.range * 6, d = Math.sqrt(d2);
         if (d > near) continue;
         const f = Math.min(1, (this.signRange - d) / 40, (near - d) / 25); // fade at the edge of either range
-        cl.setLight(n++, l.x, l.y, l.z, l.range, l.r * f, l.g * f, l.b * f, 2);
+        cl.setLight(n++, l.x, l.y, l.z, l.range, l.r * f, l.g * f, l.b * f, l.decay ?? 2); // decay: 2 unless the sign says
         s++;
       }
     }

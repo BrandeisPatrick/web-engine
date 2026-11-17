@@ -102,8 +102,9 @@ Everything else, layer by layer: [ENGINE.md](ENGINE.md). Every source file start
   `model.updateMatrixWorld(true)` runs first.
 - Animation clip names are the GLB's exact names (`HumanArmature|Man_Walk`, not `Walk`). A wrong name throws and lists
   the real ones.
-- Lamp intensity is three.js `PointLight` intensity: about 8 for a garden lamp (reach 12 m, decay 1.5), up to 260 for
-  a city street lamp (reach 48 m, decay 2). At 1 the lamp is invisible and nothing warns you.
+- Lamp intensity is three.js `PointLight` intensity: 8 to 12 for a garden lamp (reach 12 m, decay 1.5; 12 over dark
+  gravel and earth, as starter-walk), up to 260 for a city street lamp (reach 48 m, decay 2). At 1 the lamp is invisible
+  and nothing warns you. The lamp's glass needs `emissiveIntensity` about 8 to glow through the dusk bloom.
 - Clustered lights need five calls in three places (HOWTO "Clustered lights"); skip one and lamps silently do not
   light. `lights: { clustered: true }` is a `MapWorld` option only.
 - `loadTextureSet` needs `base`: the default folder does not exist in this repository. The sets live in

@@ -395,7 +395,7 @@ surface above.
   (default 8) on the lamps nearest the view, or, with `mode: 'clustered'` and a `ClusteredLights` instance, pushes
   every lamp in range into the clustered list. `MapWorld` does this for its street lamps (its `lights: { clustered:
   true }` option); a game without `MapWorld` creates the `NearestLights` / `ClusteredLights` itself. Intensities are
-  three's `PointLight` units (linear colour x intensity): about 8 for a garden lamp (reach 12 m, decay 1.5), up to 260
+  three's `PointLight` units (linear colour x intensity): 8 to 12 for a garden lamp (reach 12 m, decay 1.5), up to 260
   for a city street lamp (reach 48 m, decay 2); at 1 a lamp is invisible at dusk. The clustered wiring without
   `MapWorld` is five calls: [docs/HOWTO.md, "Clustered lights"](docs/HOWTO.md#clustered-lights).
 - Look options (all off by default; the picture is unchanged without them):
@@ -672,7 +672,8 @@ cost are in [the design notes](docs/DESIGN-NOTES.md#textures-pbr-sets-ktx2).
   once they exist; `await shell.ready()` compiles the scene's shaders, draws a frame and shows the start card over the
   live scene, blurred and dimmed (it does not wait for the click: set `window.__sample` after it). The start click
   calls `audio.start()` (the audio gesture), clears the blur in 1 s and turns the inputs back on (`enabled`). Esc, P,
-  the pad's Start or the touch pause button pause: `engine.clock.pause()`, `audio.setPaused(true)` when the bus has
+  the pad's Start or the round pause button (top right while playing, on every device; `pauseButton: 'auto'` keeps it
+  to touch screens) pause: `engine.clock.pause()`, `audio.setPaused(true)` when the bus has
   it, inputs off; it also pauses when the tab is hidden or the pointer lock is lost. On-screen touch controls are
   hidden while a card is up. The pause card has the volume, `addToggle(key, label)` / `addSlider(key, label, { min,
   max, step })` rows and the quality tiers. Settings are saved (`shell.settings.get(k)`, `shell.settings.on(k, fn)`
