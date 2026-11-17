@@ -29,6 +29,8 @@
 // NEON_NAMES) are lettered on canopies, shop boards and roof signs from one canvas atlas (building-materials.js), lit at
 // dusk. The weathering (stucco float texture, patches, cracks, streaks, damp, fading, mildew, formwork, roof stains)
 // and the far level's window bays are a shader pass in building-materials.js.
+// Shrubs in pots are a few lumpy clumps (blob), not clipped stacks. afterProps quietens the `miami` plugin's neon (no
+// cornice tubes, warm sign letters, dimmer warm light; ?neon=1 keeps the old look).
 // Colliders for the claimed footprints are registered here (MapWorld skips claimed ones).
 import * as THREE from 'three';
 import { GeoBuf, NullBuf, BuildingBuilder, MODE, enc, PBR, FACADE, WIN_RECTS, tintBytes, insetRing, RBIT, signedArea, pointInRing, localizeMeshOrigin } from '@vibe/engine/world';
@@ -55,6 +57,8 @@ const DECO_ROADS = /^(Ocean Drive|Collins Avenue|Washington Avenue|Española Way
 const INFO = {
   plain: (pbr, seed, cls = -1) => [cls, -1, seed, enc(pbr, MODE.PLAIN)],
   wall: (S) => [CL.WALL, Math.round(S.base * 20), S.seed, enc(S.wallPbr, MODE.PLAIN)], // y: the street height (x 20) for the damp band
+  // a streak quad laid on the wall (under a sill / bracket): y < 0 flags it, -(street height x 20) - 1; uv (0..1, 1..2)
+  streak: (S) => [CL.WALL, -(Math.max(0, Math.round(S.base * 20)) + 1), S.seed, enc(S.wallPbr, MODE.PLAIN)],
   conc: (S) => [CL.CONCRETE, -1, S.seed, enc(PBR.CONCRETE_PANEL, MODE.PLAIN)],
   trim: (S, pbr = PBR.PLAIN) => [CL.TRIM, -1, S.seed, enc(pbr, MODE.PLAIN)],
   led: (seed) => [0, -1, seed, enc(PBR.PLAIN, MODE.LED)],
@@ -182,6 +186,20 @@ function frameOf(a, b) {
   const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz);
   if (L < 0.05) return null;
   return { ax: a[0], az: a[1], dx: dx / L, dz: dz / L, ox: dz / L, oz: -dx / L, L, mx: (a[0] + b[0]) / 2, mz: (a[1] + b[1]) / 2 };
+}
+
+/** The `miami` plugin's neon, quietened (see afterProps): tubes hidden, sign letters and their lights warm and dimmer. */
+function quietNeon(M) {
+  const warm = (c, k) => { const l = (c[0] + c[1] + c[2]) / 3; return [l * 1.32 * k, l * 0.98 * k, l * 0.66 * k]; };
+  for (const o of M.group.children) {
+    if (o.name === 'neon-tubes') o.visible = false;
+    if (/^neon-signs-/.test(o.name) && o.geometry && o.geometry.attributes.aSign) {
+      const a = o.geometry.attributes.aSign;
+      for (let i = 0; i < a.count; i++) { const w = warm([a.getY(i), a.getZ(i), a.getW(i)], 1.15); a.setXYZW(i, a.getX(i), Math.min(1, w[0]), Math.min(1, w[1]), Math.min(1, w[2])); }
+      a.needsUpdate = true;
+    }
+  }
+  for (const L of M.neonLights || []) { L.col = warm(L.col, 1); L.k *= 0.5; }
 }
 
 // ------------------------------------------------------------------ rings
@@ -361,6 +379,16 @@ export function miamiBuildingsPlugin(o = {}) {
       P.group.name = 'miami-buildings';
       console.info('[miami] buildings', JSON.stringify(P.stats));
       return P.group;
+    },
+    // after the `miami` plugin's afterProps (it comes first in the plugin list): take its neon down to what a quiet
+    // dusk street has. The parapet / fin tubes go (they read as pink tube lines along every cornice), the blade signs
+    // and marquees keep their letters in a warm white, and their light on the facades is warm and about half as
+    // strong (the saturated red / pink splashes read as an orange-red smear). ?neon=1 keeps the old neon.
+    afterProps(ctx) {
+      if (/[?&]neon=1/.test((globalThis.location && globalThis.location.search) || '')) return null;
+      const M = ctx.world.plugins.find((p) => p.name === 'miami');
+      if (M) quietNeon(M);
+      return null;
     },
     update(dt, cam, darkness = 0) {
       if (!cam || !P.mats) return;
@@ -542,6 +570,10 @@ function walls(S, ring, src, edgeKind, y0, ys, opts) {
   let per = 0;
   const info = opts.pbr != null ? [CL.WALL, Math.round(S.base * 20), S.seed, enc(opts.pbr, MODE.PLAIN)] : INFO.wall(S);
   const yTop = S.base + ys[ys.length - 1];
+  // the facade shader's dirt runs: the wall top (u) and the floor rhythm (v: floor height x 100 x 1000 + ground storey x 100)
+  const fhR = ys.length > 2 ? ys[2] - ys[1] : 0, gHR = ys.length > 2 ? ys[1] : 0;
+  const pv = Math.round(fhR * 100) * 1000 + Math.min(999, Math.round(gHR * 100));
+  const wuv = [yTop, pv, yTop, pv];
   for (let i = 0; i < n; i++) {
     const a = ring[i], b = ring[(i + 1) % n];
     const f = frameOf(a, b); if (!f) continue;
@@ -561,12 +593,12 @@ function walls(S, ring, src, edgeKind, y0, ys, opts) {
     const ops = (S.openings && S.openings.get(i)) || [];
     const yb0 = opts.shade ? [y0, ...ys.slice(1, -1).map((v) => S.base + v), yTop] : [y0, yTop];
     void wall;
-    for (let j = 0; j + 1 < yb0.length; j++) cutRect(L0, f, yb0[j], yb0[j + 1], ops, info, tintAt);
+    for (let j = 0; j + 1 < yb0.length; j++) cutRect(L0, f, yb0[j], yb0[j + 1], ops, info, tintAt, wuv);
   }
 }
 const mixT = (a, b, t) => [Math.round(a[0] + (b[0] - a[0]) * t), Math.round(a[1] + (b[1] - a[1]) * t), Math.round(a[2] + (b[2] - a[2]) * t)];
 /** The wall rectangle [0, L] x [ya, yb] of edge f minus the openings: horizontal bands split round the openings. */
-function cutRect(buf, f, ya, yb, ops, info, tintAt) {
+function cutRect(buf, f, ya, yb, ops, info, tintAt, uv = null) {
   const ys = [ya, yb];
   for (const o of ops) { if (o.y0 > ya && o.y0 < yb) ys.push(o.y0); if (o.y1 > ya && o.y1 < yb) ys.push(o.y1); }
   ys.sort((p, q) => p - q);
@@ -576,8 +608,8 @@ function cutRect(buf, f, ya, yb, ops, info, tintAt) {
     const cover = ops.filter((o) => o.y0 <= y0 + 1e-3 && o.y1 >= y1 - 1e-3).sort((p, q) => p.s0 - q.s0);
     let s = 0;
     const tA = tintAt(y0), tB = tintAt(y1);
-    for (const o of cover) { if (o.s0 > s + 0.005) face(buf, f, s, o.s0, y0, y1, 0, info, tA, tB); s = Math.max(s, o.s1); }
-    if (f.L > s + 0.005) face(buf, f, s, f.L, y0, y1, 0, info, tA, tB);
+    for (const o of cover) { if (o.s0 > s + 0.005) face(buf, f, s, o.s0, y0, y1, 0, info, tA, tB, uv); s = Math.max(s, o.s1); }
+    if (f.L > s + 0.005) face(buf, f, s, f.L, y0, y1, 0, info, tA, tB, uv);
   }
 }
 
@@ -697,6 +729,15 @@ function windowAt(S, f, sc, w, y0, y1, fl, opt = {}) {
   if (opt.noTrim) return;
   // sill (L1 on the street faces) and the rain streak washing down from it
   slab(L2, f, s0 - 0.08, s1 + 0.08, y0 - 0.07, y0 + 0.02, -0.02, 0.09, INFO.conc(S), S.trim, 'tf');
+  const hk = hash01(S.seed, sc * 7.1 + y0 * 3.3);
+  if (!S.P.lite && y0 - S.base > 1.4 && hk < 0.8) streakQuad(S, f, s0 - 0.05, s1 + 0.05, y0 - 0.07, Math.min(y0 - S.base - 0.3, 0.6 + 0.65 * hash01(S.seed + 1, sc + y0)));
+}
+/** Deterministic 0..1 from a seed and a number (does not advance S.r, so the layout stays as it was). */
+function hash01(seed, x) { let h = (seed ^ Math.imul(Math.round(x * 997) | 0, 2654435761)) >>> 0; h = Math.imul(h ^ (h >>> 15), 2246822519) >>> 0; h = Math.imul(h ^ (h >>> 13), 3266489917) >>> 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+/** A dirty-water run laid on the wall below yTop, len m long (the facade shader draws the runs; L2, near only). */
+function streakQuad(S, f, s0, s1, yTop, len) {
+  if (len < 0.2) return;
+  face(S.bufs[2], f, s0, s1, yTop - len, yTop, 0.006, INFO.streak(S), S.body, S.body, [0, 1, 1, 2]);
 }
 
 /** A wall-mounted air-conditioner (L1: a small box that still reads at 150 m and breaks the window grid). */
@@ -705,7 +746,7 @@ function wallAC(S, f, s, y) {
   slab(L2, f, s - 0.36, s + 0.36, y, y + 0.46, 0, 0.42, INFO.trim(S, PBR.METAL), tb([0.86, 0.86, 0.84]), 'tbfe', tb([0.5, 0.5, 0.5]));
   slab(L2, f, s - 0.3, s + 0.3, y - 0.06, y, 0.05, 0.3, INFO.plain(PBR.PLAIN, S.seed), S.dark, 'f');
   // rust / water staining run down from the bracket, the condensate pipe
-  if (y - S.base > 1.5) face(L2, f, s - 0.22, s + 0.18, Math.max(S.base + 0.3, y - 1.6 - S.r() * 1.2), y, 0.005, INFO.wall(S), mixT(S.bodyStreak, [150, 110, 80], 0.15), S.body);
+  if (y - S.base > 1.5) { const yb = Math.max(S.base + 0.3, y - 1.6 - S.r() * 1.2); S.bufs[2] && face(S.bufs[2], f, s - 0.3, s + 0.26, yb, y, 0.006, INFO.streak(S), S.body, S.body, [0, 1, 1, 2]); }
   slab(S.bufs[2], f, s + 0.3, s + 0.33, Math.max(S.base, y - 1.2), y + 0.05, 0.02, 0.05, INFO.trim(S, PBR.METAL), tb([0.9, 0.9, 0.88]), 'f');
 }
 
@@ -933,10 +974,34 @@ function table(buf, S, f, s, out, y, col) {
   S.P.helper.cylinder(buf, p[0], p[2], y, 0.04, 0.7, 5, INFO.plain(PBR.METAL, S.seed), tb([0.25, 0.25, 0.26]));
 }
 function pottedPlant(buf, S, f, s, out, y, big = false) {
-  const p = at(f, s, 0, out), k = big ? 1.6 : 1;
-  S.P.helper.cylinder(buf, p[0], p[2], y, 0.2 * k, 0.36 * k, 7, INFO.plain(PBR.CONCRETE_PANEL, S.seed), tb([0.72, 0.42, 0.3]));
-  S.P.helper.cylinder(buf, p[0], p[2], y + 0.36 * k, 0.34 * k, 0.42 * k, 7, INFO.plain(PBR.GRASS, S.seed), tb([0.55, 0.72, 0.42]));
-  S.P.helper.cylinder(buf, p[0], p[2], y + 0.78 * k, 0.24 * k, 0.22 * k, 7, INFO.plain(PBR.GRASS, S.seed), tb([0.6, 0.76, 0.46]));
+  const p = at(f, s, 0, out), k = big ? 1.6 : 1, h = hash01(S.seed, s * 3.7 + out);
+  // a weathered terracotta pot, dark soil, and a loose shrub of a few lumpy clumps (not a clipped stack)
+  S.P.helper.cylinder(buf, p[0], p[2], y, 0.2 * k, 0.34 * k, 9, INFO.plain(PBR.CONCRETE_PANEL, S.seed), tb([0.6, 0.42, 0.33]));
+  S.P.helper.cylinder(buf, p[0], p[2], y + 0.3 * k, 0.215 * k, 0.04 * k, 9, INFO.trim(S), tb([0.56, 0.4, 0.32]));
+  const leaf = [[0.5, 0.6, 0.38], [0.55, 0.63, 0.4], [0.46, 0.56, 0.38]];
+  const n = big ? 4 : 3;
+  for (let i = 0; i < n; i++) {
+    const a = h * 6.283 + i * 2.1, rr = i === 0 ? 0 : 0.11 * k, hi = hash01(S.seed + i, s + out * 1.3);
+    const cx = p[0] + Math.cos(a) * rr, cz = p[2] + Math.sin(a) * rr;
+    const R = (i === 0 ? 0.3 : 0.2 + 0.08 * hi) * k;
+    blob(buf, cx, y + 0.34 * k + R * (i === 0 ? 0.85 : 0.6) + (i === 0 ? 0.08 * k : 0.12 * k * hi), cz, R, R * (0.8 + 0.25 * hi), R, INFO.plain(PBR.GRASS, S.seed), tb(leaf[(i + Math.floor(h * 3)) % 3]), S.seed + i * 31);
+  }
+}
+/** A lumpy low-poly ellipsoid (shrub clump): 7 segments x 5 rings, radius jittered per vertex, smooth-ish normals. */
+function blob(buf, cx, cy, cz, rx, ry, rz, info, tint, seed) {
+  const SEG = 7, RING = 5, idx = [];
+  for (let j = 0; j <= RING; j++) {
+    const v = j / RING, th = v * Math.PI, sy = Math.cos(th), sr = Math.sin(th), row = [];
+    for (let i = 0; i <= SEG; i++) {
+      const ph = ((i % SEG) / SEG) * Math.PI * 2;
+      const nx = Math.cos(ph) * sr, nz = Math.sin(ph) * sr;
+      const jit = j === 0 || j === RING ? 1 : 0.84 + 0.3 * hash01(seed, (i % SEG) * 13 + j * 7);
+      const flat = sy < -0.3 ? 0.75 : 1; // flatter underneath
+      row.push(buf.v(cx + nx * rx * jit, cy + sy * ry * jit * flat, cz + nz * rz * jit, nx, sy, nz, 0, 0, info, tint));
+    }
+    idx.push(row);
+  }
+  for (let j = 0; j < RING; j++) for (let i = 0; i < SEG; i++) buf.quad(idx[j][i], idx[j][i + 1], idx[j + 1][i + 1], idx[j + 1][i]);
 }
 /**
  * A hotel entrance you could walk into: the opening (sc +- w/2, up to yTop) shows a lobby room (terrazzo floor,
@@ -1015,7 +1080,7 @@ function decoPorch(S, f, gH, pz) {
   // planters at the ends
   for (const s of [0.9, f.L - 0.9]) {
     slab(L1, f, s - 0.4, s + 0.4, base, base + 0.6, 2.4, 3.1, INFO.conc(S), S.trim, 'tfe');
-    slab(L1, f, s - 0.34, s + 0.34, base + 0.6, base + 0.72, 2.46, 3.04, INFO.plain(PBR.GRASS, S.seed), tb([0.55, 0.72, 0.45]), 't');
+    slab(L1, f, s - 0.34, s + 0.34, base + 0.6, base + 0.66, 2.46, 3.04, INFO.plain(PBR.GRASS, S.seed), tb([0.3, 0.27, 0.22]), 't');
     pottedPlant(L2, S, f, s, 2.75, base + 0.6);
   }
   void L0;
@@ -1035,7 +1100,7 @@ function serviceDoor(S, f, sc) {
 function baseDetail(S, f, gb, door) {
   const [, L1, L2] = S.bufs, base = S.base, r = S.r;
   if (r() < 0.6) {
-    const hT = tb(pick([[0.5, 0.68, 0.38], [0.56, 0.72, 0.42], [0.46, 0.64, 0.4]], r()));
+    const hT = tb(pick([[0.46, 0.58, 0.36], [0.5, 0.6, 0.38], [0.44, 0.55, 0.37]], r()));
     gb.forEach((sc, q) => { if (q === door) return; const s0 = Math.max(0.3, sc - 1.2), s1 = Math.min(f.L - 0.3, sc + 1.2); slab(L1, f, s0, s1, base, base + 0.75 + r() * 0.3, 0, 0.75, INFO.plain(PBR.GRASS, S.seed), hT, 'tfe'); });
   }
   if (r() < 0.5) { const s = f.L * (0.15 + r() * 0.7); slab(L2, f, s - 0.03, s + 0.03, base, base + 1.4, 0.02, 0.08, INFO.trim(S, PBR.METAL), tb([0.8, 0.75, 0.3]), 'fe'); slab(L2, f, s + 0.08, s + 0.38, base + 0.7, base + 1.0, 0, 0.2, INFO.trim(S, PBR.METAL), tb([0.75, 0.76, 0.74]), 'tfe'); }

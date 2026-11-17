@@ -56,7 +56,10 @@ export { NearestLights } from './NearestLights.js';
 // GPU-simulated particles (0.7.0): the CPU ParticleSystem's API over GPUComputationRenderer ping-pong textures
 export { GpuParticleSystem, GpuParticleStaging } from './GpuParticles.js';
 export { DEFAULT_RINGS, impostorViews, bakeImpostors, createImpostorMaterial, ImpostorBatch } from './Impostors.js';
-export { createTimeUniforms, updateTimeUniforms, windSway, ditherFade, applyPatches, makeDepthMaterial, GLSL_IGN, GLSL_HASH } from './MaterialPatches.js';
+export {
+  createTimeUniforms, updateTimeUniforms, windSway, ditherFade, applyPatches, makeDepthMaterial, GLSL_IGN, GLSL_HASH,
+  weathering, weatheringUniforms, weatheringAt, bakeWeathering, GLSL_WEATHERING, WEATHERING_DEFAULTS,
+} from './MaterialPatches.js';
 export { InstancedPool } from './InstancedPool.js';
 // CPU copies of GPU data (opt-in, one-way): static geometry arrays and data / compressed texture pixels after upload
 export { releaseStaticGeometry, releaseTextureData, createMemoryTrim } from './Memory.js';
