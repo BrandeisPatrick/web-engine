@@ -20,7 +20,7 @@
   `NearestLights({ spot: { near } })` (m, default 0 = off, 0.25 m steps) fade a spot in over its first `near` m along
   its axis, so a lamp's own pole and the wall at head height stay unlit; `near` is packed into the stored decay
   (decay + 8 x round(near x 4)), so a shielded spot's decay must stay below 8. nyc-night's lamps are 44 degree cones,
-  twice as bright, with a 5 m shield (1.5x in `?look=open`). `src/world/Scenery.js` (world): `countryRoad`,
+  twice as bright, with a 5 m shield (a quarter less in `?look=open`, whose exposure is higher). `src/world/Scenery.js` (world): `countryRoad`,
   `parkCorner`, `groundCover` (a grass-ground patch: broad lush / dry / bare patches and gravel paths) and
   `paintedLines`; the starters now drive a country road with a lay-by and walk a park corner (test `scenery`;
   catalogue entries `engine-country-road`, `engine-park-corner`). Thinner, wispier tyre smoke (`TyreFx`), a matte
