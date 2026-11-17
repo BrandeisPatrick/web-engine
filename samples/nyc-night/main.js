@@ -229,8 +229,11 @@ async function boot() {
   // street lamps: sodium-warm pools with real falloff (a little brighter and shorter-reaching than the engine's dusk tuning)
   // desktop (clustered): each lamp a spot aimed down, so it lays a round pool with a soft rim on the pavement and leaves
   // the wall above its head alone (a point light smeared the facade behind the pole); the spot sits in the lamp head,
-  // not 35 cm under it, so the pole's top is not lit white from a hand's breadth away
-  { const LP = world.props && world.props.lightPool; if (LP) { LP.color.setRGB(1.0, 0.62, 0.3).multiplyScalar(DESK ? 3.0 : 1.8); LP.reach = 15; LP.spot = { cosInner: 0.85, cosOuter: 0.3 }; if (DESK) LP.yOffset = 0.15; LP._fresh = true; for (const l of LP.lights || []) { l.color.copy(LP.color); l.distance = 15; } } }
+  // not 35 cm under it, so the pole's top is not lit white from a hand's breadth away. The cone is a real luminaire's
+  // (full to ~20 deg off straight down, gone by ~44 deg: a pool about 8 m across under a 9 m head, with a rim; the old
+  // 72 deg cone lit the whole street evenly, so no pool read), twice as bright inside it, and shielded over its first
+  // 5 m below the head (ClusteredLights setSpot near): the pole and the wall at head height stay out of it
+  { const LP = world.props && world.props.lightPool; if (LP) { LP.color.setRGB(1.0, 0.62, 0.3).multiplyScalar(DESK ? 6.0 : 1.8); LP.reach = 15; LP.spot = { cosInner: 0.94, cosOuter: 0.72, near: 5 }; if (DESK) LP.yOffset = 0.15; LP._fresh = true; for (const l of LP.lights || []) { l.color.copy(LP.color); l.distance = 15; } } }
   // facade light (facades.js), roof lines and wall clutter (rooftops.js), light in the air (airglow.js)
   const westAz = (NYC_SUN.azimuthStart + NYC_SUN.azimuthSpan * Math.min(1.15, (DUSK_HOURS - NYC_SUN.rise) / (NYC_SUN.set - NYC_SUN.rise))) * DEG;
   const facadeGrade = gradeFacades({ world, west: { x: Math.sin(westAz), z: -Math.cos(westAz) }, lamps: 4, skyGain: NIGHT ? 0.3 : 1, canyon: LOOK === 'open' ? (DESK ? [0.62, 1.25] : [0.72, 1.25]) : (DESK ? [0.45, 1.25] : [0.58, 1.25]) }); // the canyon floor dark, never black

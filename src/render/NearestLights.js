@@ -42,10 +42,12 @@ export class NearestLights {
    * @param {object} [o.clustered]  render/ClusteredLights.js instance (setLight / count) for mode 'clustered'
    * @param {number} [o.clusteredRange=220]  m from the camera: candidates within it are cluster lights (Infinity = all)
    * @param {number} [o.clusteredFade=30]  m at the end of that range over which they fade out (0 = hard edge)
-   * @param {{ cosInner: number, cosOuter: number }|null} [o.spot=null]  mode 'clustered' only: each lamp is a spot
+   * @param {{ cosInner: number, cosOuter: number, near?: number }|null} [o.spot=null]  mode 'clustered' only: each lamp is a spot
    *        aimed straight down (ClusteredLights.setSpot) instead of a point, so it lays a round, soft-edged pool on
    *        the ground and does not light the wall above its head; cosInner / cosOuter are the cosines of the angles
-   *        from straight down where the cone starts to fade and where it ends (e.g. 0.82 / 0.12). null: points
+   *        from straight down where the cone starts to fade and where it ends (e.g. 0.82 / 0.12); optional `near`
+   *        (m, default 0): the light fades in over its first `near` m below the head (ClusteredLights.setSpot near),
+   *        so the lamp's own pole and the wall at head height are not lit by it. null: points
    *        (today's light). Read on every push, so `pool.spot = ...; pool._fresh = true` switches it at runtime.
    */
   constructor(o = {}) {
@@ -198,7 +200,7 @@ export class NearestLights {
       if (d2 > r2) continue;
       if (m >= max) { if (!this._warned) { this._warned = true; console.warn(`[NearestLights] more than ${max} lights within ${R} m: the rest are skipped`); } break; }
       const k = F > 0 ? Math.min(1, (R - Math.sqrt(d2)) / F) : 1;
-      if (sp) C.setSpot(m++, x, y, z, reach, cr * k, cg * k, cb * k, decay, 0, -1, 0, sp.cosInner, sp.cosOuter);
+      if (sp) C.setSpot(m++, x, y, z, reach, cr * k, cg * k, cb * k, decay, 0, -1, 0, sp.cosInner, sp.cosOuter, sp.near || 0);
       else C.setLight(m++, x, y, z, reach, cr * k, cg * k, cb * k, decay);
     }
     C.count = m; this.pushed = m;
