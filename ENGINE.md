@@ -630,8 +630,9 @@ cost are in [the design notes](docs/DESIGN-NOTES.md#textures-pbr-sets-ktx2).
   `env(safe-area-inset-*)`), per-entry `portrait` overrides re-applied on rotation, `floating` sticks (the base follows
   the thumb inside a zone), `TouchControls.setProgress(id, p)` cooldown rings, button `hitSlop` (an invisible hit
   ring around a button), touchpad `slop` (a drag counts from that many px), `touchReveal` (controls on the first
-  touch, hidden on a key press) and `isTouchDevice({ multiTouch: true })` (iPads with a keyboard). No current page uses
-  them all (the retired Halloween game did; it is on the branch `archive/halloween`).
+  touch, hidden on a key press) and `isTouchDevice({ multiTouch: true })` (iPads with a keyboard). `samples/nyc-night/` uses
+  the floating stick, `portrait`, `hitSlop`, `slop` and `touchReveal`; the cooldown rings and `multiTouch` were used
+  only by the retired Halloween game (branch `archive/halloween`).
 - `anim` layer: `AnimationController` (states, 1D blend trees, transition table, markers, root motion with the
   hips' horizontal track neutralised) and `TwoBoneIK` / CCD helpers.
 - `AnimationController(model, clips, { states, trees })`: a state's `clip` is the clip's exact name (or an
