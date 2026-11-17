@@ -18,6 +18,11 @@ const LOBES = 8, DEPTH = 0.11; // ribs and crease depth of the lantern body
 const REGROW = 26;       // s until a smashed lantern is back
 const SHARD_LIFE = 2.8;  // s before the shards sink away
 const SLOTS = 4;         // smashes whose shards can be alive at once
+// the halo's least pull toward the eye (m): past the rind's near side from any view (radius 0.46 x the widest build
+// 1.08, the shoulders and the stem above the halo's centre). (fix pass 2) The fix pass's smaller halo (1.5 m x the
+// look's 0.6) pulled its quad only 0.4 m, inside the rind: the rind's nearest vertex fan poked through and hid the
+// halo there, a dark hexagon on every lantern seen close
+const GLOW_PULL = 0.7;
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _e = new THREE.Euler();
 const _qa = [0, 0, 0, 1];
 
@@ -450,7 +455,7 @@ export class Lanterns {
     for (let i = 0; i < this.n; i++) {
       if (!this.alive[i]) continue;
       const g = this.grow[i], f = this.flick[i] + time, k = (0.85 + 0.15 * Math.sin(f * 7.3)) * g;
-      glows.set(base + n++, this.x[i], this.y[i] + 0.42, this.z[i], this.remaster ? 1.5 : 2.6, (this.remaster ? 0.36 : 0.5) * k, (this.remaster ? 0.14 : 0.2) * k, (this.remaster ? 0.028 : 0.04) * k); // (fix pass: a glow round the carving, not a 2.6 m orange blob)
+      glows.set(base + n++, this.x[i], this.y[i] + 0.42, this.z[i], this.remaster ? 1.5 : 2.6, (this.remaster ? 0.36 : 0.5) * k, (this.remaster ? 0.14 : 0.2) * k, (this.remaster ? 0.028 : 0.04) * k, GLOW_PULL); // (fix pass: a glow round the carving, not a 2.6 m orange blob)
     }
     return n;
   }
