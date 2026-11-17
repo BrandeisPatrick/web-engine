@@ -13,7 +13,7 @@ The fastest start is to copy a starter folder (see [AGENTS.md](../AGENTS.md)); t
 a time. Names such as `engine`, `scene`, `camera`, `renderer`, `physics` and `postfx` are the objects the starters
 create first. [ENGINE.md](../ENGINE.md) has the full API.
 
-Contents: [Engine and quality tiers](#engine-and-quality-tiers) ·
+Contents: [Engine and quality tiers](#engine-and-quality-tiers) · [Start without a stall](#start-without-a-stall) ·
 [Character with camera, input and animation](#character-with-camera-input-and-animation) ·
 [Load a GLB and play its clips](#load-a-glb-and-play-its-clips) · [Drive a car](#drive-a-car) ·
 [Get in and out of a vehicle](#get-in-and-out-of-a-vehicle) ·
@@ -66,6 +66,32 @@ engine.onResize = (w, h, pr) => postfx.setSize(w, h, pr);
 
 The tier gear button is `new QualityMenu({ quality: Q, corner: 'tr' })` (ui); a change stores the tier and reloads the
 page. `S.lights`, `S.world`, `S.textures` and `S.effects` are for the game to read.
+
+## Start without a stall
+
+The first frame compiles every shader and uploads every texture; on a phone that takes seconds. Draw it while a
+loading screen still covers the page: `engine.warmUp()` runs the systems' per-frame phases and `renderFn` at dt 0 for
+a few frames (nothing moves), then waits for the GPU without blocking the page. Create the loading screen (ui) at the
+top of the module:
+
+<!-- from: samples/starter-walk/main.js#loading -->
+```js
+const loading = new LoadingScreen({ title: 'STARTER · WALK', label: 'Loading…' });
+```
+
+and end `boot()` with:
+
+<!-- from: samples/starter-walk/main.js#start -->
+```js
+loading.setLabel('Compiling shaders…');
+await engine.warmUp(); // the systems and renderFn at dt 0 (nothing moves), finished on the GPU: no first-frame stall
+engine.start();
+loading.hide();
+```
+
+If the device drops the WebGL context later (phones do when GPU memory runs short), the engine stops the loop, shows
+a message with a Reload button (`engine.onContextLost` replaces it) and the next `resolveQuality()` in that tab comes up
+lighter. An error thrown in a frame is logged and shown once as a line at the bottom of the page (`engine.onFrameError`).
 
 ## Character with camera, input and animation
 
@@ -625,9 +651,10 @@ browser tests can tell when it is ready:
 
 <!-- from: samples/starter-walk/main.js#page-contract -->
 ```js
-window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-walk' }), { cc, anim }).setReady();
+window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-walk', quality: Q }), { cc, anim }).setReady();
 ```
 
+`quality: Q` (optional) puts the resolved tier on the harness (`window.__sample.quality`) for the tests.
 `Object.assign` copies the extra fields once, by value: a getter or a number in the source object is frozen at that
 moment. Expose state that changes as a function (`{ game: () => ({ mode, score }) }`) and call it from the test.
 

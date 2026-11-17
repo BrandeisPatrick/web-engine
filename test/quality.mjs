@@ -1,10 +1,13 @@
 // Headless checks for the quality tiers (src/core/Quality.js): the device recommendation (phone, iPad reporting a Mac,
 // desktop, software renderer, low memory), resolveQuality's precedence (?quality= > stored choice > recommendation;
-// legacy high / low), tierSettings' deep merge (never mutating QUALITY_TIERS), defineTier, and that the module stays
-// Node-safe (no window: desktop, no storage, no ExperimentalWarning from Node's own localStorage getter).
+// legacy high / low), the step down after lost WebGL contexts (sessionStorage count: desktop -> mobile -> pixel ratio
+// capped; never over ?quality= or a stored choice), tierSettings' deep merge (never mutating QUALITY_TIERS), defineTier,
+// and that the module stays Node-safe (no window: desktop, no storage, no ExperimentalWarning from Node's own
+// localStorage / sessionStorage getters).
 // Run: node test/quality.mjs
 import {
   QUALITY_TIERS, TIER_IDS, QUALITY_STORAGE_KEY, tierSettings, defineTier, recommendTier, storedTier, storeTier, resolveQuality,
+  CONTEXT_LOSS_KEY, LOST_MAX_PIXEL_RATIO, contextLosses, recordContextLoss, clearContextLosses,
 } from '../src/core/Quality.js';
 import * as core from '@vibe/engine/core';
 
@@ -37,6 +40,9 @@ const env = (o) => ({ ...DESK, ...o });
   const q = resolveQuality({ search: '' });
   check('node: resolveQuality() -> desktop, recommended', q.tier === 'desktop' && q.source === 'recommended' && q.storageKey === QUALITY_STORAGE_KEY, `${q.tier} / ${q.source}`);
   check('core index re-exports the tier API', core.resolveQuality === resolveQuality && core.QUALITY_TIERS === QUALITY_TIERS && core.TIER_IDS === TIER_IDS);
+  check('core index re-exports the lost-context API', core.recordContextLoss === recordContextLoss && core.contextLosses === contextLosses && core.clearContextLosses === clearContextLosses && core.CONTEXT_LOSS_KEY === CONTEXT_LOSS_KEY);
+  check('node: no window -> 0 losses, recording is a no-op', contextLosses() === 0 && !throws(() => recordContextLoss()) && contextLosses() === 0 && !throws(() => clearContextLosses()));
+  check('node: resolveQuality() not lighter', q.lighter === false && q.contextLosses === 0);
   check('tier ids: desktop, mobile (best first)', TIER_IDS.join() === 'desktop,mobile');
 }
 
@@ -119,6 +125,57 @@ const env = (o) => ({ ...DESK, ...o });
   Object.defineProperty(globalThis, 'localStorage', { get() { throw new Error('SecurityError'); }, configurable: true });
   check('blocked storage: storedTier null, storeTier no-op', storedTier() === null && !throws(() => storeTier('mobile')) && res('').source === 'recommended');
   delete globalThis.localStorage; delete globalThis.window;
+}
+
+// ================================================================================================= lighter after lost contexts
+{
+  const local = new Map(), sess = new Map();
+  const mock = (m) => ({ getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) });
+  globalThis.window = globalThis;
+  Object.defineProperty(globalThis, 'localStorage', { value: mock(local), configurable: true, writable: true });
+  Object.defineProperty(globalThis, 'sessionStorage', { value: mock(sess), configurable: true, writable: true });
+  const PHONE = env({ userAgent: UA.iphone, maxTouchPoints: 5, coarse: true });
+  const res = (search, o = {}) => resolveQuality({ search, env: DESK, ...o });
+
+  let q = res('');
+  check('lost: none recorded -> not lighter', contextLosses() === 0 && q.lighter === false && q.contextLosses === 0 && q.tier === 'desktop' && q.reason === 'desktop GPU');
+  check('lost: recordContextLoss counts in sessionStorage', recordContextLoss() === 1 && sess.get(CONTEXT_LOSS_KEY) === '1' && contextLosses() === 1);
+  q = res('');
+  check('lost x1, desktop device -> mobile tier', q.tier === 'mobile' && q.source === 'recommended' && q.recommended === 'desktop' && q.lighter === true && q.contextLosses === 1,
+    `${q.tier} / ${q.source} / ${q.recommended}`);
+  check('lost x1, desktop device: the mobile preset as is (pixel ratio 1.5)', q.settings.engine.maxPixelRatio === 1.5 && q.settings.postfx.gbuffer === false);
+  check('lost: reason says why', q.reason === 'desktop GPU; lighter after a graphics reset', q.reason);
+  recordContextLoss();
+  q = res('');
+  check('lost x2, desktop device -> mobile, pixel ratio capped', q.tier === 'mobile' && q.settings.engine.maxPixelRatio === LOST_MAX_PIXEL_RATIO && LOST_MAX_PIXEL_RATIO === 1);
+  clearContextLosses();
+  check('clearContextLosses forgets them', contextLosses() === 0 && !sess.has(CONTEXT_LOSS_KEY) && res('').lighter === false);
+
+  recordContextLoss();
+  q = resolveQuality({ search: '', env: PHONE });
+  check('lost x1, phone -> mobile, pixel ratio capped at 1', q.tier === 'mobile' && q.lighter && q.settings.engine.maxPixelRatio === 1 && q.reason === 'phone; lighter after a graphics reset');
+  q = resolveQuality({ search: '', env: PHONE, overrides: { mobile: { engine: { maxPixelRatio: 1.25 } } } });
+  check('lost: the cap applies after a game\'s override (1.25 -> 1)', q.settings.engine.maxPixelRatio === 1);
+  q = resolveQuality({ search: '', env: PHONE, overrides: { mobile: { engine: { maxPixelRatio: 0.75 } } } });
+  check('lost: a lower override stays lower', q.settings.engine.maxPixelRatio === 0.75);
+  check('lost: QUALITY_TIERS not mutated by the cap', QUALITY_TIERS.mobile.engine.maxPixelRatio === 1.5);
+
+  q = res('?quality=desktop');
+  check('lost: ?quality= is never overridden', q.tier === 'desktop' && q.source === 'query' && q.lighter === false && q.contextLosses === 1 && q.settings.engine.maxPixelRatio === 2);
+  q = resolveQuality({ search: '?quality=mobile', env: PHONE });
+  check('lost: ?quality=mobile keeps its pixel ratio', q.tier === 'mobile' && !q.lighter && q.settings.engine.maxPixelRatio === 1.5);
+  storeTier('desktop');
+  q = res('');
+  check('lost: a stored choice is never overridden', q.tier === 'desktop' && q.source === 'stored' && q.lighter === false && q.reason === 'desktop GPU');
+  q = resolveQuality({ search: '', env: PHONE });
+  check('lost: a stored desktop choice on a phone stays desktop', q.tier === 'desktop' && q.source === 'stored' && !q.lighter);
+  storeTier(null);
+  q = res('', { contextLosses: 0 });
+  check('lost: opts.contextLosses replaces the session count', q.lighter === false && q.tier === 'desktop' && res('', { contextLosses: 2 }).settings.engine.maxPixelRatio === 1);
+
+  Object.defineProperty(globalThis, 'sessionStorage', { get() { throw new Error('SecurityError'); }, configurable: true });
+  check('lost: blocked sessionStorage -> 0, recording does not throw', contextLosses() === 0 && !throws(() => recordContextLoss()) && res('').lighter === false);
+  delete globalThis.sessionStorage; delete globalThis.localStorage; delete globalThis.window;
 }
 
 // ================================================================================================= tierSettings / defineTier

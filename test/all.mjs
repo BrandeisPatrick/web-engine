@@ -12,6 +12,8 @@ const SUITES = [
   { file: 'world-build.mjs', shim: true },
   { file: 'world-lights.mjs', shim: true },
   { file: 'core.mjs' },
+  // the Engine's start-up and failure paths: warmUp (dt 0, no fixed step, GPU fence polled), lost context, frame errors
+  { file: 'engine-start.mjs' },
   { file: 'look-stats.mjs' },
   { file: 'memory.mjs' },
   { file: 'texture-manifest.mjs' },

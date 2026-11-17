@@ -441,7 +441,6 @@ async function boot() {
   }
 
   // ---------------------------------------------------------------- harness
-  renderer.compile(scene, camera);
   const loadMs = Math.round(performance.now() - t0);
   memTrim.sweep();
   // the harness's live frames start renderFn's frame counters at a fixed phase and put them back afterwards
@@ -450,8 +449,14 @@ async function boot() {
   // a resumed loop after bench poses: TAA / volumetric jitter back on
   engine.addSystem({ lateUpdate() { if (hold.still && !harness.frozen) { hold.still = false; if (postfx && postfx.history) postfx.set('jitter', true); if (postfx && postfx.volumetric) { postfx.set('volumetric.jitter', true); postfx.set('volumetric.temporal', true); } } } }, 'unhold');
   window.__miami = { THREE, engine, world, atmo, postfx, car, props, rig, input, audio, hud, plugin, quality: Q, loadMs, physics, ramps, extra, resetToRoad, placeCar, streets };
-  console.info(`[miami] ready in ${loadMs} ms · tier ${Q.tier} (${Q.source}, recommended ${Q.recommended}: ${Q.reason}) · car ${W.model.stats.triangles} tris · props ${props.bodies.length} · neon ${plugin.stats.signs} signs`);
   const bp = readBenchParams(location.search); if (bp.size) harness.resize(bp.size.w, bp.size.h);
+  // the programs, pipelines and uploads of the first frames, drawn under the loading screen at the final size (Engine
+  // warmUp: dt 0, nothing moves) and finished on the GPU, so the first live frame does not stall
+  loading.setProgress(1, 'Compiling shaders…');
+  // bench: renderFn only (the poses' state stays as loaded), 12 frames (renderFn's every-2nd / 3rd / 4th-frame counters
+  // end in the phase they started in, so the poses draw the same passes as without the warm-up)
+  const warm = await engine.warmUp(bp.enabled ? { systems: false, frames: 12 } : {});
+  console.info(`[miami] ready in ${loadMs} ms (warm-up ${warm.ms} ms: compile ${warm.compileMs}, fence ${warm.fence}) · tier ${Q.tier} (${Q.source}, recommended ${Q.recommended}: ${Q.reason}) · car ${W.model.stats.triangles} tris · props ${props.bodies.length} · neon ${plugin.stats.signs} signs`);
   harness.setReady();
   engine.start();
   if (bp.enabled) harness.freeze();
@@ -594,7 +599,7 @@ function makeHarness({ engine, world, atmo, postfx, car, props, rig, placeCar, p
     },
   };
   return createBenchHarness(engine, {
-    name: 'miami-drive',
+    name: 'miami-drive', quality: Q,
     poses,
     after: (cam) => {
       // world past its throttles with the traffic held (its worker answers asynchronously: an answer landing between

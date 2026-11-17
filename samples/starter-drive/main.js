@@ -10,13 +10,15 @@ import { PhysicsWorld, VehicleController, ROAD_CAR_SPEC } from '@vibe/engine/phy
 import { Atmosphere, PostFX, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
 import { VehicleInput } from '@vibe/engine/input';
 import { ChaseRig } from '@vibe/engine/camera';
-import { UILayer, Panel, Readout, QualityMenu } from '@vibe/engine/ui';
+import { UILayer, Panel, Readout, QualityMenu, LoadingScreen } from '@vibe/engine/ui';
 
 const BASE = import.meta.env.BASE_URL; // asset URLs go through it, so the page also works under a sub-path
 
 // ---- quality tier: 'desktop' or 'mobile' (?quality=mobile forces one; the gear button stores a choice)
 const Q = resolveQuality();
 const S = Q.settings;
+// ---- a loading screen until the first frames are drawn (it shows a boot error too)
+const loading = new LoadingScreen({ title: 'STARTER · DRIVE', label: 'Loading…' });
 
 // #region howto:road-car-spec
 // ---- the car's physics: an ordinary road car. Spread it to tune: { ...ROAD_CAR_SPEC, motorPower: 200e3, vMax: 70 }.
@@ -136,10 +138,17 @@ async function boot() {
       speed.set(Math.round(Math.abs(car.forwardSpeed) * 3.6));
     },
   }, 'game');
+
+  // ---- start: draw the first frames under the loading screen (shaders compile, textures upload), then show them
+  // #region howto:start
+  loading.setLabel('Compiling shaders…');
+  await engine.warmUp(); // the systems and renderFn at dt 0 (nothing moves), finished on the GPU: no first-frame stall
   engine.start();
+  loading.hide();
+  // #endregion howto:start
 
   // ---- page contract for the browser tests (npm run smoke): window.__sample with `ready`
-  window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-drive' }), { car, body }).setReady();
+  window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-drive', quality: Q }), { car, body }).setReady();
 }
 
-boot().catch((e) => console.error('[starter-drive] boot failed', e));
+boot().catch((e) => { console.error('[starter-drive] boot failed', e); loading.error(`Failed to start: ${e.message}`); });

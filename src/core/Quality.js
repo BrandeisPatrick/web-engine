@@ -11,10 +11,22 @@
 //
 // Order of precedence: `?quality=desktop|mobile` (not stored; legacy `high` / `low` map to desktop / mobile), then the
 // stored choice (localStorage `vibe.quality`), then `recommendTier()`. Node-safe: without `window` the tier is 'desktop'.
+//
+// Lighter after a lost WebGL context. The Engine records every `webglcontextlost` of its canvas for the browser session
+// (`recordContextLoss()`: sessionStorage `vibe.contextLost`, a count; phones drop the context when GPU memory runs
+// short). While the tier comes from the recommendation, each recorded loss steps the load down one rung:
+// desktop -> mobile -> mobile with `engine.maxPixelRatio` capped at LOST_MAX_PIXEL_RATIO (1). A phone (recommended
+// mobile) goes straight to the cap. `?quality=` and a stored choice are never changed. The result says so:
+// `lighter: true`, `contextLosses` (the count) and a `reason` that ends in '; lighter after a graphics reset'
+// (`recommended` stays what the device would get). The count lives until the tab closes; `clearContextLosses()` forgets it.
 
 /** Tier ids, best first. */
 export const TIER_IDS = ['desktop', 'mobile'];
 export const QUALITY_STORAGE_KEY = 'vibe.quality';
+/** sessionStorage key of the lost-context count (see header). */
+export const CONTEXT_LOSS_KEY = 'vibe.contextLost';
+/** The pixel-ratio cap of the lightest rung after lost contexts (see header). */
+export const LOST_MAX_PIXEL_RATIO = 1;
 
 /**
  * The presets. Groups: `engine` (Engine options), `shadows` (Atmosphere `shadows`), `postfx` (PostFX options),
@@ -107,6 +119,22 @@ export function storeTier(tier, key = QUALITY_STORAGE_KEY) {
   try { if (tier == null) s.removeItem(key); else if (normalise(tier)) s.setItem(key, normalise(tier)); } catch { /* private mode */ }
 }
 
+// as storage(): window first
+function session() { try { return typeof window !== 'undefined' && typeof sessionStorage !== 'undefined' ? sessionStorage : null; } catch { return null; } }
+/** WebGL context losses recorded in this browser session (see header); 0 without storage. */
+export function contextLosses(key = CONTEXT_LOSS_KEY) {
+  const s = session();
+  try { const n = s ? parseInt(s.getItem(key) || '0', 10) : 0; return n > 0 ? n : 0; } catch { return 0; }
+}
+/** Count one more lost context for this session (the Engine calls it on `webglcontextlost`). Returns the new count. */
+export function recordContextLoss(key = CONTEXT_LOSS_KEY) {
+  const s = session(), n = contextLosses(key) + 1;
+  try { if (s) s.setItem(key, String(n)); } catch { /* private mode, blocked site data */ }
+  return n;
+}
+/** Forget this session's lost contexts: the next resolveQuality() is not lightened. */
+export function clearContextLosses(key = CONTEXT_LOSS_KEY) { const s = session(); try { if (s) s.removeItem(key); } catch { /* blocked */ } }
+
 /**
  * @typedef {{
  *   label: string, blurb: string,
@@ -134,11 +162,14 @@ export function storeTier(tier, key = QUALITY_STORAGE_KEY) {
  * @property {'query'|'stored'|'recommended'} source  where `tier` came from (?quality=, the stored choice, the device)
  * @property {TierSettings} settings  the tier's groups, overrides merged
  * @property {string} storageKey
+ * @property {number} contextLosses  WebGL context losses recorded this session (see header)
+ * @property {boolean} lighter  this load was stepped down because of them (only when source is 'recommended')
  */
 /**
  * Pick the tier for this page load.
- * @param {{ search?: string, overrides?: { desktop?: object, mobile?: object, [tier: string]: object | undefined }, env?: object, storageKey?: string }} [opts]
- *   overrides: per tier, groups merged over the preset (a game's own groups too)
+ * @param {{ search?: string, overrides?: { desktop?: object, mobile?: object, [tier: string]: object | undefined }, env?: object, storageKey?: string, contextLosses?: number }} [opts]
+ *   overrides: per tier, groups merged over the preset (a game's own groups too); contextLosses: instead of the
+ *   session's count (tests)
  * @returns {QualityChoice}
  */
 export function resolveQuality(opts = {}) {
@@ -147,10 +178,16 @@ export function resolveQuality(opts = {}) {
   const rec = recommendTier(opts.env);
   const fromQuery = normalise(new URLSearchParams(search).get('quality'));
   const fromStore = storedTier(storageKey);
-  const tier = fromQuery || fromStore || rec.tier;
+  const losses = Number.isFinite(opts.contextLosses) ? Math.max(0, opts.contextLosses) : contextLosses();
+  // lighter after lost contexts (header): one rung per loss, recommended tiers only
+  const lighter = !fromQuery && !fromStore && losses > 0;
+  let tier = fromQuery || fromStore || rec.tier, rungs = lighter ? losses : 0;
+  if (rungs > 0 && tier === 'desktop') { tier = 'mobile'; rungs--; }
+  const settings = tierSettings(tier, opts.overrides && opts.overrides[tier]);
+  if (rungs > 0) settings.engine.maxPixelRatio = Math.min(settings.engine.maxPixelRatio ?? 2, LOST_MAX_PIXEL_RATIO);
   return {
-    tier, recommended: rec.tier, reason: rec.reason, storageKey,
+    tier, recommended: rec.tier, reason: lighter ? `${rec.reason}; lighter after a graphics reset` : rec.reason, storageKey,
     source: fromQuery ? 'query' : fromStore ? 'stored' : 'recommended',
-    settings: tierSettings(tier, opts.overrides && opts.overrides[tier]),
+    settings, contextLosses: losses, lighter,
   };
 }
