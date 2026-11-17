@@ -72,6 +72,10 @@ export class LoadingScreen {
 
   static adopt(element) { return new LoadingScreen({ adopt: element }); }
 
+  /**
+   * @param {number} p  0..1
+   * @param {string} [label]
+   */
   setProgress(p, label) {
     this.progress = Math.min(1, Math.max(0, p || 0));
     if (this.barEl) {
@@ -80,6 +84,7 @@ export class LoadingScreen {
     }
     if (label && this.labelEl) this.labelEl.textContent = label;
   }
+  /** @param {string} text */
   setLabel(text) { if (this.labelEl) this.labelEl.textContent = text; }
   /** Show an error in the label (bar stops). */
   error(msg) { this.setLabel(msg); if (this.barEl) this.barEl.style.background = '#a33'; this._stopSweep(); }
