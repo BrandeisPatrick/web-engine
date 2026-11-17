@@ -1,6 +1,6 @@
 # Before and after
 
-What changed on screen in 1.1.0-beta.1. Every image is a capture of the samples in this repository, taken in Chrome on
+What changed on screen in 1.1.0-beta.1, and (first section) in the unreleased round after it. Every image is a capture of the samples in this repository, taken in Chrome on
 an Apple M4 (the desktop quality tier unless noted). "Before" is the first working pass of each demo or the engine's
 earlier output; "after" is this release. The city demos' camera poses moved between the two, so the pairs show the
 same place and subject rather than the same pixel.
@@ -8,6 +8,73 @@ same place and subject rather than the same pixel.
 The work was held to a reference standard for tone (a low-key dusk frame: dark, nothing clipped, one warm hue family),
 which is now a gate in `npm run smoke`, and then to asset detail: materials, construction and objects that hold up
 close. `CHANGELOG.md` has the full list.
+
+## Unreleased: the look pass and the fix pass
+
+The round after 1.1.0-beta.1 (see `CHANGELOG.md`, Unreleased). "Before" is `main` before the round, "this round" is
+the default look, each captured in the same bench pose at 1280 x 720 on the desktop tier. Each demo's default look
+stays inside the smoke test's look gate (low key: a dark mean, nothing clipped, one warm hue family). Each also has
+`?look=open`, a brighter two-temperature grade of the same scene (more exposure, cool shade against warm lamps, a
+small lifted black) that the gate does not check: one example per demo below.
+
+### Night NYC walk
+
+Lamps as shielded downward spots (round pools, the pole left dark), glass that reflects the street, lit and dim
+rooms, lit street trees, weathered street kit, shop interiors with a counter and pendant lamps.
+
+<table><tr><th>Before (main)</th><th>This round</th></tr><tr><td><img src="before-after/nyc-avenue-look-before.jpg" alt="Before (main)"></td><td><img src="before-after/nyc-avenue-look-after.jpg" alt="This round"></td></tr></table>
+
+<table><tr><th>Before (main)</th><th>This round</th></tr><tr><td><img src="before-after/nyc-kerb-look-before.jpg" alt="Before (main)"></td><td><img src="before-after/nyc-kerb-look-after.jpg" alt="This round"></td></tr></table>
+
+<table><tr><th>Before (main)</th><th>This round</th></tr><tr><td><img src="before-after/nyc-shop-look-before.jpg" alt="Before (main)"></td><td><img src="before-after/nyc-shop-look-after.jpg" alt="This round"></td></tr></table>
+
+`?look=open`:
+
+<img src="before-after/nyc-avenue-look-open.jpg" alt="Night NYC walk, the avenue in the open look" width="720">
+
+### Miami drive
+
+A soft lit cloud deck, the afterglow as the key light, lit foliage, aged stucco with dirt runs, lifeguard huts with
+form and aged paint, the neon tubes off by default (`?neon=1`).
+
+<table><tr><th>Before (main)</th><th>This round</th></tr><tr><td><img src="before-after/miami-chase-look-before.jpg" alt="Before (main)"></td><td><img src="before-after/miami-chase-look-after.jpg" alt="This round"></td></tr></table>
+
+<table><tr><th>Before (main)</th><th>This round</th></tr><tr><td><img src="before-after/miami-strip-look-before.jpg" alt="Before (main)"></td><td><img src="before-after/miami-strip-look-after.jpg" alt="This round"></td></tr></table>
+
+<table><tr><th>Before (main)</th><th>This round</th></tr><tr><td><img src="before-after/miami-beach-look-before.jpg" alt="Before (main)"></td><td><img src="before-after/miami-beach-look-after.jpg" alt="This round"></td></tr></table>
+
+`?look=open`:
+
+<img src="before-after/miami-chase-look-open.jpg" alt="Miami drive, the chase view in the open look" width="720">
+
+### Midnight Candy Run
+
+Regraded inside the gate: the candy's coloured halos cut to small warm glints, night jack-o'-lanterns with breathing
+candle light, a readable moonlit ground, real lane stones, inscriptions, shaped capstones and clapboard (desktop).
+
+<table><tr><th>Before (main)</th><th>This round</th></tr><tr><td><img src="before-after/halloween-gate-look-before.jpg" alt="Before (main)"></td><td><img src="before-after/halloween-gate-look-after.jpg" alt="This round"></td></tr></table>
+
+<table><tr><th>Before (main)</th><th>This round</th></tr><tr><td><img src="before-after/halloween-house-look-before.jpg" alt="Before (main)"></td><td><img src="before-after/halloween-house-look-after.jpg" alt="This round"></td></tr></table>
+
+<table><tr><th>Before (main)</th><th>This round</th></tr><tr><td><img src="before-after/halloween-grave-closeup-look-before.jpg" alt="Before (main)"></td><td><img src="before-after/halloween-grave-closeup-look-after.jpg" alt="This round"></td></tr></table>
+
+`?look=open`:
+
+<img src="before-after/halloween-gate-look-open.jpg" alt="Midnight Candy Run, the gate view in the open look" width="720">
+
+### Starters
+
+`starter-walk` is set in a park corner (`parkCorner`, `groundCover`) and `starter-drive` on a country road
+(`countryRoad`) with the HD hatchback (`createCarVisual`). Each pair: the start frame, and four seconds of W held.
+
+<table><tr><th>Before (main)</th><th>This round</th></tr><tr><td><img src="before-after/starter-walk-start-before.jpg" alt="Before (main)"></td><td><img src="before-after/starter-walk-start-after.jpg" alt="This round"></td></tr></table>
+
+<table><tr><th>Before (main)</th><th>This round</th></tr><tr><td><img src="before-after/starter-walk-run-before.jpg" alt="Before (main)"></td><td><img src="before-after/starter-walk-run-after.jpg" alt="This round"></td></tr></table>
+
+<table><tr><th>Before (main)</th><th>This round</th></tr><tr><td><img src="before-after/starter-drive-start-before.jpg" alt="Before (main)"></td><td><img src="before-after/starter-drive-start-after.jpg" alt="This round"></td></tr></table>
+
+<table><tr><th>Before (main)</th><th>This round</th></tr><tr><td><img src="before-after/starter-drive-run-before.jpg" alt="Before (main)"></td><td><img src="before-after/starter-drive-run-after.jpg" alt="This round"></td></tr></table>
+
 
 ## Night NYC walk (`samples/nyc-night`)
 
