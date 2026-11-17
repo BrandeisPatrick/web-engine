@@ -1,6 +1,6 @@
 # Before and after
 
-What changed on screen in 1.1.0-beta.1, and (first two sections) in the unreleased round after it. Every image is a capture of the samples in this repository, taken in Chrome on
+What changed on screen in 1.1.0-beta.1, and (first two sections) in 1.1.0. Every image is a capture of the samples in this repository, taken in Chrome on
 an Apple M4 (the desktop quality tier unless noted). "Before" is the first working pass of each demo or the engine's
 earlier output; "after" is this release. The city demos' camera poses moved between the two, so the pairs show the
 same place and subject rather than the same pixel.
@@ -10,7 +10,7 @@ which became a gate in `npm run smoke`, and then to asset detail: materials, con
 close. On 2026-11-17 the brighter open look became the demos' default (next section) and the gate now holds that
 look. `CHANGELOG.md` has the full list.
 
-## Unreleased: the open look is the default
+## 1.1.0: the open look is the default
 
 On 2026-11-17 the owner compared the two looks side by side and made the brighter, two-temperature open look the
 default in nyc-night and miami-drive. The low-key look is still there with `?look=low`. Each sheet shows every bench
@@ -21,9 +21,9 @@ ones from the comparison, made before the switch.
 
 <img src="before-after/miami-drive-looks.jpg" alt="Miami drive, every bench pose: the low-key look on the left, the open look on the right" width="960">
 
-## Unreleased: the look pass and the fix pass
+## 1.1.0: the look pass and the fix pass
 
-The round after 1.1.0-beta.1 (see `CHANGELOG.md`, Unreleased). "Before" is `main` before the round, "this round" is
+The round after 1.1.0-beta.1 (see `CHANGELOG.md`, 1.1.0). "Before" is `main` before the round, "this round" is
 the low-key look that was the default then (now `?look=low`), each captured in the same bench pose at 1280 x 720 on
 the desktop tier. It stayed inside the smoke test's look gate of the time (low key: a dark mean, nothing clipped, one
 warm hue family). The round also added the open look, a brighter two-temperature grade of the same scene (more
