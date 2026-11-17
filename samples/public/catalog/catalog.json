@@ -5151,7 +5151,7 @@
    "credit": null,
    "bytes": null,
    "facts": {
-    "triangles": 8704
+    "triangles": 13504
    },
    "tags": [
     "road",
@@ -8481,7 +8481,7 @@
    "credit": null,
    "bytes": null,
    "facts": {
-    "triangles": 5170
+    "triangles": 11890
    },
    "tags": [
     "park",
