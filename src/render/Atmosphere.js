@@ -135,9 +135,14 @@ uniform float uStars, uTime;
 uniform vec3 uMoonDir, uMoonCol;
 uniform vec3 uHorizonTint;
 uniform float uSkySat;
+uniform float uCloudStyle, uEnvWarm;
+uniform vec3 uEnvWarmCol;
 float rsHash13( vec3 p ) { p = fract( p * 0.1031 ); p += dot( p, p.zyx + 31.32 ); return fract( ( p.x + p.y ) * p.z ); }
 vec3 rsHash33( vec3 p ) { p = fract( p * vec3( 0.1031, 0.1030, 0.0973 ) ); p += dot( p, p.yxz + 33.33 ); return fract( ( p.xxy + p.yxx ) * p.zyx ); }
 float rsCloud( vec2 uv ) { return texture2D( tCloud, uv ).r * 0.65 + texture2D( tCloud, uv * 2.9 + vec2( 0.37, 0.71 ) ).r * 0.35; }
+// 'lit' style: three octaves (the third from the detail channel) on a domain-warped position
+vec2 rsWarp( vec2 uv ) { return uv + ( vec2( texture2D( tCloud, uv * 0.43 + vec2( 0.11, 0.29 ) ).r, texture2D( tCloud, uv * 0.43 + vec2( 0.53, 0.07 ) ).r ) - 0.5 ) * 0.1; }
+float rsCloud3( vec2 q ) { return rsCloud( q ) + ( texture2D( tCloud, q * 7.3 + vec2( 0.19, 0.83 ) ).b - 0.5 ) * 0.14; }
 `;
 
 const SKY_MAIN = /* glsl */`
@@ -198,14 +203,34 @@ const SKY_MAIN = /* glsl */`
 		float dy = max( direction.y, 0.012 );
 		float t = max( uCloudH - cameraPosition.y, 60.0 ) / dy;
 		vec2 uv = ( cameraPosition.xz + direction.xz * t ) * uCloudScale + uCloudOffset;
-		float n = rsCloud( uv ) + ( texture2D( tCloud, uv * 9.0 ).b - 0.5 ) * 0.12;
 		float thr = 1.0 - uCover;
-		float d = smoothstep( thr, thr + 0.2, n );
 		vec2 sdir = normalize( vSunDirection.xz + vec2( 1e-4 ) ) * 0.012;
-		float dS = smoothstep( thr, thr + 0.2, rsCloud( uv + sdir ) );
-		float lit = clamp( 1.0 - 0.7 * dS + 0.2 * ( 1.0 - d ), 0.0, 1.0 );
 		float fwd = pow( rsCs, 5.0 );
-		vec3 cc = uCloudAmb * ( 0.7 + 0.3 * ( 1.0 - d ) ) + uCloudSun * lit * ( 0.45 + 1.5 * fwd * ( 1.0 - 0.6 * d ) );
+		float d;
+		vec3 cc;
+		if ( uCloudStyle < 0.5 ) {
+			float n = rsCloud( uv ) + ( texture2D( tCloud, uv * 9.0 ).b - 0.5 ) * 0.12;
+			d = smoothstep( thr, thr + 0.2, n );
+			float dS = smoothstep( thr, thr + 0.2, rsCloud( uv + sdir ) );
+			float lit = clamp( 1.0 - 0.7 * dS + 0.2 * ( 1.0 - d ), 0.0, 1.0 );
+			cc = uCloudAmb * ( 0.7 + 0.3 * ( 1.0 - d ) ) + uCloudSun * lit * ( 0.45 + 1.5 * fwd * ( 1.0 - 0.6 * d ) );
+		} else {
+			// soft deck lit by its relief: density falling toward the sun is a face the sun reaches (self-shadowing
+			// from the density gradient), warm raking light on it, a cool shaded body, a bright rim on the thin edges
+			// toward the sun, and never darker than a shade of the sky behind (no dark blobs against a bright sky)
+			vec2 q = rsWarp( uv );
+			float n = rsCloud3( q );
+			d = smoothstep( thr - 0.04, thr + 0.24, n );
+			float thick = smoothstep( thr + 0.08, thr + 0.45, n );
+			float relief = clamp( ( n - rsCloud3( q + sdir * 1.4 ) ) * 6.0 + 0.5, 0.0, 1.0 );
+			float toSun = clamp( dot( normalize( direction.xz + vec2( 1e-5 ) ), normalize( vSunDirection.xz + vec2( 1e-5 ) ) ) * 0.5 + 0.5, 0.0, 1.0 );
+			float low = 1.0 - smoothstep( 0.05, 0.5, vSunDirection.y ); // 1 at a low sun: raking light, rims
+			vec3 shade = uCloudAmb * ( 0.55 + 0.9 * relief * relief ) * ( 1.0 - 0.35 * thick );
+			shade = max( shade, col * vec3( 0.78, 0.8, 0.9 ) * ( 1.0 - 0.3 * thick ) );
+			float rake = mix( 0.6, 0.08 + 2.0 * relief * relief * relief, low ) * ( 1.0 - 0.45 * thick );
+			cc = shade + uCloudSun * rake * ( 0.5 + 1.4 * fwd + 0.6 * low * pow( toSun, 3.0 ) );
+			cc += uCloudSun * d * ( 1.0 - d ) * 4.0 * pow( toSun, 4.0 ) * ( 0.25 + 0.6 * low );
+		}
 		float t2 = max( uCloudH * 2.6 - cameraPosition.y, 60.0 ) / dy;
 		vec2 w2 = cameraPosition.xz + direction.xz * t2;
 		vec2 uv2 = vec2( w2.x * 0.8 + w2.y * 0.6, -w2.x * 0.6 + w2.y * 0.8 ) * uCloudScale * vec2( 0.45, 1.5 ) + uCloudOffset * 1.7;
@@ -218,6 +243,10 @@ const SKY_MAIN = /* glsl */`
 		vec3 sky0 = col;
 		col = mix( col, mix( cic, sky0, ( 1.0 - exp( -t2 * 0.00002 ) ) * 0.8 ), a2 );
 		col = mix( col, mix( cc, sky0, 1.0 - exp( -t * 0.00004 ) ), a1 );
+	}
+	if ( uEnvWarm > 0.0 ) { // environment capture only (lowSunEnv): a warmer, brighter sky toward a low sun
+		float ts = clamp( dot( normalize( direction.xz + vec2( 1e-5 ) ), normalize( vSunDirection.xz + vec2( 1e-5 ) ) ) * 0.5 + 0.5, 0.0, 1.0 );
+		col += uEnvWarmCol * uEnvWarm * pow( ts, 3.0 ) * exp( -abs( direction.y ) * 4.0 );
 	}
 	gl_FragColor = vec4( col, 1.0 );`;
 
@@ -240,6 +269,7 @@ function makeSkyUniforms(cloudTex) {
     uCloudSun: { value: new THREE.Color(1, 1, 1) }, uCloudAmb: { value: new THREE.Color(0.3, 0.3, 0.35) },
     uStars: { value: 0 }, uTime: { value: 0 },
     uHorizonTint: { value: new THREE.Color(0.8, 0.93, 1.15) }, uSkySat: { value: 1.3 },
+    uCloudStyle: { value: 0 }, uEnvWarm: { value: 0 }, uEnvWarmCol: { value: new THREE.Color(0, 0, 0) },
     uMoonDir: { value: new THREE.Vector3(0, 1, 0) }, uMoonCol: { value: new THREE.Color(1.6, 1.55, 1.45) },
   };
 }
@@ -268,6 +298,23 @@ export const DEFAULT_FLARE = [
   ['hex', 170, 1.12, [0.55, 1.0, 0.7], 0.055],
   ['dot', 90, 1.38, [0.75, 0.6, 1.0], 0.07],
 ];
+
+/**
+ * Twilight key light (Atmosphere option `twilightKey`, off by default): from just before sunset until the sun is
+ * `fadeOut` degrees under the horizon, the shadow-casting light comes from the sun's azimuth at no less than
+ * `elevation` degrees, warm (`color`, linear), at up to `intensity`, where it beats the sun and the moon. The bright
+ * band of sky over the set sun then lights the scene from one side: a key direction, rim light and shadows that read,
+ * instead of an even, dim sky fill. `scatter`: the post fog's forward-scatter glow toward the afterglow (fogParams).
+ */
+/**
+ * Low-sun environment (Atmosphere option `lowSunEnv`, off by default): while the sun is lower than `below` degrees (and
+ * until it is 8 degrees under the horizon) scene.environmentIntensity rises toward `intensity` and the environment
+ * capture's horizon toward the sun is warmed and brightened by `warm` x the sunlight colour, so surfaces facing the
+ * sun get a warm fill and the rest a cool sky fill, as under a real low sun.
+ */
+export const DEFAULT_LOW_SUN_ENV = { intensity: 1.7, warm: 0.5, below: 20 };
+
+export const DEFAULT_TWILIGHT_KEY = { intensity: 1.1, elevation: 5, color: [1.0, 0.56, 0.34], fadeIn: -0.5, fadeOut: -9, scatter: 0.03 };
 
 const DEFAULT_SHADOWS = {
   cascades: 2,            // 2 = near + far cascade (needs the chunk patch), 3 / 4 add middle cascades, 1 = a single map
@@ -321,6 +368,13 @@ const DEFAULT_SHADOWS = {
  * @property {number} [maxCasterHeight=200]  tallest shadow caster (m)
  * @property {number[]} [cloudWind]  [x, z] m/s at cloud height
  * @property {number} [shadowNearHalf]  legacy: shadows.near
+ * @property {boolean|object} [twilightKey]  opt-in warm key light from the afterglow around sunset: true or
+ *   { intensity, elevation (deg), color, fadeIn, fadeOut (deg of sun elevation), scatter } (DEFAULT_TWILIGHT_KEY); off by default
+ * @property {string} [cloudStyle='classic']  'lit': soft cloud deck shaded by its relief toward the sun, with warm
+ *   undersides, a rim near the sun, a domain warp and a third octave; 'classic': the original two-octave puffs
+ * @property {boolean|object} [lowSunEnv]  opt-in brighter, warmer environment light at low sun: true or
+ *   { intensity (environmentIntensity at the horizon), warm (0..1 warmth of the sunward horizon), below (deg) }
+ *   (DEFAULT_LOW_SUN_ENV); off by default
  */
 
 export class Atmosphere {
@@ -357,6 +411,11 @@ export class Atmosphere {
     this.moonColor = new THREE.Color(...(opts.moonColor || [0.62, 0.72, 1.0]));
     this.fogDensity = opts.fogDensity ?? [0.00030, 0.00015]; // scene fog: day density, extra at night
     this.flareSpec = opts.flare === false ? null : opts.flare || DEFAULT_FLARE;
+    // opt-in twilight key (DEFAULT_TWILIGHT_KEY): off (null) by default
+    this.twilightKey = opts.twilightKey ? { ...DEFAULT_TWILIGHT_KEY, ...(opts.twilightKey === true ? {} : opts.twilightKey) } : null;
+    this.twilightKeyAmount = 0;
+    this.cloudStyle = opts.cloudStyle === 'lit' ? 'lit' : 'classic';
+    this.lowSunEnv = opts.lowSunEnv ? { ...DEFAULT_LOW_SUN_ENV, ...(opts.lowSunEnv === true ? {} : opts.lowSunEnv) } : null;
     this.nearHalf = sh.near;                                   // near cascade half size (m), 2048 map
     this.farHalfSteps = Array.isArray(sh.far) ? sh.far.slice() : [sh.far]; // far cascade half size by camera height, 4096 map
     this.shadowHalf = this.nearHalf;
@@ -742,6 +801,21 @@ export class Atmosphere {
     this.lightDir.copy(day > 0.02 ? d : this.moonDir);
     this.sun.color.copy(day > 0.02 ? sl.color : moonCol);
     this.sun.intensity = day > 0.02 ? this.sunIntensity * day * Math.pow(sl.trans, 0.8) * L.sun : this.moonIntensity;
+    // twilight key (opt-in): around sunset the bright sky segment over the sun stays the key light (warm, low, from the
+    // sun's azimuth) until it is weaker than the sun itself or the moon
+    const tk = this.twilightKey;
+    this.twilightKeyAmount = 0;
+    if (tk) {
+      const k = smoothstep(tk.fadeOut * DEG, tk.fadeIn * DEG, el) * (1 - smoothstep(tk.fadeIn * DEG, tk.fadeIn * DEG + 6 * DEG, el));
+      const ki = tk.intensity * k;
+      if (ki > this.sun.intensity && ki > 0.001) {
+        const ke = Math.max(el, tk.elevation * DEG);
+        this.lightDir.set(Math.sin(az) * Math.cos(ke), Math.sin(ke), -Math.cos(az) * Math.cos(ke)).normalize();
+        this.sun.color.setRGB(tk.color[0], tk.color[1], tk.color[2]);
+        this.sun.intensity = ki;
+        this.twilightKeyAmount = k;
+      }
+    }
     const moonLit = this.moonScatter > 0 && !(day > 0.02); // moonScatter: the fog glow / volumetrics follow the moon
     if (this.moonScatter > 0) { this.scatterDir.copy(moonLit ? this.moonDir : d); this.scatterColor.copy(moonLit ? moonCol : sl.color); }
     this._farDirty = true;
@@ -767,7 +841,14 @@ export class Atmosphere {
       u.uCloudAmb.value.setRGB(L.ca[0], L.ca[1], L.ca[2]);
       u.uMoonDir.value.copy(this.moonDir);
       u.uHorizonTint.value.setRGB(0.8, 0.93, 1.15).lerp(_white, L.tw);
+      u.uCloudStyle.value = this.cloudStyle === 'lit' ? 1 : 0;
     }
+    // low-sun environment (opt-in): how much of it applies at this sun elevation
+    const lse = this.lowSunEnv;
+    const lowK = lse ? smoothstep(lse.below, 2, elDeg) * smoothstep(-8, -1, elDeg) : 0;
+    const eu0 = this.envSky.material.uniforms;
+    eu0.uEnvWarm.value = lse ? lse.warm * lowK : 0;
+    eu0.uEnvWarmCol.value.copy(this.sunColor).multiplyScalar(0.5);
     this.sky.material.uniforms.uStars.value = L.night;
     this.envSky.material.uniforms.uStars.value = 0;
 
@@ -776,15 +857,16 @@ export class Atmosphere {
       if (this.envRT) this.envRT.dispose();
       this.envRT = this.pmrem.fromScene(this.envScene, 0, 0.1, 1000);
       this.scene.environment = this.envRT.texture;
-      this.scene.environmentIntensity = L.env;
+      this.scene.environmentIntensity = lse ? L.env + (Math.max(L.env, lse.intensity) - L.env) * lowK : L.env;
     }
 
     // clean sky radiance (no disc, no clouds) for fog colour + horizon sampling
     const eu = this.envSky.material.uniforms;
-    eu.uDisc.value = 0; eu.uClouds.value = 0;
+    const envWarm = eu.uEnvWarm.value;
+    eu.uDisc.value = 0; eu.uClouds.value = 0; eu.uEnvWarm.value = 0;
     if (this.renderer) this.cubeCam.update(this.renderer, this.envScene);
     const hor = this.sampleHorizon();
-    eu.uDisc.value = 1; eu.uClouds.value = 1;
+    eu.uDisc.value = 1; eu.uClouds.value = 1; eu.uEnvWarm.value = envWarm;
     this.horizon = hor;
 
     // scene fog (no-post path): tone-mapped horizon colour (three applies fog after tone mapping)
@@ -797,6 +879,7 @@ export class Atmosphere {
     const fp = this.fogParams;
     fp.haze = L.haze; fp.mist = L.mist;
     fp.sunScatter = moonLit ? this.moonScatter : 0.05 * day * (1 - smoothstep(25 * DEG, 45 * DEG, el));
+    if (tk && !moonLit) fp.sunScatter = Math.max(fp.sunScatter, tk.scatter * this.twilightKeyAmount); // the haze glows toward the afterglow
 
     // hemisphere: sky dome colour from the horizon, ground = warm bounce of the sun (city lights at night)
     const hn = hor.clone().multiplyScalar(1 / Math.max(0.03, Math.max(hor.r, hor.g, hor.b)));

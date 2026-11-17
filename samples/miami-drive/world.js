@@ -101,6 +101,9 @@ export function miamiWorldOptions({ scene, renderer, map, q, timeOfDay, plugins,
       sun: MIAMI_SUN, timePresets: MIAMI_PRESETS, camera,
       shadows: { ...q.shadows, near: 45, far: [200, 420, 650] },
       cloudWind: [6, 2],
+      // the dusk look: the afterglow stays the key light after sunset (warm, low, from the glow), soft clouds lit
+      // by their relief toward the sun, and a warmer, brighter sky fill while the sun is low (engine options, off by default)
+      twilightKey: { intensity: 0.9, elevation: 5 }, cloudStyle: 'lit', lowSunEnv: true,
     },
     pbrSize: q.textures.maxSize >= 2048 ? 1024 : 512,
     // Ocean Drive between 8th and 9th Street, northbound (bake frame: x east, z south), the deco district
@@ -846,8 +849,8 @@ function coconutPalms(rows, spacing, r, gy = () => 0, keep = () => true, xFn = n
     fronds.push(g);
   }
   const crown = mergeGeometries(fronds); crown.computeVertexNormals();
-  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5f5244, roughness: 0.95 });
-  const frondMat = new THREE.MeshStandardMaterial({ color: 0x4a5a2e, roughness: 0.85, side: THREE.DoubleSide }); // a dry, sun-faded olive
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5f5244, roughness: 0.95, name: 'coconutTrunk' });
+  const frondMat = new THREE.MeshStandardMaterial({ color: 0x4a5a2e, roughness: 0.85, side: THREE.DoubleSide, name: 'coconutFrond' }); // a dry, sun-faded olive
   // instanced per 200 m chunk along the beach, so the camera's frustum culls the palms it cannot see
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const byChunk = new Map();
