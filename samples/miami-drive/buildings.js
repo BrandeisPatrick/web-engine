@@ -390,8 +390,10 @@ export function miamiBuildingsPlugin(o = {}) {
       if (M) quietNeon(M);
       return null;
     },
-    update(dt, cam, darkness = 0) {
+    update(dt, cam, darkness = 0, world = null) {
       if (!cam || !P.mats) return;
+      // the twilight key's highlight on glazing and glossy stucco scaled and soft-capped near 0.08 (building-materials.js uMbKeyGlint)
+      if (P.mats.uniforms.uMbKeyGlint) { const k = (world && world.atmo && world.atmo.twilightKeyAmount) || 0; P.mats.uniforms.uMbKeyGlint.value.set(1 - 0.6 * k, k / 0.08); }
       if (P.atlas) P.atlas.setLit(THREE.MathUtils.smoothstep(darkness, 0.08, 0.3));
       const x = cam.x, y = cam.y, z = cam.z;
       for (const t of P.tiles0) {

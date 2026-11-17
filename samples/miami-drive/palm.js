@@ -128,15 +128,24 @@ function crownGeometry(seed, { fronds = 18, len = 4.3, droop = 1.0, dead = 6, nu
   return mergeGeometries(norm);
 }
 
+/**
+ * The near / far cross-fade (shared with world.js coconutPalms). The crowns dither over [near - 4, near] (a 4x4
+ * ordered pattern, complementary between the two palms). The trunks switch at near - 2 instead: the two trunks differ
+ * a little in bend and girth, so a dithered overlap shows the sky through a regular stipple; a cut at one distance
+ * (per fragment) is invisible at 50 m.
+ */
+export const PALM_FADE_FS = (trunk) => trunk ? 'step(uNear - 2.0, DIST)' : 'smoothstep(uNear - 4.0, uNear, DIST)';
+export const PALM_DITHER_FS = 'fract(dot(floor(gl_FragCoord.xy), vec2(0.5, 0.25)) + 0.125 * mod(floor(gl_FragCoord.x * 0.5) + floor(gl_FragCoord.y * 0.5), 2.0) + 0.0625)';
+
 /** Shared material patch: wind (travelling along aSway.x), trunk ring scars, and the near / far dither. */
 function patch(mat, U, kind) {
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, { uTime: U.uTime, uViewPos: U.uViewPos, uNear: U.uNear });
     sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>
-uniform float uTime; varying vec3 vPW; varying float vTy;
+uniform float uTime; varying vec3 vPW; varying float vTy; varying float vTu;
 ${kind === 'crown' ? 'attribute vec2 aSway;' : ''}`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
-vTy = position.y;
+vTy = position.y; vTu = ${kind === 'trunk' ? 'uv.x' : '0.0'};
 #ifdef USE_INSTANCING
   float iph = instanceMatrix[3].x * 0.31 + instanceMatrix[3].z * 0.17;
 #else
@@ -153,19 +162,28 @@ vPW = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
 vPW = (modelMatrix * vec4(transformed, 1.0)).xyz;
 #endif`);
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
-uniform vec3 uViewPos; uniform float uNear; varying vec3 vPW; varying float vTy;`)
+uniform vec3 uViewPos; uniform float uNear; varying vec3 vPW; varying float vTy; varying float vTu;
+float npH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }`)
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
-  { float k = smoothstep(uNear - 4.0, uNear, distance(vPW, uViewPos));
-    float bayer = fract(dot(floor(gl_FragCoord.xy), vec2(0.5, 0.25)) + 0.125 * mod(floor(gl_FragCoord.x * 0.5) + floor(gl_FragCoord.y * 0.5), 2.0) + 0.0625);
-    if (k > bayer) discard; }`)
+  { float k = ${PALM_FADE_FS(kind === 'trunk').replace('DIST', 'distance(vPW, uViewPos)')};
+    if (k > ${PALM_DITHER_FS}) discard; }`)
       .replace('#include <color_fragment>', kind === 'trunk' ? `#include <color_fragment>
-  { float ring = abs(fract(vTy * 85.0 + sin(vTy * 31.0) * 0.15) - 0.5);   // ring scars every ~12 cm of a 10 m trunk
-    diffuseColor.rgb *= 0.78 + 0.32 * smoothstep(0.05, 0.22, ring);
-    diffuseColor.rgb *= mix(0.85, 1.12, smoothstep(0.0, 0.15, vTy)) * mix(1.0, 0.8, smoothstep(0.85, 1.0, vTy)); }` : '#include <color_fragment>')
+  { // ring scars ~11 cm apart on a 10 m trunk, each a little uneven in height, depth and tilt; fibres between them
+    float y = vTy * 90.0, rI = floor(y + sin(vTu * 6.2832 + floor(y) * 1.7) * 0.18);
+    float yr = y + sin(vTu * 6.2832 + rI * 1.7) * 0.18 + (npH(vec2(rI, 3.1)) - 0.5) * 0.25;
+    float aa = 1.0 - smoothstep(0.25, 0.7, fwidth(y));
+    float ring = abs(fract(yr) - 0.5), deep = 0.55 + 0.45 * npH(vec2(rI, 7.7));
+    diffuseColor.rgb *= 1.0 - aa * deep * 0.3 * (1.0 - smoothstep(0.03, 0.17, ring));
+    float fib = npH(vec2(floor(vTu * 150.0), floor(yr * 0.5))) * 0.6 + npH(vec2(floor(vTu * 47.0), rI)) * 0.4;
+    diffuseColor.rgb *= 1.0 + (fib - 0.5) * 0.22 * (1.0 - smoothstep(0.4, 1.2, fwidth(vTu * 150.0)));
+    diffuseColor.rgb *= 0.92 + 0.16 * npH(vec2(rI, 1.3)) * aa;
+    diffuseColor.rgb *= mix(0.85, 1.08, smoothstep(0.0, 0.15, vTy)) * mix(1.0, 0.8, smoothstep(0.85, 1.0, vTy)); }` : '#include <color_fragment>')
       .replace('#include <normal_fragment_maps>', kind === 'trunk' ? `#include <normal_fragment_maps>
-  { float rr = fract(vTy * 85.0 + sin(vTy * 31.0) * 0.15); normal = normalize(normal + vec3(0.0, (smoothstep(0.0, 0.2, rr) - smoothstep(0.2, 0.4, rr)) * 0.6, 0.0)); }` : '#include <normal_fragment_maps>');
+  { float y = vTy * 90.0, rI = floor(y + sin(vTu * 6.2832 + floor(y) * 1.7) * 0.18);
+    float rr = fract(y + sin(vTu * 6.2832 + rI * 1.7) * 0.18 + (npH(vec2(rI, 3.1)) - 0.5) * 0.25);
+    normal = normalize(normal + vec3(0.0, (smoothstep(0.0, 0.2, rr) - smoothstep(0.2, 0.4, rr)) * 0.5 * (1.0 - smoothstep(0.25, 0.7, fwidth(y))), 0.0)); }` : '#include <normal_fragment_maps>');
   };
-  mat.customProgramCacheKey = () => `near-palm-${kind}`;
+  mat.customProgramCacheKey = () => `near-palm-2-${kind}`;
   return mat;
 }
 
@@ -183,7 +201,7 @@ export function buildNearPalms(instances, o = {}) {
     crownGeometry(11, { fronds: 18, len: 4.4, droop: 1.0, dead: 6, nuts: 10 }),
     crownGeometry(23, { fronds: 15, len: 4.0, droop: 1.25, dead: 7, nuts: 8 }),
   ];
-  const trunkMat = patch(new THREE.MeshStandardMaterial({ color: 0x8a7a66, roughness: 0.95, name: 'nearPalmTrunk' }), U, 'trunk');
+  const trunkMat = patch(new THREE.MeshStandardMaterial({ color: 0x857a6c, roughness: 0.95, name: 'nearPalmTrunk' }), U, 'trunk');
   const crownMat = patch(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide, name: 'nearPalmCrown' }), U, 'crown');
   const group = new THREE.Group(); group.name = 'near-palms';
   const CH = 60, chunks = new Map();
@@ -226,4 +244,64 @@ export function buildNearPalms(instances, o = {}) {
       for (const cg of list) { _c.copy(cg.userData.ctr); cg.visible = _c.distanceTo(camera.position) < near + 30; } // (chunks are 60 m)
     },
   };
+}
+
+/**
+ * The street palms' bark (the engine's Canary Island date palm, `veg-palm`): its atlas strip is a lattice of leaf-base
+ * diamonds that reads as a large regular pattern on Miami's close street trunks. This patch replaces, on the tree
+ * material only, the texels of that strip with procedural fibrous grey-brown bark: fine uneven rings ~9 cm apart, a
+ * few faint leaf-base scars, vertical fibres (resolution-free; the pattern fades to its average where it would
+ * alias). Other species' texels and other demos are untouched. frond + frondTint (an atlas region and an rgb
+ * multiplier): the fronds' texels tinted (?look=open: less yellow). Returns the number of materials patched.
+ */
+export function canaryBark(root, region, { frond = null, frondTint = null } = {}) {
+  let n = 0;
+  root.traverse((o) => {
+    if (!o.isMesh || o.name !== 'veg-palm') return;
+    const m = o.material;
+    if (!m || m.userData.canaryBark) return;
+    m.userData.canaryBark = true; n++;
+    const prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey;
+    const uPB = { value: new THREE.Vector4(region.u0, region.v0, region.u1, region.v1) };
+    const tint = frond && frondTint;
+    const uPF = { value: tint ? new THREE.Vector4(frond.u0, frond.v0, frond.u1, frond.v1) : new THREE.Vector4(2, 2, 2, 2) };
+    const uPT = { value: new THREE.Vector3(...(tint ? frondTint : [1, 1, 1])) };
+    m.onBeforeCompile = function (sh, r) {
+      if (prev) prev.call(this, sh, r);
+      sh.uniforms.uPalmBark = uPB; sh.uniforms.uPalmFrond = uPF; sh.uniforms.uPalmFrondTint = uPT;
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+uniform vec4 uPalmBark, uPalmFrond; uniform vec3 uPalmFrondTint;
+float cbH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float cbN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(cbH(i), cbH(i + vec2(1.0, 0.0)), f.x), mix(cbH(i + vec2(0.0, 1.0)), cbH(i + vec2(1.0, 1.0)), f.x), f.y); }
+vec3 canaryBark(vec2 q) {
+  // q.x: around the trunk (0..1, periodic), q.y: metres up the strip (~12 m)
+  float y = q.y * 130.0, a = q.x * 6.2832;  // ~9 cm rings
+  float rI = floor(y + sin(a * 2.0 + floor(y) * 2.3) * 0.2);
+  float yr = y + sin(a * 2.0 + rI * 2.3) * 0.2 + (cbH(vec2(rI, 4.1)) - 0.5) * 0.3;
+  float fy = fwidth(y), aa = 1.0 - smoothstep(0.3, 0.8, fy);
+  float ring = abs(fract(yr) - 0.5);
+  vec3 c = vec3(0.17, 0.152, 0.13) * (0.86 + 0.28 * cbH(vec2(rI, 1.7)) * aa);              // grey-brown, per ring
+  c *= 1.0 - aa * (0.4 + 0.6 * cbH(vec2(rI, 8.3))) * 0.26 * (1.0 - smoothstep(0.04, 0.24, ring));
+  // faint leaf-base scars: broad, staggered, soft (no lattice), every second or third ring
+  float cell = floor(q.x * 9.0 + mod(rI, 2.0) * 0.5 + cbH(vec2(rI, 2.0)) * 0.6);
+  float sc = step(0.45, cbH(vec2(cell, rI))) * (1.0 - smoothstep(0.15, 0.5, abs(fract(q.x * 9.0 + mod(rI, 2.0) * 0.5 + cbH(vec2(rI, 2.0)) * 0.6) - 0.5)));
+  c *= 1.0 + sc * 0.12 * aa * smoothstep(0.1, 0.4, ring);
+  // fibres
+  float fib = cbN(vec2(q.x * 260.0, yr * 1.4)) * 0.6 + cbN(vec2(q.x * 90.0, y * 0.3)) * 0.4;
+  c *= 1.0 + (fib - 0.5) * 0.45 * (1.0 - smoothstep(0.5, 1.5, fwidth(q.x * 260.0)));
+  return c * (0.9 + 0.2 * cbN(vec2(q.x * 3.0, y * 0.015)));                                     // broad weathering
+}`)
+        .replace('diffuseColor *= texture2D( map, vMapUv );', `vec4 cbTx = texture2D( map, vMapUv );
+	if ( vMapUv.x > uPalmBark.x && vMapUv.x < uPalmBark.z && vMapUv.y > uPalmBark.y && vMapUv.y < uPalmBark.w ) {
+		vec2 cbQ = vec2( ( vMapUv.x - uPalmBark.x ) / ( uPalmBark.z - uPalmBark.x ), ( vMapUv.y - uPalmBark.y ) / ( uPalmBark.w - uPalmBark.y ) );
+		cbTx.rgb = canaryBark( cbQ );
+	}
+	if ( vMapUv.x > uPalmFrond.x && vMapUv.x < uPalmFrond.z && vMapUv.y > uPalmFrond.y && vMapUv.y < uPalmFrond.w ) cbTx.rgb *= uPalmFrondTint;
+	diffuseColor *= cbTx;`);
+    };
+    m.customProgramCacheKey = function () { return (prevKey ? prevKey.call(this) : '') + '|canary-bark-1'; };
+    m.needsUpdate = true;
+  });
+  return n;
 }
