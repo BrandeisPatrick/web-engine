@@ -142,6 +142,9 @@ void wxWeather( inout vec3 col, inout float rough, vec3 p, vec3 n, float h, floa
 	col *= 1.0 + A.x * ( m - 0.5 ) * 2.0;
 	col *= 1.0 + A.y * ( m2 - 0.5 ) * 2.0 * vec3( 1.0, 0.15, - 0.9 );
 	rough += A.z * ( ( m2 - 0.5 ) * 1.4 + ( m1 - 0.5 ) * 0.8 );
+	// mottling at hand scale (~30 cm), faded out where a pixel is over ~5 cm (it would only shimmer)
+	float mot = 1.0 - smoothstep( 0.02, 0.06, pw );
+	if ( mot > 0.0 ) col *= 1.0 + A.x * 0.45 * ( wxNoise( q * 3.3 + sd + 5.3 ) - 0.5 ) * 2.0 * mot;
 	// sun fading: patchy, paler and greyer, more on the upper parts
 	if ( C.x > 0.0 ) {
 		float l = dot( col, vec3( 0.299, 0.587, 0.114 ) );

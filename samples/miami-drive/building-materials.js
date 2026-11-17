@@ -153,21 +153,21 @@ const WEATHER = /* glsl */`
       if (win > 0.01) {
         vec2 wl = vec2((cf.x - 0.5) / max(wf, 0.05) + 0.5, (cf.y - sf) / max(hf, 0.05));
         float hp = mbH(id + 3.7);
-        float lit = step(1.0 - uLitFrac * (0.5 + 1.0 * fract(vInfo.z * 7.13)), hp);
+        float lit = step(1.0 - uLitFrac * (0.75 + 1.2 * fract(vInfo.z * 7.13)), hp);
         vec3 lc = mix(vec3(1.0, 0.66, 0.36), vec3(0.78, 0.87, 1.0), step(0.72, mbH(id + 9.1))) * uWinGain * (0.55 + 0.8 * mbH(id + 5.3)) * uNight;
         float glow = 0.0;
         vec3 room = fRoom(id, clamp(wl, 0.0, 1.0), fRt, vInfo.z, lit, lc, fDay, 0.0, glow) + lc * glow * 1.4;
         float blind = mbH(id + 21.7) < 0.4 ? 0.2 + 0.6 * mbH(id + 2.2) : 0.0;
         if (wl.y > 1.0 - blind) room = vec3(0.85, 0.82, 0.74) * (0.12 * fDay) + vec3(0.85, 0.82, 0.74) * lc * lit * 0.6;
         float farR = smoothstep(0.12, 0.45, max(fw2.x, fw2.y) * 3.0);
-        vec3 avg = vec3(0.6, 0.57, 0.52) * (0.05 * fDay + lc * lit * 0.62);
+        vec3 avg = vec3(0.62, 0.57, 0.5) * (0.04 * fDay + lc * lit * 1.05);
         // the reveal: a shadow along the head and one jamb of the opening
         float rev = smoothstep(0.86, 0.98, wl.y) + smoothstep(0.12, 0.0, wl.x) * 0.6;
         fEmis = mix(fEmis, mix(room, avg, farR) * (1.0 - 0.6 * rev), win);
         fCol = mix(fCol, vec3(0.025), win);
         fRough = mix(fRough, 0.05, win);
         fNxy *= 1.0 - win;
-        if (win > 0.5) { fGlass = 1.0; fSpec = vec3(0.05 + 0.02 * mbH(id)); fEnv = 1.5 * (1.0 - 0.5 * rev); }
+        if (win > 0.5) { fGlass = 1.0; fSpec = vec3(0.05 + 0.02 * mbH(id)); fEnv = mix(1.5, 0.8, farR) * (1.0 - 0.5 * rev); }
       }
       // shade under each window head (the eyebrow / reveal above)
       float under = smoothstep(sf + hf + 0.12, sf + hf, cf.y) * step(sf + hf, cf.y) * inX;
