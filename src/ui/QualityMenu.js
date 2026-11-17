@@ -5,6 +5,9 @@
 //   const q = resolveQuality();                                   // core/Quality.js
 //   const menu = new QualityMenu({ quality: q, corner: 'tr' });   // onChange(tier) instead of the reload, if given
 //   menu.addRow('Sound', toggleEl);                               // a game's own settings under the tiers
+// The tier rows are also exported for other menus (GameShell's pause card uses them):
+//   const { group, buttons } = buildTierRows(q, (tier) => chooseTier(q, tier));   // a radiogroup element
+//   injectQualityStyle();                                         // the rows' CSS (QualityMenu injects it itself)
 import { QUALITY_TIERS, TIER_IDS, storeTier } from '../core/Quality.js';
 import { injectTheme, injectStyle } from './theme.js';
 
@@ -38,6 +41,47 @@ const CSS = `
 `;
 const GEAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
 
+/** Inject the quality rows' stylesheet (and the theme) once. */
+export function injectQualityStyle() { injectTheme(); injectStyle('ui-quality', CSS); }
+
+/**
+ * The tier rows of the quality menu: a radiogroup with one button per tier (label, blurb, a "Recommended" tag on the
+ * device's recommendation), the current tier checked. Clicking a row calls onPick(tierId). Call injectQualityStyle()
+ * once for their look.
+ * @param {{ tier: string, recommended: string }} quality  from resolveQuality()
+ * @param {(tier: string) => void} onPick
+ * @returns {{ group: HTMLDivElement, buttons: HTMLButtonElement[] }}
+ */
+export function buildTierRows(quality, onPick) {
+  const group = document.createElement('div'); group.setAttribute('role', 'radiogroup'); group.setAttribute('aria-label', 'Graphics quality');
+  const buttons = [];
+  for (const id of TIER_IDS) {
+    const t = QUALITY_TIERS[id], b = document.createElement('button');
+    b.type = 'button'; b.className = 'ui-q-tier'; b.setAttribute('role', 'radio'); b.dataset.tier = id;
+    b.setAttribute('aria-checked', String(id === quality.tier));
+    const name = document.createElement('b'); name.textContent = t.label; b.append(name);
+    if (id === quality.recommended) { const tag = document.createElement('i'); tag.className = 'ui-q-tag'; tag.style.fontStyle = 'normal'; tag.textContent = 'Recommended'; b.append(tag); }
+    const blurb = document.createElement('span'); blurb.textContent = t.blurb; b.append(blurb);
+    b.addEventListener('click', () => onPick(id));
+    group.append(b); buttons.push(b);
+  }
+  return { group, buttons };
+}
+
+/**
+ * Store `tier` as the player's choice and apply it: onChange(tier) when given, else reload the page without any
+ * ?quality= override (what QualityMenu does). Picking the current tier does nothing.
+ * @param {{ tier: string, storageKey?: string }} quality
+ * @param {string} tier
+ * @param {((tier: string) => void) | null} [onChange]
+ */
+export function chooseTier(quality, tier, onChange) {
+  if (tier === quality.tier) return;
+  storeTier(tier, quality.storageKey);
+  if (onChange) { onChange(tier); return; }
+  const u = new URL(location.href); u.searchParams.delete('quality'); location.replace(u.toString());
+}
+
 export class QualityMenu {
   /**
    * @param {{ quality: { tier: string, recommended: string, storageKey?: string }, corner?: 'tr' | 'tl' | 'br' | 'bl',
@@ -53,18 +97,8 @@ export class QualityMenu {
     const panel = this.panel = document.createElement('div');
     panel.className = `ui-q-panel ui-glass ${corner}`; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Settings');
     const title = document.createElement('p'); title.className = 'ui-q-title'; title.textContent = o.title || 'Graphics quality';
-    const group = document.createElement('div'); group.setAttribute('role', 'radiogroup'); group.setAttribute('aria-label', 'Graphics quality');
+    const { group } = buildTierRows(this.quality, (id) => this.choose(id));
     panel.append(title, group);
-    for (const id of TIER_IDS) {
-      const t = QUALITY_TIERS[id], b = document.createElement('button');
-      b.type = 'button'; b.className = 'ui-q-tier'; b.setAttribute('role', 'radio'); b.dataset.tier = id;
-      b.setAttribute('aria-checked', String(id === this.quality.tier));
-      const name = document.createElement('b'); name.textContent = t.label; b.append(name);
-      if (id === this.quality.recommended) { const tag = document.createElement('i'); tag.className = 'ui-q-tag'; tag.style.fontStyle = 'normal'; tag.textContent = 'Recommended'; b.append(tag); }
-      const blurb = document.createElement('span'); blurb.textContent = t.blurb; b.append(blurb);
-      b.addEventListener('click', () => this.choose(id));
-      group.append(b);
-    }
     const note = document.createElement('p'); note.className = 'ui-q-note'; note.textContent = 'Changing quality reloads the page.';
     panel.append(note);
     btn.addEventListener('click', (e) => { e.stopPropagation(); this.setOpen(!this.open); });
@@ -85,9 +119,7 @@ export class QualityMenu {
   /** Store `tier` and apply it: onChange(tier) when given, else reload without any ?quality= override. */
   choose(tier) {
     if (tier === this.quality.tier) { this.setOpen(false); return; }
-    storeTier(tier, this.quality.storageKey);
-    if (this.onChange) { this.onChange(tier); return; }
-    const u = new URL(location.href); u.searchParams.delete('quality'); location.replace(u.toString());
+    chooseTier(this.quality, tier, this.onChange);
   }
 
   /** Add a game setting under the tiers: a label and any control element. Returns the row. */
