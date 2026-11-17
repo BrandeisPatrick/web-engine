@@ -713,10 +713,11 @@ function buildBeach(P, ctx, o) {
         (m.material.color.getHex() === 0xf2efe6 ? whiteG : paintG).push(g);
       });
     }
-    const add = (list, mat, name) => { if (!list.length) return; const mesh = new THREE.Mesh(mergeGeometries(list), mat); mesh.name = name; mesh.castShadow = true; mesh.receiveShadow = true; P.group.add(mesh); };
+    const add = (list, mat, name, cast = true) => { if (!list.length) return; const mesh = new THREE.Mesh(mergeGeometries(list), mat); mesh.name = name; mesh.castShadow = cast; mesh.receiveShadow = true; P.group.add(mesh); };
     add(paintG, agedPaint(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7 }), 'paint'), 'lifeguard-huts');
     add(whiteG, agedPaint(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75 }), 'trim'), 'lifeguard-huts-trim');
-    if (winMat) add(winG, winMat, 'lifeguard-huts-windows');
+    // (the panes lie 1 cm proud of the cabin walls: the cabin already casts their shadow, so they skip the shadow map)
+    if (winMat) add(winG, winMat, 'lifeguard-huts-windows', false);
   }
   // tall coconut palms in a loose line along the dune edge
   // shared with the detailed near palms (palm.js, desktop): the cheap ones dither out within uNear of the camera
@@ -821,25 +822,37 @@ function beachDressing(P, rows, r, o, world) {
   }
 }
 
+/** Drop the named faces of a BoxGeometry ('px nx py ny pz nz'), by its groups. */
+function dropFaces(geo, hide) {
+  if (!hide) return geo;
+  const names = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
+  const drop = new Set(hide.split(' ')), src = geo.index.array, keep = [];
+  for (const gr of geo.groups) if (!drop.has(names[gr.materialIndex])) for (let i = gr.start; i < gr.start + gr.count; i++) keep.push(src[i]);
+  geo.setIndex(keep); geo.clearGroups();
+  return geo;
+}
+
 function hut(x, z, color, r, y = 0) {
   const g = new THREE.Group();
   const paint = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
   const white = new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 0.7 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x2b2824, roughness: 0.8 }); // the door, the flag halyard cleat
-  const box = (w, h, d, mat, px, py, pz, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(px, py, pz); m.rotation.set(rx, ry, rz); g.add(m); return m; };
+  // hide: faces no camera can see (BoxGeometry order px nx py ny pz nz: buried in the deck or the ramp, coplanar with a
+  // face drawn on top of them, inside the cabin): dropped, so they cost no triangles in the view and the shadow map
+  const box = (w, h, d, mat, px, py, pz, rx = 0, ry = 0, rz = 0, hide = '') => { const m = new THREE.Mesh(dropFaces(new THREE.BoxGeometry(w, h, d), hide), mat); m.position.set(px, py, pz); m.rotation.set(rx, ry, rz); g.add(m); return m; };
   const DY = 1.65; // deck top
   // stilts with cross braces on the two long sides
-  for (const [sx, sz] of [[-1.75, -1.75], [1.75, -1.75], [-1.75, 1.75], [1.75, 1.75]]) box(0.22, DY, 0.22, white, sx, DY / 2, sz);
+  for (const [sx, sz] of [[-1.75, -1.75], [1.75, -1.75], [-1.75, 1.75], [1.75, 1.75]]) box(0.22, DY, 0.22, white, sx, DY / 2, sz, 0, 0, 0, 'py ny');
   for (const sz of [-1.75, 1.75]) { const L = Math.hypot(3.5, DY - 0.3); box(L, 0.08, 0.08, white, 0, DY / 2, sz, 0, 0, Math.atan2(DY - 0.3, 3.5)); }
   for (const sx of [-1.75, 1.75]) { const L = Math.hypot(3.5, DY - 0.3); box(0.08, 0.08, L, white, sx, DY / 2, 0, -Math.atan2(DY - 0.3, 3.5), 0, 0); }
   box(4.3, 0.16, 4.3, white, 0, DY - 0.08, 0);                                      // the deck
-  const cab = box(3, 2.4, 3, paint, 0, DY + 1.2, 0); cab.castShadow = true;          // the cabin
-  box(3.08, 0.12, 3.08, white, 0, DY + 0.06, 0);                                    // a skirting board
+  const cab = box(3, 2.4, 3, paint, 0, DY + 1.2, 0, 0, 0, 0, 'ny'); cab.castShadow = true;          // the cabin
+  box(3.08, 0.12, 3.08, white, 0, DY + 0.06, 0, 0, 0, 0, 'ny');                                    // a skirting board
   box(0.05, 1.9, 0.95, dark, -1.53, DY + 0.98, -0.7);                               // the door (land side, by the ramp)
-  box(0.07, 2.0, 0.08, white, -1.53, DY + 1.0, -1.2); box(0.07, 2.0, 0.08, white, -1.53, DY + 1.0, -0.2); box(0.07, 0.08, 1.08, white, -1.53, DY + 1.98, -0.7);
+  box(0.07, 2.0, 0.08, white, -1.53, DY + 1.0, -1.2, 0, 0, 0, 'px'); box(0.07, 2.0, 0.08, white, -1.53, DY + 1.0, -0.2, 0, 0, 0, 'px'); box(0.07, 0.08, 1.08, white, -1.53, DY + 1.98, -0.7, 0, 0, 0, 'px');
   // the deck rail on three sides (not where the ramp lands)
   for (const [sx, sz, w, d] of [[2.1, 0, 0.06, 4.2], [0, 2.1, 4.2, 0.06], [0, -2.1, 4.2, 0.06]]) { box(w, 0.07, d, white, sx, DY + 0.95, sz); box(w, 0.05, d, white, sx, DY + 0.5, sz); }
-  for (const [sx, sz] of [[2.1, 2.1], [2.1, -2.1], [-2.1, 2.1], [-2.1, -2.1], [2.1, 0], [0, 2.1], [0, -2.1]]) box(0.08, 0.95, 0.08, white, sx, DY + 0.47, sz);
+  for (const [sx, sz] of [[2.1, 2.1], [2.1, -2.1], [-2.1, 2.1], [-2.1, -2.1], [2.1, 0], [0, 2.1], [0, -2.1]]) box(0.08, 0.95, 0.08, white, sx, DY + 0.47, sz, 0, 0, 0, 'ny');
   // the roof: an eave slab with a deep overhang, a low hipped cap, a flag on a short pole
   box(4.4, 0.14, 4.4, white, 0, DY + 2.47, 0);
   const roof = new THREE.Mesh(new THREE.CylinderGeometry(0.0, 2.95, 0.95, 4, 1), paint); roof.rotation.y = Math.PI / 4; roof.position.y = DY + 2.54 + 0.47; roof.castShadow = true; g.add(roof);
@@ -848,7 +861,7 @@ function hut(x, z, color, r, y = 0) {
   // the ramp from the deck's land edge down to the sand, with slats and a hand rail each side
   const RL = 4.6, ra = Math.asin(DY / RL), rcx = -2.15 - Math.cos(ra) * RL / 2;
   box(RL, 0.1, 1.1, white, rcx, DY / 2 - 0.05, -0.7, 0, 0, ra);
-  for (let k = 1; k < 9; k++) { const t = k / 9, px = -2.15 - Math.cos(ra) * RL * t, py = DY - Math.sin(ra) * RL * t; box(0.05, 0.05, 1.1, white, px, py + 0.02, -0.7); }
+  for (let k = 1; k < 9; k++) { const t = k / 9, px = -2.15 - Math.cos(ra) * RL * t, py = DY - Math.sin(ra) * RL * t; box(0.05, 0.05, 1.1, white, px, py + 0.02, -0.7, 0, 0, 0, 'ny'); }
   for (const sz of [-0.7 - 0.58, -0.7 + 0.58]) {
     box(RL, 0.06, 0.06, white, rcx, DY / 2 + 0.9, sz, 0, 0, ra);
     for (const t of [0.08, 0.5, 0.92]) { const px = -2.15 - Math.cos(ra) * RL * t, py = DY - Math.sin(ra) * RL * t; box(0.06, 0.9, 0.06, white, px, py + 0.45, sz); }
