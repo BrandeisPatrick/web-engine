@@ -779,6 +779,23 @@ const keysOf = (fx) => fx.composer.passes.map((p) => fx._passKeys.get(p)).join()
   check('dispose (every pass on): no throw', !throws(() => { all.dispose(); s.dispose(); gfx.dispose(); fx.dispose(); }));
 }
 
+{
+  // ---- look { aoLit, aoTint, lift }: off by default (the pinned text, no define), derived text + defines when on
+  const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 1000);
+  const fx = new PostFX(stub(), scene, cam, { atmosphere: null });
+  fx.render(0);
+  const m = fx.finalPass.material;
+  check('look: defaults keep the exported text and set no define', m.fragmentShader === FINAL_SHADER.fragmentShader && !m.defines.FINAL_AO_LIT && !m.defines.FINAL_LIFT);
+  fx.set('look.aoLit', 0.8); fx.set('look.lift', [0.006, 0.0085, 0.011]); fx.render(0);
+  check('look on: FINAL_AO_LIT + FINAL_LIFT, text with both blocks, uniforms set', m.defines.FINAL_AO_LIT === 1 && m.defines.FINAL_LIFT === 1
+    && m.fragmentShader.includes('uAoLit * smoothstep( 0.16, 0.85') && m.fragmentShader.includes('+ uLift;') && m.uniforms.uLift.value.y === 0.0085 && m.uniforms.uAoLit.value === 0.8);
+  check('look: get returns copies', fx.get('look.lift')[2] === 0.011 && fx.get('look.aoLit') === 0.8);
+  fx.set('look.aoLit', 0); fx.set('look.lift', [0, 0, 0]); fx.render(0);
+  check('look off again: back to the exported text, no define', m.fragmentShader === FINAL_SHADER.fragmentShader && !m.defines.FINAL_AO_LIT && !m.defines.FINAL_LIFT);
+  check('look: bad values / unknown keys throw', throws(() => fx.set('look.aoLit', 2)) && throws(() => fx.set('look.lift', [1, 0])) && throws(() => new PostFX(stub(), scene, cam, { atmosphere: null, look: { gamma: 1 } })));
+  fx.dispose();
+}
+
 console.log(results.join('\n'));
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll post-pipeline option checks passed.');
 process.exit(failures ? 1 : 0);

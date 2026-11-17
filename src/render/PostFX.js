@@ -103,6 +103,9 @@
 //   dof: null | true | { focusDistance 12, focalLength 50, fStop 2, sensorHeight 24, maxCoC 12, scale 0.5,
 //     samples 24, nearBlur true, stableDepth false } (DOF_DEFAULTS)
 //   lut: null | { texture: Data3DTexture, size, strength 1 } (the Assets 'lut' value works as it is)
+//   look: { aoLit 0, aoTint [0, 0, 0], lift [0, 0, 0] } finishing in the final pass (FINAL_AO_LIT: AO only on the
+//     ambient, suppressed where a light reaches, and a per-channel occlusion tint; FINAL_LIFT: a coloured black floor
+//     after the contrast curve). At the defaults no define is set and the shader is unchanged; set('look.<key>', v).
 // set() paths (unknown paths throw): 'aa', 'gbuffer', 'jitter', 'renderScale', 'timing', 'ao.enabled', 'ao.normals',
 //   'bloom.enabled', 'taa.<option>', 'ssr' (false | true | options), 'ssr.<option>', 'volumetric' (false | true |
 //   options), 'volumetric.<option>' (incl. 'volumetric.intensity'), 'motionBlur' (strength: 0 removes the pass; or
@@ -155,6 +158,8 @@ export const FINAL_SHADER = {
     // 0.8.0 compositor inputs, read only under their defines (FINAL_SSR, FINAL_VOLUMETRIC, FINAL_LUT)
     tSSR: { value: null }, tVolume: { value: null }, uVolColor: { value: new THREE.Color(0, 0, 0) },
     tLUT: { value: null }, uLutSize: { value: 2 }, uLutStrength: { value: 1 },
+    // `look` inputs, read only under their defines (FINAL_AO_LIT, FINAL_LIFT)
+    uAoLit: { value: 0 }, uAoTint: { value: new THREE.Vector3() }, uLift: { value: new THREE.Vector3() },
   },
   // The eye-adaptation multiplier is one value for the whole screen: evaluated per vertex of the full-screen triangle
   // and passed flat (same value), instead of a texture read + exp2 + pow in each of ~6 M pixels at Retina size.
@@ -394,6 +399,37 @@ const FINAL_CLOSEST_AT = 'ivec2 p = ivec2( gl_FragCoord.xy ), mx = textureSize( 
 export const FINAL_UPSCALE_FRAGMENT = replaceOnce(FINAL_SHADER.fragmentShader, FINAL_CLOSEST_AT,
   'ivec2 mx = textureSize( tDepth, 0 ) - 1, p = min( ivec2( vUv * vec2( mx + 1 ) ), mx );');
 
+// The `look` options (FINAL_AO_LIT, FINAL_LIFT): derived text as well, inserted only while one is on, so every default
+// shader text stays the pinned one (test/render-scale.mjs, test/postfx-options.mjs).
+const LOOK_AO_AT = '          col *= mix( 1.0, ao, uAO );\n';
+const LOOK_LIFT_AT = '      col = p * p;\n';
+const LOOK_UNIFORMS_AT = '    varying vec2 vUv;\n    flat varying float vAE;\n';
+function withLook(frag) {
+  frag = replaceOnce(frag, LOOK_UNIFORMS_AT, LOOK_UNIFORMS_AT + `    #ifdef FINAL_AO_LIT
+    uniform float uAoLit;
+    uniform vec3 uAoTint;
+    #endif
+    #ifdef FINAL_LIFT
+    uniform vec3 uLift;
+    #endif
+`);
+  frag = replaceOnce(frag, LOOK_AO_AT, `    #ifdef FINAL_AO_LIT
+          // AO belongs to the ambient: pixels a light reaches (exposed luma 0.16 .. 0.85) keep most of their light
+          ao = mix( ao, 1.0, uAoLit * smoothstep( 0.16, 0.85, lum * uExposure / 0.6 * ( uAE.y > 0.0 ? vAE : 1.0 ) ) );
+    #endif
+${LOOK_AO_AT}    #ifdef FINAL_AO_LIT
+          { float a = max( mix( 1.0, ao, uAO ), 1e-3 ); col *= mix( vec3( 1.0 ), vec3( 1.0 / a ), uAoTint ); } // per channel mix( a, 1, tint ): a cool occlusion
+    #endif
+`);
+  return replaceOnce(frag, LOOK_LIFT_AT, `${LOOK_LIFT_AT}    #ifdef FINAL_LIFT
+      col = col * ( 1.0 - max( uLift.r, max( uLift.g, uLift.b ) ) ) + uLift; // a coloured floor: the darkest pixel is uLift, white stays white
+    #endif
+`);
+}
+/** @internal The final pass's text with the `look` blocks (at renderScale 1, and under upscaling). */
+export const FINAL_LOOK_FRAGMENT = withLook(FINAL_SHADER.fragmentShader);
+const FINAL_UPSCALE_LOOK_FRAGMENT = withLook(FINAL_UPSCALE_FRAGMENT);
+
 class FinalPass extends Pass {
   constructor(fx) {
     super();
@@ -415,6 +451,9 @@ class FinalPass extends Pass {
     this._vol = false; // FINAL_VOLUMETRIC defined (an enabled volumetric pass)
     this._lut = false; // FINAL_LUT defined (fx.lutOptions set)
     this._up = false; // FINAL_UPSCALE (fx renderScale in effect < 1): FINAL_UPSCALE_FRAGMENT
+    this._aoLit = false; // FINAL_AO_LIT defined (look.aoLit > 0 or a look.aoTint)
+    this._lift = false; // FINAL_LIFT defined (a look.lift)
+    this._look = false; // the look text in use (FINAL_LOOK_FRAGMENT / FINAL_UPSCALE_LOOK_FRAGMENT)
   }
   setSize(w, h) { this.material.uniforms.uRes.value.set(w, h); }
   render(renderer, writeBuffer, readBuffer) {
@@ -424,10 +463,26 @@ class FinalPass extends Pass {
     const closest = taa && fx.history.jitter && fx.taaOptions.stableDepth !== false; // no jitter: depth is stable
     const sp = fx.ssrPass, ssr = sp !== null && sp.enabled && !taa; // under TAA the TAA pass composites SSR (TAA_SSR)
     const vp = fx.volumetricPass, vol = vp !== null && vp.enabled, lo = fx.lutOptions, lut = lo.texture !== null;
-    const ups = fx._scaleOn;
+    const ups = fx._scaleOn, lk = fx.lookOptions;
+    const aoLit = lk.aoLit > 0 || lk.aoTint[0] !== 0 || lk.aoTint[1] !== 0 || lk.aoTint[2] !== 0;
+    const lift = lk.lift[0] !== 0 || lk.lift[1] !== 0 || lk.lift[2] !== 0;
+    const look = aoLit || lift;
+    if (ups !== this._up || look !== this._look) {
+      this._look = look;
+      this.material.fragmentShader = ups ? (look ? FINAL_UPSCALE_LOOK_FRAGMENT : FINAL_UPSCALE_FRAGMENT) : (look ? FINAL_LOOK_FRAGMENT : FINAL_SHADER.fragmentShader);
+      this.material.needsUpdate = true;
+    }
+    if (aoLit !== this._aoLit || lift !== this._lift) {
+      this._aoLit = aoLit; this._lift = lift;
+      const d = this.material.defines;
+      if (aoLit) d.FINAL_AO_LIT = 1; else delete d.FINAL_AO_LIT;
+      if (lift) d.FINAL_LIFT = 1; else delete d.FINAL_LIFT;
+      this.material.needsUpdate = true;
+    }
+    if (aoLit) { u.uAoLit.value = lk.aoLit; u.uAoTint.value.fromArray(lk.aoTint); }
+    if (lift) u.uLift.value.fromArray(lk.lift);
     if (ups !== this._up) {
       this._up = ups;
-      this.material.fragmentShader = ups ? FINAL_UPSCALE_FRAGMENT : FINAL_SHADER.fragmentShader;
       if (ups) this.material.defines.FINAL_UPSCALE = 1; else delete this.material.defines.FINAL_UPSCALE;
       this.material.needsUpdate = true;
     }
@@ -647,7 +702,7 @@ export class PostFX {
    * @param {object} [o] atmosphere (an Atmosphere, or null), width/height (CSS px), pixelRatio, samples (MSAA,
    *   default 4), msaa, msaaMaxPixels, lateClear, compactHDR, grade, ao, bloom, fog, fogFarFade, fogMinSkyElevation,
    *   autoExposure, fogColor, fogParams, gbuffer, aa, taa, jitter, jitterPattern, renderScale (1), timing; 0.8.0
-   *   (all off by default): ssr, volumetric, motionBlur, dof, lut, ao.normals (see header)
+   *   (all off by default): ssr, volumetric, motionBlur, dof, lut, ao.normals; look { aoLit, aoTint, lift } (see header)
    */
   constructor(renderer, scene, camera, o = {}) {
     this.renderer = renderer; this.scene = scene; this.camera = camera;
@@ -713,6 +768,16 @@ export class PostFX {
     this.dofOptions = { ...DOF_DEFAULTS };
     /** @type {{ texture: THREE.Data3DTexture | null, size: number, strength: number }} 3D LUT grade (texture null = none). */
     this.lutOptions = { texture: null, size: 0, strength: 1 };
+    /**
+     * Finishing options of the final pass, all off by default (the picture is then unchanged): aoLit (0..1, AO is
+     * suppressed on pixels a light reaches, exposed luma 0.16..0.85: AO belongs to the ambient; Saltline 0.8), aoTint
+     * ([r, g, b] 0..1: occluded pixels keep that fraction of their light per channel, a cool tint such as [0, 0.03,
+     * 0.07]), lift ([r, g, b] display-linear: the floor black is lifted to this colour after the contrast curve, white
+     * stays white; e.g. [0.006, 0.0085, 0.011]). set('look.aoLit' | 'look.aoTint' | 'look.lift', v) / get.
+     * @type {{ aoLit: number, aoTint: number[], lift: number[] }}
+     */
+    this.lookOptions = { aoLit: 0, aoTint: [0, 0, 0], lift: [0, 0, 0] };
+    for (const k in o.look || {}) this._setLook(k, o.look[k]); // validated: unknown keys / bad values throw
     this._next = null; // options staged by _parseToggle for _commitToggle
     this._ssrOn = this._parseToggle('ssr', o.ssr); // requested; built only with the G-buffer
     this._volOn = this._parseToggle('volumetric', o.volumetric);
@@ -1017,6 +1082,7 @@ export class PostFX {
         }
         break;
       case 'lut': this._setLut(value); break;
+      case 'look.aoLit': case 'look.aoTint': case 'look.lift': this._setLook(path.slice(5), value); break;
       case 'lut.strength':
         if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`[PostFX] lut.strength: expected a finite number, got ${value}`);
         this.lutOptions.strength = value; break;
@@ -1052,12 +1118,27 @@ export class PostFX {
       case 'dof': return this.dof; // copies: a later set() does not change what was read
       case 'lut': return this.lut;
       case 'lut.strength': return this.lutOptions.strength;
+      case 'look.aoLit': return this.lookOptions.aoLit;
+      case 'look.aoTint': return this.lookOptions.aoTint.slice();
+      case 'look.lift': return this.lookOptions.lift.slice();
       default: {
         const p = OPTION_PATHS.get(path);
         if (p === undefined) throw new Error(`[PostFX] get: unknown path '${path}'`);
         return this._options(p.group)[p.key];
       }
     }
+  }
+
+  // a `look` option, validated (unknown keys and bad values throw, nothing changes)
+  _setLook(key, v) {
+    const lo = this.lookOptions;
+    if (key === 'aoLit') {
+      if (typeof v !== 'number' || !(v >= 0 && v <= 1)) throw new Error(`[PostFX] look.aoLit: expected a number in 0..1, got ${v}`);
+      lo.aoLit = v;
+    } else if (key === 'aoTint' || key === 'lift') {
+      if (!Array.isArray(v) || v.length !== 3 || !v.every((x) => typeof x === 'number' && x >= 0 && x < 1)) throw new Error(`[PostFX] look.${key}: expected [r, g, b] with each in 0..1, got ${v}`);
+      lo[key] = v.slice();
+    } else throw new Error(`[PostFX] look: unknown option '${key}' (aoLit, aoTint, lift)`);
   }
 
   // the kept options of a group / its live pass (null when absent)
