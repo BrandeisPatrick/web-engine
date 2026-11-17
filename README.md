@@ -147,7 +147,7 @@ guards. [bench/README.md](bench/README.md) describes the score, the guards and t
 
 ## Project status
 
-The current release is **1.1.0-beta.1**, a pre-release; **1.0.0** is the latest stable release. Both are on the
+The current release is **1.1.0**; **1.1.0-beta.1** was its pre-release and **1.0.0** the release before. All are on the
 [releases page](https://github.com/BrandeisPatrick/web-engine/releases), and [CHANGELOG.md](CHANGELOG.md) lists what
 changed in each.
 

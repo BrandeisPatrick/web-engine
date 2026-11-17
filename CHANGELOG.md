@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 — 2026-11-17 — Sound, game shell, drive feel, car and camera kits; the open look; phone start-up; Halloween retired
 - The open look is the default in nyc-night and miami-drive: the owner chose it on 2026-11-17 after comparing the two
   looks side by side (docs/BEFORE-AFTER.md, first section; the sheets are `docs/before-after/nyc-night-looks.jpg` and
   `miami-drive-looks.jpg`). The earlier low-key grade is `?look=low`; `?look=open` is still accepted. One line per
