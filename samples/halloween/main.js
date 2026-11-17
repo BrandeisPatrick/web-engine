@@ -428,6 +428,9 @@ async function boot() {
         // desktop / high: moonlight shafts through the mist (the volumetric pass marching the moon: Atmosphere
         // moonScatter), shadowed by the moon's map (so not with ?shadows=0); phones keep the fog's analytic moon glow
         volumetric: LOW || !SHADOWS ? false : { maxDistance: 50, steps: 16, intensity: CLASSIC ? 0.07 : 0.1 },
+        // AO on the ambient only (the moonlit faces stay clean); ?look=open also a small cool black lift (the low-key
+        // default has none: the graveyard view sits at the smoke look gate's limit for dark pixels)
+        ...(CLASSIC ? {} : { look: { aoLit: 0.8, ...(OPEN ? { lift: [0.006, 0.008, 0.012] } : {}) } }),
       });
       if (LOW) postfx.ao.enabled = false;
     } catch (e) { console.warn('[halloween] post-processing unavailable', e); postfx = null; }
