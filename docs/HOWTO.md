@@ -18,6 +18,7 @@ Contents: [Engine and quality tiers](#engine-and-quality-tiers) ·
 [Load a GLB and play its clips](#load-a-glb-and-play-its-clips) · [Drive a car](#drive-a-car) ·
 [Get in and out of a vehicle](#get-in-and-out-of-a-vehicle) ·
 [Steering assist, skid marks and smoke](#steering-assist-skid-marks-and-smoke) ·
+[Weathered walls and props](#weathered-walls-and-props) ·
 [Smooth rendering between fixed steps](#smooth-rendering-between-fixed-steps) ·
 [Lamps without MapWorld](#lamps-without-mapworld) · [Clustered lights](#clustered-lights) · [Headlights](#headlights) ·
 [A textured mesh from a texture set](#a-textured-mesh-from-a-texture-set) · [HUD text](#hud-text) ·
@@ -361,6 +362,21 @@ corner leaves nothing, a handbrake turn leaves dark marks. Both are in the "Driv
 visible ground is the physics ground. A pause-menu switch is `input.assist.enabled = on` (the starter's `GameShell`
 toggle, "Loading, a start screen and pause"). Budget: `new TyreFx({ budget: { marks: 600, smoke: 120 } })` on the
 mobile tier; one draw call each for marks and smoke.
+
+## Weathered walls and props
+
+`weathering()` (render) is a material patch: world-space breakup with no UVs and no textures, so a flat wall or a
+clean prop stops looking new. Grime rises from y = 0, or from each object's origin with `ground: 'origin'`.
+
+<!-- from: test/howto/recipes.js#weathering -->
+```js
+applyPatches(wallMat, [weathering({ grime: 0.4, streaks: 0.35 })]);         // a wall standing on y = 0
+applyPatches(postMat, [weathering({ ground: 'origin', streaks: 0, seed: 3 })]); // props: grime from each one's own base
+```
+
+The defaults are restrained (`WEATHERING_DEFAULTS`); `fade` and `chips` are off unless you set them. It costs a few
+noise lookups per pixel of the patched material. Walls that already have their own grime (a facade shader) do not
+need it; a custom shader can include `GLSL_WEATHERING` and call `wxWeather` itself.
 
 ## Smooth rendering between fixed steps
 

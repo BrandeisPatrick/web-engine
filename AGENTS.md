@@ -82,6 +82,12 @@ expose state that changes through a function (`{ game: () => ({ mode, score }) }
 | Walls and crates | `PhysicsWorld`, `DynamicsWorld`, `attachToPhysicsWorld`, `boxShape` (physics) | `physics.addStaticBox({ center, size })`; `dyn.addBody({ shape, position, mass })` | `test/howto/recipes.js` |
 | Hills, a small track | `PhysicsWorld` (physics) | `new PhysicsWorld({ heightfield: (x, z) => y })`, `setSurfaceProvider(fn)` | `test/howto/recipes.js` |
 | Desktop / phone tiers | `resolveQuality` (core), `GameShell` / `QualityMenu` (ui) | `const S = resolveQuality().settings`; `new GameShell({ quality })` puts the tiers in the pause card (or `new QualityMenu({ quality })` without a shell) | starters |
+| Weathered walls and props | `applyPatches`, `weathering` (render) | `applyPatches(mat, [weathering({ grime: 0.4, streaks: 0.35 })])`; props: `weathering({ ground: 'origin' })` | HOWTO "Weathered walls and props", `samples/starter-drive/main.js` |
+| Lit clouds and a key light after sunset | `Atmosphere` (render) | `new Atmosphere({ ..., cloudStyle: 'lit', lowSunEnv: true, twilightKey: true })` | `samples/miami-drive/world.js` |
+| Leaves lit like leaves (wrap, light through, rim) | `applyFoliageLightingTo`, `buildTreeMeshes` (world) | `applyFoliageLightingTo(group, true)` or `buildTreeMeshes(p, { foliageLight: true })` | `samples/nyc-night/main.js` |
+| Facade windows with dim rooms, shades and panes that differ | `createFacadeMaterials`, `enableFacadeDetail` (world) | `enableFacadeDetail(createFacadeMaterials(...), { dimRooms: 0.22 })` | `samples/nyc-night/facades.js` |
+| AO only on the ambient, a lifted black, TAA sharpen | `PostFX` (render) | `new PostFX(..., { look: { aoLit: 0.8, aoTint: [0, 0.03, 0.07], lift: [0.002, 0.003, 0.004] }, taa: { sharpen: 0.25 } })` | `samples/nyc-night/main.js` |
+| Lamp light in round pools on the ground | `NearestLights` (render) | `new NearestLights({ mode: 'clustered', clustered, spot: { cosInner: 0.82, cosOuter: 0.12 } })` | `samples/nyc-night/main.js` |
 | A whole city | `MapWorld` (world) | only for map-scale cities from baked OpenStreetMap data | `samples/nyc-night/main.js` |
 
 Everything else, layer by layer: [ENGINE.md](ENGINE.md). Every source file starts with a header documenting its API.

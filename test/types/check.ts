@@ -237,3 +237,21 @@ const tuned = new ChaseRig(engine.camera, null, { feel: { sway: 0.4, lagCap: 0.3
 roadChase.addTrauma(0.5).addTrauma(0.2); void tuned; void ROAD_FEEL.surge;
 const tpDip = new ThirdPersonRig(engine.camera, null, { landingDip: 1, sprintFov: 6 });
 tpDip.land(4.4);
+
+// the round's look options: weathering, a lit cloud deck and twilight key, lit foliage, facade detail, PostFX look,
+// lamp spots (all off unless asked for)
+import { weathering, applyPatches, bakeWeathering, WEATHERING_DEFAULTS, DEFAULT_TWILIGHT_KEY, DEFAULT_LOW_SUN_ENV } from '@vibe/engine/render';
+import { applyFoliageLighting, applyFoliageLightingTo, enableFacadeDetail, createFacadeMaterials, DEFAULT_FOLIAGE_LIGHT } from '@vibe/engine/world';
+const wallMat = new THREE.MeshStandardMaterial();
+applyPatches(wallMat, [weathering({ grime: 0.4, streaks: 0.35, ground: 'origin', seed: 2 })]);
+void bakeWeathering; void WEATHERING_DEFAULTS.grime; void DEFAULT_TWILIGHT_KEY.intensity; void DEFAULT_LOW_SUN_ENV.warm;
+const lookAtmo = new Atmosphere({ scene: engine.scene, renderer: engine.renderer, camera: engine.camera, timeOfDay: 'dusk', cloudStyle: 'lit', lowSunEnv: true, twilightKey: { intensity: 0.9 } });
+void lookAtmo;
+const leafU = applyFoliageLighting(new THREE.MeshStandardMaterial(), { wrap: 0.5 });
+const leafN: number = applyFoliageLightingTo(engine.scene, true, (m, o) => o.name.startsWith('veg-') && !!m);
+void leafU; void leafN; void DEFAULT_FOLIAGE_LIGHT.rim;
+void enableFacadeDetail; void createFacadeMaterials;
+const lookFx = new PostFX(engine.renderer, engine.scene, engine.camera, { look: { aoLit: 0.8, aoTint: [0, 0.03, 0.07], lift: [0.002, 0.003, 0.004] }, taa: { sharpen: 0.25 } });
+lookFx.set('look.aoLit', 0.6);
+const spotPool = new NearestLights({ count: 4, mode: 'clustered', spot: { cosInner: 0.82, cosOuter: 0.12 } });
+void spotPool;

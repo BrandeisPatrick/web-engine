@@ -398,6 +398,29 @@ surface above.
   three's `PointLight` units (linear colour x intensity): about 8 for a garden lamp (reach 12 m, decay 1.5), up to 260
   for a city street lamp (reach 48 m, decay 2); at 1 a lamp is invisible at dusk. The clustered wiring without
   `MapWorld` is five calls: [docs/HOWTO.md, "Clustered lights"](docs/HOWTO.md#clustered-lights).
+- Look options (all off by default; the picture is unchanged without them):
+  - `new Atmosphere({ cloudStyle: 'lit' })`: a soft cloud deck shaded by its relief toward the sun, warm undersides,
+    a rim near the sun, domain-warped, three octaves ('classic' keeps the two-octave puffs).
+  - `twilightKey: true | { intensity, elevation, color, fadeIn, fadeOut, scatter }` (`DEFAULT_TWILIGHT_KEY`): from just
+    before sunset until the sun is 9 degrees under, the shadow-casting light comes from the afterglow, low and warm,
+    so a dusk scene keeps one key direction, rims and shadows.
+  - `lowSunEnv: true | { intensity, warm, below }` (`DEFAULT_LOW_SUN_ENV`): at low sun the environment light rises
+    and its horizon toward the sun warms (warm fill on sun-facing surfaces, cool sky fill on the rest).
+  - `PostFX({ look: { aoLit, aoTint, lift } })`: `aoLit` (0..1) keeps AO on the ambient only (pixels a light reaches
+    lose it), `aoTint` colours what AO leaves (e.g. `[0, 0.03, 0.07]`), `lift` raises the floor black to a colour
+    after the contrast curve (e.g. `[0.006, 0.0085, 0.011]`, about a third of it in a low-key look). Each adds its
+    block to the final pass only while it is on; `postfx.set('look.aoLit', v)` at runtime.
+  - `NearestLights({ mode: 'clustered', spot: { cosInner, cosOuter } })`: each lamp is a spot aimed straight down, a
+    round soft-edged pool on the ground that leaves the wall above its head dark.
+  - `weathering(options)` (`src/render/MaterialPatches.js`): a material patch for `applyPatches` that breaks up
+    walls and props in world space (no UVs, no textures): macro value / hue / roughness variation, grime rising from
+    the ground (`ground: 'origin'` for props), rain streaks, dust on ledges, optional sun fading and chips.
+    `GLSL_WEATHERING` is the same as a library for custom shaders, `bakeWeathering` bakes it into vertex colours and
+    `weatheringAt` is the CPU twin. Recipe: [docs/HOWTO.md, "Weathered walls and props"](docs/HOWTO.md#weathered-walls-and-props).
+  - World: `applyFoliageLighting(material, opts)` / `applyFoliageLightingTo(root, opts, filter)` and
+    `buildTreeMeshes(..., { foliageLight })` light leaves as foliage (wrap, light through the leaves, rim, more sky);
+    `enableFacadeDetail(createFacadeMaterials(...), opts)` gives facade windows dim rooms, street spill, panes that
+    differ, roller shades and weathered curtain walls.
 - Moonlit scattering (opt-in, `new Atmosphere({ moonScatter: amount })`, default 0 = off): at night, while the moon
   is the shadow-casting light (`lightDir = moonDir`), the post fog's forward-scatter glow (`fogParams.sunScatter`,
   otherwise 0 at night) is `amount`, and `atmo.scatterDir` / `atmo.scatterColor` follow the moon (`moonDir`,
@@ -662,12 +685,12 @@ meshes and `PhysicsWorld.setSurfaceProvider` instead.
 | `MapData.js` | `loadMapData(url)`, `validateMapData(data)`, `prepareMapData(data, spawnOpts)` -> `{ offset, bounds, outerBox, spawn }`, `findSpawn(data, bounds, { road, at })`, `generateProceduralCity(seed, { waterfrontName, center })`, `MAP_KEYS`, `assetBase()` |
 | `Terrain.js` | `Terrain` (`load(url)`, `setData(json)`, `setOffset`, `heightAt`, `rawHeightAt`, `normalAt`, `attachSurface`), `GroundSurface` (nested lattice; `applyCorridors`, `finalize`, `heightAt`, `normalAt`), `sampleLevel`, `drapePolygon`, `clipConvex`, `latticeSplit` |
 | `RoadNetwork.js` | `RoadNetwork({ roads, rail, raster, isWater, surface, deckHolds })` (`prepare`, `build`, `meshes`, `list`, `deckHash`, `segHash`, `corridors`, `heldDecks`), `roadStyle`, `RBIT`, `createRoadMaterial`, `createTactileMaterial`, `SolidBuf`, `samplePolyline`, `quadUp`, `DEFAULT_DECK_HOLD` |
-| `Buildings.js` + `FacadeTextures.js` | `BuildingBuilder(region, { groundAt, streetAt, offset, baseGrid, detailGrid, lodDist, detailFloors, maxWindows, style, nearDetail, grid })` (`add(b, rnd, footprint?)`, `footprint(b)`, `build`), `TileBuildingBuilder(region, opts, 'low' \| 'full' \| 'near')` (`meshes(mats)` generator), `NullBuf`, `DEFAULT_BUILDING_STYLE` (`oldProb(xb, zb)`, `victorianProb(xb, zb)`, `namedRe`), `createFacadeMaterials`, `GeoBuf`, `MODE`, `enc`, `tintOf`, `insetRing`, `offsetRing`; `FACADE`, `WIN_RECTS`, `makeFacadeTextures`, `PBR`, `PBR_SETS`, `GROUND_SETS`, `loadPbrTextures` |
+| `Buildings.js` + `FacadeTextures.js` | `BuildingBuilder(region, { groundAt, streetAt, offset, baseGrid, detailGrid, lodDist, detailFloors, maxWindows, style, nearDetail, grid })` (`add(b, rnd, footprint?)`, `footprint(b)`, `build`), `TileBuildingBuilder(region, opts, 'low' \| 'full' \| 'near')` (`meshes(mats)` generator), `NullBuf`, `DEFAULT_BUILDING_STYLE` (`oldProb(xb, zb)`, `victorianProb(xb, zb)`, `namedRe`), `createFacadeMaterials`, `enableFacadeDetail(mats, { dimRooms, spill, paneVariation, shades, weathering })`, `GeoBuf`, `MODE`, `enc`, `tintOf`, `insetRing`, `offsetRing`; `FACADE`, `WIN_RECTS`, `makeFacadeTextures`, `PBR`, `PBR_SETS`, `GROUND_SETS`, `loadPbrTextures` |
 | `Props.js` + `Furniture.js` + `Vehicles.js` | `Props({ net, raster, colliders, data, isLand, groundAt, seed, streets, signStyle, treeRules, treeMix })`; furniture library (`makeFurnitureGeometry`, `FURNITURE_META`, `buildSignAtlas(names, style)`, `DEFAULT_SIGN_STYLE`, materials); vehicle library (`makeVehicleGeometry(type, { lod, livery })`, `VEHICLE_SPECS`, `pickVehicleColor`, `createVehicleMaterial`, `DEFAULT_BUS_LIVERY`, `PartBuilder`) |
 | `CarVisual.js` | `createCarVisual(type, { color, castShadow, contactShadow, shadowOpacity })` -> `{ root, wheels, spinners, spec, lamps, update(dt, car, { darkness, lights, brake, reverse }), setColor, dispose }`, `carSpecFor(type)` |
 | `Traffic.js` | presenter: `Traffic({ world, data, net, props, seed, count, camera, busLivery, worker })` (`build`, `ready`, `update`, `queryColliders`, `setPlayer`, `setCamera`, `summary`, `pose(i)`, `mode`, `perf`, `sim`) |
 | `TrafficSim.js` + `traffic.worker.js` | simulation core (no scene objects): `TrafficSim({ roads, signals, groundAt \| baked, spawn, seed, count })` (`build`, `update(dt)`, `setView`, `setPlayer`, `readSignals`, `writePoses`, `queryColliders`, `summary`, `bakeError`, `lanes`, `vehicles`), `TrafficSim.roadsFrom(net)`, `buildSignalInfos({ data, net, props })`, `playerInfoFrom(src)`, `TRAFFIC_TYPES`, `POSE_STRIDE`, `typeCounts`; the module worker that runs it |
-| `Vegetation.js` (+ `VegModels.js`, `VegTextures.js`, `VegMaterials.js`) | `buildTreeMeshes(placements, { groundAt, colliders, seed, rules, mix })`, `bakeVegImpostors`, `SPECIES`, `makeVegAtlas`, `createVegMaterial`, `createVegImpostorMaterial` |
+| `Vegetation.js` (+ `VegModels.js`, `VegTextures.js`, `VegMaterials.js`) | `buildTreeMeshes(placements, { groundAt, colliders, seed, rules, mix, foliageLight })`, `bakeVegImpostors`, `SPECIES`, `makeVegAtlas`, `createVegMaterial`, `createVegImpostorMaterial`, `applyFoliageLighting`, `applyFoliageLightingTo`, `DEFAULT_FOLIAGE_LIGHT` |
 | `Water.js` / `Shore.js` / `Boats.js` | `Water`, `createWaterMaterial({ ..., refraction })` (0.8.0: `setWaterRefraction`, `setWaterSceneTextures`, `updateWaterRefraction`, `WATER_REFRACTION_DEFAULTS`), `buildShoreField`, Gerstner `waveHeight` / `waveSlope`; `Waterfront({ world, renderer, level, waterMat, pondMat, groundMat, ferryDock, islandFill, boats, farland })`, `createGroundMaterial`, `bakeLandClass`, `buildFarLand(json, world, level, opts)`; `Boats({ ..., ferryDock, ferryRoute, ferries, shipRoute, sailZones, sailCount, bridge })` |
 | `geom.js` | `hashStr`, `signedArea`, `pointInRing`, `RingIndex` (exact row-bucketed pointInRing for big rings), `pointInPoly`, `ringBounds`, `centroid`, `sanitizeRing`, `polylineLength` (+ re-exports of `render/noise.js`) |
 | `MeshChunker.js`, `ShadowPasses.js` | tiled static meshes, per-cascade shadow casters (see Conventions); `NearestLights.js` re-exports the render layer's class |
