@@ -334,6 +334,20 @@ for (const damping of [60, 200, 1000]) {
   check('determinism: finite pose', A.tp.camera.position.length() + A.fp.camera.position.length(), 0, 1e6, 'm');
 }
 
+// --- reactive options default off (their behaviour: test/camera-feel.mjs) -------------------------
+{
+  const tp = new ThirdPersonRig(camera(), null), fp = new FirstPersonRig(camera(), null);
+  const st = { sprint: true };
+  for (const [name, rig] of [['TP', tp], ['FP', fp]]) {
+    rig.setTarget(target(), () => st);
+    rig.update(DT);
+    const y = rig.camera.position.y;
+    check(`${name} defaults: landingDip 0, sprintFov 0, trauma 0`, rig.landingDip + rig.sprintFov + rig.trauma, 0, 0);
+    check(`${name} land() without landingDip leaves the camera (chainable)`, rig.land(8) === rig ? (run(rig, 0.2), Math.abs(rig.camera.position.y - y)) : NaN, 0, 0, 'm');
+    check(`${name} state.sprint without sprintFov leaves the FOV`, rig.camera.fov, 60, 60, 'deg');
+  }
+}
+
 // --- perf -----------------------------------------------------------------------------
 {
   const boxes = [];
