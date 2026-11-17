@@ -105,13 +105,12 @@ export class ChaseRig extends CameraRig {
   /**
    * @param {THREE.PerspectiveCamera} camera
    * @param {HTMLElement} [domElement]
-   * @param {object} [opts]  minY, getGroundHeight, queryColliders, physics, occlusion, collisionMargin,
+   * @param {{ feel?: null|'road'|Partial<ChaseFeel>, [key: string]: any }} [opts]  minY, getGroundHeight, queryColliders, physics, occlusion, collisionMargin,
    *                          offsets: { hood, cockpit }, modes: { name: config }, modeOrder: [names],
    *                          active (false = start inactive), flightFraming (true | false | 'auto'),
    *                          flightFramingDelay (s, 'auto' only, 0.6), canopyFromCollider (treeCanopy | null | fn),
    *                          thinKinds ([2, 3] | [] | kinds), feel (null | 'road' | Partial<ChaseFeel>: see ROAD_FEEL),
    *                          traumaDecay, traumaShake (CameraRig: addTrauma)
-   * @param {null|'road'|Partial<ChaseFeel>} [opts.feel=null]  road feel in follow mode (default off)
    */
   constructor(camera, domElement, opts = {}) {
     super(camera, withChaseDefaults(opts));

@@ -248,10 +248,10 @@ const TAU = Math.PI * 2;
 export class CameraRig {
   /**
    * @param {THREE.PerspectiveCamera} camera
-   * @param {object} [opts]  minY (ground clearance), active (default true; false = start inactive until
-   *                         activate()) + CameraCollision options
-   * @param {number} [opts.traumaDecay=1.7]  trauma lost per second (see addTrauma)
-   * @param {{ pitch?: number, yaw?: number, roll?: number }} [opts.traumaShake]  peak shake angles (rad) at trauma 1
+   * @param {{ traumaDecay?: number, traumaShake?: { pitch?: number, yaw?: number, roll?: number }, [key: string]: any }} [opts]
+   *   minY (ground clearance), active (default true; false = start inactive until activate()) + CameraCollision
+   *   options; traumaDecay (1.7: trauma lost per second, see addTrauma), traumaShake (peak shake angles in rad at
+   *   trauma 1, default { pitch: 0.025, yaw: 0.025, roll: 0.035 })
    */
   constructor(camera, opts = {}) {
     this.camera = camera;
