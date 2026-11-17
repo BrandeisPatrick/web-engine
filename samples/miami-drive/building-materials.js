@@ -191,9 +191,13 @@ const WEATHER = /* glsl */`
     if (farG > 0.0) {
       vec2 cell = vec2(floor(vFuv.x * 0.5), floor(vFuv.y)), id = cell + vec2(vInfo.z * 113.0, vInfo.z * 71.0);
       float hp = mix(fHash(id + 3.7), fHash(vec2(vInfo.z * 17.0, cell.y)), 0.75);
-      float lit = max(step(1.0 - uLitFrac * (0.6 + 0.9 * fract(vInfo.z * 5.7)), hp), step(1.0 - uLitFrac * 0.5, fHash(id + 9.9)));
-      fEnv *= 1.0 - 0.5 * farG;
-      fEmis += vec3(1.0, 0.74, 0.46) * lit * uNight * uWinGain * 0.3 * farG;
+      float lit = max(step(1.0 - uLitFrac * (0.9 + 1.2 * fract(vInfo.z * 5.7)), hp), step(1.0 - uLitFrac * 0.7, fHash(id + 9.9)));
+      // the rows must read at a distance: the glass darker than the stucco (less sky in it), every room a faint warm
+      // grey (curtains, a lamp further in), more of them lit
+      fEnv *= 1.0 - 0.7 * farG;
+      fCol *= 1.0 - 0.5 * farG;
+      fEmis += vec3(1.0, 0.8, 0.6) * uNight * uWinGain * 0.025 * (0.5 + fHash(id + 4.4)) * farG;
+      fEmis += vec3(1.0, 0.74, 0.46) * lit * uNight * uWinGain * 0.38 * farG;
     }
   }
 }
@@ -218,14 +222,31 @@ export function miamiFacadeMaterials(world, { weather = true } = {}) {
   for (const k of ['uNight', 'uLitFrac', 'uWinGain', 'uTime', 'uClock']) if (eng[k]) set.uniforms[k] = eng[k];
   set.uniforms.uMbWeather = { value: weather ? 1 : 0 }; // phones: the far windows, glass block and trim only
   set.uniforms.uMbNoise = { value: noiseTexture() };
+  // the directional light's highlight: scaled and soft-capped while the twilight key is the directional light
+  // (buildings.js update; (1, 0) by day: unchanged).
+  // The key stands for a broad bright patch of sky, not a disc, so a point-light highlight on glazing and glossy
+  // stucco is a hot spot that reads as a lamp; the environment already carries the afterglow's reflection
+  set.uniforms.uMbKeyGlint = { value: new THREE.Vector2(1, 0) }; // (scale, 1 / soft cap)
   const m = set.facade, prev = m.onBeforeCompile;
   m.onBeforeCompile = (sh, r) => {
     prev.call(m, sh, r);
+    sh.uniforms.uMbKeyGlint = set.uniforms.uMbKeyGlint;
     sh.fragmentShader = sh.fragmentShader
-      .replace('varying vec3 vWall;', `varying vec3 vWall;\n${NOISE}`)
-      .replace('diffuseColor.rgb *= fCol;', `${WEATHER}\ndiffuseColor.rgb *= fCol;`);
+      .replace('varying vec3 vWall;', `varying vec3 vWall;\n${NOISE}\nuniform vec2 uMbKeyGlint;`)
+      .replace('diffuseColor.rgb *= fCol;', `${WEATHER}\ndiffuseColor.rgb *= fCol;`)
+      .replace('#include <lights_fragment_begin>', THREE.ShaderChunk.lights_fragment_begin
+        .replace('#if ( NUM_DIR_LIGHTS > 0 ) && defined( RE_Direct )', `vec3 mbSpec0 = reflectedLight.directSpecular;
+#ifdef USE_CLEARCOAT
+vec3 mbCc0 = clearcoatSpecularDirect;
+#endif
+#if ( NUM_DIR_LIGHTS > 0 ) && defined( RE_Direct )`)
+        .replace('#if ( NUM_RECT_AREA_LIGHTS > 0 )', `{ vec3 ds = max( reflectedLight.directSpecular - mbSpec0, 0.0 ) * uMbKeyGlint.x; reflectedLight.directSpecular = mbSpec0 + ds / ( 1.0 + ds * uMbKeyGlint.y ); }
+#ifdef USE_CLEARCOAT
+{ vec3 dc = max( clearcoatSpecularDirect - mbCc0, 0.0 ) * uMbKeyGlint.x; clearcoatSpecularDirect = mbCc0 + dc / ( 1.0 + dc * uMbKeyGlint.y ); }
+#endif
+#if ( NUM_RECT_AREA_LIGHTS > 0 )`));
   };
-  m.customProgramCacheKey = () => 'roadster-facade-3-miami-weather-2';
+  m.customProgramCacheKey = () => 'roadster-facade-3-miami-weather-3';
   return set;
 }
 

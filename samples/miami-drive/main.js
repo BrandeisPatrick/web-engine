@@ -16,7 +16,7 @@ import {
   createBenchHarness, readBenchParams, resolveQuality, isTouchDevice, lutFromFunction, DEFAULT_GRADE, TextureSets, loadTextureSet, loadTextureManifest,
 } from '@vibe/engine';
 import { createMemoryTrim } from '@vibe/engine/render';
-import { applyFoliageLightingTo } from '@vibe/engine/world';
+import { applyFoliageLightingTo, vegUV } from '@vibe/engine/world';
 import { QualityMenu } from '@vibe/engine/ui';
 import { MapWorld, ExtraLights, miamiPlugin, miamiWorldOptions, prepareMiamiData, MIAMI_MAP_URL, MIAMI_PRESETS } from './world.js';
 import { buildCarModel } from './car-model.js';
@@ -27,7 +27,7 @@ import { HUD, ACCENT, applyTheme } from './hud.js';
 import { DuskSky } from './sky.js';
 import { loadCarGlb } from './car-glb.js';
 import { buildRoadside } from './roadside.js';
-import { buildNearPalms } from './palm.js';
+import { buildNearPalms, canaryBark } from './palm.js';
 import { miamiBuildingsPlugin } from './buildings.js';
 
 const params = new URLSearchParams(location.search);
@@ -109,8 +109,8 @@ const DUSK_GRADE = DEFAULT_GRADE.map((g) => {
     ...g,
     aeS: OPEN ? 0.7 : 0,
     exp: dusk ? g.exp * DUSK_EXPOSURE : g.exp,
-    sat: dusk ? (OPEN ? 1.0 : 0.85) : g.sat, con: dusk ? g.con + (OPEN ? 0.02 : 0.04) : g.con,
-    wb: dusk ? [1.04, 1.0, 0.94] : g.wb,
+    sat: dusk ? (OPEN ? 0.93 : 0.85) : g.sat, con: dusk ? g.con + (OPEN ? 0.02 : 0.04) : g.con,
+    wb: dusk ? (OPEN ? [1.015, 1.0, 0.975] : [1.04, 1.0, 0.94]) : g.wb, // (open: less pink-orange over the whole frame)
     sh: dusk ? (OPEN ? [-0.004, 0.0, 0.008] : [0.004, 0.001, -0.004]) : g.sh, hi: dusk ? [0.01, 0.004, -0.01] : g.hi, split: dusk ? 0.6 : g.split,
     bT: dusk ? 4.5 : g.bT, bS: dusk ? 0.2 : g.bS, bR: dusk ? 0.28 : g.bR,
     vig: dusk ? (OPEN ? 0.42 : 0.5) : g.vig, grain: dusk ? 0.03 : g.grain,
@@ -305,7 +305,13 @@ async function boot() {
   const FOLIAGE = /^(roadside-plants|roadside-grass|near-palms|coconut-palms|veg-|dune-scrub|dune-grass)/;
   const FOLIAGE_MAT = /^(nearPalmTrunk|coconutTrunk)$/; // trunks stay solid
   const isFoliage = (m, o) => { if (FOLIAGE_MAT.test(m.name)) return false; for (let x = o; x; x = x.parent) if (FOLIAGE.test(x.name)) return true; return false; };
-  const litFoliage = () => applyFoliageLightingTo(scene, { wrap: 0.5, translucency: 0.35, rim: 1.0, ambient: 0.3, tint: [1.0, 0.72, 0.55] }, isFoliage);
+  // (?look=open: less light through the leaves and a cooler tint; under its higher exposure the street palms went
+  // yellow-green)
+  const FOLIAGE_OPTS = OPEN ? { wrap: 0.5, translucency: 0.2, rim: 0.8, ambient: 0.3, tint: [0.92, 0.74, 0.6] } : { wrap: 0.5, translucency: 0.35, rim: 1.0, ambient: 0.3, tint: [1.0, 0.72, 0.55] };
+  // the street palms' bark: fibrous grey-brown with fine rings instead of the atlas's leaf-base lattice (palm.js),
+  // before the lit-foliage pass wraps the same material (re-applied with it: tiles stream in)
+  const palmBark = () => canaryBark(scene, vegUV('barkPalm'), OPEN ? { frond: vegUV('frond'), frondTint: [0.8, 0.86, 0.9] } : {}); // (open: the fronds less yellow)
+  const litFoliage = () => { palmBark(); applyFoliageLightingTo(scene, FOLIAGE_OPTS, isFoliage); };
   litFoliage(); litFoliageRef.fn = litFoliage;
   if (roadside) { console.info('[miami] roadside', roadside.stats); engine.addSystem({ lateUpdate: (dt) => roadside.update(camera, atmo.darkness, hold.still ? 0 : dt || 1 / 60) }, 'roadside'); } // (the wind holds still for harness captures)
 
