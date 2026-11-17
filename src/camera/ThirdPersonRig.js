@@ -22,9 +22,12 @@
 // pointerLock: true makes the rig lock the pointer on click and read mousemove itself; with a domElement the wheel
 // zooms (wheelZoom). look() / turn() are ignored while inactive (and for NaN deltas); activate() snaps. No allocations per frame (apart from what
 // queryColliders returns).
+// Opt-in feel (both default 0 = off, pose for pose as without them): landingDip (gain, 1 = the reference feel) dips the
+// camera on rig.land(fallSpeed) with a spring (CameraRig LandingSpring: ~7 cm after a 1 m fall), sprintFov (degrees)
+// widens the FOV while state.sprint is true (or a number 0..1), eased at 6 1/s. rig.addTrauma(x) shakes (CameraRig).
 import * as THREE from 'three';
-import { CameraRig, clamp, damp, wrapPi, springStep } from './CameraRig.js';
-import { bindLook, targetPosition, targetFacing } from './FirstPersonRig.js';
+import { CameraRig, LandingSpring, clamp, damp, wrapPi, springStep } from './CameraRig.js';
+import { bindLook, targetPosition, targetFacing, SprintFov } from './FirstPersonRig.js';
 
 const EMPTY = Object.freeze({});
 const SPRING_HZ = 120;   // minimum focus-spring sub-step rate (also >= 4 * damping: stable, monotonic, frame-rate independent)
@@ -58,6 +61,8 @@ export class ThirdPersonRig extends CameraRig {
    * @param {number} [o.autoRecentre=0]      seconds without look input before yaw eases to the target's facing (0 = off)
    * @param {number} [o.recentreRate=2.5]    easing rate of the auto-recentre (1/s)
    * @param {number} [o.collisionMargin=0.25] [o.collisionRecover=4]  stand-off from a hit (m), ease-out rate (1/s)
+   * @param {number} [o.landingDip=0]        landing dip gain for land(speed) (0 = off; 1 = ~7 cm after a 1 m fall)
+   * @param {number} [o.sprintFov=0]         degrees added to the camera's FOV while state.sprint (0 = off)
    */
   constructor(camera, domElement, o = {}) {
     super(camera, o);
@@ -86,6 +91,10 @@ export class ThirdPersonRig extends CameraRig {
     this._dist = this.distance;                // eased zoom distance
     this._occ = 1;                             // allowed fraction of the focus -> camera segment
     this._idle = 0;                            // seconds since the last look input
+    this.landingDip = o.landingDip || 0;
+    this.sprintFov = o.sprintFov || 0;
+    this._dip = new LandingSpring(1);
+    this._sprint = new SprintFov(camera);
     this._unbind = bindLook(this, this.domElement, !!o.pointerLock, (e) => {
       if (!this.wheelZoom) return;
       e.preventDefault();
@@ -121,6 +130,14 @@ export class ThirdPersonRig extends CameraRig {
   /** Place the camera now (when active with a target), else on the next update. */
   snap() { super.snap(); if (this.enabled && this.target) this.update(0); }
   activate() { super.activate(); this.snap(); }
+
+  /**
+   * A landing: dips the camera by landingDip (no effect while it is 0). Call it on touchdown with the downward speed,
+   * e.g. `if (cc.landedThisStep) rig.land(cc.landingSpeed)`.
+   * @param {number} speed  m/s, positive
+   * @returns {this}
+   */
+  land(speed) { if (this.landingDip > 0) { this._dip.gain = this.landingDip; this._dip.kick(speed); } return this; }
 
   /** Horizontal unit forward of the view yaw (for camera-relative movement). */
   getForward(out) { return out.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); }
@@ -173,10 +190,13 @@ export class ThirdPersonRig extends CameraRig {
       f = this._occ;
     } else C.focus.copy(_tpos);
     cam.position.copy(_desired).sub(this.focus).multiplyScalar(f).add(this.focus);
+    if (this._dip.v !== 0 || this._dip.y !== 0) cam.position.y += snap ? this._dip.reset() : this._dip.step(dt);
     if (this.collide) C.pushOut(cam.position);
     if (C.getGroundHeight) C.clampAboveGround(cam.position, this.minY);
 
     const S = this.state; S.yaw = this.yaw; S.pitch = this.pitch; S.distance = d * f;
+    if (this.sprintFov) this._sprint.update(dt, st, this.sprintFov, snap);
+    this._applyTrauma(dt);
     this._snapPending = false;
   }
 

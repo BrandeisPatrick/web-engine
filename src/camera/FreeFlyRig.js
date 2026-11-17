@@ -148,6 +148,7 @@ export class FreeFlyRig extends CameraRig {
     this.velocity.lerp(w, damp(this.damping, dt));
     cam.position.addScaledVector(this.velocity, dt);
     if (this.collide && this.collision.getGroundHeight) { this.collision.focus.copy(cam.position); this.collision.clampAboveGround(cam.position, this.minY); }
+    this._applyTrauma(dt);
     this._snapPending = false;
   }
 

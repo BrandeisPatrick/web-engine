@@ -128,6 +128,7 @@ export class OrbitRig extends CameraRig {
     if (C.getGroundHeight) { C.focus.copy(this._center); C.clampAboveGround(cam.position, this.minY); }
     cam.up.set(0, 1, 0);
     cam.lookAt(this._center);
+    this._applyTrauma(dt);
     this._snapPending = false;
   }
 

@@ -17,9 +17,13 @@
 // ignored while inactive (and for NaN deltas); activate() snaps. The bob phase restarts once the bob has faded out,
 // so every walk starts on the same stride. No allocations per frame.
 //
-// Also exports the small helpers ThirdPersonRig shares: bindLook, targetPosition, targetFacing.
+// Opt-in feel (both default 0 = off, pose for pose as without them): landingDip (gain, 1 = the reference feel) dips the
+// eye on rig.land(fallSpeed) with a spring (CameraRig LandingSpring: ~7 cm after a 1 m fall), sprintFov (degrees)
+// widens the FOV while state.sprint is true (or a number 0..1), eased at 6 1/s. rig.addTrauma(x) shakes (CameraRig).
+//
+// Also exports the small helpers ThirdPersonRig shares: bindLook, targetPosition, targetFacing, SprintFov.
 import * as THREE from 'three';
-import { CameraRig, clamp, smooth01, damp, wrapPi } from './CameraRig.js';
+import { CameraRig, LandingSpring, clamp, smooth01, damp, wrapPi } from './CameraRig.js';
 
 const EMPTY = Object.freeze({});
 const _q = new THREE.Quaternion();
@@ -41,6 +45,24 @@ export function targetFacing(t, st, fallback) {
   if (!t || !t.getWorldQuaternion) return fallback;
   _v.set(0, 0, -1).applyQuaternion(t.getWorldQuaternion(_q));
   return _v.x * _v.x + _v.z * _v.z < 1e-8 ? fallback : Math.atan2(-_v.x, -_v.z);
+}
+
+/**
+ * Sprint FOV for the character rigs: update(dt, state, extraDeg) eases the camera's FOV from the value it had when
+ * this was made toward base + extraDeg * w, w = state.sprint (true = 1, or a number 0..1), at 6 1/s.
+ */
+export class SprintFov {
+  /** @param {THREE.PerspectiveCamera} camera */
+  constructor(camera) { this.camera = camera; this.base = camera.fov || 60; this.w = 0; }
+  /**
+   * @param {number} dt @param {{ sprint?: boolean|number }} st @param {number} extraDeg @param {boolean} [snap]
+   */
+  update(dt, st, extraDeg, snap = false) {
+    const s = st && st.sprint, target = s === true ? 1 : typeof s === 'number' && s > 0 ? Math.min(1, s) : 0;
+    this.w = snap ? target : this.w + (target - this.w) * damp(6, dt);
+    const fov = this.base + extraDeg * this.w, cam = this.camera;
+    if (Math.abs(cam.fov - fov) > 1e-4) { cam.fov = fov; cam.updateProjectionMatrix(); }
+  }
 }
 
 /**
@@ -82,6 +104,8 @@ export class FirstPersonRig extends CameraRig {
    * @param {number} [o.bobFreq=2]          steps per second at bobSpeed
    * @param {number} [o.bobSpeed=4]         horizontal speed (m/s) of full bob
    * @param {boolean} [o.active=true] [o.invertY=false] [o.pointerLock=false]
+   * @param {number} [o.landingDip=0]       landing dip gain for land(speed) (0 = off; 1 = ~7 cm after a 1 m fall)
+   * @param {number} [o.sprintFov=0]        degrees added to the camera's FOV while state.sprint (0 = off)
    */
   constructor(camera, domElement, o = {}) {
     super(camera, o);
@@ -100,8 +124,20 @@ export class FirstPersonRig extends CameraRig {
     this._eye = this.eyeHeight;
     this._bobW = 0;
     this._bobPhase = 0;
+    this.landingDip = o.landingDip || 0;
+    this.sprintFov = o.sprintFov || 0;
+    this._dip = new LandingSpring(1);
+    this._sprint = new SprintFov(camera);
     this._unbind = bindLook(this, this.domElement, !!o.pointerLock, null);
   }
+
+  /**
+   * A landing: dips the eye by landingDip (no effect while it is 0). Call it on touchdown with the downward speed,
+   * e.g. `if (cc.landedThisStep) rig.land(cc.landingSpeed)`.
+   * @param {number} speed  m/s, positive
+   * @returns {this}
+   */
+  land(speed) { if (this.landingDip > 0) { this._dip.gain = this.landingDip; this._dip.kick(speed); } return this; }
 
   /** Feed look deltas in pixels (x sensitivity; mouse right / down positive, invertY flips y); ignored while inactive. */
   look(dx, dy) { const k = this.sensitivity; this.turn(-dx * k, (this.invertY ? dy : -dy) * k); }
@@ -157,10 +193,13 @@ export class FirstPersonRig extends CameraRig {
       cam.position.x += Math.cos(this.yaw) * side;
       cam.position.z -= Math.sin(this.yaw) * side;
     } else this._bobW = 0;
+    if (this._dip.v !== 0 || this._dip.y !== 0) cam.position.y += snap ? this._dip.reset() : this._dip.step(dt);
 
     const C = this.collision;
     if (C.getGroundHeight) { C.focus.copy(_tpos); C.clampAboveGround(cam.position, this.minY); }
     const s = this.state; s.yaw = this.yaw; s.pitch = this.pitch; s.distance = 0;
+    if (this.sprintFov) this._sprint.update(dt, st, this.sprintFov, snap);
+    this._applyTrauma(dt);
     this._snapPending = false;
   }
 
