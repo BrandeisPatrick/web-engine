@@ -24,6 +24,14 @@
   pause button shows on every device by default (`pauseButton: true`; `'auto'` is the old touch-only), so
   `?autostart=1` still has a visible way to pause and reach the tiers; `test/browser/howto.mjs` takes its headlight
   captures with the loop frozen and the car hidden (deterministic).
+- Demo fixes: Halloween's lantern halo sits clear of the rind (a lantern seen close no longer shows a dark hexagon).
+  NYC: the shop light moved out of the awning valance (no white blob), the lamp highlight on shop glass is capped to a
+  small point, tighter street-lamp pools, pedestrian signal lenses at a night level, and the A-frame sign stands on its
+  feet. Miami: the dusk cloud deck stops early where the sky is certainly clear and reads its noise lattice from a
+  table baked once (same picture), the lifeguard huts drop faces nobody sees, and the beach is back at its baseline
+  cost. Street furniture (`src/world/Furniture.js`): the bench backrest and its iron uprights recline instead of
+  leaning over the seat, the bistro chairs' backs lean away from the table, the utility pole's braces rise from the
+  pole to the crossarm, and the A-frame's chalk panel and lines follow their board.
 - Fix pass (after the look pass): street lamps as shielded spots: `ClusteredLights.setSpot(..., near)` and
   `NearestLights({ spot: { near } })` (m, default 0 = off, 0.25 m steps) fade a spot in over its first `near` m along
   its axis, so a lamp's own pole and the wall at head height stay unlit; `near` is packed into the stored decay
