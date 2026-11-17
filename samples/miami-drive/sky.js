@@ -58,7 +58,7 @@ vec3 skyAt(vec3 d) {
   vec2 ax = vec2(sin(uGlowAz), -cos(uGlowAz)), ay = vec2(-ax.y, ax.x);   // toward the glow / across it (xz)
   vec2 w = d.xz / (d.y + 0.07);                                           // the deck in perspective
   vec2 p = vec2(dot(w, ax) * 1.25, dot(w, ay) * 0.5) + vec2(uSeed, -uSeed * 0.6);  // streaks run across the glow
-  p += (vec2(fbm3(p * 0.45 + 7.1), fbm3(p * 0.45 + 2.9)) - 0.5) * 1.3;   // domain warp: rolls, not stripes
+  p += (vec2(n2(p * 0.45 + 7.1), n2(p * 0.45 + 2.9)) - 0.5) * 1.3;       // domain warp: rolls, not stripes
   float dens = fbm4(p);
   float body = dens * 0.7 + n2(p * 0.17 + 3.7) * 0.42 + n2(p * 0.07 - 1.3) * 0.12 - 0.06;  // groups, clear sky between
   // coverage: patchy, a clear gap low over the glow, thinning overhead
@@ -67,7 +67,7 @@ vec3 skyAt(vec3 d) {
   float cov = smoothstep(c0, c0 + 0.22, body) * smoothstep(0.012, 0.06, e);
   float thick = smoothstep(c0 + 0.05, c0 + 0.4, body);
   // relief: density falling toward the glow = a face the low sun reaches (self-shadowing from the gradient)
-  float relief = clamp((dens - fbm4(p + vec2(0.16, 0.0))) * 5.0 + 0.5, 0.0, 1.0);
+  float relief = clamp((dens - fbm3(p + vec2(0.16, 0.0))) * 5.0 + 0.5, 0.0, 1.0); // (3 octaves: the fine one hardly moves it)
   float nearG = pow(glowA, 1.3);
   vec3 base = mix(vec3(0.16, 0.125, 0.15), vec3(0.075, 0.06, 0.075), thick);                 // cool violet-grey shade
   base = mix(base, sky * vec3(0.9, 0.85, 0.95), 0.45) * (0.75 + 0.55 * relief * relief);
@@ -78,8 +78,8 @@ vec3 skyAt(vec3 d) {
   cc = mix(cc, hor * 0.95, exp(-e * 14.0) * 0.7);                                          // the far deck melts into the haze
   col = mix(sky, cc, cov * 0.92);
   // scud: thin bright wisps low in the gap
-  float sc = smoothstep(0.62, 0.85, fbm3(vec2(dot(w, ax) * 3.0, dot(w, ay) * 0.35) + 11.0)) * glowA * exp(-e / 0.05) * smoothstep(0.004, 0.02, e);
-  col += vec3(0.5, 0.2, 0.08) * sc * 0.35;
+  float scK = glowA * exp(-e / 0.05) * smoothstep(0.004, 0.02, e);
+  if (scK > 0.01) col += vec3(0.5, 0.2, 0.08) * 0.35 * scK * smoothstep(0.62, 0.85, fbm3(vec2(dot(w, ax) * 3.0, dot(w, ay) * 0.35) + 11.0));
   return col * uExposure;
 }
 void main() { gl_FragColor = vec4(skyAt(vDir), 1.0); }`;
