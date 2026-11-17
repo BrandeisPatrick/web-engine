@@ -25,9 +25,9 @@
   "sound": "Sound"
  },
  "counts": {
-  "total": 194,
+  "total": 195,
   "byCategory": {
-   "vehicle": 12,
+   "vehicle": 13,
    "character": 7,
    "building": 12,
    "prop": 57,
@@ -47,10 +47,10 @@
   },
   "byKind": {
    "file": 59,
-   "code": 135
+   "code": 136
   },
   "byScope": {
-   "engine": 68,
+   "engine": 69,
    "demo": 126
   },
   "notReusable": 12
@@ -309,6 +309,49 @@
     "result": "car",
     "az": 140,
     "el": 14
+   }
+  },
+  {
+   "id": "engine-car-visual",
+   "name": "Drivable car (createCarVisual)",
+   "category": "vehicle",
+   "categoryLabel": "Vehicle",
+   "kind": "code",
+   "scope": "engine",
+   "demo": null,
+   "where": {
+    "module": "src/world/CarVisual.js",
+    "export": "createCarVisual",
+    "symbol": null,
+    "import": "@vibe/engine/world"
+   },
+   "usedBy": [],
+   "via": null,
+   "reusable": true,
+   "reason": null,
+   "credit": null,
+   "bytes": null,
+   "facts": {
+    "types": "VEHICLE_HD_TYPES (sedan, hatchback, suv, pickup, minivan, police, taxi, police_sedan)",
+    "physics": "visual.spec = ROAD_CAR_SPEC resized to the body",
+    "triangles": 36922
+   },
+   "tags": [
+    "car",
+    "drivable",
+    "hd",
+    "wheels",
+    "lamps",
+    "procedural",
+    "player"
+   ],
+   "thumb": "catalog/thumbs/engine-car-visual.jpg",
+   "preview3d": true,
+   "description": "A drivable HD car in one call: makeVehicleParts body, glass, interior and four wheels that roll, steer and ride the suspension of a VehicleController built from visual.spec (ROAD_CAR_SPEC resized to the body, so the wheels sit where the physics has them), brake / reverse / head lamps and a soft contact shadow. Faces -Z; the origin is on the ground at the middle of the body length, the controller's reference point. Call visual.update(dt, car, { darkness }) each frame after placing visual.root on the car's pose. The starter-drive page drives one.",
+   "snippet": "import * as THREE from 'three';\nimport { createCarVisual } from '@vibe/engine/world';\nimport { VehicleController } from '@vibe/engine/physics';\nconst visual = createCarVisual('hatchback', { color: 0x9e1416 });\nscene.add(visual.root);\nconst car = new VehicleController(visual.spec);\nvisual.update(0, car, { darkness: 0 });",
+   "preview": {
+    "az": 140,
+    "el": 16
    }
   },
   {

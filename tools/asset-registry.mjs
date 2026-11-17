@@ -419,6 +419,20 @@ scene.add(tile);`,
 
 export const CODE_ENTRIES = [
   ...Object.entries(VEH).map(vehicleEntry),
+  {
+    id: 'engine-car-visual', name: 'Drivable car (createCarVisual)', category: 'vehicle', module: 'src/world/CarVisual.js', export: 'createCarVisual',
+    usedBy: [], tags: ['car', 'drivable', 'hd', 'wheels', 'lamps', 'procedural', 'player'],
+    facts: { types: "VEHICLE_HD_TYPES (sedan, hatchback, suv, pickup, minivan, police, taxi, police_sedan)", physics: 'visual.spec = ROAD_CAR_SPEC resized to the body' },
+    description: 'A drivable HD car in one call: makeVehicleParts body, glass, interior and four wheels that roll, steer and ride the suspension of a VehicleController built from visual.spec (ROAD_CAR_SPEC resized to the body, so the wheels sit where the physics has them), brake / reverse / head lamps and a soft contact shadow. Faces -Z; the origin is on the ground at the middle of the body length, the controller\'s reference point. Call visual.update(dt, car, { darkness }) each frame after placing visual.root on the car\'s pose. The starter-drive page drives one.',
+    snippet: `import * as THREE from 'three';
+import { createCarVisual } from '@vibe/engine/world';
+import { VehicleController } from '@vibe/engine/physics';
+const visual = createCarVisual('hatchback', { color: 0x9e1416 });
+scene.add(visual.root);
+const car = new VehicleController(visual.spec);
+visual.update(0, car, { darkness: 0 });`,
+    preview: { az: 140, el: 16 },
+  },
   ...Object.entries(FURN).map(furnitureEntry),
   ...Object.entries(SPECIES_NAMES).map(treeEntry),
   ...BOATS.map(boatEntry),

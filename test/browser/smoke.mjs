@@ -71,6 +71,8 @@ const pages = args._.length ? args._ : args.pages ? String(args.pages).split(','
   'starter-walk', 'starter-walk-mobile', 'starter-drive', 'starter-drive-mobile',
   // the Asset library page
   'assets',
+  // the sound kit page: its selfTest() renders the ten-second scene offline and checks the mix limits
+  'sound-check',
 ];
 const size = parseSize(args.size || defaultSize);
 const headless = !args.headed;

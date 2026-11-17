@@ -39,6 +39,14 @@
   "skinned": 0,
   "points": 0
  },
+ "engine-car-visual": {
+  "triangles": 36922,
+  "meshes": 12,
+  "instanced": 2,
+  "instances": 2,
+  "skinned": 0,
+  "points": 0
+ },
  "engine-city-ambience": {
   "ran": true
  },
