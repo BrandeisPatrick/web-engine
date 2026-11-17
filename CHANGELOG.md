@@ -16,6 +16,14 @@
   that reflects the street, lit and dim rooms, wall drips and damp, lit street trees, weathered street kit. Miami:
   a soft lit cloud deck, the afterglow key, lit foliage, aged stucco with dirt runs, shrubs, the neon tubes off
   (`?neon=1`), AO on the ambient. Halloween: regraded inside the gate, the candy's coloured halos cut to small warm glints, smoother carved pumpkin edges and breathing candle light, the green window and blue door calmed, inscriptions, shaped capstones and clapboard (desktop), AO on the ambient, `?look=open` with a small black lift. Starters: lit clouds (drive also the low-sun fill), AO on the ambient, weathered posts and lamp, broad patches on the walk's ground.
+- Starter fixes: starter-walk's lamp glows again (glass emissive 8, over the dusk bloom threshold; it was 1.6) and
+  pools at intensity 12 over the dark gravel and earth (docs: 8 to 12 for a garden lamp); `parkCorner` /
+  `countryRoad` boulders are one smooth-shaded mesh with fracture faces, mottled vertex colour, a dark foot, stone
+  grain and `weathering()`; `countryRoad`'s asphalt sits 6 mm up (was 20 mm, above the car's contact shadow) with
+  world-space patching, and starter-drive textures it with `asphalt_02` and a firmer contact shadow; `GameShell`'s
+  pause button shows on every device by default (`pauseButton: true`; `'auto'` is the old touch-only), so
+  `?autostart=1` still has a visible way to pause and reach the tiers; `test/browser/howto.mjs` takes its headlight
+  captures with the loop frozen and the car hidden (deterministic).
 - Fix pass (after the look pass): street lamps as shielded spots: `ClusteredLights.setSpot(..., near)` and
   `NearestLights({ spot: { near } })` (m, default 0 = off, 0.25 m steps) fade a spot in over its first `near` m along
   its axis, so a lamp's own pole and the wall at head height stay unlit; `near` is packed into the stored decay

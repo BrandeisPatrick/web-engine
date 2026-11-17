@@ -90,6 +90,7 @@ try {
     check('click: the AudioContext runs', s.bus.started && s.bus.ctx === 'running', JSON.stringify(s.bus));
     check('click: input back on', s.input === true);
     check('click: blur cleared in about a second', s.filter === 'none' && !s.startShown, s.filter);
+    check('desktop: the pause button shows in play (the visible way to pause and the settings)', s.pauseBtn);
 
     await page.keyboard.press('Escape');
     const t1 = (await page.evaluate(STATE)).time; await sleep(400);
@@ -140,6 +141,9 @@ try {
     const s = await page.evaluate(STATE);
     check('?autostart=1: straight to playing, no card', r.state === 'playing' && !s.startShown && s.filter === 'none');
     check('?autostart=1: input on, the bus waits for the first gesture', s.input === true && s.bus.armed && !s.bus.started, JSON.stringify(s.bus));
+    check('?autostart=1: the pause button shows (no card told the player about Esc)', s.pauseBtn);
+    await page.click('.ui-shell-pause'); await sleep(300);
+    check('?autostart=1: the pause button opens the pause card with the quality tiers', await page.evaluate(() => window.__shell.state === 'paused' && !!document.querySelector('.ui-shell-card.show .ui-shell-q')));
     check('autostart: no errors', errors.length === 0, errors.slice(0, 3).join(' | '));
     await page.close();
   }

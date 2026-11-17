@@ -53,7 +53,9 @@ const hashPos = (g) => { let h = 0; const a = g.getAttribute('position').array; 
   const physics = new PhysicsWorld();
   const r = parkCorner({ physics, lamp: [3, -6] });
   const boxes = physics.staticBoxes;
-  check('park: static mesh built (fence, boulders)', staticMesh(r).geometry.getAttribute('position').count > 2000);
+  check('park: static mesh built (fence)', staticMesh(r).geometry.getAttribute('position').count > 1000);
+  const rocks = r.group.children.find((o) => o.name === 'boulders');
+  check('park: boulders, one indexed mesh with smooth normals and vertex colours', !!rocks && !!rocks.geometry.index && !!rocks.geometry.getAttribute('color') && rocks.geometry.getAttribute('position').count === 7 * 642, rocks ? `${rocks.geometry.getAttribute('position').count} vertices` : 'none');
   check('park: bench instance', r.group.children.some((o) => o.isInstancedMesh));
   check('park: one path for groundCover', r.paths.length === 1 && r.paths[0].points.length >= 4);
   const p = r.paths[0].points, segD = (x, z) => Math.min(...p.slice(1).map(([bx, bz], i) => {

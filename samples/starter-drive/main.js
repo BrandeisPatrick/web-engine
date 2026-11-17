@@ -26,7 +26,7 @@ const S = Q.settings;
 // ---- the car: an HD hatchback body and its physics, ROAD_CAR_SPEC resized to that body (wheels where the body has them).
 // Other bodies: 'sedan', 'suv', 'pickup', 'minivan', 'taxi', 'police'. Tune by spreading: { ...visual.spec, motorPower: 200e3 }.
 // (Without a spec VehicleController is the Roadster, a 400 km/h car that flies on the thrust input.)
-const visual = createCarVisual('hatchback', { color: 0x8a1418 });
+const visual = createCarVisual('hatchback', { color: 0x8a1418, shadowOpacity: 0.9 });
 const SPEC = visual.spec; // ROAD_CAR_SPEC with this body's size, axles, track and wheel radius
 // #endregion howto:road-car-spec
 
@@ -56,13 +56,13 @@ async function boot() {
   shell.setProgress(0.2, 'Road');
   // PBR sets: `base` is the folder holding manifest.json and one folder per set id; repeat = metres / tile size
   const texBase = `${BASE}nyc/textures/`, manifest = await loadTextureManifest(texBase);
-  const [asphalt, grass] = await Promise.all(['clean_asphalt', 'leafy_grass'].map((id) => loadTextureSet(id, { renderer, base: texBase, manifest })));
+  const [asphalt, grass] = await Promise.all(['asphalt_02', 'leafy_grass'].map((id) => loadTextureSet(id, { renderer, base: texBase, manifest })));
   const surfaces = [...place.surfaces, { mesh: ground, w: 6000, l: 6000, set: grass }]; // place.surfaces: the road and lay-by
   for (const { mesh, w, l, set = asphalt } of surfaces) {
     if (!set) continue; // a set that did not load leaves the plain colour
     const maps = [set.map, set.normalMap, set.roughnessMap].map((t) => t && t.clone());
     for (const t of maps) if (t) t.repeat.set(w / set.size, l / set.size);
-    Object.assign(mesh.material, { map: maps[0], normalMap: maps[1], roughnessMap: maps[2], color: new THREE.Color(0xffffff) });
+    Object.assign(mesh.material, { map: maps[0], normalMap: maps[1], roughnessMap: maps[2], color: new THREE.Color(set === asphalt ? 0x9a9a9a : 0xffffff) });
   }
   // distance haze (PostFX's fog): the far road and the field fade into the sky instead of meeting it at a hard line
   atmosphere.fogParams.haze = 0.002;

@@ -10,13 +10,15 @@
 //
 // Each builder returns { group, update(dt, cameraPos, darkness), ... }: add `group` to the scene and call update once a
 // frame (tree wind and the near / impostor split). Static colliders go into `physics` when one is given. Everything is
-// deterministic for a seed. Cost: about 3 draw calls for the static parts (one merged PartBuilder mesh, the paint,
-// furniture instances) plus the trees' (one per near species and one for every impostor).
+// deterministic for a seed. Cost: about 4 draw calls for the static parts (one merged PartBuilder mesh, the boulders,
+// the paint, furniture instances) plus the trees' (one per near species and one for every impostor).
 import * as THREE from 'three';
 import { PartBuilder } from './Vehicles.js';
 import { makeFurnitureGeometry, createFurnitureMaterial, buildSignAtlas, FURNITURE_META } from './Furniture.js';
 import { buildTreeMeshes } from './Vegetation.js';
 import { mulberry32 } from './geom.js';
+import { mergeVertices, mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { applyPatches, weathering } from '../render/MaterialPatches.js';
 
 /** Most path segments a groundCover patch takes (all paths together). */
 export const COVER_MAX_SEGMENTS = 24;
@@ -183,22 +185,92 @@ function fenceInto(B, pts, rnd, { spacing = 2.6, height = 1.15, rails = 2, skip 
   return posts;
 }
 
-/** A weathered boulder (smooth, displaced, half sunk) into a PartBuilder. */
-function rockInto(B, x, z, s, rnd) {
-  const g = new THREE.IcosahedronGeometry(1, 3);
-  const pos = g.getAttribute('position'), v = new THREE.Vector3();
+/**
+ * A weathered boulder into `rocks` (a list of geometries that rocksMesh merges): a displaced sphere with two or three
+ * flat fracture faces, shared vertices so the normals stay smooth after the displacement, half sunk. Vertex colours
+ * carry the form: darker in the hollows and in a band at the ground (contact), a little lichen on the up-facing parts.
+ * Takes exactly seven numbers from `rnd` (the placements after it depend on that).
+ */
+function rockInto(rocks, x, z, s, rnd) {
+  let g = new THREE.IcosahedronGeometry(1, 7); // 1280 triangles, 642 vertices
+  g.deleteAttribute('normal'); g.deleteAttribute('uv');
+  g = mergeVertices(g); // indexed: computeVertexNormals then averages across faces (smooth, no facets)
+  const pos = g.getAttribute('position'), v = new THREE.Vector3(), d = new THREE.Vector3();
   const f = [rnd() * 9, rnd() * 9, rnd() * 9], squash = 0.5 + rnd() * 0.2, stretch = 0.85 + rnd() * 0.4;
-  for (let i = 0; i < pos.count; i++) { // the same direction always gets the same push: no cracks between faces
+  const tone = 0.85 + rnd() * 0.3, yaw = rnd() * 6.28, r2 = mulberry32(Math.floor(f[0] * 1e5));
+  // fracture planes: a flat-ish top and one or two broken sides (the radius is cut to the plane where it is shorter)
+  const planes = [[0, 1, 0, 0.74 + r2() * 0.16]];
+  for (let k = 0, n = 1 + Math.floor(r2() * 2); k < n; k++) { const a = r2() * 6.28, e = 0.1 + r2() * 0.5; planes.push([Math.cos(a) * Math.cos(e), Math.sin(e), Math.sin(a) * Math.cos(e), 0.7 + r2() * 0.15]); }
+  const hollow = new Float32Array(pos.count);
+  for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos, i).normalize();
     const n = Math.sin(v.x * 2.1 + f[0]) * Math.sin(v.y * 2.7 + f[1]) * Math.sin(v.z * 2.3 + f[2]);
-    const m = 1 + 0.22 * n + 0.07 * Math.sin(v.x * 7.1 + v.z * 5.3 + f[1]);
+    const mid = Math.sin(v.x * 7.1 + v.z * 5.3 + f[1]) * 0.6 + Math.sin(v.y * 9.7 - v.x * 6.1 + f[2]) * 0.4; // knobs and dips
+    let m = 1 + 0.2 * n + 0.06 * mid;
+    for (const [px, py, pz, o] of planes) { const c = v.x * px + v.y * py + v.z * pz; if (c > 0.05) m = Math.min(m, o / c); }
+    hollow[i] = Math.max(0, -mid);
     pos.setXYZ(i, v.x * m * stretch, v.y * m * squash, v.z * m);
   }
+  const mat = new THREE.Matrix4().compose(d.set(x, -0.18 * s, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), new THREE.Vector3(s, s, s));
+  g.applyMatrix4(mat);
   g.computeVertexNormals();
-  const tone = 0.85 + rnd() * 0.3, M = { c: [0.13 * tone, 0.12 * tone, 0.105 * tone], rough: 0.92, metal: 0 };
-  const mat = new THREE.Matrix4().compose(new THREE.Vector3(x, -0.18 * s, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * 6.28), new THREE.Vector3(s, s, s));
-  B.geo(g, M, mat);
-  g.dispose();
+  // colour: a warm grey that sits with the bare earth and gravel; mottled (two octaves of vertex noise), darker in the
+  // hollows and in a band at the ground (contact), pale lichen patches on the up-facing parts
+  const nor = g.getAttribute('normal'), col = new Float32Array(pos.count * 3);
+  const wn = (px, py, pz, k) => Math.sin(px * k + f[0]) * Math.sin(py * k * 1.3 + f[1]) * Math.sin(pz * k * 0.9 + f[2]);
+  for (let i = 0; i < pos.count; i++) {
+    const px = pos.getX(i), h = pos.getY(i), pz = pos.getZ(i), up = nor.getY(i);
+    const foot = 0.45 + 0.55 * Math.min(1, Math.max(0, h / (0.18 * s + 0.04)));   // contact: darker near the ground
+    const cav = 1 - 0.4 * Math.min(1, hollow[i] * 1.6);
+    const mot = 1 + 0.22 * wn(px, h, pz, 9) + 0.14 * wn(pz, px, h, 23);           // mottling at ~30 cm and ~10 cm
+    const k = tone * foot * cav * mot;
+    const li = Math.min(1, Math.max(0, up - 0.35) * 2.2) * Math.max(0, wn(px, h, pz, 6) * 1.6 + 0.2); // lichen, up faces
+    const r = 0.25 * k, gg = 0.205 * k, bb = 0.155 * k;
+    col[i * 3] = r + (0.3 - r) * li * 0.4; col[i * 3 + 1] = gg + (0.31 - gg) * li * 0.4; col[i * 3 + 2] = bb + (0.22 - bb) * li * 0.4;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  rocks.push(g);
+}
+
+// stone grain: a world-space value-noise bump (pits and grains of a few cm) and a fine albedo speckle, faded out where a
+// pixel covers more than ~3 cm (it would only shimmer there). Four noise lookups per rock pixel.
+const ROCK_GRAIN = {
+  key: 'rockGrain',
+  worldPosition: true,
+  depth: false,
+  fragmentPars: /* glsl */`
+float rgHash( vec3 p ) { p = fract( p * vec3( 0.1031, 0.1030, 0.0973 ) ); p += dot( p, p.yxz + 33.33 ); return fract( ( p.x + p.y ) * p.z ); }
+float rgNoise( vec3 x ) {
+	vec3 i = floor( x ), f = fract( x ); f = f * f * ( 3.0 - 2.0 * f );
+	return mix( mix( mix( rgHash( i ), rgHash( i + vec3( 1.0, 0.0, 0.0 ) ), f.x ), mix( rgHash( i + vec3( 0.0, 1.0, 0.0 ) ), rgHash( i + vec3( 1.0, 1.0, 0.0 ) ), f.x ), f.y ),
+		mix( mix( rgHash( i + vec3( 0.0, 0.0, 1.0 ) ), rgHash( i + vec3( 1.0, 0.0, 1.0 ) ), f.x ), mix( rgHash( i + vec3( 0.0, 1.0, 1.0 ) ), rgHash( i + vec3( 1.0, 1.0, 1.0 ) ), f.x ), f.y ), f.z );
+}
+`,
+  fragmentSurface: /* glsl */`
+	{
+		float pw = length( fwidth( vMpWorld ) ), near = 1.0 - smoothstep( 0.012, 0.035, pw );
+		if ( near > 0.0 ) {
+			vec3 q = vMpWorld * 24.0;
+			float n0 = rgNoise( q ), e = 0.35;
+			vec3 gr = vec3( rgNoise( q + vec3( e, 0.0, 0.0 ) ), rgNoise( q + vec3( 0.0, e, 0.0 ) ), rgNoise( q + vec3( 0.0, 0.0, e ) ) ) - n0;
+			vec3 gv = ( viewMatrix * vec4( gr / e, 0.0 ) ).xyz;
+			normal = normalize( normal - 0.35 * near * ( gv - dot( gv, normal ) * normal ) );
+			diffuseColor.rgb *= 1.0 + near * ( n0 - 0.5 ) * 0.45;
+		}
+	}
+`,
+};
+
+/** The boulders as one mesh: vertex colours, rough stone, weathering() for the breakup (mottling, dirt at the foot), grain. */
+function rocksMesh(rocks) {
+  if (!rocks.length) return null;
+  const g = mergeGeometries(rocks);
+  for (const r of rocks) r.dispose();
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, metalness: 0 });
+  applyPatches(m, [weathering({ scale: 4, macro: 0.3, hue: 0.06, roughness: 0.12, grime: 0.6, grimeHeight: 0.2, grimeColor: [0.45, 0.4, 0.33], streaks: 0, dust: 0.2, seed: 2 }), ROCK_GRAIN]);
+  const mesh = new THREE.Mesh(g, m);
+  mesh.castShadow = mesh.receiveShadow = true; mesh.name = 'boulders';
+  return mesh;
 }
 
 /** Furniture instances of one type: [[x, z, yaw], ...]. */
@@ -242,11 +314,13 @@ function plantTrees(near, line, mix, keepOut, physics) {
   return trees;
 }
 
-function finish(B, group, trees, extra = {}) {
+function finish(B, group, trees, rocks, extra = {}) {
   const mat = createFurnitureMaterial();
   const mesh = new THREE.Mesh(B.build('furniture'), mat);
   mesh.castShadow = mesh.receiveShadow = true; mesh.name = 'sceneryStatic';
   group.add(mesh);
+  const boulders = rocksMesh(rocks);
+  if (boulders) group.add(boulders);
   if (trees.group) group.add(trees.group);
   return { group, trees, update: (dt, cameraPos, darkness = 0) => trees.update(dt, cameraPos, darkness), ...extra };
 }
@@ -281,21 +355,26 @@ export function countryRoad(o = {}) {
   const LB = o.layby || { from: 10, to: -110, width: 7 }, rnd = mulberry32(o.seed ?? 3), physics = o.physics || null;
   const group = new THREE.Group(); group.name = 'countryRoad';
   const B = new PartBuilder();
-  const asphalt = new THREE.MeshStandardMaterial({ color: 0xb4b4b4, roughness: 0.9 }); // x the set's maps: dry, worn grey
+  // x the set's maps: dry, worn grey. Low over the ground (6 mm, pulled forward in depth so it never fights the field far
+  // off): a car's contact shadow (12 mm up) and the paint (10 mm) must sit above it, or the asphalt hides them
+  const asphalt = new THREE.MeshStandardMaterial({ color: 0xb4b4b4, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
   // asphalt: the road (UVs 0..1 over w x l) and the lay-by, a tapered strip on the left (UVs in metres)
   const road = new THREE.Mesh(new THREE.PlaneGeometry(W, from - to).rotateX(-Math.PI / 2), asphalt);
-  road.position.set(0, 0.02, (from + to) / 2);
+  road.position.set(0, 0.006, (from + to) / 2);
   const s = new THREE.Shape([[-hw + 0.2, LB.from], [-hw - LB.width, LB.from - 20], [-hw - LB.width, LB.to + 20], [-hw + 0.2, LB.to]].map(([x, z]) => new THREE.Vector2(x, -z)));
   const layby = new THREE.Mesh(new THREE.ShapeGeometry(s).rotateX(-Math.PI / 2), asphalt.clone());
-  layby.position.y = 0.017;
-  for (const m of [road, layby]) { m.receiveShadow = true; group.add(m); }
+  layby.position.y = 0.004;
+  for (const m of [road, layby]) { // patched and resurfaced stretches: world-space breakup over the set's tiles
+    applyPatches(m.material, [weathering({ scale: 0.3, macro: 0.14, hue: 0.02, roughness: 0.1, grime: 0, streaks: 0, dust: 0, seed: 5 })]);
+    m.receiveShadow = true; group.add(m);
+  }
   // paint: dashed centre line, edge lines 0.35 m in from the asphalt edge; the left one broken along the lay-by
   const ex = hw - 0.35;
   group.add(paintedLines([
     { x: 0, from, to, dash: [3, 9], width: 0.12 },
     { x: ex, from, to, width: 0.15 },
     { x: -ex, from, to: LB.from, width: 0.15 }, { x: -ex, from: LB.from, to: LB.to, width: 0.15, dash: [1, 1] }, { x: -ex, from: LB.to, to, width: 0.15 },
-  ]));
+  ], { y: 0.01 }));
   // gravel verges (also round the lay-by) and a side track off to the right
   const vx = hw + 0.6, lx = hw + LB.width + 0.6, tz = LB.to + 40;
   const track = [[hw, tz], [12, tz - 6], [30, tz - 20], [80, tz - 32], [160, tz - 38]];
@@ -325,7 +404,8 @@ export function countryRoad(o = {}) {
   nameSign(B, group, o.trackName || 'Mill Lane', hw + 1.6, tz + 5, -Math.PI / 2);
   if (physics) physics.addStaticBox({ center: [hw + 1.6, 1.35, tz + 5], size: [0.12, 2.7, 0.12], kind: 'post' });
   // a few boulders by the lay-by and the verges
-  for (const [x, z, sc] of [[-hw - LB.width - 2.2, LB.from - 26, 0.55], [-hw - LB.width - 1.8, LB.from - 31, 0.35], [hw + 2.4, -36, 0.4], [-hw - 2.2, LB.to - 18, 0.5], [hw + 2.8, tz - 9, 0.6]]) rockInto(B, x, z, sc, rnd);
+  const rocks = [];
+  for (const [x, z, sc] of [[-hw - LB.width - 2.2, LB.from - 26, 0.55], [-hw - LB.width - 1.8, LB.from - 31, 0.35], [hw + 2.4, -36, 0.4], [-hw - 2.2, LB.to - 18, 0.5], [hw + 2.8, tz - 9, 0.6]]) rockInto(rocks, x, z, sc, rnd);
   // trees: a few near the start beyond the fences, field trees, and a tree line 150-250 m out on both sides
   // (the low sun is on the left: trees there sit where their swaying shadows miss the first 50 m of road ahead)
   const near = [[-23, 12, 1.1], [-26, 24, 1.2], [-21, -66, 1.25], [-24, -80, 1.05], [20, -10, 1.15], [24, -24, 0.95], [21, tz - 26, 1.2], [19.5, -150, 1.1]];
@@ -334,7 +414,7 @@ export function countryRoad(o = {}) {
   for (let z = from + 150; z > to - 400; z -= 7 + rnd() * 5) for (const side of [-1, 1]) line.push([side * (150 + rnd() * 90 + 30 * Math.sin(z * 0.004 + side)), z, 1 + rnd() * 0.6, rnd()]);
   for (let x = -150; x < 150; x += 8 + rnd() * 4) line.push([x, to - 260 - rnd() * 60, 1 + rnd() * 0.5, rnd()]);
   const trees = plantTrees(near, line, [['oak', 0.5], ['round', 0.3], ['planeB', 0.2]], (x, z, r) => Math.abs(x) < 16 + r, physics);
-  return finish(B, group, trees, {
+  return finish(B, group, trees, rocks, {
     paths, counts: { trees: trees.count, posts },
     surfaces: [{ mesh: road, uvMetres: false, w: W, l: from - to }, { mesh: layby, uvMetres: true, w: 1, l: 1 }],
   });
@@ -368,8 +448,8 @@ export function parkCorner(o = {}) {
     for (let t = 0; t < L; t += 1) box(ax + ((cx - ax) * t) / L, 0.6, az + ((cz - az) * t) / L, 0.3, 1.2, 1.1);
   }
   // boulders beside the path
-  const rocks = [[-1.7, lz - 1.5, 0.55], [-2.5, lz - 2.6, 0.32], [lx + 0.6, lz - 9, 0.45], [-3.6, lz + 9, 0.4], [-4.8, lz - 22, 0.7], [-3.2, lz - 37, 0.5], [lx + 6, lz - 2, 0.8]];
-  for (const [x, z, s] of rocks) { rockInto(B, x, z, s, rnd); box(x, s * 0.3, z, s * 1.6, s * 0.6, s * 1.6); }
+  const rocks = [], rockAt = [[-1.7, lz - 1.5, 0.55], [-2.5, lz - 2.6, 0.32], [lx + 0.6, lz - 9, 0.45], [-3.6, lz + 9, 0.4], [-4.8, lz - 22, 0.7], [-3.2, lz - 37, 0.5], [lx + 6, lz - 2, 0.8]];
+  for (const [x, z, s] of rockAt) { rockInto(rocks, x, z, s, rnd); box(x, s * 0.3, z, s * 1.6, s * 0.6, s * 1.6); }
   // trees: a handful near the path, a loose scatter beyond, and a tree line 130-220 m out
   const near = [[-9, lz - 14, 0.9], [lx + 10, lz - 22, 0.85], [-13, lz + 3, 1.0], [lx + 10, lz + 9, 0.85], [-14, lz - 36, 0.95], [lx + 4, lz - 42, 1.0]];
   const pathDist = (x, z) => Math.min(...path.slice(1).map(([bx2, bz2], i) => {
@@ -383,5 +463,5 @@ export function parkCorner(o = {}) {
   const line = [];
   for (let a = 0; a < Math.PI * 2; a += 0.03 + rnd() * 0.02) { const r = 130 + rnd() * 90; line.push([Math.sin(a) * r, lz - Math.cos(a) * r, 1 + rnd() * 0.6, rnd()]); }
   const trees = plantTrees(near, line, [['oak', 0.45], ['round', 0.35], ['planeB', 0.2]], (x, z, r) => pathDist(x, z) < 1.3 + r || Math.hypot(x - bx, z - bz) < 1.5 + r, physics);
-  return finish(B, group, trees, { paths: [{ points: path, width: 1.7 }], counts: { trees: trees.count, posts: 0 } });
+  return finish(B, group, trees, rocks, { paths: [{ points: path, width: 1.7 }], counts: { trees: trees.count, posts: 0 } });
 }
