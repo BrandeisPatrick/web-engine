@@ -205,13 +205,6 @@ export const FINAL_SHADER = {
     uniform sampler2D tVolume;
     uniform vec3 uVolColor;
     #endif
-    #ifdef FINAL_AO_LIT
-    uniform float uAoLit;
-    uniform vec3 uAoTint;
-    #endif
-    #ifdef FINAL_LIFT
-    uniform vec3 uLift;
-    #endif
     #ifdef FINAL_LUT
     uniform highp sampler3D tLUT;
     uniform float uLutSize, uLutStrength;
@@ -342,14 +335,7 @@ export const FINAL_SHADER = {
           float ao = aoAt( depth );
           float lum = dot( col, vec3( 0.2126, 0.7152, 0.0722 ) );
           ao = mix( ao, 1.0, smoothstep( 2.0, 10.0, lum ) ); // emissives / hot highlights keep their energy
-    #ifdef FINAL_AO_LIT
-          // AO belongs to the ambient: pixels a light reaches (exposed luma 0.16 .. 0.85) keep most of their light
-          ao = mix( ao, 1.0, uAoLit * smoothstep( 0.16, 0.85, lum * uExposure / 0.6 * ( uAE.y > 0.0 ? vAE : 1.0 ) ) );
-    #endif
           col *= mix( 1.0, ao, uAO );
-    #ifdef FINAL_AO_LIT
-          { float a = max( mix( 1.0, ao, uAO ), 1e-3 ); col *= mix( vec3( 1.0 ), vec3( 1.0 / a ), uAoTint ); } // per channel mix( a, 1, tint ): a cool occlusion
-    #endif
         }
         if ( uHasFog > 0.5 ) {
           vec4 vp = uProjInv * vec4( vUv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0 );
@@ -386,9 +372,6 @@ export const FINAL_SHADER = {
       vec3 p = sqrt( max( col, 0.0 ) );          // contrast S-curve in a perceptual space
       p = mix( p, p * p * ( 3.0 - 2.0 * p ), uContrast );
       col = p * p;
-    #ifdef FINAL_LIFT
-      col = col * ( 1.0 - max( uLift.r, max( uLift.g, uLift.b ) ) ) + uLift; // a coloured floor: the darkest pixel is uLift, white stays white
-    #endif
       vec2 vc = dc * vec2( uRes.x / uRes.y, 1.0 );
       col *= mix( 1.0, smoothstep( 1.05, 0.25, length( vc ) ), uVignette );
       vec3 o = toSRGB( clamp( col, 0.0, 1.0 ) );
@@ -416,6 +399,37 @@ const FINAL_CLOSEST_AT = 'ivec2 p = ivec2( gl_FragCoord.xy ), mx = textureSize( 
 export const FINAL_UPSCALE_FRAGMENT = replaceOnce(FINAL_SHADER.fragmentShader, FINAL_CLOSEST_AT,
   'ivec2 mx = textureSize( tDepth, 0 ) - 1, p = min( ivec2( vUv * vec2( mx + 1 ) ), mx );');
 
+// The `look` options (FINAL_AO_LIT, FINAL_LIFT): derived text as well, inserted only while one is on, so every default
+// shader text stays the pinned one (test/render-scale.mjs, test/postfx-options.mjs).
+const LOOK_AO_AT = '          col *= mix( 1.0, ao, uAO );\n';
+const LOOK_LIFT_AT = '      col = p * p;\n';
+const LOOK_UNIFORMS_AT = '    varying vec2 vUv;\n    flat varying float vAE;\n';
+function withLook(frag) {
+  frag = replaceOnce(frag, LOOK_UNIFORMS_AT, LOOK_UNIFORMS_AT + `    #ifdef FINAL_AO_LIT
+    uniform float uAoLit;
+    uniform vec3 uAoTint;
+    #endif
+    #ifdef FINAL_LIFT
+    uniform vec3 uLift;
+    #endif
+`);
+  frag = replaceOnce(frag, LOOK_AO_AT, `    #ifdef FINAL_AO_LIT
+          // AO belongs to the ambient: pixels a light reaches (exposed luma 0.16 .. 0.85) keep most of their light
+          ao = mix( ao, 1.0, uAoLit * smoothstep( 0.16, 0.85, lum * uExposure / 0.6 * ( uAE.y > 0.0 ? vAE : 1.0 ) ) );
+    #endif
+${LOOK_AO_AT}    #ifdef FINAL_AO_LIT
+          { float a = max( mix( 1.0, ao, uAO ), 1e-3 ); col *= mix( vec3( 1.0 ), vec3( 1.0 / a ), uAoTint ); } // per channel mix( a, 1, tint ): a cool occlusion
+    #endif
+`);
+  return replaceOnce(frag, LOOK_LIFT_AT, `${LOOK_LIFT_AT}    #ifdef FINAL_LIFT
+      col = col * ( 1.0 - max( uLift.r, max( uLift.g, uLift.b ) ) ) + uLift; // a coloured floor: the darkest pixel is uLift, white stays white
+    #endif
+`);
+}
+/** @internal The final pass's text with the `look` blocks (at renderScale 1, and under upscaling). */
+export const FINAL_LOOK_FRAGMENT = withLook(FINAL_SHADER.fragmentShader);
+const FINAL_UPSCALE_LOOK_FRAGMENT = withLook(FINAL_UPSCALE_FRAGMENT);
+
 class FinalPass extends Pass {
   constructor(fx) {
     super();
@@ -439,6 +453,7 @@ class FinalPass extends Pass {
     this._up = false; // FINAL_UPSCALE (fx renderScale in effect < 1): FINAL_UPSCALE_FRAGMENT
     this._aoLit = false; // FINAL_AO_LIT defined (look.aoLit > 0 or a look.aoTint)
     this._lift = false; // FINAL_LIFT defined (a look.lift)
+    this._look = false; // the look text in use (FINAL_LOOK_FRAGMENT / FINAL_UPSCALE_LOOK_FRAGMENT)
   }
   setSize(w, h) { this.material.uniforms.uRes.value.set(w, h); }
   render(renderer, writeBuffer, readBuffer) {
@@ -451,6 +466,12 @@ class FinalPass extends Pass {
     const ups = fx._scaleOn, lk = fx.lookOptions;
     const aoLit = lk.aoLit > 0 || lk.aoTint[0] !== 0 || lk.aoTint[1] !== 0 || lk.aoTint[2] !== 0;
     const lift = lk.lift[0] !== 0 || lk.lift[1] !== 0 || lk.lift[2] !== 0;
+    const look = aoLit || lift;
+    if (ups !== this._up || look !== this._look) {
+      this._look = look;
+      this.material.fragmentShader = ups ? (look ? FINAL_UPSCALE_LOOK_FRAGMENT : FINAL_UPSCALE_FRAGMENT) : (look ? FINAL_LOOK_FRAGMENT : FINAL_SHADER.fragmentShader);
+      this.material.needsUpdate = true;
+    }
     if (aoLit !== this._aoLit || lift !== this._lift) {
       this._aoLit = aoLit; this._lift = lift;
       const d = this.material.defines;
@@ -462,7 +483,6 @@ class FinalPass extends Pass {
     if (lift) u.uLift.value.fromArray(lk.lift);
     if (ups !== this._up) {
       this._up = ups;
-      this.material.fragmentShader = ups ? FINAL_UPSCALE_FRAGMENT : FINAL_SHADER.fragmentShader;
       if (ups) this.material.defines.FINAL_UPSCALE = 1; else delete this.material.defines.FINAL_UPSCALE;
       this.material.needsUpdate = true;
     }

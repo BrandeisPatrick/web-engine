@@ -4,7 +4,7 @@
 // MapWorld loads render/ClusteredLights.js (installClusteredChunks / syncClustered / applyClustered) for any
 // `lights.clustered`; `clustered: true` also constructs the real class headless.
 import * as THREE from 'three';
-import { MapWorld } from '@vibe/engine/world';
+import { MapWorld, NearestLights } from '@vibe/engine/world';
 
 let failures = 0;
 const results = [];
@@ -219,6 +219,20 @@ const P2 = TC.uniforms.engineClParams2.value;
 check('clustered true: lights in view after update (params2.w)', P2[3], 1, 698);
 T.setLightMode('pool');
 check('clustered true: setLightMode(pool) zeroes params2.w', P2[3], 0);
+
+// --- NearestLights `spot` (clustered): lamps as spots aimed straight down; null keeps points
+{
+  const calls = [];
+  const C = { maxLights: 64, count: 0, setLight: (...a) => calls.push(['p', ...a]), setSpot: (...a) => calls.push(['s', ...a]) };
+  const NL = new NearestLights({ mode: 'clustered', clustered: C, distance: 15 });
+  NL.setPositions([[0, 9, 0], [10, 9, 0]]);
+  NL.update(0.016, { position: new THREE.Vector3(0, 2, 0) }, 100);
+  check('spot null: points (setLight)', calls.filter((c) => c[0] === 'p').length, 2);
+  calls.length = 0; NL.spot = { cosInner: 0.85, cosOuter: 0.3 }; NL._fresh = true;
+  NL.update(0.016, { position: new THREE.Vector3(0, 2, 0) }, 100);
+  const sp = calls.filter((c) => c[0] === 's');
+  check('spot set: spots aimed down with the cone cosines', sp.length === 2 && sp[0][10] === 0 && sp[0][11] === -1 && sp[0][12] === 0 && sp[0][13] === 0.85 && sp[0][14] === 0.3 ? 1 : 0, 1);
+}
 
 console.error(results.join('\n'));
 console.error(failures ? `\n${failures} lights check(s) FAILED` : '\nAll lights checks passed.');

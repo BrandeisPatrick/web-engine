@@ -131,7 +131,6 @@ async function boot() {
     timeOfDay: NIGHT ? 'night' : params.has('t') && Number.isFinite(+params.get('t')) ? +params.get('t') : DUSK_HOURS,
     atmosphere: {
       camera, shadows: S.shadows, sun: NYC_SUN, looks: NIGHT ? nightLooks() : duskLooks(), moonScatter: DESK ? 0.35 : 0.2, moonIntensity: 0.14, // a weak moon: its building shadows edge the lamp pools softly, not as hard bright slabs
-     
       moon: { azimuth: 200, elevation: 48 }, maxCasterHeight: 420, skyGain: 0.2,
     },
     spawn: { road: /^7th Avenue$/ },
