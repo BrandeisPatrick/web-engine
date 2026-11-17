@@ -126,7 +126,7 @@ export class VehicleAudio {
 
   impact(strength = 1) {
     const ctx = this.bus.ctx;
-    if (!ctx || ctx.state !== 'running' || !this._n) return;
+    if (!ctx || !this.bus.live || !this._n) return;
     const n = this._n, t = ctx.currentTime;
     if (t - this._lastImpact < 0.08) return;
     this._lastImpact = t;
@@ -157,7 +157,7 @@ export class VehicleAudio {
     this._prevDamage = dmg;
 
     const ctx = this.bus.ctx;
-    if (!ctx || ctx.state !== 'running' || !this._n) return;
+    if (!ctx || !this.bus.live || !this._n) return;
     const n = this._n;
     const speed = Math.abs(s.speedKmh || 0) / 3.6;
     const sN = clamp(speed / this.topSpeed, 0, 1);
