@@ -560,7 +560,7 @@ async function boot() {
     if (B) B.update = bu;
   };
   const harness = createBenchHarness(engine, {
-    name: 'nyc-night',
+    name: 'nyc-night', quality: Q,
     poses: {
       avenue(cam) {
         // the hero view: crosstown, on the sidewalk edge, looking west down the street canyon into the afterglow
@@ -714,14 +714,17 @@ async function boot() {
   const bp = readBenchParams(location.search);
   if (bp.enabled && bp.size) harness.resize(bp.size.w, bp.size.h);
 
-  memlog('before compile');
-  renderer.compile(scene, camera);
+  // the programs, pipelines and uploads of the first frames, drawn under the loading screen (Engine warmUp: dt 0,
+  // nothing moves) and finished on the GPU, so the first live frame does not stall with the city already showing
+  memlog('before warm-up');
+  loading.setProgress(1, 'Compiling shaders…');
+  const warm = await engine.warmUp({ systems: !bp.enabled }); // bench: renderFn only (the poses' state stays as loaded)
   const loadMs = Math.round(performance.now() - t0);
   window.__nyc = {
     THREE, engine, world, postfx, atmo: world.atmo, clustered, extra, signs, steam, wet, player, cc, input, hud, menu, harness,
     quality: Q, facadeGrade, walls, ground, kit, crowns, air, roofs, get rig() { return rig; }, setRig, START, SQUARE, loadMs, loadWorldMs, geo, streetAt,
   };
-  console.info(`[nyc] ready in ${loadMs} ms (world ${loadWorldMs} ms) · tier ${Q.tier} (${Q.source}) · ${signs.lights.length} sign lights · ${world.stats.lamps} lamps · ${world.stats.vehicles} vehicles`);
+  console.info(`[nyc] ready in ${loadMs} ms (world ${loadWorldMs} ms, warm-up ${warm.ms} ms) · tier ${Q.tier} (${Q.source}${Q.lighter ? ', lighter after a graphics reset' : ''}) · ${signs.lights.length} sign lights · ${world.stats.lamps} lamps · ${world.stats.vehicles} vehicles`);
   engine.start();
   loading.hide(400);
   harness.setReady();

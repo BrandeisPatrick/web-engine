@@ -216,7 +216,8 @@ async function boot() {
   const physics = new PhysicsWorld({ cellSize: 8 });
   const engine = new Engine({
     container: document.getElementById('app'), fixedHz: 120, maxSubsteps: 4, physics, fov: 58, near: 0.1, far: 1500,
-    renderer: { antialias: NOFX, powerPreference: 'high-performance' }, maxPixelRatio: LOW ? 1.5 : 2, shadows: SHADOWS,
+    // the tier's cap (2 desktop, 1.5 mobile; 1 after lost graphics contexts this session, core/Quality.js)
+    renderer: { antialias: NOFX, powerPreference: 'high-performance' }, maxPixelRatio: QUALITY.settings.engine.maxPixelRatio, shadows: SHADOWS,
     targetFps: +params.get('fps') || (TOUCH ? 60 : 0),
   });
   const { scene, camera, renderer } = engine;
@@ -1309,7 +1310,7 @@ async function boot() {
     const glowAt = world.glowLevels.slice(), glowNow = world.glowLevels.slice(); // world.glowLevels when after() last started / when a bench began
     let candyNow = null, beamsNow = null; // the candy's instances when a bench began
     harness = createBenchHarness(engine, {
-      name: 'halloween',
+      name: 'halloween', quality: QUALITY,
       poses: {
         gate: shot(SPAWN[0], SPAWN[1], 0),                          // the opening view: the green, the cottage, the graveyard
         graveyard: shot(18, -16, Math.atan2(-(35 - 18), -(-38 + 16)), 5, 2.2, 14), // inside the fence toward the crypt
@@ -1413,7 +1414,11 @@ async function boot() {
     /** Test hook: jump the clock (seconds left). */
     setTimeLeft(s) { G.left = s; },
   };
-  console.info(`[halloween] ready in ${loadMs} ms · touch ${TOUCH} · quality ${QUALITY.tier} (${QUALITY.source}) · ${lanterns.n} lanterns · ${ghosts.list.length} ghosts · ${physics.staticBoxes.length} colliders · pr ${engine.pixelRatio}`);
+  // the programs, pipelines and uploads of the first frames, drawn under the loading screen (Engine warmUp: dt 0,
+  // nothing moves) and finished on the GPU, so the first live frame does not stall with the title already showing
+  loading.setProgress(1, 'Compiling shaders…');
+  const warm = await engine.warmUp({ systems: !harness }); // bench: renderFn only (the poses' state stays as loaded)
+  console.info(`[halloween] ready in ${loadMs} ms (warm-up ${warm.ms} ms) · touch ${TOUCH} · quality ${QUALITY.tier} (${QUALITY.source}${QUALITY.lighter ? ', lighter after a graphics reset' : ''}) · ${lanterns.n} lanterns · ${ghosts.list.length} ghosts · ${physics.staticBoxes.length} colliders · pr ${engine.pixelRatio}`);
   engine.start();
   loading.hide(450);
   if (harness) { harness.setReady(); harness.freeze(); }

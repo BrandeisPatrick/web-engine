@@ -34,12 +34,66 @@
 // resolution), targetFps 60 anywhere = 18.5 / 11.5 ms. A reading under 60 Hz is not trusted for the budget (a scene
 // missing every other vsync from its first frame looks exactly like a 30 Hz screen). Under vsync the interval never
 // drops below the budget, so in practice the ratio only comes down (as it always did on 60 Hz screens).
+//
+// Start-up: `await engine.warmUp()` before `engine.start()`, while the loading screen still covers the page. A
+// renderer compiles the scene's programs at their first draw (ANGLE's Metal backend, which every iOS browser and Chrome
+// on a Mac use, builds the pipeline state there too), and textures and geometry upload then, so without it the first
+// live frame stalls for seconds on a phone with the loading screen already gone (a black canvas under the HUD).
+// warmUp({ frames = 4, systems = true, timeout = 15000, compile = true }): one paint first (a label set just before
+// shows), then renderer.compileAsync(scene, camera) (non-blocking linking where KHR_parallel_shader_compile exists;
+// programs the game compiled itself are cached), then `frames` warm frames with a task between them, then a GPU fence
+// (fenceSync, polled with clientWaitSync(sync, 0, 0) on a timer, so the main thread stays free while the GPU finishes).
+// A warm frame is what a frame on a paused clock does: every enabled system's earlyUpdate(0), update(0, alpha) and
+// lateUpdate(0, alpha), no fixed step (the simulation does not move, time does not advance), then
+// renderFn(scene, camera, 0). The update phases let the first frame's per-frame state settle before it is drawn: a
+// camera rig places the camera, a light pool switches its lights on (a different light count is a different program
+// for every lit material: on a phone the first live frame would compile them again). `systems: false` draws renderFn
+// only, for a page whose state must not change before its captures (the bench harness's poses). The 4 frames reach a
+// renderFn's every-2nd- and every-4th-frame work once and end those schedules in the phase they started in. Not
+// counted in frameCount, the profiler or adaptive resolution. Resolves { frames, ms, compileMs, fence: 'signaled' |
+// 'timeout' | 'none' (no fences) | 'lost', lost }; never rejects on a lost context (lost: true; onContextLost has
+// run). An error a frame throws rejects (the game's boot shows it).
+//
+// Lost WebGL context (phones drop it under GPU memory pressure): on `webglcontextlost` of the canvas the loop stops
+// (no frame runs on the dead context), `engine.contextLost` becomes true, the loss is recorded for the browser session
+// (core/Quality.js recordContextLoss: the next resolveQuality() comes up lighter) and `engine.onContextLost(event)`
+// runs; its default (showContextLost) shows a notice with a Reload button. A frame that throws on a context that is
+// already lost (before the event arrives) takes the same path. start() does nothing afterwards. There is no
+// re-initialisation on `webglcontextrestored`: reloading is the robust path.
+// Frame errors: an exception in tick() is caught, logged with console.error (every one, as an uncaught error was) and
+// passed to `engine.onFrameError(error)`; its default (showFrameError) shows the first one as a line at the bottom of the page (a phone
+// user can screenshot it). The loop keeps running, as before.
+// showNotice(text, { button, onButton, kind = 'notice' | 'error', id }) -> HTMLElement: plain DOM over the page (the
+// ui layer's CSS variables when its theme is on the page, its values as fallbacks); one element per id (default: the
+// kind), a second call replaces the text. Set the hooks to replace these with a game's own UI.
 import * as THREE from 'three';
 import { Profiler, ProfilerOverlay } from './Profiler.js';
 import { Clock } from './Clock.js';
+import { recordContextLoss } from './Quality.js';
 
 const noop = () => {};
 const now = () => performance.now();
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** One rendering opportunity (rAF, then a task after it), or 100 ms where rAF does not run (a hidden tab). */
+const nextPaint = () => new Promise((r) => {
+  const t = setTimeout(r, 100);
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => setTimeout(() => { clearTimeout(t); r(); }, 0));
+});
+/** The default lost-context text. */
+export const CONTEXT_LOST_TEXT = 'The graphics were reset by the device, probably low on memory.';
+// notices (showNotice): the ui theme's variables with its values as fallbacks (core does not import the ui layer)
+const FONT = 'var(--ui-font,-apple-system,system-ui,"Segoe UI",Roboto,sans-serif)';
+const NOTICE_CSS = {
+  notice: `position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:max-content;max-width:min(420px,calc(100vw - 32px));
+    box-sizing:border-box;padding:20px 22px;border-radius:var(--ui-radius,18px);background:rgba(10,12,16,.94);
+    border:1px solid var(--ui-glass-border,rgba(255,255,255,.12));box-shadow:0 10px 40px rgba(0,0,0,.5);
+    color:var(--ui-text,#f2f4f7);font:400 16px/1.45 ${FONT};text-align:center`,
+  error: `position:fixed;left:12px;right:12px;bottom:max(12px,env(safe-area-inset-bottom));box-sizing:border-box;padding:8px 12px;
+    border-radius:10px;background:rgba(40,8,12,.92);border:1px solid rgba(255,120,120,.35);color:#ffd0d0;
+    font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;text-align:left;word-break:break-word`,
+};
+const NOTICE_BUTTON_CSS = `display:inline-block;margin-top:14px;min-height:44px;min-width:120px;padding:10px 22px;border:0;
+  border-radius:999px;background:var(--ui-accent,#e82127);color:#fff;font:600 15px/1 ${FONT};cursor:pointer`;
 
 export class Engine {
   /**
@@ -102,11 +156,28 @@ export class Engine {
      * @type {(width: number, height: number, pixelRatio: number) => void}
      */
     this.onResize = noop;
+    /** True once the WebGL context is lost (see header); the loop has stopped and start() does nothing. */
+    this.contextLost = false;
+    /**
+     * Called once when the WebGL context is lost, after the loop stopped (see header). Default: a notice with a
+     * Reload button. Replace it with a game's own message; `() => {}` shows nothing.
+     * @type {(event: Event | null) => void}
+     */
+    this.onContextLost = () => this.showContextLost();
+    /**
+     * Called with each error a frame throws, after console.error (see header). Default: the first one as a line at the
+     * bottom of the page.
+     * @type {(error: any) => void}
+     */
+    this.onFrameError = (e) => this.showFrameError(e);
+    this._errorShown = false; this._notices = new Map();
     this.time = 0; this.frameCount = 0; this.dt = 0; this.alpha = 0; this.substeps = 0;
     this._running = false; this._acc = 0; this._last = 0; this._raf = 0;
     this._profileAt = o.profile ? (o.profile === true ? 10 : +o.profile) : 0;
     this._onWindowResize = () => this.resize();
     window.addEventListener('resize', this._onWindowResize);
+    this._onContextLost = (e) => this._contextLost(e);
+    this.renderer.domElement.addEventListener('webglcontextlost', this._onContextLost);
     this.setPixelRatio(this.maxPR);
     this.resize();
   }
@@ -161,8 +232,126 @@ export class Engine {
     this.onResize(width, height, this.pixelRatio);
   }
 
-  start() { if (this._running) return; this._running = true; this._last = now(); this._rafT = 0; this._calib = 10; this._raf = requestAnimationFrame(this._frame); }
+  start() { if (this._running || this.contextLost) return; this._running = true; this._last = now(); this._rafT = 0; this._calib = 10; this._raf = requestAnimationFrame(this._frame); }
   stop() { this._running = false; cancelAnimationFrame(this._raf); }
+
+  /**
+   * Draw frames and let the GPU finish them before the loop starts (see "Start-up" in the header). Call it after the
+   * scene, the camera and renderFn are set up and the canvas has its final size, while a loading screen covers the
+   * page; then start() and hide the loading screen.
+   * @param {{ frames?: number, systems?: boolean, timeout?: number, compile?: boolean }} [o]
+   *   frames: warm frames (default 4); systems: run the systems' per-frame phases at dt 0 before each render (default
+   *   true; false: renderFn only); timeout: ms for each wait (compile, GPU fence; default 15000); compile:
+   *   renderer.compileAsync first (default true)
+   * @returns {Promise<{ frames: number, ms: number, compileMs: number, fence: 'signaled' | 'timeout' | 'none' | 'lost', lost: boolean }>}
+   */
+  async warmUp({ frames = 4, systems = true, timeout = 15000, compile = true } = {}) {
+    const R = this.renderer, gl = R.getContext(), t0 = now();
+    const out = { frames: 0, ms: 0, compileMs: 0, fence: 'none', lost: false };
+    const lost = () => {
+      if (!this.contextLost && !gl.isContextLost()) return false;
+      this._contextLost(null);
+      out.fence = 'lost'; out.lost = true; out.ms = Math.round(now() - t0);
+      return true;
+    };
+    await nextPaint();
+    if (lost()) return out;
+    if (compile && typeof R.compileAsync === 'function') {
+      const tc = now();
+      try {
+        await Promise.race([R.compileAsync(this.scene, this.camera), sleep(timeout)]);
+      } catch (e) { if (!lost()) throw e; }
+      out.compileMs = Math.round(now() - tc);
+      if (lost()) return out;
+    }
+    for (let i = 0; i < frames; i++) {
+      try { this._warmFrame(systems); } catch (e) { if (lost()) return out; throw e; }
+      out.frames++;
+      await sleep(0);
+      if (lost()) return out;
+    }
+    if (typeof gl.fenceSync === 'function') {
+      const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+      gl.flush();
+      const tf = now();
+      out.fence = sync ? 'timeout' : 'none';
+      while (sync && now() - tf < timeout) {
+        await sleep(4); // WebGL updates a sync's status only between tasks
+        if (lost()) return out;
+        const s = gl.clientWaitSync(sync, 0, 0);
+        if (s === gl.ALREADY_SIGNALED || s === gl.CONDITION_SATISFIED) { out.fence = 'signaled'; break; }
+        if (s === gl.WAIT_FAILED) break;
+      }
+      if (sync) gl.deleteSync(sync);
+    } else await nextPaint();
+    out.ms = Math.round(now() - t0);
+    return out;
+  }
+
+  // a warm frame (header): the per-frame phases at dt 0, no fixed step, then the render
+  _warmFrame(systems) {
+    const S = this.systems, a = this.alpha;
+    if (systems) {
+      for (let i = 0; i < S.length; i++) { const s = S[i]; if (s.earlyUpdate && s.__on !== false) s.earlyUpdate(0); }
+      for (let i = 0; i < S.length; i++) { const s = S[i]; if (s.update && s.__on !== false) s.update(0, a); }
+      for (let i = 0; i < S.length; i++) { const s = S[i]; if (s.lateUpdate && s.__on !== false) s.lateUpdate(0, a); }
+    }
+    this.renderer.info.reset();
+    this.renderFn(this.scene, this.camera, 0);
+  }
+
+  // the canvas lost its WebGL context (event), or a frame found it lost before the event came (null): once
+  _contextLost(e) {
+    if (this.contextLost) return;
+    this.contextLost = true;
+    this.stop();
+    recordContextLoss();
+    console.warn('[engine] WebGL context lost: the loop stopped (reload to continue)');
+    this.onContextLost(e || null);
+  }
+
+  /** The default onContextLost: pointer lock released, CONTEXT_LOST_TEXT with a Reload button. */
+  showContextLost() {
+    if (typeof document !== 'undefined' && document.exitPointerLock && document.pointerLockElement) document.exitPointerLock();
+    return this.showNotice(CONTEXT_LOST_TEXT, { button: 'Reload', onButton: () => location.reload() });
+  }
+
+  /** The default onFrameError: the first error as a line at the bottom of the page; later calls do nothing. */
+  showFrameError(e) {
+    if (this._errorShown) return null;
+    this._errorShown = true;
+    return this.showNotice(`Error: ${e && e.message ? e.message : String(e)}`, { kind: 'error' });
+  }
+
+  /**
+   * A small message over the page (see header): the lost-context notice, the frame-error line, or a game's own.
+   * @param {string} text
+   * @param {{ button?: string, onButton?: () => void, kind?: 'notice' | 'error', id?: string, parent?: HTMLElement }} [o]
+   * @returns {HTMLElement | null}  null without a document
+   */
+  showNotice(text, { button, onButton, kind = 'notice', id, parent } = {}) {
+    if (typeof document === 'undefined') return null;
+    const key = id || kind;
+    let el = this._notices.get(key);
+    if (!el || !el.isConnected) {
+      el = document.createElement('div');
+      el.className = `engine-notice engine-notice-${kind}`;
+      el.setAttribute('role', kind === 'error' ? 'alert' : 'alertdialog');
+      el.style.cssText = `${NOTICE_CSS[kind] || NOTICE_CSS.notice};z-index:2147483000;pointer-events:auto;user-select:text;-webkit-user-select:text`;
+      for (const t of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(t, (ev) => ev.stopPropagation());
+      (parent || document.body).appendChild(el);
+      this._notices.set(key, el);
+    }
+    el.textContent = '';
+    const p = document.createElement('div'); p.textContent = text; el.appendChild(p);
+    if (button) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = button; b.style.cssText = NOTICE_BUTTON_CSS;
+      if (onButton) b.addEventListener('click', onButton);
+      el.appendChild(b);
+    }
+    return el;
+  }
 
   _frame = (t) => {
     if (!this._running) return;
@@ -190,8 +379,15 @@ export class Engine {
     let dt = (t - this._last) / 1000; this._last = t;
     if (dt > 0.25) dt = 0.25; // tab was hidden
     else if (!(dt >= 0)) dt = 0; // first rAF timestamp can precede start()
-    this.tick(dt);
+    try { this.tick(dt); } catch (e) { this._frameError(e); }
   };
+
+  // a frame threw (header): a lost context takes the lost path; anything else is logged and shown
+  _frameError(e) {
+    if (this.contextLost || this.renderer.getContext().isContextLost()) { this._contextLost(null); return; }
+    console.error('[engine] frame error', e);
+    try { this.onFrameError(e); } catch (e2) { console.error('[engine] onFrameError failed', e2); }
+  }
 
   /**
    * Advance one frame by `dt` seconds: early -> fixed steps -> update -> late -> render. Driven by the rAF loop
@@ -246,6 +442,9 @@ export class Engine {
 
   dispose() {
     this.stop(); window.removeEventListener('resize', this._onWindowResize);
+    this.renderer.domElement.removeEventListener('webglcontextlost', this._onContextLost);
+    for (const el of this._notices.values()) el.remove();
+    this._notices.clear();
     for (const s of this.systems) if (s.dispose) s.dispose();
     if (this.overlay) this.overlay.dispose();
     this.renderer.dispose(); this.renderer.domElement.remove();

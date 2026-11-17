@@ -18,7 +18,8 @@
 //   if (bp.size) harness.resize(bp.size.w, bp.size.h);
 //   harness.setReady();
 //
-// API: name, engine, ready, poses (ids), settings (ids), frozen, live / converge (the hook groups or null),
+// API: name, engine, quality (the page's resolveQuality() result when passed as `quality`, else null), ready, poses
+// (ids), settings (ids), frozen, live / converge (the hook groups or null),
 // setReady(), pose(id) -> id, settle() -> Promise, render(), bench(frames = 24, { warmup = 3 }) -> ms per frame,
 // capture(scale = 4, into) -> { w, h, scale, data, hash }, converged(frames = 48, scale = 4, into) -> the same,
 // diff(a, b) -> { meanAbs, p99, max, pctOver2, pctOver8 },
@@ -88,7 +89,8 @@
 // (red, orange, yellow, lime, green, spring, cyan, azure, blue, violet, magenta, rose; bins under 0.5 % are omitted).
 // The capture is the canvas (the 3D frame after post-processing), without DOM HUD elements.
 // Device report: report({ repeats = 3, frames = 24 }) -> Promise of { name, device: { userAgent, renderer, pixelRatio,
-// screen, memory, cores }, size, poses: [{ pose, ms, fps, drawCalls, triangles, look }] } (ms = the median of
+// screen, memory, cores }, quality: { tier, source, reason, lighter } | null, size, poses: [{ pose, ms, fps, drawCalls,
+// triangles, look }] } (ms = the median of
 // `repeats` bench() runs at the size the page is showing), for machines the scripts cannot drive: a phone or a
 // tablet. Loading a sample with ?perfreport=1 runs it once the sample is ready and shows the result in an overlay
 // with a Copy button; the JSON goes into bench/devices/<name>.json (bench/README.md).
@@ -176,6 +178,8 @@ export function readBenchParams(search) {
  *   begin(harness), frame(dt, harness) before each render, end(harness) (see "Live frames" in the header)
  * @param {{ begin: Function, end?: Function }} [o.converge]  converged(): begin(harness) lets TAA accumulate with
  *   jitter from a reset history, all else held; end(harness) (see "Converged captures" in the header)
+ * @param {import('./Quality.js').QualityChoice} [o.quality]  the page's resolveQuality() result (harness.quality; the
+ *   browser tests read the tier in effect from it)
  * @param {boolean} [o.global=true]  assign window.__sample
  */
 // ?perfreport=1: run report() and show it (plain DOM, no dependency on the ui layer); the page keeps its last pose
@@ -268,6 +272,8 @@ export function createBenchHarness(engine, o = {}) {
   const h = {
     name: o.name || 'sample',
     engine: E,
+    /** The page's resolveQuality() result, or null. */
+    quality: o.quality || null,
     ready: false,
     /** Registered pose ids. */
     poses: Object.keys(poseFns),
@@ -298,6 +304,7 @@ export function createBenchHarness(engine, o = {}) {
         device: { userAgent: nav.userAgent || '', renderer: P.gpuRenderer, pixelRatio: typeof devicePixelRatio === 'number' ? devicePixelRatio : 1,
           screen: scr ? `${scr.width}x${scr.height}` : '', memory: /** @type {any} */ (nav).deviceMemory ?? null, cores: nav.hardwareConcurrency ?? null },
         query: typeof location !== 'undefined' ? location.search : '', size: null, poses: [],
+        quality: h.quality ? { tier: h.quality.tier, source: h.quality.source, reason: h.quality.reason, lighter: !!h.quality.lighter } : null,
       };
       for (const id of h.poses) {
         h.pose(id); await h.settle();

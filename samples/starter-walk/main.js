@@ -11,7 +11,7 @@ import { AnimationController } from '@vibe/engine/anim';
 import { CharacterInput } from '@vibe/engine/input';
 import { ThirdPersonRig } from '@vibe/engine/camera';
 import { AudioBus, playTone } from '@vibe/engine/audio';
-import { UILayer, Panel, Readout, QualityMenu } from '@vibe/engine/ui';
+import { UILayer, Panel, Readout, QualityMenu, LoadingScreen } from '@vibe/engine/ui';
 
 const BASE = import.meta.env.BASE_URL; // asset URLs go through it, so the page also works under a sub-path
 
@@ -20,6 +20,10 @@ const BASE = import.meta.env.BASE_URL; // asset URLs go through it, so the page 
 const Q = resolveQuality();
 const S = Q.settings;
 // #endregion howto:quality
+// ---- a loading screen until the first frames are drawn (it shows a boot error too)
+// #region howto:loading
+const loading = new LoadingScreen({ title: 'STARTER · WALK', label: 'Loading…' });
+// #endregion howto:loading
 
 async function boot() {
   // #region howto:walk-engine
@@ -165,12 +169,19 @@ async function boot() {
       distance.set(walked.toFixed(0));
     },
   }, 'game');
+
+  // ---- start: draw the first frames under the loading screen (shaders compile, textures upload), then show them
+  // #region howto:start
+  loading.setLabel('Compiling shaders…');
+  await engine.warmUp(); // the systems and renderFn at dt 0 (nothing moves), finished on the GPU: no first-frame stall
   engine.start();
+  loading.hide();
+  // #endregion howto:start
 
   // ---- page contract for the browser tests (npm run smoke): window.__sample with `ready`
   // #region howto:page-contract
-  window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-walk' }), { cc, anim }).setReady();
+  window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-walk', quality: Q }), { cc, anim }).setReady();
   // #endregion howto:page-contract
 }
 
-boot().catch((e) => console.error('[starter-walk] boot failed', e));
+boot().catch((e) => { console.error('[starter-walk] boot failed', e); loading.error(`Failed to start: ${e.message}`); });
