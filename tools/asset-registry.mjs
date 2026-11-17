@@ -433,6 +433,27 @@ const car = new VehicleController(visual.spec);
 visual.update(0, car, { darkness: 0 });`,
     preview: { az: 140, el: 16 },
   },
+  {
+    id: 'engine-country-road', name: 'Country road (countryRoad)', category: 'road', module: 'src/world/Scenery.js', export: 'countryRoad',
+    usedBy: [], tags: ['road', 'lay-by', 'lane lines', 'verge', 'fence', 'utility poles', 'trees', 'procedural', 'starter'],
+    description: 'A quiet two-lane road along -Z to start a driving game on, in one call: the asphalt with a lay-by, lane and edge lines, gravel verges, a timber fence, utility poles with wires, a side track with a name sign, trees and a tree line, built from the engine\'s furniture, vegetation and PartBuilder. Static colliders go into a PhysicsWorld when one is given. Call place.update(dt, cameraPos, darkness) each frame (tree wind, the near / far tree split); place.paths feed groundCover, place.surfaces the road texture. starter-drive drives on it.',
+    snippet: `import { countryRoad } from '@vibe/engine/world';
+const place = countryRoad({ from: 20, to: -140 });
+for (const s of place.surfaces) s.mesh.material.color.set(0x34363a); // untextured asphalt (starter-drive puts a texture set on place.surfaces)
+scene.add(place.group);
+// every frame: place.update(dt, camera.position, 0);`,
+    preview: { frames: 4, target: [0, 0, -30], az: 30, el: 22, dist: 60 },
+  },
+  {
+    id: 'engine-park-corner', name: 'Park corner (parkCorner)', category: 'environment', module: 'src/world/Scenery.js', export: 'parkCorner',
+    usedBy: [], tags: ['park', 'gravel path', 'bench', 'fence', 'boulders', 'trees', 'procedural', 'starter'],
+    description: 'A small park corner to start a walking game in, in one call: a gravel path past a lamp, a bench under it, a fence run, boulders, trees and a tree line. Static colliders (bench, fence, boulders, near trunks) go into a PhysicsWorld when one is given. Call place.update(dt, cameraPos, darkness) each frame; place.paths feed groundCover({ paths }) for the path and the grass patches on your ground. starter-walk is set in one.',
+    snippet: `import { parkCorner } from '@vibe/engine/world';
+const place = parkCorner({ lamp: [3, -6] });
+scene.add(place.group);
+// every frame: place.update(dt, camera.position, 0);`,
+    preview: { frames: 4, target: [2, 0.4, -6], az: 35, el: 22, dist: 16 },
+  },
   ...Object.entries(FURN).map(furnitureEntry),
   ...Object.entries(SPECIES_NAMES).map(treeEntry),
   ...BOATS.map(boatEntry),

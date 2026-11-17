@@ -25,7 +25,7 @@
   "sound": "Sound"
  },
  "counts": {
-  "total": 195,
+  "total": 197,
   "byCategory": {
    "vehicle": 13,
    "character": 7,
@@ -34,12 +34,12 @@
    "vegetation": 13,
    "boat": 5,
    "sign": 6,
-   "road": 2,
+   "road": 3,
    "water": 2,
    "texture-set": 33,
    "texture": 9,
    "sky": 11,
-   "environment": 10,
+   "environment": 11,
    "effect": 4,
    "grade": 5,
    "map": 2,
@@ -47,10 +47,10 @@
   },
   "byKind": {
    "file": 59,
-   "code": 136
+   "code": 138
   },
   "byScope": {
-   "engine": 69,
+   "engine": 71,
    "demo": 126
   },
   "notReusable": 12
@@ -5131,6 +5131,56 @@
    }
   },
   {
+   "id": "engine-country-road",
+   "name": "Country road (countryRoad)",
+   "category": "road",
+   "categoryLabel": "Road and ground",
+   "kind": "code",
+   "scope": "engine",
+   "demo": null,
+   "where": {
+    "module": "src/world/Scenery.js",
+    "export": "countryRoad",
+    "symbol": null,
+    "import": "@vibe/engine/world"
+   },
+   "usedBy": [],
+   "via": null,
+   "reusable": true,
+   "reason": null,
+   "credit": null,
+   "bytes": null,
+   "facts": {
+    "triangles": 8704
+   },
+   "tags": [
+    "road",
+    "lay-by",
+    "lane lines",
+    "verge",
+    "fence",
+    "utility poles",
+    "trees",
+    "procedural",
+    "starter"
+   ],
+   "thumb": "catalog/thumbs/engine-country-road.jpg",
+   "preview3d": true,
+   "description": "A quiet two-lane road along -Z to start a driving game on, in one call: the asphalt with a lay-by, lane and edge lines, gravel verges, a timber fence, utility poles with wires, a side track with a name sign, trees and a tree line, built from the engine's furniture, vegetation and PartBuilder. Static colliders go into a PhysicsWorld when one is given. Call place.update(dt, cameraPos, darkness) each frame (tree wind, the near / far tree split); place.paths feed groundCover, place.surfaces the road texture. starter-drive drives on it.",
+   "snippet": "import { countryRoad } from '@vibe/engine/world';\nconst place = countryRoad({ from: 20, to: -140 });\nfor (const s of place.surfaces) s.mesh.material.color.set(0x34363a); // untextured asphalt (starter-drive puts a texture set on place.surfaces)\nscene.add(place.group);\n// every frame: place.update(dt, camera.position, 0);",
+   "preview": {
+    "frames": 4,
+    "target": [
+     0,
+     0,
+     -30
+    ],
+    "az": 30,
+    "el": 22,
+    "dist": 60
+   }
+  },
+  {
    "id": "miami-dune-road",
    "name": "Dune road",
    "category": "road",
@@ -8408,6 +8458,55 @@
     "mode": "card",
     "label": "Environment",
     "note": "Not reusable as is"
+   }
+  },
+  {
+   "id": "engine-park-corner",
+   "name": "Park corner (parkCorner)",
+   "category": "environment",
+   "categoryLabel": "Environment",
+   "kind": "code",
+   "scope": "engine",
+   "demo": null,
+   "where": {
+    "module": "src/world/Scenery.js",
+    "export": "parkCorner",
+    "symbol": null,
+    "import": "@vibe/engine/world"
+   },
+   "usedBy": [],
+   "via": null,
+   "reusable": true,
+   "reason": null,
+   "credit": null,
+   "bytes": null,
+   "facts": {
+    "triangles": 5170
+   },
+   "tags": [
+    "park",
+    "gravel path",
+    "bench",
+    "fence",
+    "boulders",
+    "trees",
+    "procedural",
+    "starter"
+   ],
+   "thumb": "catalog/thumbs/engine-park-corner.jpg",
+   "preview3d": true,
+   "description": "A small park corner to start a walking game in, in one call: a gravel path past a lamp, a bench under it, a fence run, boulders, trees and a tree line. Static colliders (bench, fence, boulders, near trunks) go into a PhysicsWorld when one is given. Call place.update(dt, cameraPos, darkness) each frame; place.paths feed groundCover({ paths }) for the path and the grass patches on your ground. starter-walk is set in one.",
+   "snippet": "import { parkCorner } from '@vibe/engine/world';\nconst place = parkCorner({ lamp: [3, -6] });\nscene.add(place.group);\n// every frame: place.update(dt, camera.position, 0);",
+   "preview": {
+    "frames": 4,
+    "target": [
+     2,
+     0.4,
+     -6
+    ],
+    "az": 35,
+    "el": 22,
+    "dist": 16
    }
   },
   {

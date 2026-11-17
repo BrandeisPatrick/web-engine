@@ -87,8 +87,9 @@ expose state that changes through a function (`{ game: () => ({ mode, score }) }
 | Leaves lit like leaves (wrap, light through, rim) | `applyFoliageLightingTo`, `buildTreeMeshes` (world) | `applyFoliageLightingTo(group, true)` or `buildTreeMeshes(p, { foliageLight: true })` | `samples/nyc-night/main.js` |
 | Facade windows with dim rooms, shades and panes that differ | `createFacadeMaterials`, `enableFacadeDetail` (world) | `enableFacadeDetail(createFacadeMaterials(...), { dimRooms: 0.22 })` | `samples/nyc-night/facades.js` |
 | AO only on the ambient, a lifted black, TAA sharpen | `PostFX` (render) | `new PostFX(..., { look: { aoLit: 0.8, aoTint: [0, 0.03, 0.07], lift: [0.002, 0.003, 0.004] }, taa: { sharpen: 0.25 } })` | `samples/nyc-night/main.js` |
-| Lamp light in round pools on the ground | `NearestLights` (render) | `new NearestLights({ mode: 'clustered', clustered, spot: { cosInner: 0.82, cosOuter: 0.12 } })` | `samples/nyc-night/main.js` |
+| Lamp light in round pools on the ground, the pole left dark | `NearestLights` (render) | `new NearestLights({ mode: 'clustered', clustered, spot: { cosInner: 0.82, cosOuter: 0.12, near: 5 } })`; `near` (m) shields the first metres below the head; a spot's decay must stay below 8 for it (`ClusteredLights.setSpot(..., near)`) | `samples/nyc-night/main.js` |
 | A small place to start in: a road or a park corner | `countryRoad`, `parkCorner`, `groundCover` (world) | `const place = countryRoad({ physics }); scene.add(place.group)`; per frame `place.update(dt, camera.position, darkness)`; `applyPatches(ground.material, [groundCover({ paths: place.paths })])` | starters |
+| See a demo's brighter grade | the demos' own flag | open `nyc-night/`, `miami-drive/` or `halloween/` with `?look=open` (the default look is the low-key one the smoke look gate checks) | `samples/nyc-night/main.js` (`LOOK`) |
 | A whole city | `MapWorld` (world) | only for map-scale cities from baked OpenStreetMap data | `samples/nyc-night/main.js` |
 
 Everything else, layer by layer: [ENGINE.md](ENGINE.md). Every source file starts with a header documenting its API.

@@ -199,6 +199,8 @@ Installed as a git submodule listed in a game's `workspaces`, the engine resolve
 - Render flags shared by the demos are in `samples/shared/fx-flags.js`: `?gbuffer=1`, `?aa=taa|fxaa|msaa`,
   `?shadows=pcf|fast|pcss`, `?cascades=2|3|4`, `?ssr=1`, `?volumetric=1`, `?motionblur=1`, `?dof=1`,
   `?lut=warm|bleach`, `?aonormals=gbuffer`, `?fps=60`.
+- `?look=open` (nyc-night, miami-drive, halloween): a brighter, two-temperature grade of the same scene. The default
+  look is the low-key one the smoke look gate checks; `open` is not gated.
 - The Halloween game's own flags are in [its README](samples/halloween/README.md).
 - The earlier test samples (Canyon Run, the procedural city, Character, the physics sandbox) were removed in favour
   of the current demos; they are in git history (`git show fc73161:samples/<name>/main.js`).
@@ -209,8 +211,8 @@ Installed as a git submodule listed in a game's `workspaces`, the engine resolve
 
 - `test/car-sim.mjs`: the vehicle model (`ROADSTER_SPEC`) and the PhysicsWorld queries; the determinism gate
   (bit-identical since 0.4.0).
-- `test/world-build.mjs`, `world-lights`, `vehicles-hd`: the procedural city built headless, its stats, queries and
-  10 s of traffic; the vehicle detail levels.
+- `test/world-build.mjs`, `world-lights`, `vehicles-hd`, `scenery`: the procedural city built headless, its stats,
+  queries and 10 s of traffic; the vehicle detail levels; the starters' country road, park corner and ground cover.
 - `test/core.mjs`, `quality`, `shell`, `look-stats`, `memory`, `texture-manifest`, `assets`, `rigs`, `camera-feel`,
   `character-input`, `steering-assist`, `anim`, `character-sim`, `car-visual`: core services, the quality tiers, the
   game shell's state and settings, the look statistics, memory trimming, loaders, camera rigs and their road feel,

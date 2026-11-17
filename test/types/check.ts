@@ -255,3 +255,16 @@ const lookFx = new PostFX(engine.renderer, engine.scene, engine.camera, { look: 
 lookFx.set('look.aoLit', 0.6);
 const spotPool = new NearestLights({ count: 4, mode: 'clustered', spot: { cosInner: 0.82, cosOuter: 0.12 } });
 void spotPool;
+// the fix pass: a spot's near shield (metres; the spot's decay must stay below 8), and the starters' scenery
+const shieldPool = new NearestLights({ count: 4, mode: 'clustered', clustered: lights, spot: { cosInner: 0.82, cosOuter: 0.12, near: 5 } });
+void shieldPool;
+lights.setSpot(0, 0, 6, 0, 30, 1, 0.8, 0.6, 2, 0, -1, 0, 0.82, 0.12, 5);
+import { countryRoad, parkCorner, groundCover, paintedLines, COVER_MAX_SEGMENTS, type SceneryResult, type CoverPath } from '@vibe/engine/world';
+const road = countryRoad({ physics, width: 10, layby: { from: 10, to: -110, width: 7 }, trackName: 'Mill Lane', seed: 3 });
+const roadSurfaces: number = road.surfaces.length; void roadSurfaces;
+const park: SceneryResult = parkCorner({ physics, lamp: [3, -6] });
+park.update(0.016, engine.camera.position, 0.5);
+const parkPaths: CoverPath[] = park.paths;
+applyPatches(wallMat, [groundCover({ paths: parkPaths, scale: 1, amount: 1 })]);
+const paint: THREE.Mesh = paintedLines([{ x: 0, from: 0, to: -40, dash: [3, 9] }]); void paint;
+const coverMax: number = COVER_MAX_SEGMENTS + park.counts.trees + road.counts.posts; void coverMax;

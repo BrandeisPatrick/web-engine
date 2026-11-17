@@ -445,7 +445,11 @@ engine.addSystem({ lateUpdate() { cl.update(camera); } }, 'lights'); // 5. per f
 
 Clustered lights cast no shadows. `NearestLights` can feed them instead of a pool:
 `new NearestLights({ mode: 'clustered', clustered: cl, ... })`. `MapWorld` does all of this itself with its
-`lights: { clustered: true }` option.
+`lights: { clustered: true }` option. For street lamps that lay round pools and leave their own pole dark, make them
+downward spots with a near shield: `spot: { cosInner: 0.82, cosOuter: 0.12, near: 5 }` (the light fades in over the
+first 5 m below the head). Directly, that is `cl.setSpot(i, x, y, z, range, r, g, b, decay, 0, -1, 0, cosInner,
+cosOuter, near)`; `near` is in metres (0.25 m steps, default 0 = off) and is packed into the decay, so a shielded
+spot's decay must stay below 8.
 
 Every game needs the tier switch: the desktop tier has `S.lights.clustered === true`, the mobile tier `false`. On
 mobile a `NearestLights` pool puts real lights on the four lamps nearest the camera (same reach and
@@ -476,7 +480,7 @@ at z = -length / 2). `SPEC` is the car's spec, `cl` the page's `ClusteredLights`
 the first free light index (the lamp count). One way per tier:
 
 - Desktop: two clustered spot entries, `cl.setSpot(index, x, y, z, range, r, g, b, decay, dx, dy, dz, cosInner,
-  cosOuter)`, recomputed every frame from the body's matrix (the list is in world space; it does not follow a parent).
+  cosOuter, near = 0)`, recomputed every frame from the body's matrix (the list is in world space; it does not follow a parent).
   The Miami demo's values: reach 60 m, colour × intensity 90, decay 2, cone from cos(0.32) to cos(0.5), aimed 6 % down.
 - Mobile: one three.js `SpotLight` between the lamps, a child of the body (every real light costs on every lit pixel,
   so one for the pair). Add its `target` to the body too: a target outside the scene graph never moves, and the beam

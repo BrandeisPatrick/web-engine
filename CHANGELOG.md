@@ -16,6 +16,22 @@
   that reflects the street, lit and dim rooms, wall drips and damp, lit street trees, weathered street kit. Miami:
   a soft lit cloud deck, the afterglow key, lit foliage, aged stucco with dirt runs, shrubs, the neon tubes off
   (`?neon=1`), AO on the ambient. Halloween: regraded inside the gate, the candy's coloured halos cut to small warm glints, smoother carved pumpkin edges and breathing candle light, the green window and blue door calmed, inscriptions, shaped capstones and clapboard (desktop), AO on the ambient, `?look=open` with a small black lift. Starters: lit clouds (drive also the low-sun fill), AO on the ambient, weathered posts and lamp, broad patches on the walk's ground.
+- Fix pass (after the look pass): street lamps as shielded spots: `ClusteredLights.setSpot(..., near)` and
+  `NearestLights({ spot: { near } })` (m, default 0 = off, 0.25 m steps) fade a spot in over its first `near` m along
+  its axis, so a lamp's own pole and the wall at head height stay unlit; `near` is packed into the stored decay
+  (decay + 8 x round(near x 4)), so a shielded spot's decay must stay below 8. nyc-night's lamps are 44 degree cones,
+  twice as bright, with a 5 m shield (1.5x in `?look=open`). `src/world/Scenery.js` (world): `countryRoad`,
+  `parkCorner`, `groundCover` (a grass-ground patch: broad lush / dry / bare patches and gravel paths) and
+  `paintedLines`; the starters now drive a country road with a lay-by and walk a park corner (test `scenery`;
+  catalogue entries `engine-country-road`, `engine-park-corner`). Thinner, wispier tyre smoke (`TyreFx`), a matte
+  walker, louder footsteps, lighter dry asphalt. NYC: near panes no longer mirror loose lit windows, dim rooms lit low
+  and deep, shop interiors with a counter and pendant lamps, true-width tar and cracks, no gutter litter across junction
+  boxes, more garbage piles and trash cans. Miami: a soft key glint on facades, softer wet-sand edge and neutral dusk
+  sand, fibrous street-palm bark, lifeguard huts with form and aged paint, readable far window rows; the open look
+  less pink. Halloween: readable moonlit village ground, night jack-o'-lanterns, a fill on shaded walls, muted
+  signposts, 400 real lane stones (desktop), leaf-sized litter. The steering-assist allocation gate now gives its
+  32 B budget to the measurement as well (it retried every window against 1 B and failed when the last one held a
+  GC). `npm test` runs 57 suites.
 - Sound kit (audio): `SoundBank` with 18 named sounds rendered in plain JavaScript (`SOUND_PRESETS`), `Footsteps`, a
   voice policy (`VoicePool`), the 'safe' master chain and `setPaused` / `setMuffle` / `duck` on `AudioBus`,
   `audioSelfTest` / `analyseMix` / `encodeWav`, and the `samples/sound-check/` page (a card per sound, the measured

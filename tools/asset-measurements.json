@@ -58,6 +58,14 @@
   "skinned": 0,
   "points": 0
  },
+ "engine-country-road": {
+  "triangles": 8704,
+  "meshes": 13,
+  "instanced": 7,
+  "instances": 124,
+  "skinned": 0,
+  "points": 0
+ },
  "engine-facade-windows": {
   "ran": true
  },
@@ -266,6 +274,14 @@
   "meshes": 1,
   "instanced": 1,
   "instances": 1,
+  "skinned": 0,
+  "points": 0
+ },
+ "engine-park-corner": {
+  "triangles": 5170,
+  "meshes": 9,
+  "instanced": 7,
+  "instances": 380,
   "skinned": 0,
   "points": 0
  },

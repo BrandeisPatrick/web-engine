@@ -29,7 +29,7 @@ Order: core < physics < render < anim / input / camera / audio / ui < world. Low
 | camera | `@vibe/engine/camera` | `CameraRig`, `CameraCollision`, `ChaseRig`, `OrbitRig`, `FreeFlyRig`, `ThirdPersonRig`, `FirstPersonRig`, `ROAD_FEEL`, `LandingSpring`, `SprintFov` |
 | audio | `@vibe/engine/audio` | `AudioBus`, the synth voices (`playTone`, `playNoiseBurst`, `OscStack`, `NoiseVoice`, ...), `PositionalAudio`, `SamplePlayer`, `registerAudioLoader`, `VehicleAudio`, `CityAmbience`, the sound kit: `SoundBank` (named sounds, voice policy), `SOUND_PRESETS` (18), `Footsteps`, `VoicePool`, `audioSelfTest` / `analyseMix` / `MIX_LIMITS`, `encodeWav`, the `dsp` namespace; `AudioBus({ master: 'safe' })`, `SAFE_MASTER` |
 | ui | `@vibe/engine/ui` | `UILayer`, `Panel`, `Readout`, `Gauge`, `Bar`, `Badge`, `Segments`, `Minimap`, `Flash`, `GMeter`, `AttitudeIndicator`, `HelpOverlay`, `LoadingScreen`, `QualityMenu`, `GameShell`, `createSettings`, the theme (`setTheme`, `theme`) |
-| world | `@vibe/engine/world` | `MapWorld` and its systems (terrain, roads, buildings, props, vegetation, water, traffic), `TileStreamer`, `createCarVisual` / `carSpecFor`; `NearestLights` is re-exported from render |
+| world | `@vibe/engine/world` | `MapWorld` and its systems (terrain, roads, buildings, props, vegetation, water, traffic), `TileStreamer`, `createCarVisual` / `carSpecFor`, `countryRoad` / `parkCorner` / `groundCover` (Scenery); `NearestLights` is re-exported from render |
 
 ## Conventions to know first
 
@@ -410,8 +410,12 @@ surface above.
     lose it), `aoTint` colours what AO leaves (e.g. `[0, 0.03, 0.07]`), `lift` raises the floor black to a colour
     after the contrast curve (e.g. `[0.006, 0.0085, 0.011]`, about a third of it in a low-key look). Each adds its
     block to the final pass only while it is on; `postfx.set('look.aoLit', v)` at runtime.
-  - `NearestLights({ mode: 'clustered', spot: { cosInner, cosOuter } })`: each lamp is a spot aimed straight down, a
-    round soft-edged pool on the ground that leaves the wall above its head dark.
+  - `NearestLights({ mode: 'clustered', spot: { cosInner, cosOuter, near } })`: each lamp is a spot aimed straight
+    down, a round soft-edged pool on the ground that leaves the wall above its head dark. `near` (m, default 0 = off)
+    is a shield at the head: the light fades in over its first `near` m below it, so the lamp's own pole and the wall
+    at head height stay unlit (nyc-night uses 5 m). It is `ClusteredLights.setSpot(..., cosInner, cosOuter, near)`
+    underneath: quantised to 0.25 m and packed into the decay (stored as decay + 8 x round(near x 4)), so a spot with
+    a shield must have a decay below 8 (a larger decay ignores `near`).
   - `weathering(options)` (`src/render/MaterialPatches.js`): a material patch for `applyPatches` that breaks up
     walls and props in world space (no UVs, no textures): macro value / hue / roughness variation, grime rising from
     the ground (`ground: 'origin'` for props), rain streaks, dust on ledges, optional sun fading and chips.
@@ -421,6 +425,10 @@ surface above.
     `buildTreeMeshes(..., { foliageLight })` light leaves as foliage (wrap, light through the leaves, rim, more sky);
     `enableFacadeDetail(createFacadeMaterials(...), opts)` gives facade windows dim rooms, street spill, panes that
     differ, roller shades and weathered curtain walls.
+- The three demos turn these on in their default look, which stays inside the look gate in `test/browser/smoke.mjs`
+  (low key: dark mean, nothing clipped, one warm hue family). Each also has `?look=open` (nyc-night, miami-drive,
+  halloween): a brighter, two-temperature grade of the same scene (more exposure, cooler shade against warm lamps,
+  a small lifted black) that the gate does not check, there to compare against and to start a brighter game from.
 - Moonlit scattering (opt-in, `new Atmosphere({ moonScatter: amount })`, default 0 = off): at night, while the moon
   is the shadow-casting light (`lightDir = moonDir`), the post fog's forward-scatter glow (`fogParams.sunScatter`,
   otherwise 0 at night) is `amount`, and `atmo.scatterDir` / `atmo.scatterColor` follow the moon (`moonDir`,
@@ -458,7 +466,10 @@ Two paths, chosen per `PostFX` instance; the forward path is the default and ren
   texture (+2 texture units); a global `lights_pars_begin` / `lights_fragment_begin` patch under `ENGINE_CLUSTERED`
   loops over the fragment's cell and calls three's `RE_Direct` with the stock attenuation, so 8 clustered lights
   render pixel-identically to 8 real `PointLight`s. No shadows on clustered lights (real three lights keep theirs).
-  `NearestLights({ mode: 'clustered', clustered })` pushes every lamp within `clusteredRange`.
+  `NearestLights({ mode: 'clustered', clustered })` pushes every lamp within `clusteredRange`. Spots:
+  `cl.setSpot(i, x, y, z, range, r, g, b, decay, dx, dy, dz, cosInner, cosOuter, near = 0)`; `near` (m, 0.25 m steps)
+  fades the light in along the axis over its first `near` m (a luminaire's housing: the pole beside the head stays
+  dark) and needs decay < 8.
 - **Cascades and PCSS** (`shadowCascade.js`, `shadowKernel.js`, `Atmosphere`): `shadows.cascades` 1-4 (middle
   cascades `sunMid` / `sunMid2` between the near `sun` and the far `sunFar`, round-robin map updates), `kernel:
   'pcss'` (8-tap blocker search on the packed map, penumbra from receiver - blocker, 12-tap rotated compare disc),
@@ -688,6 +699,7 @@ meshes and `PhysicsWorld.setSurfaceProvider` instead.
 | `Buildings.js` + `FacadeTextures.js` | `BuildingBuilder(region, { groundAt, streetAt, offset, baseGrid, detailGrid, lodDist, detailFloors, maxWindows, style, nearDetail, grid })` (`add(b, rnd, footprint?)`, `footprint(b)`, `build`), `TileBuildingBuilder(region, opts, 'low' \| 'full' \| 'near')` (`meshes(mats)` generator), `NullBuf`, `DEFAULT_BUILDING_STYLE` (`oldProb(xb, zb)`, `victorianProb(xb, zb)`, `namedRe`), `createFacadeMaterials`, `enableFacadeDetail(mats, { dimRooms, spill, paneVariation, shades, weathering })`, `GeoBuf`, `MODE`, `enc`, `tintOf`, `insetRing`, `offsetRing`; `FACADE`, `WIN_RECTS`, `makeFacadeTextures`, `PBR`, `PBR_SETS`, `GROUND_SETS`, `loadPbrTextures` |
 | `Props.js` + `Furniture.js` + `Vehicles.js` | `Props({ net, raster, colliders, data, isLand, groundAt, seed, streets, signStyle, treeRules, treeMix })`; furniture library (`makeFurnitureGeometry`, `FURNITURE_META`, `buildSignAtlas(names, style)`, `DEFAULT_SIGN_STYLE`, materials); vehicle library (`makeVehicleGeometry(type, { lod, livery })`, `VEHICLE_SPECS`, `pickVehicleColor`, `createVehicleMaterial`, `DEFAULT_BUS_LIVERY`, `PartBuilder`) |
 | `CarVisual.js` | `createCarVisual(type, { color, castShadow, contactShadow, shadowOpacity })` -> `{ root, wheels, spinners, spec, lamps, update(dt, car, { darkness, lights, brake, reverse }), setColor, dispose }`, `carSpecFor(type)` |
+| `Scenery.js` | small places to start a game in (the starters use them): `countryRoad({ physics, width, from, to, layby, trackName, seed })` (two-lane road along -Z, lay-by, paint, verges, fence, poles and wires, a named side track, trees; also `surfaces` for texturing) and `parkCorner({ physics, lamp, path, seed })` (gravel path, bench under the lamp, fence, boulders, trees) -> `{ group, update(dt, cameraPos, darkness), paths, counts }`; `groundCover({ paths, scale, seed, amount, dry, lush, earth, path })` (material patch for `applyPatches` on a flat grass ground: broad lush / dry / bare patches and gravel paths; up to `COVER_MAX_SEGMENTS` path segments; not with `weathering()` on the same material); `paintedLines(lines, { y, color })` (road paint as one mesh) |
 | `Traffic.js` | presenter: `Traffic({ world, data, net, props, seed, count, camera, busLivery, worker })` (`build`, `ready`, `update`, `queryColliders`, `setPlayer`, `setCamera`, `summary`, `pose(i)`, `mode`, `perf`, `sim`) |
 | `TrafficSim.js` + `traffic.worker.js` | simulation core (no scene objects): `TrafficSim({ roads, signals, groundAt \| baked, spawn, seed, count })` (`build`, `update(dt)`, `setView`, `setPlayer`, `readSignals`, `writePoses`, `queryColliders`, `summary`, `bakeError`, `lanes`, `vehicles`), `TrafficSim.roadsFrom(net)`, `buildSignalInfos({ data, net, props })`, `playerInfoFrom(src)`, `TRAFFIC_TYPES`, `POSE_STRIDE`, `typeCounts`; the module worker that runs it |
 | `Vegetation.js` (+ `VegModels.js`, `VegTextures.js`, `VegMaterials.js`) | `buildTreeMeshes(placements, { groundAt, colliders, seed, rules, mix, foliageLight })`, `bakeVegImpostors`, `SPECIES`, `makeVegAtlas`, `createVegMaterial`, `createVegImpostorMaterial`, `applyFoliageLighting`, `applyFoliageLightingTo`, `DEFAULT_FOLIAGE_LIGHT` |
