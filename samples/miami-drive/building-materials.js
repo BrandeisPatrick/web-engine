@@ -61,24 +61,6 @@ const WEATHER = /* glsl */`
       wxWeather(fCol, fRoughW, vWPos, wN, hs, pw, vec4(0.17, 0.04, 0.12, 0.75), vec4(0.62, 1.25, 0.7, 1.0 / 5.0),
         vec4(0.18 + 0.3 * sunF, 0.35, 0.45, wxC0.w), vec3(0.6, 0.57, 0.5), vec3(0.55, 0.54, 0.51));
       fRough = fRoughW;
-      // runs of dirt down from the parapet coping and from every floor's ledge / eyebrow line (buildings.js walls pack
-      // the wall top in vFuv.x and the floor rhythm in vFuv.y: floor height x 100 x 1000 + ground storey x 100)
-      if (mbC < 1.5 && vInfo.y >= 0.0 && vFuv.x > 0.5) {
-        float topY = vFuv.x, fhh = floor(vFuv.y / 1000.0) / 100.0, gH = mod(vFuv.y, 1000.0) / 100.0;
-        float cA = mbN(vec2(p.x * 3.3, 11.0 + vInfo.z * 7.0)) * 0.7 + mbN(vec2(p.x * 11.0, 5.0 + vInfo.z)) * 0.4;
-        float cols = smoothstep(0.38, 0.82, cA);
-        float dTop = topY - vWPos.y;
-        float runT = cols * (1.0 - smoothstep(0.0, 1.0 + 3.5 * mbN(vec2(p.x * 1.7, 2.0 + vInfo.z)), dTop)) * step(-0.05, dTop);
-        float runF = 0.0;
-        if (fhh > 1.5 && hs > gH + 0.2) {
-          float dB = fhh - mod(hs - gH, fhh);
-          float cB = smoothstep(0.45, 0.85, mbN(vec2(p.x * 4.1, 23.0 + vInfo.z * 3.0)) * 0.7 + mbN(vec2(p.x * 13.0, 9.0)) * 0.4);
-          runF = cB * (1.0 - smoothstep(0.0, 0.5 + 1.2 * mbN(vec2(p.x * 2.3, 7.0 + vInfo.z)), dB));
-        }
-        float run = clamp(max(runT * 0.95, runF * 0.75), 0.0, 1.0);
-        fCol *= mix(vec3(1.0), vec3(0.62, 0.6, 0.53), run * 0.62);
-        fRough = mix(fRough, 0.97, run * 0.3);
-      }
       // the darker damp band right at the pavement (ragged top)
       if (hs < 0.9) {
         float damp = 1.0 - smoothstep(0.05, 0.25 + 0.5 * mbN(vec2(p.x * 1.4, 3.0)), hs);
@@ -140,6 +122,26 @@ const WEATHER = /* glsl */`
       fRough = 0.95;
       fCol *= 1.0 + 0.2 * (wxNoise(vWPos * 0.21 + wxC0.w) - 0.5);
     }
+    // (desktop and phones) runs of dirt down from the parapet coping and from every floor's ledge / eyebrow line (buildings.js walls pack
+    // the wall top in vFuv.x and the floor rhythm in vFuv.y: floor height x 100 x 1000 + ground storey x 100)
+  if (mbC < 1.5 && vInfo.y >= 0.0 && vFuv.x > 0.5) {
+      float topY = vFuv.x, fhh = floor(vFuv.y / 1000.0) / 100.0, gH = mod(vFuv.y, 1000.0) / 100.0;
+      float cA = mbN(vec2(p.x * 3.3, 11.0 + vInfo.z * 7.0)) * 0.7 + mbN(vec2(p.x * 11.0, 5.0 + vInfo.z)) * 0.4;
+      float cols = smoothstep(0.38, 0.82, cA);
+      float dTop = topY - vWPos.y;
+      float runT = cols * (1.0 - smoothstep(0.0, 1.0 + 3.5 * mbN(vec2(p.x * 1.7, 2.0 + vInfo.z)), dTop)) * step(-0.05, dTop);
+      float runF = 0.0;
+      if (fhh > 1.5 && hs > gH + 0.2) {
+        float dB = fhh - mod(hs - gH, fhh);
+        float cB = smoothstep(0.45, 0.85, mbN(vec2(p.x * 4.1, 23.0 + vInfo.z * 3.0)) * 0.7 + mbN(vec2(p.x * 13.0, 9.0)) * 0.4);
+        runF = cB * (1.0 - smoothstep(0.0, 0.5 + 1.2 * mbN(vec2(p.x * 2.3, 7.0 + vInfo.z)), dB));
+      }
+      float run = clamp(max(runT * 0.95, runF * 0.75), 0.0, 1.0);
+      fCol *= mix(vec3(1.0), vec3(0.62, 0.6, 0.53), run * 0.62);
+      fRough = mix(fRough, 0.97, run * 0.3);
+    }
+    // phones (no weathering pass): a cheap broad mottle so walls are not one flat value
+    if (mbC < 1.5 && uMbWeather < 0.5) fCol *= 1.0 + 0.24 * (mbN(p * 0.3 + vInfo.z * 9.0) * 0.65 + mbN(p * 1.1) * 0.35 - 0.5);
     // ---- far facade: the window bays of the near version (uv: bays, floors; y: window width / height x100)
     if (mbC > 4.5 && mbC < 5.5) {
       vec2 c = vFuv, cf = fract(c), ci = floor(c);
@@ -180,13 +182,13 @@ const WEATHER = /* glsl */`
   // ---- window glass seen from afar (the skyline at dusk): less of the pale sky in it, so the openings read darker
   // than the stucco, and the lit rooms keep a warm core instead of averaging into the glass
   if (fMode == 7 && fGlass > 0.5) {
-    float farG = smoothstep(0.05, 0.3, max(fwidth(vFuv.x * 0.5), fwidth(vFuv.y)));
+    float farG = smoothstep(0.015, 0.1, max(fwidth(vFuv.x * 0.5), fwidth(vFuv.y)));
     if (farG > 0.0) {
       vec2 cell = vec2(floor(vFuv.x * 0.5), floor(vFuv.y)), id = cell + vec2(vInfo.z * 113.0, vInfo.z * 71.0);
       float hp = mix(fHash(id + 3.7), fHash(vec2(vInfo.z * 17.0, cell.y)), 0.75);
-      float lit = step(1.0 - uLitFrac * (0.6 + 0.9 * fract(vInfo.z * 5.7)), hp);
+      float lit = max(step(1.0 - uLitFrac * (0.6 + 0.9 * fract(vInfo.z * 5.7)), hp), step(1.0 - uLitFrac * 0.5, fHash(id + 9.9)));
       fEnv *= 1.0 - 0.5 * farG;
-      fEmis += vec3(1.0, 0.74, 0.46) * lit * uNight * uWinGain * 0.22 * farG;
+      fEmis += vec3(1.0, 0.74, 0.46) * lit * uNight * uWinGain * 0.3 * farG;
     }
   }
 }
