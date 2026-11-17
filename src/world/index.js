@@ -20,6 +20,10 @@ export { createCarVisual, carSpecFor } from './CarVisual.js';
 /** @typedef {import('./CarVisual.js').CarVisual} CarVisual  what createCarVisual returns */
 /** @typedef {import('./CarVisual.js').CarVisualOptions} CarVisualOptions */
 /** @typedef {import('./CarVisual.js').CarVisualUpdateOptions} CarVisualUpdateOptions */
+// a small believable place to start in: a country road, a park corner, ground cover, road paint (the starters use them)
+export { countryRoad, parkCorner, groundCover, paintedLines, COVER_MAX_SEGMENTS } from './Scenery.js';
+/** @typedef {import('./Scenery.js').SceneryResult} SceneryResult */
+/** @typedef {import('./Scenery.js').CoverPath} CoverPath */
 export { Traffic } from './Traffic.js';
 export { TrafficSim, TRAFFIC_TYPES, POSE_STRIDE, buildSignalInfos, playerInfoFrom, typeCounts } from './TrafficSim.js';
 export { buildTreeMeshes, bakeVegImpostors, IMP_VIEWS, impostorView } from './Vegetation.js';

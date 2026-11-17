@@ -1,8 +1,8 @@
-// Starter: a driving game. Copy this folder to start one: flat ground, a straight textured road with a wide apron at the
-// start, an HD hatchback on the engine's VehicleController (an ordinary road car) with the steering assist, skid marks
-// and tyre smoke, a chase camera that reacts to the car, car sounds, golden-hour sky with distance haze,
-// post-processing, a game shell (loading bar, start card, pause with volume, assist and quality, all saved) and a
-// speed readout. Every block says what it is and what a game would change.
+// Starter: a driving game. Copy this folder to start one: a field with a country road through it (a lay-by, lane lines,
+// verges, fences, poles and trees from world/Scenery.js: replace it with your level), an HD hatchback on the engine's
+// VehicleController (an ordinary road car) with the steering assist, skid marks and tyre smoke, a chase camera that
+// reacts to the car, car sounds, golden-hour sky with distance haze, post-processing, a game shell (loading bar, start
+// card, pause with volume, assist and quality, all saved) and a speed readout. Every block says what a game would change.
 // Controls: W / S or arrows drive and brake (brake from a stop reverses), A / D steer, X handbrake, C camera, R reset,
 // Esc / P pause; gamepad and touch work too. ?autostart=1 skips the start card (tests that press keys need it).
 // The `// #region howto:` markers are for docs/HOWTO.md, which copies those blocks (test/docs.mjs checks the copies).
@@ -12,7 +12,7 @@ import { PhysicsWorld, VehicleController } from '@vibe/engine/physics';
 import { Atmosphere, PostFX, TyreFx, loadTextureManifest, loadTextureSet, applyPatches, weathering } from '@vibe/engine/render';
 import { VehicleInput } from '@vibe/engine/input';
 import { ChaseRig } from '@vibe/engine/camera';
-import { createCarVisual } from '@vibe/engine/world';
+import { createCarVisual, countryRoad, groundCover } from '@vibe/engine/world';
 import { AudioBus, SoundBank, VehicleAudio } from '@vibe/engine/audio';
 import { UILayer, Panel, Readout, GameShell } from '@vibe/engine/ui';
 
@@ -44,23 +44,24 @@ async function boot() {
   // cloudStyle 'lit': soft clouds lit by the low sun; lowSunEnv: a warmer, brighter fill while the sun is low (opt-in)
   const atmosphere = new Atmosphere({ scene, renderer, camera, timeOfDay: 'golden', shadows: S.shadows, cloudStyle: 'lit', lowSunEnv: true });
 
-  // ---- ground, a straight road (z from +100 to -900) and a wide apron for the first 120 m, where slides stay on asphalt
+  // ---- the place: a field, and a quiet country road through it (z from +100 to -900) with a lay-by beside the start,
+  // lane and edge lines, gravel verges, fences, utility poles, a side track with a sign and trees (world/Scenery.js)
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x4d5a3a, roughness: 1 }));
   ground.receiveShadow = true;
-  const ROAD_W = 10, ROAD_L = 1000, APRON = [30, 120]; // apron width and length (m)
-  const roadMat = new THREE.MeshStandardMaterial({ color: 0x9a9a9a, roughness: 0.6 });
-  const road = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_W, ROAD_L).rotateX(-Math.PI / 2), roadMat);
-  road.position.set(0, 0.02, 100 - ROAD_L / 2); road.receiveShadow = true;
-  const apron = new THREE.Mesh(new THREE.PlaneGeometry(APRON[0], APRON[1]).rotateX(-Math.PI / 2), roadMat.clone());
-  apron.position.set(0, 0.015, 20 - APRON[1] / 2); apron.receiveShadow = true;
-  scene.add(ground, road, apron);
+  const ROAD_W = 10; // asphalt width: two 3.5 m lanes and hard shoulders
+  const place = countryRoad({ physics, width: ROAD_W, from: 100, to: -900 });
+  scene.add(ground, place.group);
+  // broad patches of dry and lush grass on the field, and the gravel verges and track
+  applyPatches(ground.material, [groundCover({ paths: place.paths })]);
   shell.setProgress(0.2, 'Road');
-  // asphalt PBR set: `base` is the folder holding manifest.json and one folder per set id; repeat = metres / tile size
-  const texBase = `${BASE}nyc/textures/`;
-  const asphalt = await loadTextureSet('asphalt_02', { renderer, base: texBase, manifest: await loadTextureManifest(texBase) });
-  for (const [mesh, w, l] of asphalt ? [[road, ROAD_W, ROAD_L], [apron, ...APRON]] : []) {
-    const maps = [asphalt.map, asphalt.normalMap, asphalt.roughnessMap].map((t) => t && t.clone());
-    for (const t of maps) if (t) t.repeat.set(w / asphalt.size, l / asphalt.size);
+  // PBR sets: `base` is the folder holding manifest.json and one folder per set id; repeat = metres / tile size
+  const texBase = `${BASE}nyc/textures/`, manifest = await loadTextureManifest(texBase);
+  const [asphalt, grass] = await Promise.all(['clean_asphalt', 'leafy_grass'].map((id) => loadTextureSet(id, { renderer, base: texBase, manifest })));
+  const surfaces = [...place.surfaces, { mesh: ground, w: 6000, l: 6000, set: grass }]; // place.surfaces: the road and lay-by
+  for (const { mesh, w, l, set = asphalt } of surfaces) {
+    if (!set) continue; // a set that did not load leaves the plain colour
+    const maps = [set.map, set.normalMap, set.roughnessMap].map((t) => t && t.clone());
+    for (const t of maps) if (t) t.repeat.set(w / set.size, l / set.size);
     Object.assign(mesh.material, { map: maps[0], normalMap: maps[1], roughnessMap: maps[2], color: new THREE.Color(0xffffff) });
   }
   // distance haze (PostFX's fog): the far road and the field fade into the sky instead of meeting it at a hard line
@@ -86,7 +87,7 @@ async function boot() {
   // ---- the car: the simulation (VehicleController) and what you see (visual.root: body, glass, wheels, lamps, shadow)
   // #region howto:drive-car
   const car = new VehicleController(SPEC);
-  const START = new THREE.Vector3(0, 0, 0);
+  const START = new THREE.Vector3(1.75, 0, 0); // the middle of the right-hand lane
   car.reset(START, 0, physics); // heading 0 faces -Z (down the road)
   // #endregion howto:drive-car
   const body = visual.root; // faces -Z like the controller; its origin is the controller's reference point
@@ -175,6 +176,7 @@ async function boot() {
       sfx.update(dt);
       // #endregion howto:drive-sound-update
       atmosphere.update(camera.position, dt);
+      place.update(dt, camera.position, atmosphere.darkness); // tree wind and the near / far tree split
       speed.set(Math.round(Math.abs(car.forwardSpeed) * 3.6));
     },
   }, 'game');

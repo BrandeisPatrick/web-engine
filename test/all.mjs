@@ -19,6 +19,8 @@ const SUITES = [
   { file: 'vehicles-hd.mjs', shim: true },
   // createCarVisual: every HD type, wheels on the physics within 1 cm, a 10 s drive, lamps, contact shadow
   { file: 'car-visual.mjs' },
+  // the starters' scenery (world/Scenery.js): country road, park corner, ground cover, road paint; colliders, determinism
+  { file: 'scenery.mjs' },
   // quality tiers (desktop / mobile): device recommendation, ?quality= / stored precedence, preset merge
   { file: 'quality.mjs' },
   // ui: the game shell's state machine and saved settings (the DOM half is test/browser/shell.mjs)

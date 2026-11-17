@@ -1,20 +1,19 @@
-// Starter: a third-person walker. Copy this folder to start a game: flat textured ground, an animated GLB character
-// (idle / walk / run) with a contact shadow, a street lamp, dusk sky with distance haze, post-processing, a game shell
-// (loading bar, start card, pause with volume and quality, saved), one HUD readout, and sound: footsteps, a landing
-// thump, a dusk bed and the lamp's hum. Every block says what it is and what a game would change. Controls: WASD /
-// arrows, mouse (right-drag or click to lock), Space jumps, Shift runs, Esc / P pause; gamepad and touch work too.
-// ?autostart=1 skips the start card (tests that press keys need it).
+// Starter: a third-person walker. Copy this folder to start a game: an animated GLB character (idle / walk / run) with a
+// contact shadow in a park corner at dusk (a lamp, a path, a bench, trees: world/Scenery.js, replace it with your level),
+// post-processing, a game shell (loading bar, start card, pause with volume and quality, saved), one HUD readout and sound
+// (footsteps, a landing thump, a dusk bed, the lamp's hum). Every block says what a game would change. Controls: WASD /
+// arrows, mouse (right-drag or click to lock), Space jumps, Shift runs, Esc / P pause; gamepad and touch; ?autostart=1.
 // The `// #region howto:` markers are for docs/HOWTO.md, which copies those blocks (test/docs.mjs checks the copies).
 import * as THREE from 'three';
 import { Engine, Assets, PoseInterpolator, resolveQuality, createBenchHarness } from '@vibe/engine/core';
 import { PhysicsWorld, CharacterController } from '@vibe/engine/physics';
 import { Atmosphere, PostFX, NearestLights, registerRenderLoaders, loadTextureManifest, loadTextureSet, softDotTexture, applyPatches, weathering } from '@vibe/engine/render';
+import { parkCorner, groundCover } from '@vibe/engine/world';
 import { AnimationController } from '@vibe/engine/anim';
 import { CharacterInput } from '@vibe/engine/input';
 import { ThirdPersonRig } from '@vibe/engine/camera';
 import { AudioBus, SoundBank, Footsteps } from '@vibe/engine/audio';
 import { UILayer, Panel, Readout, GameShell } from '@vibe/engine/ui';
-
 const BASE = import.meta.env.BASE_URL; // asset URLs go through it, so the page also works under a sub-path
 
 // ---- quality tier: 'desktop' or 'mobile' (?quality=mobile forces one; the pause card stores a choice)
@@ -52,14 +51,11 @@ async function boot() {
     Object.assign(ground.material, { map: grass.map, normalMap: grass.normalMap, roughnessMap: grass.roughnessMap, color: new THREE.Color(0xffffff) });
   }
   // #endregion howto:ground-texture
-  // weathering (render): world-space breakup, no UVs. The ground gets broad patches (a tiled texture alone reads as carpet)
-  applyPatches(ground.material, [weathering({ scale: 0.07, macro: 0.2, hue: 0.05, grime: 0, streaks: 0, dust: 0 })]);
 
   // ---- one lamp: a post on a base with a hooded lantern, lit by NearestLights (a pool of real lights; give it many
   // positions). The glass glows softly; the light itself comes from the point light, so it pools on the ground
   const lampAt = new THREE.Vector3(3, 3.2, -6);
-  const iron = new THREE.MeshStandardMaterial({ color: 0x1e2023, metalness: 0.6, roughness: 0.45 });
-  const lamp = new THREE.Group();
+  const iron = new THREE.MeshStandardMaterial({ color: 0x1e2023, metalness: 0.6, roughness: 0.45 }), lamp = new THREE.Group();
   const parts = [[new THREE.CylinderGeometry(0.05, 0.07, 3.1, 10), 1.55], [new THREE.CylinderGeometry(0.16, 0.2, 0.3, 12), 0.15], [new THREE.ConeGeometry(0.26, 0.2, 12), 3.42]];
   for (const [geo, y] of parts) { const p = new THREE.Mesh(geo, iron); p.position.y = y; p.castShadow = true; lamp.add(p); }
   const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.11, 0.26, 12), new THREE.MeshStandardMaterial({ color: 0x302820, emissive: 0xffb466, emissiveIntensity: 1.6 }));
@@ -71,6 +67,9 @@ async function boot() {
   const lamps = new NearestLights({ count: 1, color: 0xffb070, distance: 12, decay: 1.5, parent: scene });
   lamps.setPositions([[lampAt.x, lampAt.y, lampAt.z]]);
   // #endregion howto:lamp
+  // ---- the place around the lamp (world/Scenery.js): a gravel path, a bench, a fence, boulders, trees (colliders too)
+  const place = parkCorner({ physics, lamp: [lampAt.x, lampAt.z] }); scene.add(place.group);
+  applyPatches(ground.material, [groundCover({ paths: place.paths })]); // broad lush / dry / bare patches, the path
 
   // ---- the character: a GLB with clips. Change the file, the height and the clip names for your own model
   // #region howto:glb-load
@@ -82,13 +81,13 @@ async function boot() {
   /** @type {import('@vibe/engine/render').GltfAsset} */
   const gltf = assets.get('hero');
   const model = gltf.instantiate(); // an Object3D (a skinning-safe clone)
-  model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+  // this GLB (converted from FBX) has metalness 0.4 on cloth, skin and hair: the hair mirrored the sky as a grey patch
+  model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; Object.assign(o.material, { metalness: 0, roughness: 0.75 }); } });
   model.updateMatrixWorld(true); // bones too: the skinned bounds below read them
   const box = new THREE.Box3().setFromObject(model), k = 1.8 / (box.max.y - box.min.y); // fit to 1.8 m, feet at y = 0
   model.scale.multiplyScalar(k); model.position.y = -box.min.y * k;
   model.rotation.y = Math.PI; // this GLB faces +Z; the engine's forward is -Z
-  const player = new THREE.Group();
-  player.add(model);
+  const player = new THREE.Group().add(model); // the game moves and turns this group
   scene.add(player);
   // a soft contact shadow on the ground under the feet (the sun's shadow alone leaves the walker floating at dusk)
   const blob = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x000000, map: softDotTexture(), transparent: true, opacity: 0.85, depthWrite: false }));
@@ -136,8 +135,8 @@ async function boot() {
   // #region howto:sound
   const audio = new AudioBus({ master: 'safe', volume: 0.7 }); // compressor + soft clipper: nothing can clip
   const sfx = new SoundBank(audio, { listener: camera });        // the named sounds (SOUND_PRESETS)
-  const steps = new Footsteps(sfx, { surface: 'grass', at: player });
-  sfx.loop('amb.dusk', { gain: 0.14 });                          // a quiet dusk bed
+  const steps = new Footsteps(sfx, { surface: 'grass', at: player, gain: 2.4 }); // gain: footfalls and landings over the bed
+  sfx.loop('amb.dusk', { gain: 0.1 });                           // a quiet dusk bed
   sfx.loop('lamp.hum', { at: lampAt, gain: 0.2 });               // the lamp hums when you are near it
   shell.use({ engine, audio, inputs: [input] }); // the start click calls audio.start(); pause mutes, Esc / P pause
   // #endregion howto:sound
@@ -182,6 +181,7 @@ async function boot() {
       // #region howto:lamp-update
       lamps.update(dt, { position: camera.position }, 8); // PointLight intensity: ~8 for a garden lamp at 12 m reach
       // #endregion howto:lamp-update
+      place.update(dt, camera.position, atmosphere.darkness); // tree wind and the near / far tree split
       blob.position.set(player.position.x, 0.015, player.position.z); // the contact shadow fades as the feet leave the ground
       blob.material.opacity = 0.85 * Math.max(0, 1 - player.position.y / 1.2);
       distance.set(walked.toFixed(0));
