@@ -6,7 +6,7 @@ export { MAP_KEYS, assetBase, validateMapData, loadMapData, prepareMapData, find
 export { Terrain, GroundSurface, sampleLevel, drapePolygon, clipConvex, latticeSplit } from './Terrain.js';
 export { RoadNetwork, RBIT, roadStyle, createRoadMaterial, createTactileMaterial, SolidBuf, samplePolyline, quadUp, DEFAULT_DECK_HOLD } from './RoadNetwork.js';
 export {
-  BuildingBuilder, TileBuildingBuilder, NullBuf, GeoBuf, createFacadeMaterials, MODE, enc, tintBytes, tintOf, insetRing, offsetRing, longAxis, UNIT_WINDOW_TRIS, DEFAULT_BUILDING_STYLE, buildingStyle,
+  BuildingBuilder, TileBuildingBuilder, NullBuf, GeoBuf, createFacadeMaterials, enableFacadeDetail, MODE, enc, tintBytes, tintOf, insetRing, offsetRing, longAxis, UNIT_WINDOW_TRIS, DEFAULT_BUILDING_STYLE, buildingStyle,
 } from './Buildings.js';
 export { FACADE, WIN_RECTS, makeFacadeTextures, PBR, PBR_SETS, GROUND_SETS, loadPbrTextures } from './FacadeTextures.js';
 export { Props } from './Props.js';
