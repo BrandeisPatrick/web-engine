@@ -577,7 +577,8 @@ Update it per frame with `distance.set(walked.toFixed(0))`.
 ## Loading, a start screen and pause
 
 `GameShell` (ui) gives a game a loading bar, a start card over the blurred scene, and pause with volume and quality,
-all saved in localStorage. Build it first, so the bar shows while the rest loads:
+all saved in localStorage. Build it first, at the top of the module, so the bar shows while the rest loads and a boot
+error can reach it:
 
 <!-- from: samples/starter-walk/main.js#game-shell -->
 ```js
