@@ -21,13 +21,13 @@ const BASE = import.meta.env.BASE_URL; // asset URLs go through it, so the page 
 const Q = resolveQuality();
 const S = Q.settings;
 // #endregion howto:quality
+// ---- loading bar, start card, pause with volume and quality (saved). The start click also starts the audio
+// #region howto:game-shell
+const shell = new GameShell({ title: 'Starter Walk', quality: Q, storageKey: 'starter-walk',
+  controls: [['W A S D', 'Walk'], ['Right-drag', 'Look'], ['Space', 'Jump'], ['Shift', 'Run']] });
+// #endregion howto:game-shell
 
 async function boot() {
-  // ---- loading bar, start card, pause with volume and quality (saved). The start click also starts the audio
-  // #region howto:game-shell
-  const shell = new GameShell({ title: 'Starter Walk', quality: Q, storageKey: 'starter-walk',
-    controls: [['W A S D', 'Walk'], ['Right-drag', 'Look'], ['Space', 'Jump'], ['Shift', 'Run']] });
-  // #endregion howto:game-shell
   // #region howto:walk-engine
   // ---- engine + physics. PhysicsWorld() is flat ground at y = 0; add a heightfield / static boxes for a real level
   const physics = new PhysicsWorld();
@@ -187,13 +187,13 @@ async function boot() {
       distance.set(walked.toFixed(0));
     },
   }, 'game');
-  engine.start();
-  await shell.ready(); // shaders compiled, first frame drawn, the start card up (it does not wait for the click)
-
+  // #region howto:start
+  await shell.ready(); // under the loading bar: engine.warmUp() (shaders, uploads), engine.start(), a frame; then the card
+  // #endregion howto:start
   // ---- page contract for the browser tests (npm run smoke): window.__sample with `ready`
   // #region howto:page-contract
-  window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-walk' }), { cc, anim, shell, audio }).setReady();
+  window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-walk', quality: Q }), { cc, anim, shell, audio }).setReady();
   // #endregion howto:page-contract
 }
 
-boot().catch((e) => console.error('[starter-walk] boot failed', e));
+boot().catch((e) => { console.error('[starter-walk] boot failed', e); shell.error(`Failed to start: ${e.message}`); });

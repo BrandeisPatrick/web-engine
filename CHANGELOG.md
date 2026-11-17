@@ -1,6 +1,51 @@
 # Changelog
 
 ## Unreleased
+- Merge of the phone start-up fix into the round, for pages with a `GameShell`: `shell.ready()` now runs
+  `engine.warmUp()` under the shell's own loading bar ("Compiling shaders…"; with `?bench=1` the demos' 12
+  renderFn-only frames), then `engine.start()`, waits until the loop has drawn, and only then shows the start card
+  (compileAsync + a frame stays as the fallback for an engine without `warmUp`); `shell.warm` keeps the warm-up's
+  result. The starters end `boot()` with `await shell.ready()` and no longer start the engine themselves: one loading
+  screen, one warm-up. `shell.error(text)` shows a boot error on that loading screen (the starters' `boot().catch`).
+  A lost WebGL context on the start or pause card: the shell steps aside for the engine's Reload notice (cards, pause
+  button and loading screen go, the canvas stays veiled, inputs off, the bus paused, `shell.lost`), and start, pause,
+  resume, the keys and auto-pause do nothing; the shell calls `engine.start()` only once, in `ready()`, and never
+  `stop()`. Tests: test/browser/phone-start.mjs also checks, on the starters, one loading screen, one GPU fence before
+  the fade, the start card only after a loop frame, and the notice on top of the shell after a loss on the title card;
+  test/browser/shell.mjs loses the context while paused. Docs: AGENTS.md "The start-up", HOWTO "Start without a
+  stall" and "Loading, a start screen and pause", ENGINE.md. `npm test` runs 58 suites.
+- Phone start-up fix (the NYC walk showed a black canvas under the HUD on iPhones, "not reliably"). Two causes: the
+  first live frame compiled every program and built every Metal pipeline (ANGLE) after the loading screen had started
+  to fade (on the live NYC page in Chrome on an M4 the first frame reached the canvas 0.9 s after the fade began; in
+  WebKit with an iPhone profile the first live frame took 1.2 s even after a render-only warm-up, because the first
+  update switches on the NearestLights pool and every lit material recompiled), and a lost WebGL context (iOS drops it
+  under GPU memory pressure) left the loop throwing every frame on a black canvas.
+  - core: `engine.warmUp({ frames = 4, systems = true, timeout, compile })`: compileAsync, then warm frames (every
+    system's per-frame phases at dt 0, no fixed step, then renderFn at dt 0), then a GPU fence polled without blocking.
+    `systems: false` draws renderFn only. Not counted in frameCount, the profiler or adaptive resolution.
+  - core: lost context: the loop stops, `engine.contextLost`, the loss is counted in sessionStorage
+    (`recordContextLoss`, `contextLosses`, `clearContextLosses`, `CONTEXT_LOSS_KEY`) and `engine.onContextLost(event)`
+    runs; the default (`showContextLost`) shows "The graphics were reset by the device, probably low on memory." with
+    a Reload button. `start()` does nothing after a loss.
+  - core: `resolveQuality()` steps a recommended tier down one rung per recorded loss (desktop -> mobile -> mobile
+    with `engine.maxPixelRatio` capped at `LOST_MAX_PIXEL_RATIO` = 1); never over `?quality=` or a stored choice. New
+    fields `lighter` and `contextLosses`; `reason` ends in '; lighter after a graphics reset'.
+  - core: a frame that throws is caught, logged with console.error (each one) and passed to `engine.onFrameError`; the
+    default (`showFrameError`) shows the first as a line at the bottom of the page. `engine.showNotice(text, { button,
+    onButton, kind, id })` is the plain-DOM message both use (the ui theme's CSS variables when present).
+  - core: `createBenchHarness(engine, { quality })` keeps the page's resolveQuality() result as `harness.quality`
+    (and in `report()`).
+  - Demos and starters: the loading label reads "Compiling shaders…", `await engine.warmUp()`, then `engine.start()`
+    and the fade. Under `?bench=1` the demos warm up with 12 renderFn-only frames (their renderFn's every-2nd / 3rd /
+    4th-frame counters keep their phase, so the perf goldens and counters are unchanged). The starters gained a
+    LoadingScreen (which also shows a boot error) and pass `quality: Q` to the harness; Halloween takes its pixel-ratio
+    cap from the tier (same values) and has the page contract in play mode too (a pose-less harness).
+  - Tests: test/engine-start.mjs (warmUp, lost context, frame errors on stand-in engines; `npm test` runs 48 suites),
+    lost-context checks in test/quality.mjs, test/browser/phone-start.mjs (every demo and starter in play mode: the
+    loading screen stays until a frame is drawn, no long frame after it, not black; a forced loseContext() shows the
+    Reload notice with no further errors; Reload comes up lighter; starter-walk also as an iPhone).
+  - Docs: ENGINE.md "Start-up, lost context, frame errors" and the lighter step under "Quality tiers"; AGENTS.md "The
+    start-up"; docs/HOWTO.md "Start without a stall".
 - Look options (render / world, all off by default; the picture is unchanged without them): `weathering()` material
   patch (`src/render/MaterialPatches.js`: macro value / hue / roughness breakup, grime from the ground, rain streaks,
   dust, optional fading and chips; `GLSL_WEATHERING`, `bakeWeathering`, `weatheringAt`, `WEATHERING_DEFAULTS`; test

@@ -7,9 +7,9 @@
 //     storageKey: 'my-game', quality: Q, defaults: { volume: 0.7 } });     // the loading bar shows now
 //   shell.setProgress(0.4, 'Textures');                                     // around your loads
 //   shell.use({ engine, audio: bus, inputs: [input] });                    // once they exist (or pass them above)
-//   engine.start();
-//   await shell.ready();     // compileAsync + one frame, then the card. Does NOT wait for the click.
+//   await shell.ready();     // the warm-up under the bar, engine.start(), a live frame, then the card (no click wait)
 //   shell.onStart(() => { ... }); shell.onPause((paused) => { ... }); shell.state;  // 'loading'|'title'|'playing'|'paused'
+//   boot().catch((e) => shell.error(`Failed to start: ${e.message}`));      // a boot error on the loading screen
 //   shell.settings.get('volume'); shell.settings.on('assist', (on) => { input.assist.enabled = on; });
 //   shell.addToggle('assist', 'Steering assist'); shell.addSlider('fov', 'Field of view', { min: 50, max: 90, step: 1 });
 //
@@ -18,9 +18,20 @@
 //     resume. With the card skipped, unlockOnGesture() instead (no gesture happened yet).
 //   - inputs: each one's `enabled` is false while the card or the pause card is up (CharacterInput, VehicleInput and
 //     InputMap all have it). A key that started the game re-enables them only once it is released (no jump on start).
-//   - engine: engine.clock.pause() / resume() while paused (the loop keeps rendering, systems get dt 0); the canvas,
-//     engine.renderer.domElement, is blurred behind the cards; renderer.compileAsync(scene, camera) before the card.
+//   - engine: ready() runs engine.warmUp() under the loading bar, labelled 'Compiling shaders…' (core Engine,
+//     "Start-up": the first frames drawn at dt 0 and finished on the GPU, so the first live frame does not stall on a
+//     phone; ?bench=1 warms up as the demos' bench pages do, { systems: false, frames: 12 }), then engine.start(), and
+//     shows the card once the loop has drawn a frame. So a game ends boot() with `await shell.ready()` and does not call
+//     engine.start() itself (an engine already started is fine: start() returns early). An engine without warmUp gets
+//     renderer.compileAsync(scene, camera) instead. engine.clock.pause() / resume() while paused (the loop keeps
+//     rendering, systems get dt 0); the canvas, engine.renderer.domElement, is blurred behind the cards. The shell
+//     never calls engine.stop(), and start() only that once.
 //   - quality: from resolveQuality(); its tier rows sit in the pause card (a pick stores it and reloads, as QualityMenu).
+// Lost WebGL context (the canvas's webglcontextlost, or engine.contextLost after the warm-up): the engine stops and shows
+// its Reload notice (Engine showContextLost; it sits above every shell element). The shell steps aside: the cards, the
+// pause button and a loading screen still up go away, the canvas stays veiled, the inputs stay off and the audio is
+// paused. `shell.lost` is true; start(), pause(), resume() and the keys, the pad and auto-pause do nothing afterwards.
+// error(text): a boot error on the loading screen (the bar turns red); once it is gone, the engine's error line.
 // Pause: Esc or P, the gamepad's Start button, the round pause button (top right while playing, on every device: the
 // only visible way to pause and reach the settings once the start card is gone or skipped), and by itself when the
 // tab is hidden or the pointer lock is lost while playing. Esc or P again, or Resume, resumes. In the title, Enter or
@@ -101,7 +112,7 @@ const PAUSE_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="tr
  *   ['Esc', 'Pause'] is added unless a pair already names Esc
  * @property {string} [touchHelp]  the help line on touch screens instead of the key list
  * @property {string} [startLabel='Play']  the start button's text
- * @property {any} [engine]  the Engine (clock, renderer, scene, camera are read)
+ * @property {any} [engine]  the Engine (warmUp, start, frameCount, contextLost, clock, renderer, scene, camera are used)
  * @property {any} [audio]  an AudioBus or anything with start() / setVolume(v) / setPaused(on)
  * @property {Array<{ enabled: boolean }>} [inputs]  inputs switched off behind the cards
  * @property {{ tier: string, recommended: string, storageKey?: string }} [quality]  resolveQuality(); tiers in the pause card
@@ -158,6 +169,14 @@ export class GameShell {
     this._touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
     this._locked = false; this._readyP = null; this._canvas = null;
     this._disposers = [];
+    /** True once the engine's WebGL context was lost (see header): the shell has stepped aside for the engine's notice. */
+    this.lost = false;
+    /**
+     * engine.warmUp()'s result once ready() ran it, else null.
+     * @type {{ frames: number, ms: number, compileMs: number, fence: string, lost: boolean } | null}
+     */
+    this.warm = null;
+    this._lossCanvas = null;
 
     this.loading = o.loading === false ? null : new LoadingScreen({ title: o.title || '', label: 'Loading…', compositor: true, parent: o.parent });
     this._build(o);
@@ -175,7 +194,7 @@ export class GameShell {
    * @returns {this}
    */
   use(parts = {}) {
-    if (parts.engine) this.engine = parts.engine;
+    if (parts.engine) { this.engine = parts.engine; this._watchLoss(); }
     if (parts.audio) { this.audio = parts.audio; this._applyVolume(); }
     if (parts.inputs) for (const i of parts.inputs) if (i && !this.inputs.includes(i)) this.inputs.push(i);
     if (this.state !== 'playing') this._setInputs(false);
@@ -190,9 +209,23 @@ export class GameShell {
   setProgress(p, label) { if (this.loading) this.loading.setProgress(p, label); return this; }
 
   /**
-   * Finish loading: compile the scene's shaders (renderer.compileAsync), wait one frame, then show the start card
-   * (or go straight to playing when the card is skipped). Resolves once the card is up; it never waits for the click.
-   * Safe to call more than once (the same promise).
+   * Show a boot error: on the loading screen while it is up (the bar turns red and stops), else as the engine's
+   * error line (engine.showNotice) when there is one. Logs nothing itself.
+   * @param {string} text
+   * @returns {this}
+   */
+  error(text) {
+    if (this.loading) this.loading.error(text);
+    else if (this.engine && typeof this.engine.showNotice === 'function') this.engine.showNotice(text, { kind: 'error' });
+    return this;
+  }
+
+  /**
+   * Finish loading under the loading bar: engine.warmUp() (the first frames drawn at dt 0 and finished on the GPU;
+   * renderer.compileAsync on an engine without it), engine.start(), a frame of the loop drawn, then the start card (or
+   * straight to playing when the card is skipped). Resolves once the card is up; it never waits for the click. After a
+   * lost context it resolves without a card (see header). Safe to call more than once (the same promise). A warm-up
+   * frame that throws rejects (the game's boot shows it).
    * @param {GameShellParts} [parts]  as use()
    * @returns {Promise<void>}
    */
@@ -200,12 +233,21 @@ export class GameShell {
     if (parts) this.use(parts);
     if (this._readyP) return this._readyP;
     this._readyP = (async () => {
-      this.setProgress(1, 'Preparing…');
+      this.setProgress(1, 'Compiling shaders…');
       const e = this.engine, r = e && e.renderer;
-      if (r && typeof r.compileAsync === 'function' && e.scene && e.camera) {
+      if (e && typeof e.warmUp === 'function') {
+        // bench: renderFn only, 12 frames (the page's state as loaded; every-2nd / 3rd / 4th-frame counters in phase)
+        this.warm = await e.warmUp(this.bench ? { systems: false, frames: 12 } : {});
+      } else if (r && typeof r.compileAsync === 'function' && e.scene && e.camera) {
         try { await r.compileAsync(e.scene, e.camera); } catch { /* compile on first draw instead */ }
       }
+      if (e && typeof e.start === 'function') e.start(); // does nothing once running, or after a lost context
+      // the card over a frame the loop drew: two paints at least, then until the loop has drawn twice (1.5 s at most:
+      // a hidden tab runs no rAF)
+      const f0 = e && typeof e.frameCount === 'number' ? e.frameCount : NaN, tw = performance.now();
       await nextFrame(); await nextFrame();
+      while (e && !this.lost && !e.contextLost && e.frameCount < f0 + 2 && performance.now() - tw < 1500) await nextFrame();
+      if (this.lost || (e && e.contextLost)) { this._onLost(); return; }
       this._canvas = (r && r.domElement) || null;
       const c = this._canvas;
       if (c) { // veiled at once behind the card (no 1 s fade in), the transition armed for the reveal
@@ -224,7 +266,7 @@ export class GameShell {
 
   /** Start the game from the title card (what the button does). Call it inside a user gesture for audio. */
   start(reason = 'api') {
-    if (this.state !== 'title') return false;
+    if (this.lost || this.state !== 'title') return false;
     const a = this.audio;
     if (a) { try { if (typeof a.start === 'function') a.start(); } catch (err) { console.warn('[GameShell] audio.start failed', err); } }
     this._applyVolume();
@@ -232,9 +274,9 @@ export class GameShell {
   }
 
   /** Pause (from playing). */
-  pause(reason = 'api') { return this._fsm.go('paused', reason); }
+  pause(reason = 'api') { return !this.lost && this._fsm.go('paused', reason); }
   /** Resume (from paused). */
-  resume(reason = 'api') { return this._fsm.go('playing', reason); }
+  resume(reason = 'api') { return !this.lost && this._fsm.go('playing', reason); }
   /** Pause or resume; returns true when now paused. */
   toggle(reason = 'api') {
     if (this.state === 'playing') this.pause(reason); else if (this.state === 'paused') this.resume(reason);
@@ -390,6 +432,31 @@ export class GameShell {
 
   _setInputs(on) { for (const i of this.inputs) if (i && 'enabled' in i) i.enabled = on; }
 
+  // the engine's canvas loses its context: step aside (header, "Lost WebGL context"). Once per canvas.
+  _watchLoss() {
+    const c = this.engine && this.engine.renderer && this.engine.renderer.domElement;
+    if (!c || c === this._lossCanvas || typeof c.addEventListener !== 'function') return;
+    this._lossCanvas = c;
+    const fn = () => this._onLost();
+    c.addEventListener('webglcontextlost', fn);
+    this._disposers.push(() => c.removeEventListener('webglcontextlost', fn));
+  }
+
+  _onLost() {
+    if (this.lost) return;
+    this.lost = true;
+    this._show(this.startCard, false); this._show(this.pauseCard, false);
+    this.root.classList.remove('open');
+    this.pauseButton.classList.remove('show');
+    this._setInputs(false);
+    const a = this.audio;
+    if (a && typeof a.setPaused === 'function') { try { a.setPaused(true); } catch { /* not started */ } }
+    const c = this._canvas || this._lossCanvas;
+    if (c) { c.classList.remove('paused'); c.classList.add('ui-shell-veil'); }
+    if (this.loading) { const l = this.loading; this.loading = null; l.hide(0); }
+    if (typeof document !== 'undefined' && this.root.contains(document.activeElement)) /** @type {HTMLElement} */ (document.activeElement).blur();
+  }
+
   _show(card, on) {
     card.classList.toggle('show', on); card.inert = !on;
   }
@@ -442,7 +509,7 @@ export class GameShell {
     on(window, 'blur', () => this._keysDown.clear());
     on(window, 'keydown', (e) => {
       this._keysDown.add(e.code);
-      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (this.lost || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
       const st = this.state;
       if (st === 'title' && (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space')) {
         if (isTyping(e.target)) return;
@@ -462,7 +529,7 @@ export class GameShell {
     on(window, 'pointerdown', (e) => {
       if (e.pointerType === 'touch' && !this._touch) {
         this._touch = true;
-        if (this.state === 'playing' && this.options.pauseButton !== false) this.pauseButton.classList.add('show');
+        if (this.state === 'playing' && !this.lost && this.options.pauseButton !== false) this.pauseButton.classList.add('show');
       }
     }, { capture: true, passive: true });
     if (typeof navigator !== 'undefined' && typeof navigator.getGamepads === 'function') {

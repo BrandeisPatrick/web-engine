@@ -30,11 +30,11 @@ const visual = createCarVisual('hatchback', { color: 0x8a1418, shadowOpacity: 0.
 const SPEC = visual.spec; // ROAD_CAR_SPEC with this body's size, axles, track and wheel radius
 // #endregion howto:road-car-spec
 
-async function boot() {
-  // ---- loading bar, start card, pause with volume, the assist toggle and quality (saved in localStorage)
-  const shell = new GameShell({ title: 'Starter Drive', quality: Q, storageKey: 'starter-drive', defaults: { assist: true },
-    controls: [['W S', 'Drive, brake'], ['A D', 'Steer'], ['X', 'Handbrake'], ['C', 'Camera'], ['R', 'Reset']] });
+// ---- loading bar, start card, pause with volume, the assist toggle and quality (saved in localStorage)
+const shell = new GameShell({ title: 'Starter Drive', quality: Q, storageKey: 'starter-drive', defaults: { assist: true },
+  controls: [['W S', 'Drive, brake'], ['A D', 'Steer'], ['X', 'Handbrake'], ['C', 'Camera'], ['R', 'Reset']] });
 
+async function boot() {
   // ---- engine + physics. PhysicsWorld() is flat ground at y = 0; PhysicsWorld({ heightfield: (x, z) => y }) for hills
   const physics = new PhysicsWorld();
   const engine = new Engine({ container: document.getElementById('app'), physics, renderer: { antialias: false }, ...S.engine });
@@ -180,12 +180,14 @@ async function boot() {
       speed.set(Math.round(Math.abs(car.forwardSpeed) * 3.6));
     },
   }, 'game');
-  engine.start();
-  await shell.ready(); // shaders compiled, first frame drawn, the start card up (it does not wait for the click)
+
+  // ---- start: the shell draws the first frames under its loading bar (engine.warmUp(): shaders compile, textures
+  // upload, nothing moves), starts the loop, and shows the start card once a frame is drawn. It does not wait for the click
+  await shell.ready();
   shell.onStart(reset); // the run starts from the line
 
   // ---- page contract for the browser tests (npm run smoke): window.__sample with `ready`
-  window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-drive' }), { car, body, visual, input, tyres, shell }).setReady();
+  window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-drive', quality: Q }), { car, body, visual, input, tyres, shell }).setReady();
 }
 
-boot().catch((e) => console.error('[starter-drive] boot failed', e));
+boot().catch((e) => { console.error('[starter-drive] boot failed', e); shell.error(`Failed to start: ${e.message}`); });

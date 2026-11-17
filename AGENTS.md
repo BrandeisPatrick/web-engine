@@ -29,6 +29,17 @@ No registration is needed (`vite.config.js` finds every `samples/<name>/index.ht
 | `npm run smoke` | Every demo and starter on both quality tiers in headless Chrome (needs Chrome and a GPU) |
 | `node test/browser/check-page.mjs <name>` | Load one page headlessly (`?autostart=1`), hold W for 2 s, fail on any console or page error |
 | `node test/browser/sound-check.mjs --wav=mix.wav` | Render the sound kit's ten-second self-test scene in headless Chrome, print its measurements and save the mix |
+| `node test/browser/phone-start.mjs [name]` | Start-up and lost-context paths of every demo and starter (loading screen until a frame is drawn, no long frame after it, the Reload notice, a lighter reload) |
+
+**The start-up.** The first frames compile every shader and upload every texture, seconds on a phone, so they are
+drawn and finished under the loading screen (`engine.warmUp()`: dt 0, nothing moves). Without it a phone shows a
+black canvas under the HUD until the first frame is done. With a `GameShell` (the starters) end `boot()` with
+`await shell.ready()` and do not call `engine.start()` yourself: it warms up under the shell's loading bar, starts the
+loop, then shows the start card over a drawn frame. Without a shell, end `boot()` with
+`loading.setLabel('Compiling shaders…'); await engine.warmUp(); engine.start(); loading.hide();` (a `LoadingScreen`
+from ui, created first). docs/HOWTO.md "Start without a stall". If the device later drops the WebGL context, the
+engine stops, shows a message with a Reload button (over the shell's cards) and the next `resolveQuality()` in that
+tab comes up lighter; do not try to restore the context.
 
 **The page contract.** The browser scripts wait for `window.__sample.ready`; a page without it fails after the timeout.
 End `boot()` with `window.__sample = createBenchHarness(engine, { name: '<name>' }).setReady();` (core), as the
@@ -57,7 +68,7 @@ expose state that changes through a function (`{ game: () => ({ mode, score }) }
 
 | I want to... | Import (from `@vibe/engine/...`) | The call | Working example |
 |---|---|---|---|
-| Run a loop | `Engine` (core) | `new Engine({ container, physics })`, `engine.addSystem({ fixedUpdate, update, lateUpdate })`, `engine.start()` | starters |
+| Run a loop | `Engine` (core) | `new Engine({ container, physics })`, `engine.addSystem({ fixedUpdate, update, lateUpdate })`, `await engine.warmUp()`, `engine.start()` | starters |
 | Sky, sun, shadows | `Atmosphere` (render) | `new Atmosphere({ scene, renderer, camera, timeOfDay: 'dusk', shadows })`; per frame `atmosphere.update(camera.position, dt)` | starters |
 | Post-processing | `PostFX` (render) | `new PostFX(renderer, scene, camera, { atmosphere, width, height, pixelRatio, ...S.postfx })`; `engine.renderFn = (sc, cam, dt) => postfx.render(dt)` | HOWTO "Engine and quality tiers" |
 | Walk a character | `CharacterController` (physics), `CharacterInput` (input), `ThirdPersonRig` (camera) | `cc.step(dt, moveX, moveZ, jump, sprint, physics)` | `samples/starter-walk/main.js` |
@@ -163,5 +174,7 @@ there:
 - The steering assist, the chase camera's road feel and the gamepad rumble were checked by scripted drives and numbers;
   nobody has driven them by hand.
 - Neither starter has been run on a real phone; the mobile tier was checked only through `?quality=mobile`.
+- No page has been run on a real phone since the start-up warm-up and the lost-context notice were added: both were
+  checked in headless Chrome and in Playwright's WebKit with an iPhone profile on a Mac, whose GPU is far faster.
 - The "using from another project" steps above were checked against what `npm pack` ships, not by installing into a
   fresh project.

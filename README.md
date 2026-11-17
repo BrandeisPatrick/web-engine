@@ -232,11 +232,14 @@ Installed as a git submodule listed in a game's `workspaces`, the engine resolve
 - `test/asset-catalog.mjs`: the asset catalogue is in step with the files (every `samples/public` file covered,
   credits complete, generated `catalog.json` and `docs/ASSETS.md` current).
 
-`test/browser/` (`smoke`, `bench`, `perf`, `halloween`, `halloween-media`, `howto`, `check-page`, `shell`,
-`sound-check`, `drive-feel`, `car-camera`) needs Chrome and runs locally. `smoke` covers the demos and the starters, each also as a `-mobile` page (the same page on the mobile
-tier); `bench` takes `nyc-night`, `miami-drive` and their `-mobile` pages. `howto` runs the browser-only recipes
-(clustered lights, GPU particles, vehicle sound) on the starter-drive page; `check-page <name>` loads one page and
-fails on any error. The scripts share `test/browser/playwright.config.mjs` (`startVite`, `launchChrome`,
+`test/browser/` (`smoke`, `bench`, `perf`, `halloween`, `halloween-media`, `howto`, `check-page`, `phone-start`,
+`shell`, `sound-check`, `drive-feel`, `car-camera`) needs Chrome and runs locally. `smoke` covers the demos and the
+starters, each also as a `-mobile` page (the same page on the mobile tier); `bench` takes `nyc-night`, `miami-drive`
+and their `-mobile` pages. `howto` runs the browser-only recipes (clustered lights, GPU particles, vehicle sound) on
+the starter-drive page; `check-page <name>` loads one page and
+fails on any error; `phone-start` loads every demo and starter in play mode and checks the start-up (the loading
+screen stays until a frame is drawn, no long frame after it), a forced context loss (the Reload notice, no further
+errors) and the lighter reload. The scripts share `test/browser/playwright.config.mjs` (`startVite`, `launchChrome`,
 `loadSample`, `watchErrors`) and wait for the page to set `window.__sample.ready` (`createBenchHarness(...)
 .setReady()`); a page without it fails after the timeout. CI (`.github/workflows/ci.yml`, Node 26) runs `npm test`,
 the build and `types:check`.

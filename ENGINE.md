@@ -67,6 +67,7 @@ attachToPhysicsWorld(dyn, physics);                                           //
 engine.addSystem({ fixedUpdate: (dt) => dyn.step(dt) }, 'dynamics'); // hooks: load?, earlyUpdate?, fixedUpdate?, update?, lateUpdate?, dispose?
 engine.addSystem({ lateUpdate: (dt) => atmo.update(camera.position, dt) }, 'world');
 await engine.load((p, label) => {});                                          // every system's load(progress), weighted
+await engine.warmUp();                                                        // first frames drawn and finished, under the loading screen
 engine.start();
 ```
 - A system is any object with some of `load?(onProgress)`, `earlyUpdate?(dt)` (before the fixed steps: input),
@@ -78,6 +79,36 @@ engine.start();
   `attachToPhysicsWorld` (or the world's own `colliderProvider`).
 - `engine.profiler.frame` gives per-system CPU ms and per-pass GPU ms (`EXT_disjoint_timer_query_webgl2`);
   `Profiler.benchThroughput` is the GPU-synchronised bench the measurements in the design notes come from.
+
+### Start-up, lost context, frame errors
+
+- `await engine.warmUp({ frames = 4, systems = true, timeout = 15000, compile = true })` before `engine.start()`,
+  while a loading screen still covers the page. The first draw of a material compiles its program (and on ANGLE's Metal
+  backend, which every iOS browser uses, builds its pipeline), and textures and geometry upload on first use: without
+  it the first live frame stalls (seconds on a phone) after the loading screen is gone, and the player sees a black
+  canvas under the HUD. warmUp waits one paint (a label set just before shows), runs `renderer.compileAsync(scene,
+  camera)` (non-blocking linking where `KHR_parallel_shader_compile` exists), draws `frames` warm frames with a task
+  between them, then waits for a GPU fence by polling `clientWaitSync(sync, 0, 0)` on a timer (the page stays
+  responsive). A warm frame is a frame on a paused clock: every enabled system's `earlyUpdate(0)`, `update(0, alpha)`,
+  `lateUpdate(0, alpha)`, no fixed step, then `renderFn(scene, camera, 0)`; so the camera rig has placed the camera and
+  a light pool has switched its lights on before the draw (a different light count is a different program for every
+  lit material). `systems: false` draws `renderFn` only: the demos use it under `?bench=1`, where the poses' state must
+  stay as loaded. Resolves `{ frames, ms, compileMs, fence: 'signaled' | 'timeout' | 'none' | 'lost', lost }`; a lost
+  context resolves (`lost: true`), an error thrown by a frame rejects. The usual end of `boot()`:
+  `loading.setLabel('Compiling shaders…'); await engine.warmUp(); engine.start(); loading.hide();`; with a `GameShell`
+  (ui; the starters) `await shell.ready()` does all of it under the shell's loading bar (see "Core services").
+- Lost WebGL context (phones drop it when GPU memory runs short): on `webglcontextlost` the loop stops,
+  `engine.contextLost` is true, the loss is recorded for the browser session (`recordContextLoss`, see "Quality
+  tiers") and `engine.onContextLost(event)` runs. The default, `engine.showContextLost()`, shows "The graphics were
+  reset by the device, probably low on memory." with a Reload button. A frame that throws on a context that is already
+  lost takes the same path; `start()` does nothing afterwards. There is no re-initialisation on
+  `webglcontextrestored`: reloading is the robust path.
+- Frame errors: an exception thrown inside `tick()` is caught, logged with `console.error` (every one) and passed to
+  `engine.onFrameError(error)`; the default, `engine.showFrameError(error)`, shows the first one as a line at the
+  bottom of the page (a phone user can screenshot it). The loop keeps running.
+- `engine.showNotice(text, { button, onButton, kind: 'notice' | 'error', id })` is the plain-DOM message both use
+  (core does not import the ui layer; it reads the ui theme's CSS variables when they are on the page). Replace
+  `onContextLost` / `onFrameError` to show a game's own UI.
 
 ### Core services
 The 0.5.0 pass makes the engine usable beyond the driving game without adding a framework on top of three.js. Each
@@ -158,6 +189,15 @@ What each tier sets (`QUALITY_TIERS` in `src/core/Quality.js`; `test/docs.mjs` f
 A game may add its own groups (`resolveQuality({ overrides })`, `defineTier`). `new QualityMenu({ quality })` (ui
 layer) is the gear button; a change stores the tier and reloads the page.
 
+Lighter after a lost context: the Engine counts each lost WebGL context of the browser session (sessionStorage
+`vibe.contextLost`; `recordContextLoss()`, `contextLosses()`, `clearContextLosses()`). While the tier comes from the
+recommendation, each loss steps the next `resolveQuality()` down one rung: desktop, then mobile, then mobile with
+`settings.engine.maxPixelRatio` capped at `LOST_MAX_PIXEL_RATIO` (1), after a game's overrides; a phone (recommended
+mobile) goes straight to the cap. `?quality=` and a stored choice are never changed. The result then has
+`lighter: true`, `contextLosses` (the count) and a `reason` ending in `'; lighter after a graphics reset'`
+(`recommended` stays what the device would get). A game whose Engine does not spread `settings.engine` applies
+`settings.engine.maxPixelRatio` itself (the Halloween demo does).
+
 ### Bench harness and the page contract
 
 `createBenchHarness(engine, { poses, settings, after, quiet })` (`src/core/Bench.js`) creates `window.__sample`: `pose(id)` stops the loop, places the camera,
@@ -168,7 +208,8 @@ box-downsamples it; `diff(a, b)` gives `meanAbs / p99 / max / pctOver2 / pctOver
 settings into a table. `?bench=1&size=WxH` pins the drawing buffer at pixel ratio 1.
 
 The page contract: `harness.setReady()` sets `window.__sample.ready`; a page needs no poses for it:
-`window.__sample = createBenchHarness(engine, { name: 'my-game' }).setReady();` (the starters end with it). The
+`window.__sample = createBenchHarness(engine, { name: 'my-game' }).setReady();` (the starters end with it; they also
+pass `quality: Q`, the resolveQuality() result, which the harness keeps as `harness.quality` and puts in `report()`). The
 browser scripts in `test/browser/` (through
 `test/browser/playwright.config.mjs`: `startVite`, `launchChrome`, `loadSample`, `watchErrors`) wait for it, so a page
 without it fails after the timeout. How to make captures reproduce across page loads, and the measured sweeps, are in
@@ -669,8 +710,13 @@ cost are in [the design notes](docs/DESIGN-NOTES.md#textures-pbr-sets-ktx2).
   the accent colour (see the header of `src/ui/index.js`).
 - `GameShell` (`src/ui/GameShell.js`): a game's front door in one object. `new GameShell({ title, controls, quality,
   storageKey })` shows a loading bar that keeps moving (`setProgress(p, label)`); `shell.use({ engine, audio, inputs })`
-  once they exist; `await shell.ready()` compiles the scene's shaders, draws a frame and shows the start card over the
-  live scene, blurred and dimmed (it does not wait for the click: set `window.__sample` after it). The start click
+  once they exist; `await shell.ready()` runs `engine.warmUp()` under the loading bar ("Compiling shaders…"; with
+  `?bench=1` `{ systems: false, frames: 12 }`), calls `engine.start()`, waits for a frame of the loop and shows the
+  start card over the live scene, blurred and dimmed (it does not wait for the click: set `window.__sample` after it).
+  So a game with a shell ends `boot()` with `await shell.ready()` and does not start the engine itself;
+  `shell.error(text)` shows a boot error on the loading screen. After a lost WebGL context the shell steps aside for
+  the engine's Reload notice (cards, pause button and loading screen go, the inputs stay off, the bus is paused,
+  `shell.lost` is true) and start / pause / resume do nothing; it never calls `engine.stop()`. The start click
   calls `audio.start()` (the audio gesture), clears the blur in 1 s and turns the inputs back on (`enabled`). Esc, P,
   the pad's Start or the round pause button (top right while playing, on every device; `pauseButton: 'auto'` keeps it
   to touch screens) pause: `engine.clock.pause()`, `audio.setPaused(true)` when the bus has

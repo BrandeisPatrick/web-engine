@@ -13,7 +13,7 @@ The fastest start is to copy a starter folder (see [AGENTS.md](../AGENTS.md)); t
 a time. Names such as `engine`, `scene`, `camera`, `renderer`, `physics` and `postfx` are the objects the starters
 create first. [ENGINE.md](../ENGINE.md) has the full API.
 
-Contents: [Engine and quality tiers](#engine-and-quality-tiers) ·
+Contents: [Engine and quality tiers](#engine-and-quality-tiers) · [Start without a stall](#start-without-a-stall) ·
 [Character with camera, input and animation](#character-with-camera-input-and-animation) ·
 [Load a GLB and play its clips](#load-a-glb-and-play-its-clips) · [Drive a car](#drive-a-car) ·
 [Get in and out of a vehicle](#get-in-and-out-of-a-vehicle) ·
@@ -69,6 +69,30 @@ engine.onResize = (w, h, pr) => postfx.setSize(w, h, pr);
 
 The starters put the tiers in the `GameShell` pause card ("Loading, a start screen and pause"); without a shell the
 gear button is `new QualityMenu({ quality: Q, corner: 'tr' })` (ui). A change stores the tier and reloads the page. `S.lights`, `S.world`, `S.textures` and `S.effects` are for the game to read.
+
+## Start without a stall
+
+The first frame compiles every shader and uploads every texture; on a phone that takes seconds. Draw it while a
+loading screen still covers the page: `engine.warmUp()` runs the systems' per-frame phases and `renderFn` at dt 0 for
+a few frames (nothing moves), then waits for the GPU without blocking the page. With a `GameShell` ("Loading, a start
+screen and pause"), as in the starters, `shell.ready()` does it under the shell's loading bar, then starts the loop and
+shows the start card once a frame is drawn: end `boot()` with it and do not call `engine.start()` yourself.
+
+<!-- from: samples/starter-walk/main.js#start -->
+```js
+await shell.ready(); // under the loading bar: engine.warmUp() (shaders, uploads), engine.start(), a frame; then the card
+```
+
+Without a shell, create a `LoadingScreen` (ui) at the top of the module (`const loading = new LoadingScreen({ title:
+'MY GAME', label: 'Loading…' })`) and end `boot()` with `loading.setLabel('Compiling shaders…'); await
+engine.warmUp(); engine.start(); loading.hide();`. A page with bench poses passes `{ systems: false, frames: 12 }`
+under `?bench=1`, as the demos do: the poses keep their loaded state, and 12 frames leave a renderFn's every-2nd, 3rd
+and 4th-frame counters in phase.
+
+If the device drops the WebGL context later (phones do when GPU memory runs short), the engine stops the loop, shows
+a message with a Reload button (`engine.onContextLost` replaces it) and the next `resolveQuality()` in that tab comes up
+lighter. A `GameShell` steps aside for it: its cards and pause button go away and it no longer pauses or starts. An
+error thrown in a frame is logged and shown once as a line at the bottom of the page (`engine.onFrameError`).
 
 ## Character with camera, input and animation
 
@@ -563,8 +587,10 @@ const shell = new GameShell({ title: 'Starter Walk', quality: Q, storageKey: 'st
 
 Then, as in the starters: `shell.setProgress(p, label)` around the loads (`engine.load((p, label) =>
 shell.setProgress(0.3 + 0.6 * p, label))`), `shell.use({ engine, audio, inputs: [input] })` once they exist (the start
-click calls `audio.start()`, so no `unlockOnGesture()`), and `await shell.ready()` after `engine.start()`, before the
-page contract (it does not wait for the click). A game setting in the pause card: `shell.addToggle('assist', 'Steering
+click calls `audio.start()`, so no `unlockOnGesture()`), and `await shell.ready()` at the end of `boot()`, before the
+page contract: it warms up under the loading bar and starts the loop ("Start without a stall"), so do not call
+`engine.start()` yourself; it does not wait for the click. A boot error goes on the loading screen with
+`boot().catch((e) => shell.error(e.message))`. A game setting in the pause card: `shell.addToggle('assist', 'Steering
 assist')` and `shell.settings.on('assist', (on) => { input.assist.enabled = !!on; })`, which runs at once with the saved
 value. Esc or P pauses (`engine.clock` stops, the loop keeps drawing, the bus fades out), and so does the round pause
 button at the top right (`pauseCorner`), shown on every device while playing so the settings are always one click
@@ -743,9 +769,10 @@ browser tests can tell when it is ready:
 
 <!-- from: samples/starter-walk/main.js#page-contract -->
 ```js
-window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-walk' }), { cc, anim, shell, audio }).setReady();
+window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-walk', quality: Q }), { cc, anim, shell, audio }).setReady();
 ```
 
+`quality: Q` (optional) puts the resolved tier on the harness (`window.__sample.quality`) for the tests.
 `Object.assign` copies the extra fields once, by value: a getter or a number in the source object is frozen at that
 moment. Expose state that changes as a function (`{ game: () => ({ mode, score }) }`) and call it from the test.
 

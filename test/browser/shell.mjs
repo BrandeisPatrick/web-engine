@@ -9,6 +9,9 @@
 //   3. ?autostart=1: ready() went straight to playing, no card; the bus waits for the first gesture (unlockOnGesture).
 //   4. 375 x 812 touch: the card fits (no horizontal scroll), the touch sticks are hidden behind it, a tap starts, the
 //      round pause button shows and pauses.
+//   5. a lost WebGL context while paused (WEBGL_lose_context): the engine's Reload notice is on top, the shell steps
+//      aside (pause card and pause button gone, canvas veiled, input off, bus paused, shell.lost), and Esc, P, resume()
+//      and toggle() neither change the state nor restart the loop (engine stopped, frameCount still).
 // Screenshots of the start card (desktop, 375 px) and the pause card go to --out=<dir> (default: the OS temp folder).
 // Needs Chrome and the GPU: run it through the machine's GPU lock.
 //   node test/browser/shell.mjs [--out=<dir>]
@@ -171,6 +174,37 @@ try {
     check('375: pause card inside the screen', s.pcard.x >= 8 && s.pcard.right <= s.vw - 8 && s.pcard.bottom <= 812, JSON.stringify(s.pcard));
     await page.screenshot({ path: path.join(out, 'pause-card-375.png') });
     check('375: no errors', errors.length === 0, errors.slice(0, 3).join(' | '));
+    await page.close();
+  }
+
+  // ---------------------------------------------------------------- 5. a lost WebGL context while paused
+  {
+    const { page, errors } = await open({ width: 1280, height: 720 });
+    await page.evaluate(BUILD);
+    await sleep(600);
+    await page.click('.ui-shell-card.show .ui-shell-btn'); await sleep(300);
+    await page.keyboard.press('Escape'); await sleep(300);
+    check('lost: paused before the loss', (await page.evaluate(STATE)).pauseShown);
+    await page.evaluate(() => window.__sample.engine.renderer.getContext().getExtension('WEBGL_lose_context').loseContext());
+    await sleep(800);
+    const LOST = () => {
+      const s = window.__shell, e = window.__sample.engine, n = document.querySelector('.engine-notice-notice'), b = n && n.querySelector('button');
+      const r = b && b.getBoundingClientRect(), top = r && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return { notice: !!b, onTop: !!b && (top === b || b.contains(top)), lost: s.lost, state: s.state, cards: document.querySelectorAll('.ui-shell-card.show').length,
+        pauseBtn: getComputedStyle(s.pauseButton).display !== 'none', veil: e.renderer.domElement.classList.contains('ui-shell-veil'),
+        running: e._running, contextLost: e.contextLost, frames: e.frameCount, input: s.inputs[0].enabled, busPaused: window.__sample.audio.paused };
+    };
+    const a = await page.evaluate(LOST);
+    check('lost while paused: the Reload notice shows, on top of the shell', a.notice && a.onTop, JSON.stringify(a));
+    check('lost: the pause card and the pause button gone, the canvas veiled, input off, bus paused', a.lost && a.cards === 0 && !a.pauseBtn && a.veil && a.input === false && a.busPaused === true);
+    await page.keyboard.press('Escape'); await sleep(100);
+    await page.keyboard.press('KeyP'); await sleep(100);
+    const resumed = await page.evaluate(() => { const r = window.__shell.resume('test'); window.__shell.toggle('test'); return r; });
+    await sleep(400);
+    const b = await page.evaluate(LOST);
+    check('lost: Esc, P, resume() and toggle() do nothing; the loop stays stopped', !resumed && b.state === a.state && b.cards === 0 && !b.running && b.contextLost && b.frames === a.frames,
+      JSON.stringify({ resumed, state: b.state, running: b.running, frames: `${a.frames} -> ${b.frames}` }));
+    check('lost: no console or page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
     await page.close();
   }
 } catch (e) {
