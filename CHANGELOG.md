@@ -32,7 +32,7 @@
   signposts, 400 real lane stones (desktop), leaf-sized litter. The steering-assist allocation gate now gives its
   32 B budget to the measurement as well (it retried every window against 1 B and failed when the last one held a
   GC). The Halloween bench snaps the lantern lights to full at each pose (the knoll's lantern in 'house' rendered
-  unlit); Miami's dusk cloud deck takes its density from three octaves (beach pose cost). `npm test` runs 57 suites.
+  unlit). `npm test` runs 57 suites.
 - Sound kit (audio): `SoundBank` with 18 named sounds rendered in plain JavaScript (`SOUND_PRESETS`), `Footsteps`, a
   voice policy (`VoicePool`), the 'safe' master chain and `setPaused` / `setMuffle` / `duck` on `AudioBus`,
   `audioSelfTest` / `analyseMix` / `encodeWav`, and the `samples/sound-check/` page (a card per sound, the measured
