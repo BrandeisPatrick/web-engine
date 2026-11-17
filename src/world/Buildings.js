@@ -53,6 +53,9 @@ varying vec3 vWall; // street height, overhang (AO) height, 1 = wall vertex
 float fHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 // interior mapping: room box behind the glass. id = room cell, f = entry point (0..1), rt = tangent-space ray
 // (x along the wall, y up, z out of the wall; rt.z < 0 looking in). Returns lit colour (pre-exposure).
+#ifdef FACADE_DETAIL
+float fRoomDim = 0.0; // set per pixel: 1 = a dim room (a lamp deep in the flat), no ceiling fixtures lit
+#endif
 vec3 fRoom(vec2 id, vec2 f, vec3 rt, float seed, float lit, vec3 lcol, float day, float store, out float glow) {
   vec3 r = vec3(rt.x * 1.15, rt.y, min(rt.z, -0.06) * 0.8);
   vec3 rr = vec3(r.x >= 0.0 ? max(r.x, 1e-4) : min(r.x, -1e-4), r.y >= 0.0 ? max(r.y, 1e-4) : min(r.y, -1e-4), r.z);
@@ -100,6 +103,12 @@ vec3 fRoom(vec2 id, vec2 f, vec3 rt, float seed, float lit, vec3 lcol, float day
   float dayK = mix(1.0, 0.25, depth) * lightTerm * (0.07 + 0.1 * store);
   float nightK = lit * (0.55 + 0.45 * lightTerm) * mix(1.0, 0.6, depth);
   glow *= lit;
+#ifdef FACADE_DETAIL
+  // a dim room is lit by one lamp low and deep in the room: no ceiling panels, the ceiling and the front of the room
+  // fall dark, the back wall keeps the light (seen from the street below, a warm glow, not floating squares)
+  glow *= 1.0 - fRoomDim;
+  nightK *= mix(1.0, (t == tB.y && rr.y > 0.0 ? 0.25 : 1.0) * mix(0.35, 1.3, depth), fRoomDim);
+#endif
   return c * (dayK * day) * vec3(1.0, 0.98, 0.95) + c * lcol * nightK;
 }
 `;
@@ -167,6 +176,7 @@ if (fMode == 0 || fMode == 2) {
       vec3 fdC = mix(vec3(1.0, 0.68, 0.4), vec3(0.55, 0.7, 1.0), step(0.6, fHash(id + 18.9)));
       lit = mix(lit, 0.08 + 0.22 * fHash(id + 18.1), fdD);
       lc = mix(lc, fdC * uWinGain * uNight, fdD);
+      fRoomDim = fdD;
 #endif
       float glow = 0.0;
       vec3 room = fRoom(id, f, fRt, vInfo.z, lit, lc, fDayR, store, glow);
