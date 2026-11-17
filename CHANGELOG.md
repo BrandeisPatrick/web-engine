@@ -1,6 +1,27 @@
 # Changelog
 
 ## Unreleased
+- Halloween (Midnight Candy Run) is retired: `samples/halloween/`, `samples/public/halloween/` and its tests
+  (`test/halloween-enemies.mjs`, `test/halloween-depth.mjs`, `test/browser/halloween.mjs`,
+  `test/browser/halloween-media.mjs`) are removed, and the game is kept on the branch `archive/halloween` (the round's
+  Halloween work and the phone start-up fix included). It is gone from the samples index, the smoke pages and look
+  gate, phone-start, the perf views (`bench/budgets.json`) and baseline (its two views only; every other pose's numbers
+  unchanged), the asset registry and catalogue (its texture sets, props, characters and their thumbnails), the deploy
+  script, README, AGENTS.md, ENGINE.md, HOWTO and docs/BEFORE-AFTER.md (with its images). Engine code in `src/` is
+  unchanged. `npm test` runs 56 suites; `npm run perf` scores NYC and Miami only (14 poses).
+- Merge of the phone start-up fix into the round, for pages with a `GameShell`: `shell.ready()` now runs
+  `engine.warmUp()` under the shell's own loading bar ("Compiling shaders…"; with `?bench=1` the demos' 12
+  renderFn-only frames), then `engine.start()`, waits until the loop has drawn, and only then shows the start card
+  (compileAsync + a frame stays as the fallback for an engine without `warmUp`); `shell.warm` keeps the warm-up's
+  result. The starters end `boot()` with `await shell.ready()` and no longer start the engine themselves: one loading
+  screen, one warm-up. `shell.error(text)` shows a boot error on that loading screen (the starters' `boot().catch`).
+  A lost WebGL context on the start or pause card: the shell steps aside for the engine's Reload notice (cards, pause
+  button and loading screen go, the canvas stays veiled, inputs off, the bus paused, `shell.lost`), and start, pause,
+  resume, the keys and auto-pause do nothing; the shell calls `engine.start()` only once, in `ready()`, and never
+  `stop()`. Tests: test/browser/phone-start.mjs also checks, on the starters, one loading screen, one GPU fence before
+  the fade, the start card only after a loop frame, and the notice on top of the shell after a loss on the title card;
+  test/browser/shell.mjs loses the context while paused. Docs: AGENTS.md "The start-up", HOWTO "Start without a
+  stall" and "Loading, a start screen and pause", ENGINE.md. `npm test` runs 58 suites.
 - Phone start-up fix (the NYC walk showed a black canvas under the HUD on iPhones, "not reliably"). Two causes: the
   first live frame compiled every program and built every Metal pipeline (ANGLE) after the loading screen had started
   to fade (on the live NYC page in Chrome on an M4 the first frame reached the canvas 0.9 s after the fade began; in
@@ -33,6 +54,81 @@
     Reload notice with no further errors; Reload comes up lighter; starter-walk also as an iPhone).
   - Docs: ENGINE.md "Start-up, lost context, frame errors" and the lighter step under "Quality tiers"; AGENTS.md "The
     start-up"; docs/HOWTO.md "Start without a stall".
+- Look options (render / world, all off by default; the picture is unchanged without them): `weathering()` material
+  patch (`src/render/MaterialPatches.js`: macro value / hue / roughness breakup, grime from the ground, rain streaks,
+  dust, optional fading and chips; `GLSL_WEATHERING`, `bakeWeathering`, `weatheringAt`, `WEATHERING_DEFAULTS`; test
+  `surface-detail`); Atmosphere `cloudStyle: 'lit'` (a soft cloud deck lit by its relief), `twilightKey` (the
+  afterglow stays the key light after sunset) and `lowSunEnv` (warmer, brighter environment light at low sun);
+  `applyFoliageLighting` / `applyFoliageLightingTo` and `buildTreeMeshes({ foliageLight })` (leaves lit as leaves);
+  `enableFacadeDetail` on `createFacadeMaterials` (dim rooms, street spill, panes that differ, shades, weathered
+  curtain walls); PostFX `look: { aoLit, aoTint, lift }` (AO on the ambient only, its tint, a lifted floor black);
+  `NearestLights({ spot })` (clustered lamps as downward spots: round pools). HOWTO "Weathered walls and props";
+  AGENTS rows for each; `npm test` runs 56 suites.
+- Demos: each default look stays inside the smoke look gate, and each has `?look=open`, a brighter two-temperature
+  alternative the gate does not check. NYC: cool sky and shade against warm lamps, lamp spots, lifted darks, glass
+  that reflects the street, lit and dim rooms, wall drips and damp, lit street trees, weathered street kit. Miami:
+  a soft lit cloud deck, the afterglow key, lit foliage, aged stucco with dirt runs, shrubs, the neon tubes off
+  (`?neon=1`), AO on the ambient. Halloween: regraded inside the gate, the candy's coloured halos cut to small warm glints, smoother carved pumpkin edges and breathing candle light, the green window and blue door calmed, inscriptions, shaped capstones and clapboard (desktop), AO on the ambient, `?look=open` with a small black lift. Starters: lit clouds (drive also the low-sun fill), AO on the ambient, weathered posts and lamp, broad patches on the walk's ground.
+- Starter fixes: starter-walk's lamp glows again (glass emissive 8, over the dusk bloom threshold; it was 1.6) and
+  pools at intensity 12 over the dark gravel and earth (docs: 8 to 12 for a garden lamp); `parkCorner` /
+  `countryRoad` boulders are one smooth-shaded mesh with fracture faces, mottled vertex colour, a dark foot, stone
+  grain and `weathering()`; `countryRoad`'s asphalt sits 6 mm up (was 20 mm, above the car's contact shadow) with
+  world-space patching, and starter-drive textures it with `asphalt_02` and a firmer contact shadow; `GameShell`'s
+  pause button shows on every device by default (`pauseButton: true`; `'auto'` is the old touch-only), so
+  `?autostart=1` still has a visible way to pause and reach the tiers; `test/browser/howto.mjs` takes its headlight
+  captures with the loop frozen and the car hidden (deterministic).
+- Demo fixes: Halloween's lantern halo sits clear of the rind (a lantern seen close no longer shows a dark hexagon).
+  NYC: the shop light moved out of the awning valance (no white blob), the lamp highlight on shop glass is capped to a
+  small point, tighter street-lamp pools, pedestrian signal lenses at a night level, and the A-frame sign stands on its
+  feet. Miami: the dusk cloud deck stops early where the sky is certainly clear and reads its noise lattice from a
+  table baked once (same picture), the lifeguard huts drop faces nobody sees, and the beach is back at its baseline
+  cost. Street furniture (`src/world/Furniture.js`): the bench backrest and its iron uprights recline instead of
+  leaning over the seat, the bistro chairs' backs lean away from the table, the utility pole's braces rise from the
+  pole to the crossarm, and the A-frame's chalk panel and lines follow their board.
+- Fix pass (after the look pass): street lamps as shielded spots: `ClusteredLights.setSpot(..., near)` and
+  `NearestLights({ spot: { near } })` (m, default 0 = off, 0.25 m steps) fade a spot in over its first `near` m along
+  its axis, so a lamp's own pole and the wall at head height stay unlit; `near` is packed into the stored decay
+  (decay + 8 x round(near x 4)), so a shielded spot's decay must stay below 8. nyc-night's lamps are 44 degree cones,
+  twice as bright, with a 5 m shield (a quarter less in `?look=open`, whose exposure is higher). `src/world/Scenery.js` (world): `countryRoad`,
+  `parkCorner`, `groundCover` (a grass-ground patch: broad lush / dry / bare patches and gravel paths) and
+  `paintedLines`; the starters now drive a country road with a lay-by and walk a park corner (test `scenery`;
+  catalogue entries `engine-country-road`, `engine-park-corner`). Thinner, wispier tyre smoke (`TyreFx`), a matte
+  walker, louder footsteps, lighter dry asphalt. NYC: near panes no longer mirror loose lit windows, dim rooms lit low
+  and deep, shop interiors with a counter and pendant lamps, true-width tar and cracks, no gutter litter across junction
+  boxes, more garbage piles and trash cans. Miami: a soft key glint on facades, softer wet-sand edge and neutral dusk
+  sand, fibrous street-palm bark, lifeguard huts with form and aged paint, readable far window rows; the open look
+  less pink. Halloween: readable moonlit village ground, night jack-o'-lanterns, a fill on shaded walls, muted
+  signposts, 400 real lane stones (desktop), leaf-sized litter. The steering-assist allocation gate now gives its
+  32 B budget to the measurement as well (it retried every window against 1 B and failed when the last one held a
+  GC). The Halloween bench snaps the lantern lights to full at each pose (the knoll's lantern in 'house' rendered
+  unlit). `npm test` runs 57 suites.
+- Sound kit (audio): `SoundBank` with 18 named sounds rendered in plain JavaScript (`SOUND_PRESETS`), `Footsteps`, a
+  voice policy (`VoicePool`), the 'safe' master chain and `setPaused` / `setMuffle` / `duck` on `AudioBus`,
+  `audioSelfTest` / `analyseMix` / `encodeWav`, and the `samples/sound-check/` page (a card per sound, the measured
+  ten-second mix, a WAV download). Every sound and the mix are measured; no one has listened yet. `VehicleAudio`
+  gains `wind` / `tyres` options (default on). Tests: `audio-dsp`, `audio-voices`, `audio-bank`; smoke runs the page's
+  self-test.
+- GameShell (ui): loading bar that keeps moving, start card over the blurred scene, pause card with volume, game
+  toggles / sliders and quality tiers, saved settings (`createSettings`); the start click is the audio gesture; touch
+  controls hide while a card is up. `LoadingScreen({ compositor: true })`. `QualityMenu` exports its tier rows
+  (`buildTierRows`, `chooseTier`). Tests: `shell` (Node), `test/browser/shell.mjs` (now on starter-walk's own shell
+  with its real `AudioBus({ master: 'safe' })`).
+- Drive feel: `SteeringAssist` (opt-in through `VehicleInput { assist }` and `update(dt, car)`), `TyreFx` (skid marks
+  and thin smoke from tyre sliding heat; puffs rise as they grow so the road does not cut them), `VehicleHaptics`
+  (gamepad rumble), and `VehicleController` tyre outputs (`steerLimit`, slip angles and peaks, `wheels[i].slideHeat`);
+  dynamics unchanged bit for bit. Tests: `steering-assist`, `tyre-fx`, `test/browser/drive-feel.mjs`.
+- Car and camera: `createCarVisual(type)` (world), an HD car with wheels on the physics, lamps and a contact shadow,
+  whose `spec` is `ROAD_CAR_SPEC` resized to the body; `rig.addTrauma(x)` on every rig, `ChaseRig({ feel: 'road' })`,
+  `landingDip` / `sprintFov` and `rig.land(speed)` on the character rigs; all off by default (main's poses, pinned).
+  Tests: `car-visual`, `camera-feel`, `test/browser/car-camera.mjs`. Asset catalogue entry `engine-car-visual`.
+- Starters: both open with the game shell (title, controls, start click, Esc / P pause with volume and quality,
+  saved). starter-drive drives the hatchback with the steering assist on (pause-card toggle), skid marks and smoke,
+  the road-feel chase camera with a short shake and a thud on a hit, the motor, road roar, wind and squeal; a 30 m
+  asphalt apron over the first 120 m, distance haze, marker posts (two instanced meshes). starter-walk has footsteps,
+  a landing thump with a camera dip, a dusk bed, a hooded lamp that hums and pools light, a contact shadow under the
+  walker and distance haze. New HOWTO recipes: "Loading, a start screen and pause", "Car sounds", "Steering assist,
+  skid marks and smoke"; "Play a sound" and "Drive a car" rewritten. Browser scripts that press keys load the
+  starters with `?autostart=1`. `npm test` runs 55 suites.
 - input: `VehicleInput.enabled` (get / set), the InputMap's `enabled` as on CharacterInput: false silences every
   vehicle action (additive; nothing else changes). Tested in test/character-input.mjs.
 - docs/HOWTO.md: new recipes "Get in and out of a vehicle" (two inputs, two rigs with `active: false` /

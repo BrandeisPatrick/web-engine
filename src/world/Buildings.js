@@ -40,6 +40,10 @@ uniform float uLitFrac;
 uniform float uWinGain;
 uniform float uTime;
 uniform float uClock;
+#ifdef FACADE_DETAIL
+uniform vec4 uFd;  // facade detail (enableFacadeDetail): x dim rooms, y room spill, z pane variation, w curtain-wall shades
+uniform vec4 uFd2; // x spandrel / mullion weathering
+#endif
 varying vec2 vFuv;
 varying vec2 vWuv;
 varying vec4 vInfo;
@@ -49,6 +53,9 @@ varying vec3 vWall; // street height, overhang (AO) height, 1 = wall vertex
 float fHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 // interior mapping: room box behind the glass. id = room cell, f = entry point (0..1), rt = tangent-space ray
 // (x along the wall, y up, z out of the wall; rt.z < 0 looking in). Returns lit colour (pre-exposure).
+#ifdef FACADE_DETAIL
+float fRoomDim = 0.0; // set per pixel: 1 = a dim room (a lamp deep in the flat), no ceiling fixtures lit
+#endif
 vec3 fRoom(vec2 id, vec2 f, vec3 rt, float seed, float lit, vec3 lcol, float day, float store, out float glow) {
   vec3 r = vec3(rt.x * 1.15, rt.y, min(rt.z, -0.06) * 0.8);
   vec3 rr = vec3(r.x >= 0.0 ? max(r.x, 1e-4) : min(r.x, -1e-4), r.y >= 0.0 ? max(r.y, 1e-4) : min(r.y, -1e-4), r.z);
@@ -74,6 +81,18 @@ vec3 fRoom(vec2 id, vec2 f, vec3 rt, float seed, float lit, vec3 lcol, float day
       glow = panel;
     } else { c = floorC; lightTerm = 0.6; }
   } else { c = wallC * 0.85; lightTerm = 0.6; }
+#ifdef FACADE_DETAIL
+  if (store > 0.5) { // a shop, not an empty box: stocked shelves on the back and side walls, a tiled floor
+    if (t != tB.y && h.y > 0.1 && h.y < 0.84) {
+      float u = (t == tB.z ? h.x : -h.z) * 13.0, y5 = h.y * 5.0, sh = fract(y5);
+      vec2 pc = vec2(floor(u), floor(y5)) + id * 3.1;
+      float fill = step(sh, 0.22 + 0.7 * fHash(pc + 1.7)) * step(0.12, fract(u)) * step(0.22, fHash(pc + seed));
+      vec3 pcol = 0.06 + 0.6 * vec3(fHash(pc + 2.1), fHash(pc + 3.3), fHash(pc + 4.7));
+      c = mix(c, mix(vec3(dot(pcol, vec3(0.33))), pcol, 0.7) * (0.75 + 0.5 * step(0.5, sh)), fill);
+      c = mix(c, vec3(0.2, 0.19, 0.18), step(sh, 0.07));
+    } else if (t == tB.y && rr.y <= 0.0) { vec2 tl = floor(vec2(h.x * 6.0, -h.z * 6.0)); c = mix(vec3(0.5, 0.48, 0.44), vec3(0.3, 0.29, 0.28), mod(tl.x + tl.y, 2.0)); }
+  }
+#endif
   float depth = clamp(-h.z, 0.0, 1.0);
   // a desk in front of the back wall for half the rooms
   vec3 dmin = vec3(0.15, 0.0, -0.62), dmax = vec3(0.85, 0.3, -0.42);
@@ -84,6 +103,12 @@ vec3 fRoom(vec2 id, vec2 f, vec3 rt, float seed, float lit, vec3 lcol, float day
   float dayK = mix(1.0, 0.25, depth) * lightTerm * (0.07 + 0.1 * store);
   float nightK = lit * (0.55 + 0.45 * lightTerm) * mix(1.0, 0.6, depth);
   glow *= lit;
+#ifdef FACADE_DETAIL
+  // a dim room is lit by one lamp low and deep in the room: no ceiling panels, the ceiling and the front of the room
+  // fall dark, the back wall keeps the light (seen from the street below, a warm glow, not floating squares)
+  glow *= 1.0 - fRoomDim;
+  nightK *= mix(1.0, (t == tB.y && rr.y > 0.0 ? 0.25 : 1.0) * mix(0.35, 1.3, depth), fRoomDim);
+#endif
   return c * (dayK * day) * vec3(1.0, 0.98, 0.95) + c * lcol * nightK;
 }
 `;
@@ -114,6 +139,10 @@ float fGlass = 0.0;
 vec3 fSpec = vec3(0.04);
 float fEnv = 1.0;
 float fDay = 1.0 - uNight;
+float fDayR = fDay; // how much of the room shows when it is not lit (FACADE_DETAIL: some spill at night)
+#ifdef FACADE_DETAIL
+fDayR = max(fDay, uFd.y);
+#endif
 if (fMode == 0 || fMode == 2) {
   float layer = vInfo.x;
   float store = 0.0;
@@ -141,8 +170,16 @@ if (fMode == 0 || fMode == 2) {
       vec3 lc = mix(vec3(1.0, 0.66, 0.36), vec3(0.78, 0.87, 1.0), step(0.72, fHash(id + 9.1)));
       if (store > 0.5) lc = vec3(1.0, 0.84, 0.64);
       lc *= uWinGain * (0.55 + 0.8 * fHash(id + 5.3)) * (1.0 + 0.6 * store) * uNight;
+#ifdef FACADE_DETAIL
+      // rooms between dark and lit: a lamp deep in the flat, a hall light through a door, a television (cool, dim)
+      float fdD = step(fHash(id + 17.3), uFd.x) * (1.0 - step(0.5, lit)) * (1.0 - store);
+      vec3 fdC = mix(vec3(1.0, 0.68, 0.4), vec3(0.55, 0.7, 1.0), step(0.6, fHash(id + 18.9)));
+      lit = mix(lit, 0.08 + 0.22 * fHash(id + 18.1), fdD);
+      lc = mix(lc, fdC * uWinGain * uNight, fdD);
+      fRoomDim = fdD;
+#endif
       float glow = 0.0;
-      vec3 room = fRoom(id, f, fRt, vInfo.z, lit, lc, fDay, store, glow);
+      vec3 room = fRoom(id, f, fRt, vInfo.z, lit, lc, fDayR, store, glow);
       room += lc * glow * 1.4;
       // blinds (at the glass plane)
       float hb = fHash(id + 21.7);
@@ -155,7 +192,7 @@ if (fMode == 0 || fMode == 2) {
       // distant windows: fade the parallax room to its average (no moire)
       float px = max(fwidth(uv.x), fwidth(uv.y));
       float far = smoothstep(0.12, 0.45, px);
-      vec3 avg = vec3(0.6, 0.57, 0.52) * (0.04 * fDay * (1.0 + store) + lc * lit * 0.62);
+      vec3 avg = vec3(0.6, 0.57, 0.52) * (0.04 * fDayR * (1.0 + store) + lc * lit * 0.62);
       fEmis = mix(room, avg, far);
       fGlass = 1.0;
       fCol = vec3(0.025);
@@ -164,6 +201,14 @@ if (fMode == 0 || fMode == 2) {
       fEnv = 1.5;
       fNxy = (vec2(fHash(id + 0.3), fHash(id + 0.7)) - 0.5) * 0.035;
       fNStr = 1.0;
+#ifdef FACADE_DETAIL
+      { // no two panes alike: the reflection's strength and tint, and a pane that is not quite flat (bent reflections)
+        float fdP = fHash(id + 23.1);
+        fEnv *= mix(1.0, 0.6 + 0.8 * fdP, uFd.z);
+        fSpec *= mix(vec3(1.0), fdP > 0.72 ? vec3(0.86, 1.0, 0.9) : vec3(1.0, 0.97, 0.92), uFd.z);
+        fNxy += vec2(sin(f.y * 3.3 + fdP * 6.3), sin(f.x * 2.9 + fdP * 9.1)) * 0.01 * uFd.z;
+      }
+#endif
     } else if (d0.r > 0.25) {
       // ---- trim (frames, sills, spandrels)
       vec4 ta = texture(uAlb, vec3(uv * 0.25, layer));
@@ -193,9 +238,19 @@ if (fMode == 0 || fMode == 2) {
   vec3 lc = mix(vec3(1.0, 0.86, 0.66), vec3(0.85, 0.92, 1.0), step(0.5, fHash(vec2(vInfo.z, cell.y)))) * uWinGain * (0.6 + 0.6 * fHash(id + 5.3)) * uNight;
   float glow = 0.0;
   vec2 f = vec2(fract(g.x * 0.5), fv);
-  vec3 room = fRoom(id, f, fRt, vInfo.z, lit, lc, fDay * 1.2, 0.0, glow) + lc * glow * 1.2;
+  vec3 room = fRoom(id, f, fRt, vInfo.z, lit, lc, fDayR * 1.2, 0.0, glow) + lc * glow * 1.2;
+#ifdef FACADE_DETAIL
+  { // roller shades drawn to different heights, panel by panel (the lit floors are not one bright band)
+    float pn = floor(g.x);
+    float sh = fHash(id + 21.7 + pn) < uFd.w ? 0.12 + 0.8 * fHash(id + 2.2 + pn) : 0.0;
+    if (fv > 1.0 - sh) {
+      vec3 bc = mix(vec3(0.8, 0.78, 0.72), vec3(0.4, 0.42, 0.44), step(0.55, fHash(id + 4.4 + pn)));
+      room = bc * (0.1 * fDayR) + bc * lc * lit * 0.6;
+    }
+  }
+#endif
   float far = smoothstep(0.12, 0.45, max(fwidth(g.x * 0.5), fw.y));
-  room = mix(room, vec3(0.55) * (0.04 * fDay + lc * lit * 0.55), far);
+  room = mix(room, vec3(0.55) * (0.04 * fDayR + lc * lit * 0.55), far);
   vec3 tint = vTint;
   fGlass = 1.0;
   fCol = tint * 0.05;
@@ -205,6 +260,13 @@ if (fMode == 0 || fMode == 2) {
   fNxy = (vec2(fHash(id + 0.31 + floor(g.x)), fHash(id + 0.77 + floor(g.x))) - 0.5) * 0.02;
   fNStr = 1.0;
   float envK = 1.0;
+#ifdef FACADE_DETAIL
+  { // panel by panel: reflection strength, a slight bow in the glass (reflections bend at the mullions)
+    float fdP = fHash(id + 23.1 + floor(g.x));
+    envK *= mix(1.0, 0.65 + 0.7 * fdP, uFd.z);
+    fNxy += vec2(sin(fu * 3.14159) - 0.64, sin(fv * 3.14159) - 0.64) * (fdP - 0.3) * 0.016 * uFd.z;
+  }
+#endif
   // shadow band under each slab edge: top of the vision glass reads darker (deeper, no interior light)
   float slabSh = smoothstep(0.8, 0.985, fv) * (1.0 - spand);
   fEmis *= 1.0 - 0.55 * slabSh; envK *= 1.0 - 0.3 * slabSh;
@@ -215,6 +277,15 @@ if (fMode == 0 || fMode == 2) {
     else { fCol = tint * 0.018; fEmis = vec3(0.0); fSpec = mix(vec3(0.04), tint * 0.11, 0.6); envK *= 0.55; }
     float band = smoothstep(sp0 - 0.07, sp0 - 0.005, fv); // shade under the vision-glass sill
     fCol *= 1.0 - 0.35 * band; envK *= 1.0 - 0.25 * band;
+#ifdef FACADE_DETAIL
+    { // panels differ (replaced, faded), and the rain runs down from the sill: duller, darker streaks
+      float pv = fHash(vec2(floor(g.x), cell.y) + vInfo.z * 13.0);
+      fCol *= 1.0 + (pv - 0.5) * 0.5 * uFd2.x;
+      float run = fHash(vec2(floor(fu * 7.0) + floor(g.x) * 7.0, cell.y + vInfo.z * 5.0));
+      float st = step(0.55, run) * smoothstep(0.0, sp0, fv) * uFd2.x;
+      envK *= 1.0 - 0.45 * st; fRough = mix(fRough, 0.6, 0.5 * st);
+    }
+#endif
   }
   if (frame > 0.01) {
     vec3 mc = variant > 2.5 ? vec3(0.75, 0.76, 0.77) : (fract(vInfo.z * 3.3) > 0.5 ? vec3(0.62, 0.64, 0.66) : vec3(0.16, 0.16, 0.17));
@@ -223,6 +294,11 @@ if (fMode == 0 || fMode == 2) {
     fMetal = mix(fMetal, 0.85, frame);
     fRough = mix(fRough, 0.32, frame);
     fGlass *= 1.0 - step(0.5, frame);
+#ifdef FACADE_DETAIL
+    // mullions: dirt collects on the transoms' tops and runs down the verticals; anodising worn in patches
+    fCol *= 1.0 - frame * uFd2.x * (0.25 * fHash(vec2(floor(g.x), cell.y + 3.0)) + 0.2 * tr * step(fv, 0.5));
+    fRough = mix(fRough, 0.55, frame * uFd2.x * 0.5 * fHash(vec2(floor(g.x) + 7.0, cell.y)));
+#endif
     fNxy = mix(fNxy, vec2((fu < 0.5 ? -1.0 : 1.0) * mull * 0.7, (fv < 0.5 ? -1.0 : 1.0) * tr * 0.5), frame);
   }
   fAO = 1.0;
@@ -393,6 +469,7 @@ export function createFacadeMaterials(tex, pbr) {
     uPbrSize: { value: sizes },
     uNight: { value: 0 }, uLitFrac: { value: 0.35 }, uWinGain: { value: 1.3 },
     uTime: { value: 0 }, uClock: { value: 17.85 },
+    uFd: { value: new THREE.Vector4(0, 0, 0, 0) }, uFd2: { value: new THREE.Vector4(0, 0, 0, 0) },
   };
   const make = (inst) => {
     const m = new THREE.MeshPhysicalMaterial({ roughness: 1, metalness: 0, ior: 1.5, specularIntensity: 1, envMapIntensity: 1 });
@@ -444,6 +521,33 @@ if (fGlass > 0.5) { material.specularColor = fSpec; material.specularF90 = 1.0; 
     return d;
   };
   return { facade: make(false), windows: make(true), depth: makeDepth(false), winDepth: makeDepth(true), uniforms };
+}
+
+/**
+ * Opt-in facade detail on materials from createFacadeMaterials (default: off, the materials render as before). Adds a
+ * FACADE_DETAIL define (a separate program) and sets the shared uniforms:
+ * - windows at night are not just lit or black: a share of the unlit rooms shows a dim lamp, a hall light or a
+ *   television (warm or cool), and every unlit room keeps a faint view of its interior (street-light spill);
+ * - glass panes differ: reflection strength and tint per pane, a slight bow so reflections bend pane to pane;
+ * - curtain walls: roller shades at different heights panel by panel, spandrel panels that differ in tone with rain
+ *   runs under the sills, dirt and worn anodising on the mullions.
+ * Costs a few ALU ops on window and curtain-wall pixels only; no textures.
+ * @param {{ facade?: import('three').Material, windows?: import('three').Material, uniforms?: object }} mats  createFacadeMaterials() result (or { facade, windows })
+ * @param {object} [o]
+ * @param {number} [o.dimRooms=0.22]  share of the unlit windows that show a dim lamp / television (0..1)
+ * @param {number} [o.spill=0.05]  how much of an unlit room shows at night (0 = black, 1 = as by day)
+ * @param {number} [o.paneVariation=1]  per-pane reflection strength / tint / bow (0 = every pane alike)
+ * @param {number} [o.shades=0.4]  share of curtain-wall panels with a roller shade drawn (0..1)
+ * @param {number} [o.weathering=1]  curtain-wall spandrel and mullion weathering (0 = clean)
+ * @returns {object} the uniforms ({ uFd, uFd2 }), shared by both materials
+ */
+export function enableFacadeDetail(mats, o = {}) {
+  const ms = [mats.facade, mats.windows].filter(Boolean);
+  const U = (mats.uniforms) || (ms[0] && ms[0].userData.uniforms);
+  U.uFd.value.set(o.dimRooms ?? 0.22, o.spill ?? 0.05, o.paneVariation ?? 1, o.shades ?? 0.4);
+  U.uFd2.value.set(o.weathering ?? 1, 0, 0, 0);
+  for (const m of ms) { m.defines = { ...(m.defines || {}), FACADE_DETAIL: '' }; m.needsUpdate = true; }
+  return U;
 }
 
 // ================================================================== geometry buffers

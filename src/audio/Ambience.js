@@ -79,7 +79,7 @@ export class CityAmbience {
 
   update(dt, { speedN = 0, altitude = 0 } = {}) {
     const ctx = this.bus.ctx, n = this._n;
-    if (!ctx || !n || ctx.state !== 'running') return;
+    if (!ctx || !n || !this.bus.live) return;
     const k = 1 - Math.exp(-0.6 * dt), s = this._s, e = this.env;
     s.nearWater += (e.nearWater - s.nearWater) * k;
     s.darkness += (e.darkness - s.darkness) * k;

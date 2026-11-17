@@ -158,10 +158,10 @@ const BUILDERS = {
   /** Slatted bench with cast-iron ends (seat faces -Z). */
   bench: (B) => {
     for (let k = 0; k < 3; k++) B.box(0, 0.45, -0.18 + k * 0.13, 1.8, 0.035, 0.1, FM.slat);
-    for (let k = 0; k < 2; k++) B.box(0, 0.62 + k * 0.15, 0.13 + k * 0.035, 1.8, 0.1, 0.03, FM.slat, { pitch: -0.25 });
+    for (let k = 0; k < 2; k++) B.box(0, 0.62 + k * 0.15, 0.13 + k * 0.035, 1.8, 0.1, 0.03, FM.slat, { pitch: 0.25 }); // +pitch: tops lean back (+Z), away from the seat
     for (const x of [-0.78, 0.78]) {
       B.box(x, 0.22, -0.2, 0.06, 0.46, 0.05, FM.iron);
-      B.box(x, 0.42, 0.14, 0.06, 0.84, 0.05, FM.iron, { pitch: -0.2 });
+      B.box(x, 0.42, 0.14, 0.06, 0.84, 0.05, FM.iron, { pitch: 0.2 }); // rear upright: foot under the seat, top behind the slats
       B.box(x, 0.62, -0.05, 0.06, 0.04, 0.42, FM.iron);
     }
   },
@@ -214,10 +214,15 @@ const BUILDERS = {
   /** Sidewalk A-frame (sandwich) board: two chalkboards leaning together; frame painted (instance colour). Boards face +-Z. */
   aframe: (B) => {
     for (const sg of [-1, 1]) {
-      const o = { pitch: sg * 0.2 };
-      B.box(0, 0.47, sg * 0.1, 0.62, 0.94, 0.028, FM.paint, o);
-      B.box(0, 0.5, sg * 0.117, 0.5, 0.66, 0.006, FM.chalk, o);
-      for (let k = 0; k < 4; k++) B.box(-0.04 + (k % 2) * 0.06, 0.66 - k * 0.12, sg * 0.122, 0.34 - (k % 3) * 0.06, 0.035, 0.004, FM.chalkText, o);
+      const a = -sg * 0.2, o = { pitch: a }; // tops lean in to meet under the hinge bar, feet splayed (+sg pitch stood it on its point)
+      // a part at height y and depth d off the board's centre plane, turned with the board about its centre (0.47, sg * 0.1)
+      const on = (x, y, d, sx, sy, sz, m) => {
+        const dy = y - 0.47, dz = sg * d;
+        B.box(x, 0.47 + dy * Math.cos(a) - dz * Math.sin(a), sg * 0.1 + dy * Math.sin(a) + dz * Math.cos(a), sx, sy, sz, m, o);
+      };
+      on(0, 0.47, 0, 0.62, 0.94, 0.028, FM.paint);
+      on(0, 0.5, 0.017, 0.5, 0.66, 0.006, FM.chalk);
+      for (let k = 0; k < 4; k++) on(-0.04 + (k % 2) * 0.06, 0.66 - k * 0.12, 0.022, 0.34 - (k % 3) * 0.06, 0.035, 0.004, FM.chalkText);
     }
     B.box(0, 0.93, 0, 0.6, 0.03, 0.06, FM.paint);
   },
@@ -229,8 +234,14 @@ const BUILDERS = {
       const x = sg * 0.62;
       for (const [lx, lz] of [[-0.17, -0.17], [0.17, -0.17], [0.17, 0.17], [-0.17, 0.17]]) B.box(x + lx, 0.22, lz, 0.025, 0.44, 0.025, FM.paint);
       B.box(x, 0.45, 0, 0.42, 0.03, 0.42, FM.teak);
-      B.box(x + sg * 0.2, 0.68, 0, 0.025, 0.46, 0.4, FM.paint, { roll: sg * 0.12 });
-      for (let k = 0; k < 3; k++) B.box(x + sg * 0.215 + sg * k * 0.004, 0.62 + k * 0.12, 0, 0.02, 0.07, 0.38, FM.teak, { roll: sg * 0.12 });
+      // back: its top leans out, away from the table (roll tilts the top toward -X, so -sg); teak slats on the seat side,
+      // turned with the back about its centre (x + sg * 0.2, 0.68)
+      const r = -sg * 0.12, bx = x + sg * 0.2;
+      B.box(bx, 0.68, 0, 0.025, 0.46, 0.4, FM.paint, { roll: r });
+      for (let k = 0; k < 3; k++) {
+        const dy = -0.06 + k * 0.12, dx = -sg * 0.0225;
+        B.box(bx + dx * Math.cos(r) - dy * Math.sin(r), 0.68 + dx * Math.sin(r) + dy * Math.cos(r), 0, 0.02, 0.07, 0.38, FM.teak, { roll: r });
+      }
     }
   },
   /** Tall shop-front pot with a clipped shrub (shrub tinted per instance). */
@@ -273,7 +284,7 @@ function utilityPole(B, tx) {
   B.lathe([[0.16, -0.5], [0.115, 11.0]], 7, FM.wood);
   disc(B, 0, 11.0, 0, 0.115, 7, FM.wood);
   B.box(0, 10.2, 0, 2.4, 0.1, 0.12, FM.wood);
-  for (const s of [-1, 1]) B.box(0.38 * s, 9.85, 0, 0.05, 0.75, 0.04, FM.galv, { roll: s * 0.75 });
+  for (const s of [-1, 1]) B.box(0.38 * s, 9.85, 0, 0.05, 0.75, 0.04, FM.galv, { roll: -s * 0.75 }); // braces: foot on the pole, top out under the crossarm
   for (const x of [-0.95, 0, 0.95]) B.lathe([[0.05, 0], [0.06, 0.06], [0.04, 0.1], [0.05, 0.14], [0, 0.17]], 5, FM.ceramic, M4(x, 10.25, 0));
   B.box(0.18, 7.6, 0, 0.28, 0.06, 0.06, FM.galv);
   if (tx) {

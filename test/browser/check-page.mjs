@@ -14,7 +14,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const errors = watchErrors(page);                   // console errors + page errors
   const path = await resolvePage(vite, id);
-  const session = await loadSample(page, vite.base + path, errors); // waits for window.__sample.ready
+  const session = await loadSample(page, vite.base + path + '?autostart=1', errors); // waits for __sample.ready; autostart: no start card
   await page.keyboard.down('KeyW'); await page.waitForTimeout(2000); await page.keyboard.up('KeyW');
   const draws = await page.evaluate(() => window.__sample.info().drawCalls);
   ok = session.status === 'ready' && errors.length === 0;

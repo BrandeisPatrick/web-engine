@@ -200,7 +200,7 @@ function resolveCredit(e, problems) {
 }
 
 // ------------------------------------------------------------------------------------------------ texture manifests
-const AREA_DEMO = { nyc: 'nyc-night', miami: 'miami-drive', halloween: 'halloween' };
+const AREA_DEMO = { nyc: 'nyc-night', miami: 'miami-drive' };
 const MAP_NAMES = { Diffuse: 'albedo', nor_gl: 'normal (OpenGL)', Rough: 'roughness', AO: 'ambient occlusion', Displacement: 'displacement' };
 
 function manifestEntries(problems) {

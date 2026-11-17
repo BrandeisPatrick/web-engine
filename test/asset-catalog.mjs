@@ -44,8 +44,8 @@ check('counts add up', catalog.counts.total === E.length && catalog.counts.byKin
 // the checker itself catches what it should
 check('checkSnippet: a name a module does not export', checkSnippet("import { NoSuchThing } from '@vibe/engine/world';").length === 1);
 check('checkSnippet: an unknown module', checkSnippet("import { x } from 'left-pad';").length === 1);
-check('checkSnippet: a demo entry point that boots its demo', checkSnippet("import { boot } from '../halloween/main.js';").some((s) => /starts its demo/.test(s)));
-check('checkSnippet: a correct snippet passes', checkSnippet("import * as THREE from 'three';\nimport { Atmosphere } from '@vibe/engine/render';\nimport { buildKid } from '../halloween/kid.js';").length === 0);
+check('checkSnippet: a demo entry point that boots its demo', checkSnippet("import { boot } from '../nyc-night/main.js';").some((s) => /starts its demo/.test(s)));
+check('checkSnippet: a correct snippet passes', checkSnippet("import * as THREE from 'three';\nimport { Atmosphere } from '@vibe/engine/render';\nimport { nightLut } from '../nyc-night/look.js';").length === 0);
 check('moduleExports follows export * and export { a as b }', moduleExports('src/index.js').has('makeVehicleGeometry') && moduleExports('src/render/index.js').has('Noise'));
 
 console.log(`\n${n - failed}/${n} passed`);

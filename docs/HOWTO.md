@@ -17,10 +17,13 @@ Contents: [Engine and quality tiers](#engine-and-quality-tiers) · [Start withou
 [Character with camera, input and animation](#character-with-camera-input-and-animation) ·
 [Load a GLB and play its clips](#load-a-glb-and-play-its-clips) · [Drive a car](#drive-a-car) ·
 [Get in and out of a vehicle](#get-in-and-out-of-a-vehicle) ·
+[Steering assist, skid marks and smoke](#steering-assist-skid-marks-and-smoke) ·
+[Weathered walls and props](#weathered-walls-and-props) ·
 [Smooth rendering between fixed steps](#smooth-rendering-between-fixed-steps) ·
 [Lamps without MapWorld](#lamps-without-mapworld) · [Clustered lights](#clustered-lights) · [Headlights](#headlights) ·
 [A textured mesh from a texture set](#a-textured-mesh-from-a-texture-set) · [HUD text](#hud-text) ·
-[Play a sound](#play-a-sound) · [Vehicle sound](#vehicle-sound) · [GPU particles](#gpu-particles) ·
+[Loading, a start screen and pause](#loading-a-start-screen-and-pause) ·
+[Play a sound](#play-a-sound) · [Vehicle sound](#vehicle-sound) · [Car sounds](#car-sounds) · [GPU particles](#gpu-particles) ·
 [Static and loose physics bodies](#static-and-loose-physics-bodies) ·
 [A small track without the world layer](#a-small-track-without-the-world-layer) ·
 [Add a sample page](#add-a-sample-page) · [Test a page headlessly](#test-a-page-headlessly)
@@ -46,8 +49,8 @@ const physics = new PhysicsWorld();
 const engine = new Engine({ container: document.getElementById('app'), physics, renderer: { antialias: false }, ...S.engine });
 const { scene, camera, renderer } = engine;
 
-// ---- sky, sun, fog and shadows. timeOfDay: hours 0..24 or 'dawn' | 'noon' | 'golden' | 'dusk' | 'night'
-const atmosphere = new Atmosphere({ scene, renderer, camera, timeOfDay: 'dusk', shadows: S.shadows });
+// ---- sky, sun, fog, shadows (timeOfDay: hours or 'dawn'..'night'); opt-in: soft clouds lit from the afterglow
+const atmosphere = new Atmosphere({ scene, renderer, camera, timeOfDay: 'dusk', shadows: S.shadows, cloudStyle: 'lit' });
 ```
 
 Post-processing, the `passes` group (nothing applies it for you) and resize handling. Without `onResize`, PostFX keeps
@@ -56,42 +59,40 @@ its first size when the window changes:
 <!-- from: samples/starter-walk/main.js#postfx -->
 ```js
 const { width, height } = engine.size;
-const postfx = new PostFX(renderer, scene, camera, { atmosphere, width, height, pixelRatio: engine.pixelRatio, ...S.postfx });
-if (postfx.aoPass) postfx.aoPass.enabled = S.passes.ao;          // `passes` is the game's to apply
+const postfx = new PostFX(renderer, scene, camera, { atmosphere, width, height, pixelRatio: engine.pixelRatio, ...S.postfx, look: { aoLit: 0.8, aoTint: [0, 0.03, 0.07] } });
+if (postfx.aoPass) postfx.aoPass.enabled = S.passes.ao;          // look.aoLit: AO only on the ambient light; `passes` is the game's
 if (postfx.bloomPass) postfx.bloomPass.enabled = S.passes.bloom;
 postfx.track(player); // per-object velocity for TAA / motion blur on moving meshes
 engine.renderFn = (sc, cam, dt) => postfx.render(dt);
 engine.onResize = (w, h, pr) => postfx.setSize(w, h, pr);
 ```
 
-The tier gear button is `new QualityMenu({ quality: Q, corner: 'tr' })` (ui); a change stores the tier and reloads the
-page. `S.lights`, `S.world`, `S.textures` and `S.effects` are for the game to read.
+The starters put the tiers in the `GameShell` pause card ("Loading, a start screen and pause"); without a shell the
+gear button is `new QualityMenu({ quality: Q, corner: 'tr' })` (ui). A change stores the tier and reloads the page. `S.lights`, `S.world`, `S.textures` and `S.effects` are for the game to read.
 
 ## Start without a stall
 
 The first frame compiles every shader and uploads every texture; on a phone that takes seconds. Draw it while a
 loading screen still covers the page: `engine.warmUp()` runs the systems' per-frame phases and `renderFn` at dt 0 for
-a few frames (nothing moves), then waits for the GPU without blocking the page. Create the loading screen (ui) at the
-top of the module:
-
-<!-- from: samples/starter-walk/main.js#loading -->
-```js
-const loading = new LoadingScreen({ title: 'STARTER · WALK', label: 'Loading…' });
-```
-
-and end `boot()` with:
+a few frames (nothing moves), then waits for the GPU without blocking the page. With a `GameShell` ("Loading, a start
+screen and pause"), as in the starters, `shell.ready()` does it under the shell's loading bar, then starts the loop and
+shows the start card once a frame is drawn: end `boot()` with it and do not call `engine.start()` yourself.
 
 <!-- from: samples/starter-walk/main.js#start -->
 ```js
-loading.setLabel('Compiling shaders…');
-await engine.warmUp(); // the systems and renderFn at dt 0 (nothing moves), finished on the GPU: no first-frame stall
-engine.start();
-loading.hide();
+await shell.ready(); // under the loading bar: engine.warmUp() (shaders, uploads), engine.start(), a frame; then the card
 ```
+
+Without a shell, create a `LoadingScreen` (ui) at the top of the module (`const loading = new LoadingScreen({ title:
+'MY GAME', label: 'Loading…' })`) and end `boot()` with `loading.setLabel('Compiling shaders…'); await
+engine.warmUp(); engine.start(); loading.hide();`. A page with bench poses passes `{ systems: false, frames: 12 }`
+under `?bench=1`, as the demos do: the poses keep their loaded state, and 12 frames leave a renderFn's every-2nd, 3rd
+and 4th-frame counters in phase.
 
 If the device drops the WebGL context later (phones do when GPU memory runs short), the engine stops the loop, shows
 a message with a Reload button (`engine.onContextLost` replaces it) and the next `resolveQuality()` in that tab comes up
-lighter. An error thrown in a frame is logged and shown once as a line at the bottom of the page (`engine.onFrameError`).
+lighter. A `GameShell` steps aside for it: its cards and pause button go away and it no longer pauses or starts. An
+error thrown in a frame is logged and shown once as a line at the bottom of the page (`engine.onFrameError`).
 
 ## Character with camera, input and animation
 
@@ -109,7 +110,7 @@ const state = { facing: 0 };            // read by the camera rig (it turns behi
 <!-- from: samples/starter-walk/main.js#character-camera -->
 ```js
 const input = new CharacterInput({ element: renderer.domElement });
-const rig = new ThirdPersonRig(camera, renderer.domElement, { physics, distance: 4.2, height: 1.6 });
+const rig = new ThirdPersonRig(camera, renderer.domElement, { physics, distance: 4.2, height: 1.6, landingDip: 1 }); // dips on landing
 rig.setTarget(player, () => state);
 ```
 
@@ -128,7 +129,8 @@ earlyUpdate(dt) {
 },
 ```
 
-Simulation per fixed step (`hop` is the sound in "Play a sound"):
+Simulation per fixed step (`steps` is the Footsteps in "Play a sound"; `rig.land` dips the camera, set up with
+`landingDip: 1` in the rig's options):
 
 <!-- from: samples/starter-walk/main.js#walk-step -->
 ```js
@@ -136,7 +138,8 @@ fixedUpdate(dt) {
   smooth.save(); // before the step: the pose PoseInterpolator blends from
   const c = input.controls;
   cc.step(dt, move.x, move.z, c.jumpHeld, c.sprint, physics);
-  if (cc.jumpedThisStep) hop();
+  steps.update(dt, { speed: cc.speed, grounded: cc.grounded, landed: cc.landedThisStep, landingSpeed: cc.landingSpeed });
+  if (cc.landedThisStep) rig.land(cc.landingSpeed); // a small camera dip on landing
   walked += cc.speed * dt;
 },
 ```
@@ -154,6 +157,7 @@ update(dt, alpha) {
   player.rotation.y = state.facing;
   anim.setParam('speed', cc.speed).update(dt);
   rig.update(dt);
+  sfx.update(dt);
 },
 ```
 
@@ -168,18 +172,21 @@ const assets = new Assets({ base: `${BASE}nyc/models/` });
 registerRenderLoaders(assets, renderer);
 assets.add('hero', { type: 'gltf', url: 'ManInSuit.glb' });
 engine.addSystem(assets.system(), 'assets');
-await engine.load();
+await engine.load((p, label) => shell.setProgress(0.3 + 0.6 * p, label));
 /** @type {import('@vibe/engine/render').GltfAsset} */
 const gltf = assets.get('hero');
 const model = gltf.instantiate(); // an Object3D (a skinning-safe clone)
-model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+// this GLB (converted from FBX) has metalness 0.4 on cloth, skin and hair: the hair mirrored the sky as a grey patch
+model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; Object.assign(o.material, { metalness: 0, roughness: 0.75 }); } });
 model.updateMatrixWorld(true); // bones too: the skinned bounds below read them
 const box = new THREE.Box3().setFromObject(model), k = 1.8 / (box.max.y - box.min.y); // fit to 1.8 m, feet at y = 0
 model.scale.multiplyScalar(k); model.position.y = -box.min.y * k;
 model.rotation.y = Math.PI; // this GLB faces +Z; the engine's forward is -Z
-const player = new THREE.Group();
-player.add(model);
+const player = new THREE.Group().add(model); // the game moves and turns this group
 scene.add(player);
+// a soft contact shadow on the ground under the feet (the sun's shadow alone leaves the walker floating at dusk)
+const blob = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x000000, map: softDotTexture(), transparent: true, opacity: 0.85, depthWrite: false }));
+scene.add(blob);
 ```
 
 `BASE` is `import.meta.env.BASE_URL`. Clip names are the GLB's own and must match exactly; a wrong name throws and lists
@@ -200,15 +207,20 @@ Per frame: `anim.setParam('speed', cc.speed).update(dt)`.
 
 ## Drive a car
 
-Imports: `VehicleController`, `ROAD_CAR_SPEC` (physics), `VehicleInput` (input), `ChaseRig` (camera),
-`PoseInterpolator` (core). `new VehicleController()` with no spec is the Roadster: 2 t, about 1 MW, flies on the
-`thrust` input. A partial spec inherits every field you leave out from it, so start from `ROAD_CAR_SPEC`.
+Imports: `VehicleController`, `ROAD_CAR_SPEC` (physics), `createCarVisual` (world), `VehicleInput` (input),
+`ChaseRig` (camera), `TyreFx` (render), `PoseInterpolator` (core). `createCarVisual(type)` builds an HD body (sedan,
+hatchback, suv, pickup, minivan, taxi, police, police_sedan) with wheels and lamps, and returns `visual.spec`,
+`ROAD_CAR_SPEC` resized to that body, so the controller's wheels sit under the visual's. `new VehicleController()` with
+no spec is the Roadster: 2 t, about 1 MW, flies on the `thrust` input. A partial spec inherits every field you leave
+out from it, so start from `visual.spec` or `ROAD_CAR_SPEC`.
 
 <!-- from: samples/starter-drive/main.js#road-car-spec -->
 ```js
-// ---- the car's physics: an ordinary road car. Spread it to tune: { ...ROAD_CAR_SPEC, motorPower: 200e3, vMax: 70 }.
+// ---- the car: an HD hatchback body and its physics, ROAD_CAR_SPEC resized to that body (wheels where the body has them).
+// Other bodies: 'sedan', 'suv', 'pickup', 'minivan', 'taxi', 'police'. Tune by spreading: { ...visual.spec, motorPower: 200e3 }.
 // (Without a spec VehicleController is the Roadster, a 400 km/h car that flies on the thrust input.)
-const SPEC = ROAD_CAR_SPEC;
+const visual = createCarVisual('hatchback', { color: 0x8a1418, shadowOpacity: 0.9 });
+const SPEC = visual.spec; // ROAD_CAR_SPEC with this body's size, axles, track and wheel radius
 ```
 
 A van: heavier, less power, a lower top speed. `length`, `width` and `height` can be spread in too; the wheel
@@ -222,30 +234,36 @@ const van = new VehicleController({ ...ROAD_CAR_SPEC, mass: 2200, motorPower: 90
 <!-- from: samples/starter-drive/main.js#drive-car -->
 ```js
 const car = new VehicleController(SPEC);
-const START = new THREE.Vector3(0, 0, 0);
+const START = new THREE.Vector3(1.75, 0, 0); // the middle of the right-hand lane
 car.reset(START, 0, physics); // heading 0 faces -Z (down the road)
 ```
 
-`body` is the Group you draw (boxes in the starter, a GLB in a real game). The controls object is what `car.step()`
-reads; `state` is what the chase rig reads (`ChaseTargetState`):
+`body` is what you draw: `visual.root` in the starter (`const body = visual.root; scene.add(body)`), or your own GLB
+in a Group that faces -Z. The controls object is what `car.step()` reads; `state` is what the chase rig reads
+(`ChaseTargetState`). `feel: 'road'` reads `state.accel` (the controller's `localAccel`); leave it out for the plain
+follow:
 
 <!-- from: samples/starter-drive/main.js#drive-controls -->
 ```js
-const input = new VehicleInput(renderer.domElement, { touch: 'auto' });
+const input = new VehicleInput(renderer.domElement, { touch: 'auto', assist: true }); // assist: lock at the grip limit, catches slides
 const controls = { throttle: 0, brake: 0, steer: 0, handbrake: false }; // what car.step() reads
-const state = { velocity: car.velocity, speedKmh: 0, grounded: true, wheelSlip: 0 };
-const rig = new ChaseRig(camera, renderer.domElement, { physics, canopyFromCollider: null, thinKinds: ['post'], flightFraming: false });
+const state = { velocity: car.velocity, speedKmh: 0, grounded: true, wheelSlip: 0, accel: car.localAccel };
+const tyres = new TyreFx({ scene, atmosphere, lift: 0.04 }); // skid marks + thin smoke from wheels[i].slideHeat
+// feel: 'road': the camera eases back under acceleration, closes in under braking and leans out in corners
+const rig = new ChaseRig(camera, renderer.domElement, { physics, canopyFromCollider: null, thinKinds: ['post'], flightFraming: false, feel: 'road' });
 rig.setTarget(body, () => state);
 ```
 
-The loop (`smooth = new PoseInterpolator(car)`, `wheels` are the four wheel meshes):
+The loop (`smooth = new PoseInterpolator(car)`; `reset()` puts the car back on the line, snaps `smooth` and the rig
+and clears the tyre marks; `sfx` is the SoundBank in "Car sounds"). `rig.addTrauma(x)` shakes any rig; place the body
+before `visual.update`:
 
 <!-- from: samples/starter-drive/main.js#drive-input -->
 ```js
 earlyUpdate(dt) {
-  input.update(dt);
+  input.update(dt, car); // with the car: steer comes out assisted (input.assist.enabled toggles it)
   controls.throttle = input.throttle; controls.brake = input.brake; controls.steer = input.steer; controls.handbrake = input.handbrake;
-  if (input.reset) { car.reset(START, 0, physics); smooth.snap(); rig.snap(); } // back to the start
+  if (input.reset) reset(); // back to the start, marks cleared
   if (input.toggleCamera) rig.cycleMode();
 },
 ```
@@ -255,6 +273,10 @@ earlyUpdate(dt) {
 fixedUpdate(dt) {
   smooth.save(); // before the step: the pose PoseInterpolator blends from
   car.step(dt, controls, physics);
+  hitCool -= dt; // a hit (car.impact, m/s into a post or the ground): a thud and a short camera shake
+  if (car.impact > 3 && hitCool <= 0) {
+    sfx.play('impact.thud', { at: body, gain: Math.min(1, car.impact / 12) }); rig.addTrauma(Math.min(0.6, car.impact / 15)); hitCool = 0.25;
+  }
 },
 ```
 
@@ -262,10 +284,8 @@ fixedUpdate(dt) {
 ```js
 update(dt, alpha) {
   smooth.apply(body, alpha);
-  for (let i = 0; i < 4; i++) { // roll the wheels, steer the front pair
-    wheels[i].rotation.x -= (car.forwardSpeed * dt) / SPEC.wheelRadius;
-    if (i < 2) wheels[i].rotation.y = car.steerAngle;
-  }
+  visual.update(dt, car, { darkness: atmosphere.darkness }); // wheels roll, steer and ride; brake / reverse / head lamps
+  tyres.update(dt, car, body);
   state.speedKmh = car.speed * 3.6; state.grounded = car.grounded; state.wheelSlip = car.wheelSlip;
   rig.update(dt);
 },
@@ -354,6 +374,34 @@ engine.addSystem({
 }, 'get-in-out');
 ```
 
+## Steering assist, skid marks and smoke
+
+On a keyboard, full lock at speed overshoots the front tyres' grip and a slide is hard to catch. The steering assist
+(`VehicleInput` option `assist: true`, input) holds the lock at the tyres' grip limit and self-steers toward the
+direction of travel when the rear steps out; it only runs when the car is passed in, `input.update(dt, car)`.
+`TyreFx` (render) lays skid marks and thin smoke only where a tyre slides (from `wheels[i].slideHeat`): a clean fast
+corner leaves nothing, a handbrake turn leaves dark marks. Both are in the "Drive a car" blocks above: the `input` and
+`tyres` lines, `input.update(dt, car)`, `tyres.update(dt, car, body)` after the body is placed, `tyres.clear()` in
+`reset()`. `lift: 0.04` because the starter's road plane sits 2 cm above the physics ground; leave it out when the
+visible ground is the physics ground. A pause-menu switch is `input.assist.enabled = on` (the starter's `GameShell`
+toggle, "Loading, a start screen and pause"). Budget: `new TyreFx({ budget: { marks: 600, smoke: 120 } })` on the
+mobile tier; one draw call each for marks and smoke.
+
+## Weathered walls and props
+
+`weathering()` (render) is a material patch: world-space breakup with no UVs and no textures, so a flat wall or a
+clean prop stops looking new. Grime rises from y = 0, or from each object's origin with `ground: 'origin'`.
+
+<!-- from: test/howto/recipes.js#weathering -->
+```js
+applyPatches(wallMat, [weathering({ grime: 0.4, streaks: 0.35 })]);         // a wall standing on y = 0
+applyPatches(postMat, [weathering({ ground: 'origin', streaks: 0, seed: 3 })]); // props: grime from each one's own base
+```
+
+The defaults are restrained (`WEATHERING_DEFAULTS`); `fade` and `chips` are off unless you set them. It costs a few
+noise lookups per pixel of the patched material. Walls that already have their own grime (a facade shader) do not
+need it; a custom shader can include `GLSL_WEATHERING` and call `wxWeather` itself.
+
 ## Smooth rendering between fixed steps
 
 Physics steps at 120 Hz, frames come at the display's rate. Draw a simulated body at the blend of its last two steps,
@@ -392,11 +440,13 @@ Per frame, after the camera moved (in `lateUpdate`):
 
 <!-- from: samples/starter-walk/main.js#lamp-update -->
 ```js
-lamps.update(dt, { position: camera.position }, 8); // PointLight intensity: ~8 for a garden lamp at 12 m reach
+lamps.update(dt, { position: camera.position }, 12); // PointLight intensity: 8-12 for a garden lamp at 12 m reach
 ```
 
-Intensity is three.js `PointLight` intensity. The demos use about 7.5 to 8 for garden lamps (reach 9 to 12 m, decay
-1.5) and up to 260 for city street lamps (reach 48 m, decay 2, 6 m up). At 1 a lamp is invisible at dusk. Keep the
+Intensity is three.js `PointLight` intensity. Garden lamps take about 8 to 12 (reach 9 to 12 m, decay 1.5): about 8 over pale
+ground, the walk starter 12 because its pool falls on dark gravel and bare earth. A lamp's glass
+needs an emissive intensity of about 8 to glow (the dusk bloom threshold); at 1.6 it reads as switched off. City street
+lamps take up to 260 (reach 48 m, decay 2, 6 m up). At 1 a lamp is invisible at dusk. Keep the
 pool at 8 or fewer: every real light costs on every lit pixel. For more lamps, use clustered lights.
 
 ## Clustered lights
@@ -421,7 +471,11 @@ engine.addSystem({ lateUpdate() { cl.update(camera); } }, 'lights'); // 5. per f
 
 Clustered lights cast no shadows. `NearestLights` can feed them instead of a pool:
 `new NearestLights({ mode: 'clustered', clustered: cl, ... })`. `MapWorld` does all of this itself with its
-`lights: { clustered: true }` option.
+`lights: { clustered: true }` option. For street lamps that lay round pools and leave their own pole dark, make them
+downward spots with a near shield: `spot: { cosInner: 0.82, cosOuter: 0.12, near: 5 }` (the light fades in over the
+first 5 m below the head). Directly, that is `cl.setSpot(i, x, y, z, range, r, g, b, decay, 0, -1, 0, cosInner,
+cosOuter, near)`; `near` is in metres (0.25 m steps, default 0 = off) and is packed into the decay, so a shielded
+spot's decay must stay below 8.
 
 Every game needs the tier switch: the desktop tier has `S.lights.clustered === true`, the mobile tier `false`. On
 mobile a `NearestLights` pool puts real lights on the four lamps nearest the camera (same reach and
@@ -452,7 +506,7 @@ at z = -length / 2). `SPEC` is the car's spec, `cl` the page's `ClusteredLights`
 the first free light index (the lamp count). One way per tier:
 
 - Desktop: two clustered spot entries, `cl.setSpot(index, x, y, z, range, r, g, b, decay, dx, dy, dz, cosInner,
-  cosOuter)`, recomputed every frame from the body's matrix (the list is in world space; it does not follow a parent).
+  cosOuter, near = 0)`, recomputed every frame from the body's matrix (the list is in world space; it does not follow a parent).
   The Miami demo's values: reach 60 m, colour × intensity 90, decay 2, cone from cos(0.32) to cos(0.5), aimed 6 % down.
 - Mobile: one three.js `SpotLight` between the lamps, a child of the body (every real light costs on every lit pixel,
   so one for the pair). Add its `target` to the body too: a target outside the scene graph never moves, and the beam
@@ -500,7 +554,7 @@ folder name (`leafy_grass`) or the manifest's role key (`grass`).
 const texBase = `${BASE}nyc/textures/`;
 const grass = await loadTextureSet('leafy_grass', { renderer, base: texBase, manifest: await loadTextureManifest(texBase) });
 if (grass) {
-  for (const t of [grass.map, grass.normalMap, grass.roughnessMap]) if (t) t.repeat.set(80 / grass.size, 80 / grass.size); // size: metres per tile
+  for (const t of [grass.map, grass.normalMap, grass.roughnessMap]) if (t) t.repeat.set(6000 / grass.size, 6000 / grass.size); // size: metres per tile
   Object.assign(ground.material, { map: grass.map, normalMap: grass.normalMap, roughnessMap: grass.roughnessMap, color: new THREE.Color(0xffffff) });
 }
 ```
@@ -510,28 +564,59 @@ Sets with `.ktx2` files (`samples/public/miami/road/`) also need the Basis trans
 
 ## HUD text
 
-`UILayer`, `Panel`, `Readout`, `QualityMenu` (ui):
+`UILayer`, `Panel`, `Readout` (ui); a page without a `GameShell` adds `new QualityMenu({ quality: Q })` for the tiers:
 
 <!-- from: samples/starter-walk/main.js#hud -->
 ```js
 const panel = new Panel({ parent: new UILayer(), corner: 'tl' });
 const distance = panel.add(new Readout({ label: 'WALKED', value: '0', unit: 'm' }));
-new QualityMenu({ quality: Q, corner: 'tr' });
 ```
 
 Update it per frame with `distance.set(walked.toFixed(0))`.
 
+## Loading, a start screen and pause
+
+`GameShell` (ui) gives a game a loading bar, a start card over the blurred scene, and pause with volume and quality,
+all saved in localStorage. Build it first, at the top of the module, so the bar shows while the rest loads and a boot
+error can reach it:
+
+<!-- from: samples/starter-walk/main.js#game-shell -->
+```js
+const shell = new GameShell({ title: 'Starter Walk', quality: Q, storageKey: 'starter-walk',
+  controls: [['W A S D', 'Walk'], ['Right-drag', 'Look'], ['Space', 'Jump'], ['Shift', 'Run']] });
+```
+
+Then, as in the starters: `shell.setProgress(p, label)` around the loads (`engine.load((p, label) =>
+shell.setProgress(0.3 + 0.6 * p, label))`), `shell.use({ engine, audio, inputs: [input] })` once they exist (the start
+click calls `audio.start()`, so no `unlockOnGesture()`), and `await shell.ready()` at the end of `boot()`, before the
+page contract: it warms up under the loading bar and starts the loop ("Start without a stall"), so do not call
+`engine.start()` yourself; it does not wait for the click. A boot error goes on the loading screen with
+`boot().catch((e) => shell.error(e.message))`. A game setting in the pause card: `shell.addToggle('assist', 'Steering
+assist')` and `shell.settings.on('assist', (on) => { input.assist.enabled = !!on; })`, which runs at once with the saved
+value. Esc or P pauses (`engine.clock` stops, the loop keeps drawing, the bus fades out), and so does the round pause
+button at the top right (`pauseCorner`), shown on every device while playing so the settings are always one click
+away (`pauseButton: 'auto'` keeps it to touch screens); `shell.onPause((paused) =>
+...)` to react, `shell.onStart(fn)` to start the run. The touch sticks hide while a card is up. Load the page with
+`?autostart=1` to skip the card in tests that press keys.
+
 ## Play a sound
 
-`AudioBus`, `playTone` (audio). Browsers start audio only after a click or key press; `unlockOnGesture()` waits for
-the first one, and until then `audio.started` is false and `audio.bus(name)` is null. Buses: `engine`, `effects`,
-`ambience`, `ui`.
+`AudioBus`, `SoundBank`, `Footsteps` (audio). Browsers start audio only after a click or key press; a `GameShell`
+start click starts the bus (without a shell, `audio.unlockOnGesture()` waits for the first gesture). `master: 'safe'`
+adds a compressor and a soft clipper so nothing clips. `SoundBank` plays the kit's named sounds (`SOUND_PRESETS`,
+listed and measured on `samples/sound-check/`); before the gesture `play` returns an inert voice and `loop` waits for
+the start. Footsteps take the character controller's fields each fixed step (`howto:walk-step`), and `sfx.update(dt)`
+per frame moves the listener with the camera. Buses: `engine`, `effects`, `ambience`, `ui`; `playTone(audio.ctx,
+audio.bus('ui'), { pitch, peak, decay })` is a one-off synth tone.
 
 <!-- from: samples/starter-walk/main.js#sound -->
 ```js
-const audio = new AudioBus({ volume: 0.7 });
-audio.unlockOnGesture();
-const hop = () => { if (audio.started) playTone(audio.ctx, audio.bus('ui'), { type: 'triangle', pitch: [[0, 660], [0.08, 990]], peak: 0.2, decay: 0.2 }); };
+const audio = new AudioBus({ master: 'safe', volume: 0.7 }); // compressor + soft clipper: nothing can clip
+const sfx = new SoundBank(audio, { listener: camera });        // the named sounds (SOUND_PRESETS)
+const steps = new Footsteps(sfx, { surface: 'grass', at: player, gain: 2.4 }); // gain: footfalls and landings over the bed
+sfx.loop('amb.dusk', { gain: 0.1 });                           // a quiet dusk bed
+sfx.loop('lamp.hum', { at: lampAt, gain: 0.2 });               // the lamp hums when you are near it
+shell.use({ engine, audio, inputs: [input] }); // the start click calls audio.start(); pause mutes, Esc / P pause
 ```
 
 ## Vehicle sound
@@ -555,6 +640,36 @@ engine.addSystem({
 ```
 
 The Miami demo's straight-six is its own synth (`samples/miami-drive/audio.js`), not the engine's.
+
+## Car sounds
+
+The starter's car: `VehicleAudio` for the motor (with `wind: false, tyres: false`, since the kit's loops do those) and
+three `SoundBank` loops whose gain and rate follow the car. The impact thud is in "Drive a car" (`drive-step`).
+
+<!-- from: samples/starter-drive/main.js#drive-sound -->
+```js
+// ---- sound: the safe mixer (compressor + soft clipper), the motor (VehicleAudio), road roar, wind and squeal loops
+const audio = new AudioBus({ master: 'safe', volume: 0.7 });
+audio.setBusVolume('engine', 0.35);
+const motor = new VehicleAudio({ bus: audio, ambience: false, topSpeed: 200 / 3.6, wind: false, tyres: false });
+const sfx = new SoundBank(audio, { listener: camera }); // the named sounds (SOUND_PRESETS); loops start with the bus
+const roar = sfx.loop('road.roar', { gain: 0 }), wind = sfx.loop('wind.rush', { gain: 0 }), squeal = sfx.loop('tyre.squeal', { gain: 0 });
+```
+
+Per frame:
+
+<!-- from: samples/starter-drive/main.js#drive-sound-update -->
+```js
+// car sounds from the car's state: motor by speed and throttle, roar and wind by speed, squeal by wheel slip
+const v = car.speed, w = Math.min(v / 55, 1), slide = Math.min(Math.max((car.wheelSlip - 0.15) * 1.4, 0), 1) * Math.min(v / 6, 1);
+motor.update(dt, { speedKmh: v * 3.6, rpmLike: controls.throttle, grounded: car.grounded });
+roar.setGain(car.grounded ? 0.22 * Math.min(v / 30, 1) : 0).setRate(0.8 + 0.6 * Math.min(v / 50, 1));
+wind.setGain(0.3 * w * w).setRate(0.9 + 0.3 * w);
+squeal.setGain(car.grounded ? 0.22 * slide : 0).setRate(0.96 + 0.08 * slide);
+sfx.update(dt);
+```
+
+These gains are the ones `samples/sound-check/`'s measured ten-second scene uses, so the measured mix is this mix.
 
 ## GPU particles
 
@@ -605,14 +720,18 @@ drive's roadside posts are the same `addStaticBox` calls:
 
 <!-- from: samples/starter-drive/main.js#static-posts -->
 ```js
-const postMat = new THREE.MeshStandardMaterial({ color: 0xd8d2c4, roughness: 0.7 });
-for (let z = 80; z > -900; z -= 40) {
-  for (const x of [-ROAD_W / 2 - 1, ROAD_W / 2 + 1]) {
-    const p = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.2, 0.3), postMat);
-    p.position.set(x, 0.6, z); p.castShadow = true; scene.add(p);
-    physics.addStaticBox({ center: [x, 0.6, z], size: [0.3, 1.2, 0.3], kind: 'post' });
-  }
-}
+const postGeo = new THREE.CylinderGeometry(0.09, 0.11, 1.1, 12), bandGeo = new THREE.CylinderGeometry(0.115, 0.115, 0.14, 12);
+const at = [];
+for (let z = -120; z > -900; z -= 40) for (const x of [-ROAD_W / 2 - 1, ROAD_W / 2 + 1]) at.push([x, z]);
+const posts = new THREE.InstancedMesh(postGeo, new THREE.MeshStandardMaterial({ color: 0x9c9890, roughness: 0.85 }), at.length);
+const bands = new THREE.InstancedMesh(bandGeo, new THREE.MeshStandardMaterial({ color: 0x1b1c1e, roughness: 0.5 }), at.length);
+const m = new THREE.Matrix4();
+at.forEach(([x, z], i) => {
+  posts.setMatrixAt(i, m.makeTranslation(x, 0.55, z)); bands.setMatrixAt(i, m.makeTranslation(x, 0.9, z));
+  physics.addStaticBox({ center: [x, 0.55, z], size: [0.22, 1.1, 0.22], kind: 'post' });
+});
+posts.castShadow = bands.castShadow = true;
+scene.add(posts, bands);
 ```
 
 ## A small track without the world layer
@@ -651,7 +770,7 @@ browser tests can tell when it is ready:
 
 <!-- from: samples/starter-walk/main.js#page-contract -->
 ```js
-window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-walk', quality: Q }), { cc, anim }).setReady();
+window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-walk', quality: Q }), { cc, anim, shell, audio }).setReady();
 ```
 
 `quality: Q` (optional) puts the resolved tier on the harness (`window.__sample.quality`) for the tests.
@@ -677,7 +796,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const errors = watchErrors(page);                   // console errors + page errors
   const path = await resolvePage(vite, id);
-  const session = await loadSample(page, vite.base + path, errors); // waits for window.__sample.ready
+  const session = await loadSample(page, vite.base + path + '?autostart=1', errors); // waits for __sample.ready; autostart: no start card
   await page.keyboard.down('KeyW'); await page.waitForTimeout(2000); await page.keyboard.up('KeyW');
   const draws = await page.evaluate(() => window.__sample.info().drawCalls);
   ok = session.status === 'ready' && errors.length === 0;

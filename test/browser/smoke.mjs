@@ -5,12 +5,12 @@
 // may still adapt), two converged(48) captures must hash equal and leave the held capture as it was (pages with a
 // converge hook, src/core/Bench.js), and info() is recorded. Every page step runs under a 90 s watchdog; a page that
 // reloads after it was ready is waited out and the pose redone once. A page without a harness (it loads and sets a
-// legacy global such as window.__game, the Halloween game's play-mode state: under ?bench=1 it builds its world and
-// exposes the harness) or without a page on this server is SKIPPED, not failed: it still fails on a console error while
+// legacy global such as window.__game, the play-mode state of the retired Halloween game: under ?bench=1 a page builds
+// its world and exposes the harness) or without a page on this server is SKIPPED, not failed: it still fails on a console error while
 // loading. On macOS a SwiftShader renderer (no GPU) fails. Exit code 1 on any failure. The `-mobile` pages are the same
 // sample on the mobile quality tier (`?quality=mobile`, core/Quality.js).
 //
-//   node test/browser/smoke.mjs                        # nyc-night, miami-drive, halloween, the starters, their -mobile variants, assets
+//   node test/browser/smoke.mjs                        # nyc-night, miami-drive, the starters, their -mobile variants, assets, sound-check
 //   node test/browser/smoke.mjs nyc-night --headed --size=1600x900 [--config=other.vite.config.js] [--no-look]
 import {
   defaultSize, repoRoot, legacyGlobals, readyTimeoutMs, parseArgs, parseSize, startVite, resolvePage, launchChrome,
@@ -21,13 +21,12 @@ import {
 const PAGE_QUERY = {
   'nyc-night': 'quality=desktop', 'nyc-night-mobile': 'quality=mobile',
   'miami-drive': 'quality=desktop', 'miami-drive-mobile': 'quality=mobile',
-  halloween: 'quality=desktop', 'halloween-mobile': 'quality=mobile',
   'starter-walk': 'quality=desktop', 'starter-walk-mobile': 'quality=mobile',
   'starter-drive': 'quality=desktop', 'starter-drive-mobile': 'quality=mobile',
 };
 // pages that are another page with a different query, and the poses they run (default: all)
 const PAGE_PATH = {
-  'nyc-night-mobile': 'nyc-night', 'miami-drive-mobile': 'miami-drive', 'halloween-mobile': 'halloween',
+  'nyc-night-mobile': 'nyc-night', 'miami-drive-mobile': 'miami-drive',
   'starter-walk-mobile': 'starter-walk', 'starter-drive-mobile': 'starter-drive',
 };
 const PAGE_POSES = {};
@@ -42,8 +41,6 @@ const PAGE_CHECK = {};
 const WARM = ['red', 'orange', 'yellow', 'rose'];
 const LOW_KEY = { lumMean: [26, 50], under40: [50, 100], over160: [0, 0.6], over240: [0, 0.05], satMean: [0.2, 0.44], palette: WARM, off: 3 };
 const PAGE_LOOK = {
-  // Midnight Candy Run's remaster: a moonlit blue-grey-violet night, the lanterns and windows its only warm colour
-  halloween: { default: { lumMean: [24, 48], under40: [50, 100], over160: [0, 1.5], over240: [0, 0.1], satMean: [0, 0.48], palette: ['blue', 'azure', 'violet', 'red', 'orange', 'yellow'], off: 4 } },
   'miami-drive': { default: LOW_KEY, strip: { lumMean: [26, 60], under40: [40, 100], over160: [0, 2], over240: [0, 0.1], satMean: [0.2, 0.46], palette: WARM, off: 8 } },
   'nyc-night': {
     default: { lumMean: [22, 48], under40: [50, 100], over160: [0, 1.5], over240: [0, 0.1], satMean: [0.15, 0.42], palette: WARM, off: 6 },
@@ -66,11 +63,13 @@ const STEP_MS = 90000;
 
 const args = parseArgs();
 const pages = args._.length ? args._ : args.pages ? String(args.pages).split(',') : [
-  'nyc-night', 'nyc-night-mobile', 'miami-drive', 'miami-drive-mobile', 'halloween', 'halloween-mobile',
+  'nyc-night', 'nyc-night-mobile', 'miami-drive', 'miami-drive-mobile',
   // the starters (samples/starter-*): no poses, so they are checked for booting clean and drawing something
   'starter-walk', 'starter-walk-mobile', 'starter-drive', 'starter-drive-mobile',
   // the Asset library page
   'assets',
+  // the sound kit page: its selfTest() renders the ten-second scene offline and checks the mix limits
+  'sound-check',
 ];
 const size = parseSize(args.size || defaultSize);
 const headless = !args.headed;

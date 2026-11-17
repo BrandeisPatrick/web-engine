@@ -23,13 +23,13 @@ Order: core < physics < render < anim / input / camera / audio / ui < world. Low
 |---|---|---|
 | core | `@vibe/engine/core` | `Engine` (renderer, scene, camera, fixed-step loop, systems, resize, adaptive pixel ratio), `Profiler`, `ProfilerOverlay`, `Events`, `Clock`, `Entity` / `EntitySystem`, `Assets`, `MathDet` and the `det*` functions, `PoseInterpolator` (render interpolation), quality tiers (`resolveQuality`, `QUALITY_TIERS`, `defineTier`), the bench harness (`createBenchHarness`, `readBenchParams`) |
 | physics | `@vibe/engine/physics` | `PhysicsWorld` (query hub), `VehicleController` + `ROAD_CAR_SPEC` / `ROADSTER_SPEC`, `CharacterController`, `DynamicsWorld` (XPBD rigid bodies, joints, particles), `Cloth`, `Rope`, `SoftBody`, `Buoyancy`, `FracturedBody`, `DynamicsClient` (worker), the shape builders (`boxShape`, `sphereShape`, `capsuleShape`, ...) |
-| render | `@vibe/engine/render` | `Atmosphere`, `PostFX` and its passes, `GBuffer`, `ClusteredLights`, `NearestLights`, `GpuParticleSystem`, `ParticleSystem`, `TextureSets` / `loadTextureSet`, `registerRenderLoaders`, `InstancedPool`, `LODGroup`, impostors (`bakeImpostors`, `ImpostorBatch`), `DecalTrail`, `ChunkCuller`, `PhysicsDebug`, `ClothMesh` / `RopeMesh` / `SoftBodyMesh`, `FractureMesh`, LUT helpers |
+| render | `@vibe/engine/render` | `Atmosphere`, `PostFX` and its passes, `GBuffer`, `ClusteredLights`, `NearestLights`, `GpuParticleSystem`, `ParticleSystem`, `TextureSets` / `loadTextureSet`, `registerRenderLoaders`, `InstancedPool`, `LODGroup`, impostors (`bakeImpostors`, `ImpostorBatch`), `DecalTrail`, `TyreFx`, `ChunkCuller`, `PhysicsDebug`, `ClothMesh` / `RopeMesh` / `SoftBodyMesh`, `FractureMesh`, LUT helpers |
 | anim | `@vibe/engine/anim` | `AnimationController`, `TwoBoneIK`, `CCDIK`, `Ragdoll` |
-| input | `@vibe/engine/input` | `InputMap`, `CharacterInput`, `VehicleInput`, `TouchControls`, `PointerLock`, `GamepadState`, the action presets (`CHARACTER_ACTIONS`, `VEHICLE_ACTIONS`) |
-| camera | `@vibe/engine/camera` | `CameraRig`, `CameraCollision`, `ChaseRig`, `OrbitRig`, `FreeFlyRig`, `ThirdPersonRig`, `FirstPersonRig` |
-| audio | `@vibe/engine/audio` | `AudioBus`, the synth voices (`playTone`, `playNoiseBurst`, `OscStack`, `NoiseVoice`, ...), `PositionalAudio`, `SamplePlayer`, `registerAudioLoader`, `VehicleAudio`, `CityAmbience` |
-| ui | `@vibe/engine/ui` | `UILayer`, `Panel`, `Readout`, `Gauge`, `Bar`, `Badge`, `Segments`, `Minimap`, `Flash`, `GMeter`, `AttitudeIndicator`, `HelpOverlay`, `LoadingScreen`, `QualityMenu`, the theme (`setTheme`, `theme`) |
-| world | `@vibe/engine/world` | `MapWorld` and its systems (terrain, roads, buildings, props, vegetation, water, traffic), `TileStreamer`; `NearestLights` is re-exported from render |
+| input | `@vibe/engine/input` | `InputMap`, `CharacterInput`, `VehicleInput`, `SteeringAssist`, `VehicleHaptics`, `TouchControls`, `PointerLock`, `GamepadState`, the action presets (`CHARACTER_ACTIONS`, `VEHICLE_ACTIONS`) |
+| camera | `@vibe/engine/camera` | `CameraRig`, `CameraCollision`, `ChaseRig`, `OrbitRig`, `FreeFlyRig`, `ThirdPersonRig`, `FirstPersonRig`, `ROAD_FEEL`, `LandingSpring`, `SprintFov` |
+| audio | `@vibe/engine/audio` | `AudioBus`, the synth voices (`playTone`, `playNoiseBurst`, `OscStack`, `NoiseVoice`, ...), `PositionalAudio`, `SamplePlayer`, `registerAudioLoader`, `VehicleAudio`, `CityAmbience`, the sound kit: `SoundBank` (named sounds, voice policy), `SOUND_PRESETS` (18), `Footsteps`, `VoicePool`, `audioSelfTest` / `analyseMix` / `MIX_LIMITS`, `encodeWav`, the `dsp` namespace; `AudioBus({ master: 'safe' })`, `SAFE_MASTER` |
+| ui | `@vibe/engine/ui` | `UILayer`, `Panel`, `Readout`, `Gauge`, `Bar`, `Badge`, `Segments`, `Minimap`, `Flash`, `GMeter`, `AttitudeIndicator`, `HelpOverlay`, `LoadingScreen`, `QualityMenu`, `GameShell`, `createSettings`, the theme (`setTheme`, `theme`) |
+| world | `@vibe/engine/world` | `MapWorld` and its systems (terrain, roads, buildings, props, vegetation, water, traffic), `TileStreamer`, `createCarVisual` / `carSpecFor`, `countryRoad` / `parkCorner` / `groundCover` (Scenery); `NearestLights` is re-exported from render |
 
 ## Conventions to know first
 
@@ -95,7 +95,8 @@ engine.start();
   lit material). `systems: false` draws `renderFn` only: the demos use it under `?bench=1`, where the poses' state must
   stay as loaded. Resolves `{ frames, ms, compileMs, fence: 'signaled' | 'timeout' | 'none' | 'lost', lost }`; a lost
   context resolves (`lost: true`), an error thrown by a frame rejects. The usual end of `boot()`:
-  `loading.setLabel('Compiling shaders…'); await engine.warmUp(); engine.start(); loading.hide();`.
+  `loading.setLabel('Compiling shaders…'); await engine.warmUp(); engine.start(); loading.hide();`; with a `GameShell`
+  (ui; the starters) `await shell.ready()` does all of it under the shell's loading bar (see "Core services").
 - Lost WebGL context (phones drop it when GPU memory runs short): on `webglcontextlost` the loop stops,
   `engine.contextLost` is true, the loss is recorded for the browser session (`recordContextLoss`, see "Quality
   tiers") and `engine.onContextLost(event)` runs. The default, `engine.showContextLost()`, shows "The graphics were
@@ -195,7 +196,7 @@ recommendation, each loss steps the next `resolveQuality()` down one rung: deskt
 mobile) goes straight to the cap. `?quality=` and a stored choice are never changed. The result then has
 `lighter: true`, `contextLosses` (the count) and a `reason` ending in `'; lighter after a graphics reset'`
 (`recommended` stays what the device would get). A game whose Engine does not spread `settings.engine` applies
-`settings.engine.maxPixelRatio` itself (the Halloween demo does).
+`settings.engine.maxPixelRatio` itself.
 
 ### Bench harness and the page contract
 
@@ -344,12 +345,21 @@ within one JS engine only.
 package. For an ordinary car use `ROAD_CAR_SPEC` (1350 kg, 4.3 x 1.8 x 1.45 m, about 110 kW rear drive, `vMax` 56 m/s,
 `flight: false`: no thrusters, `mode` always `'ground'`), and tune it by spreading: `{ ...ROAD_CAR_SPEC, motorPower:
 200e3, vMax: 70 }`. The full field list with comments is `ROADSTER_SPEC` in the source; the type is `VehicleSpec`.
-`samples/starter-drive/main.js` drives `ROAD_CAR_SPEC`; `samples/miami-drive/spec.js` is the Miami demo's own spec,
+`samples/starter-drive/main.js` drives `createCarVisual('hatchback').spec`, `ROAD_CAR_SPEC` resized to the body; `samples/miami-drive/spec.js` is the Miami demo's own spec,
 checked by `test/miami-car.mjs`. Per fixed step: `vc.step(dt, controls, world)` with a controls object
 `{ throttle, brake, steer, handbrake, thrust, pitch, yaw, boost }` and a `PhysicsWorld`; `VehicleInput` outputs those
 values as fields and the game copies them in once per frame (`samples/starter-drive/main.js`); `vc.reset(position, heading,
 world)` places it; `vc.hold = true` freezes it on the ground (countdowns) and `reset()` leaves it set.
 `PhysicsWorld.setSurfaceProvider(fn)` / `surfaceAt(x, z, out)` give per-wheel `{ mu, crr, tag }` multipliers.
+Tyre outputs, written by each grounded step and 0 in the air (they change nothing in the simulation): `steerLimit`
+(rad, the speed-sensitive lock the step allowed: `|steerAngle|` at full input), `slipFront` / `slipRear` (rad, the
+axle's signed slip angle), `slipPeakFront` / `slipPeakRear` (rad, the slip angle of peak grip, `tan(pi / 2C) / B`,
+fixed by the spec) and `wheels[i].slideHeat` (kW: load x sliding speed once a tyre is past 1.1 x its peak slip, x4
+for a handbrake-locked rear wheel; 0 while it grips). `TyreFx` (render) turns `slideHeat` into skid marks (from
+12 kW) and thin smoke (from 25 kW) on one `DecalTrail` and one `ParticleSystem`: `new TyreFx({ scene, atmosphere,
+budget: { marks, smoke, rate }, lift })`, per frame `tyres.update(dt, car, body)`, `tyres.clear()` on a reset. A clean
+corner leaves nothing; ABS and the drive-force cap mean straight braking and launches never mark either. The smoke
+puffs rise about as fast as they grow, so the road does not cut them with a hard edge (there are no soft particles).
 The suspension and contact model:
 
 - Each wheel hangs from an attach point at the top of its travel along body-down and sits on its support within
@@ -426,17 +436,48 @@ surface above.
   (default 8) on the lamps nearest the view, or, with `mode: 'clustered'` and a `ClusteredLights` instance, pushes
   every lamp in range into the clustered list. `MapWorld` does this for its street lamps (its `lights: { clustered:
   true }` option); a game without `MapWorld` creates the `NearestLights` / `ClusteredLights` itself. Intensities are
-  three's `PointLight` units (linear colour x intensity): about 8 for a garden lamp (reach 12 m, decay 1.5), up to 260
+  three's `PointLight` units (linear colour x intensity): 8 to 12 for a garden lamp (reach 12 m, decay 1.5), up to 260
   for a city street lamp (reach 48 m, decay 2); at 1 a lamp is invisible at dusk. The clustered wiring without
   `MapWorld` is five calls: [docs/HOWTO.md, "Clustered lights"](docs/HOWTO.md#clustered-lights).
+- Look options (all off by default; the picture is unchanged without them):
+  - `new Atmosphere({ cloudStyle: 'lit' })`: a soft cloud deck shaded by its relief toward the sun, warm undersides,
+    a rim near the sun, domain-warped, three octaves ('classic' keeps the two-octave puffs).
+  - `twilightKey: true | { intensity, elevation, color, fadeIn, fadeOut, scatter }` (`DEFAULT_TWILIGHT_KEY`): from just
+    before sunset until the sun is 9 degrees under, the shadow-casting light comes from the afterglow, low and warm,
+    so a dusk scene keeps one key direction, rims and shadows.
+  - `lowSunEnv: true | { intensity, warm, below }` (`DEFAULT_LOW_SUN_ENV`): at low sun the environment light rises
+    and its horizon toward the sun warms (warm fill on sun-facing surfaces, cool sky fill on the rest).
+  - `PostFX({ look: { aoLit, aoTint, lift } })`: `aoLit` (0..1) keeps AO on the ambient only (pixels a light reaches
+    lose it), `aoTint` colours what AO leaves (e.g. `[0, 0.03, 0.07]`), `lift` raises the floor black to a colour
+    after the contrast curve (e.g. `[0.006, 0.0085, 0.011]`, about a third of it in a low-key look). Each adds its
+    block to the final pass only while it is on; `postfx.set('look.aoLit', v)` at runtime.
+  - `NearestLights({ mode: 'clustered', spot: { cosInner, cosOuter, near } })`: each lamp is a spot aimed straight
+    down, a round soft-edged pool on the ground that leaves the wall above its head dark. `near` (m, default 0 = off)
+    is a shield at the head: the light fades in over its first `near` m below it, so the lamp's own pole and the wall
+    at head height stay unlit (nyc-night uses 5 m). It is `ClusteredLights.setSpot(..., cosInner, cosOuter, near)`
+    underneath: quantised to 0.25 m and packed into the decay (stored as decay + 8 x round(near x 4)), so a spot with
+    a shield must have a decay below 8 (a larger decay ignores `near`).
+  - `weathering(options)` (`src/render/MaterialPatches.js`): a material patch for `applyPatches` that breaks up
+    walls and props in world space (no UVs, no textures): macro value / hue / roughness variation, grime rising from
+    the ground (`ground: 'origin'` for props), rain streaks, dust on ledges, optional sun fading and chips.
+    `GLSL_WEATHERING` is the same as a library for custom shaders, `bakeWeathering` bakes it into vertex colours and
+    `weatheringAt` is the CPU twin. Recipe: [docs/HOWTO.md, "Weathered walls and props"](docs/HOWTO.md#weathered-walls-and-props).
+  - World: `applyFoliageLighting(material, opts)` / `applyFoliageLightingTo(root, opts, filter)` and
+    `buildTreeMeshes(..., { foliageLight })` light leaves as foliage (wrap, light through the leaves, rim, more sky);
+    `enableFacadeDetail(createFacadeMaterials(...), opts)` gives facade windows dim rooms, street spill, panes that
+    differ, roller shades and weathered curtain walls.
+- The demos turn these on in their default look, which stays inside the look gate in `test/browser/smoke.mjs`
+  (low key: dark mean, nothing clipped, one warm hue family). Each also has `?look=open` (nyc-night, miami-drive):
+  a brighter, two-temperature grade of the same scene (more exposure, cooler shade against warm lamps,
+  a small lifted black) that the gate does not check, there to compare against and to start a brighter game from.
 - Moonlit scattering (opt-in, `new Atmosphere({ moonScatter: amount })`, default 0 = off): at night, while the moon
   is the shadow-casting light (`lightDir = moonDir`), the post fog's forward-scatter glow (`fogParams.sunScatter`,
   otherwise 0 at night) is `amount`, and `atmo.scatterDir` / `atmo.scatterColor` follow the moon (`moonDir`,
   `moonColor`). PostFX's fog glow and the volumetric pass read those fields (falling back to `sunDir` / `sunColor`),
   so with `volumetric` on the pass marches moonlight shafts through the cascades that follow the moon, coloured
   `moonColor * moonIntensity`. Without the option both fields ARE the `sunDir` / `sunColor` objects: output
-  unchanged, and by day nothing differs with it either (`test/volumetric.mjs`). The Halloween sample uses it (phones:
-  the analytic glow only; desktop: the volumetric pass at `intensity` 0.07, 50 m).
+  unchanged, and by day nothing differs with it either (`test/volumetric.mjs`). nyc-night sets `moonScatter` (0.35
+  desktop, 0.2 mobile).
 
 ### Render pipeline (0.7.0): G-buffer, TAA, clustered lights, cascades, GPU particles
 Two paths, chosen per `PostFX` instance; the forward path is the default and renders bit-identically to 0.6.0.
@@ -466,7 +507,10 @@ Two paths, chosen per `PostFX` instance; the forward path is the default and ren
   texture (+2 texture units); a global `lights_pars_begin` / `lights_fragment_begin` patch under `ENGINE_CLUSTERED`
   loops over the fragment's cell and calls three's `RE_Direct` with the stock attenuation, so 8 clustered lights
   render pixel-identically to 8 real `PointLight`s. No shadows on clustered lights (real three lights keep theirs).
-  `NearestLights({ mode: 'clustered', clustered })` pushes every lamp within `clusteredRange`.
+  `NearestLights({ mode: 'clustered', clustered })` pushes every lamp within `clusteredRange`. Spots:
+  `cl.setSpot(i, x, y, z, range, r, g, b, decay, dx, dy, dz, cosInner, cosOuter, near = 0)`; `near` (m, 0.25 m steps)
+  fades the light in along the axis over its first `near` m (a luminaire's housing: the pole beside the head stays
+  dark) and needs decay < 8.
 - **Cascades and PCSS** (`shadowCascade.js`, `shadowKernel.js`, `Atmosphere`): `shadows.cascades` 1-4 (middle
   cascades `sunMid` / `sunMid2` between the near `sun` and the far `sunFar`, round-robin map updates), `kernel:
   'pcss'` (8-tap blocker search on the packed map, penumbra from receiver - blocker, 12-tap rotated compare disc),
@@ -586,8 +630,9 @@ cost are in [the design notes](docs/DESIGN-NOTES.md#textures-pbr-sets-ktx2).
   `env(safe-area-inset-*)`), per-entry `portrait` overrides re-applied on rotation, `floating` sticks (the base follows
   the thumb inside a zone), `TouchControls.setProgress(id, p)` cooldown rings, button `hitSlop` (an invisible hit
   ring around a button), touchpad `slop` (a drag counts from that many px), `touchReveal` (controls on the first
-  touch, hidden on a key press) and `isTouchDevice({ multiTouch: true })` (iPads with a keyboard); `samples/halloween/`
-  uses them all.
+  touch, hidden on a key press) and `isTouchDevice({ multiTouch: true })` (iPads with a keyboard). `samples/nyc-night/` uses
+  the floating stick, `portrait`, `hitSlop`, `slop` and `touchReveal`; the cooldown rings and `multiTouch` were used
+  only by the retired Halloween game (branch `archive/halloween`).
 - `anim` layer: `AnimationController` (states, 1D blend trees, transition table, markers, root motion with the
   hips' horizontal track neutralised) and `TwoBoneIK` / CCD helpers.
 - `AnimationController(model, clips, { states, trees })`: a state's `clip` is the clip's exact name (or an
@@ -599,6 +644,24 @@ cost are in [the design notes](docs/DESIGN-NOTES.md#textures-pbr-sets-ktx2).
   the state getter returns what the rig reads (`velocity`, `speedKmh`, `mode`, `grounded`, ...; the list is in the
   ChaseRig source; type `ChaseTargetState`). `VehicleInput` (`src/input/VehicleInput.js`) reads keyboard, gamepad and touch into
   `throttle`, `brake`, `steer`, `handbrake`, ... fields, the values `VehicleController.step` takes.
+- Steering assist (opt-in): `new VehicleInput(el, { assist: true })` and `input.update(dt, car)` with the car being
+  driven: `steer` comes out of a `SteeringAssist` and `rawSteer` keeps the player's value; `input.assist.enabled`
+  switches it live (a pause-menu toggle). Full input asks for the wheel angle that holds the front tyre at 0.97 x its
+  peak slip against the front axle's direction of travel (inside the controller's `steerLimit`); with no input the
+  wheels self-steer toward the rear axle's travel, so a slide is caught; past the rear's peak a key (not a stick)
+  hands over to self-steer; a yaw guard trims lock when the car rotates faster than its path. It passes the input
+  through below 6 m/s (fully on from 12), in reverse, in the air and while the handbrake is held. Standalone:
+  `new SteeringAssist(opts).apply(dt, steer, car, analog, handbrake)`. Method: AC-Advanced-Gamepad-Assist (MIT).
+- `VehicleHaptics`: gamepad rumble from slides, a locked wheel, landings and hits, layered `acc + m (1 - acc)`:
+  `haptics.update(dt, car, input.map.gamepad)`. Not felt by anyone yet.
+- Reactive cameras (opt-in, defaults give the old poses): `rig.addTrauma(x)` on every rig (shake = trauma², rotation
+  only, trauma falls 1.7 / s; ~0.6 s at 1). `ChaseRig({ feel: 'road' })` reads `state.accel` (a VehicleController's
+  `localAccel`): the boom lengthens under acceleration and shortens ~0.3 m under 1 g braking, the camera sways to the
+  outside of a corner (~0.35 m at 0.8 g) with a <1° horizon tilt, high-passed vertical G gives a small heave, the
+  follow frame never trails the heading by more than 0.35 rad, and the follow is sub-stepped (30 / 60 / 120 Hz agree
+  within 2 cm). Tune with an object over `ROAD_FEEL`. `ThirdPersonRig` / `FirstPersonRig`: `landingDip` (gain; 1 ≈
+  6 cm after a 1 m fall, 11 cm at the cap) with `rig.land(cc.landingSpeed)`, `sprintFov` (degrees while
+  `state.sprint`).
 - Default bindings (`CHARACTER_ACTIONS`, `VEHICLE_ACTIONS`; the generated types do not show them). To rebind, copy the
   preset, edit an action's `bindings` and pass it as `actions`. `enabled = false` on either input silences it (as
   `input.map.enabled`); CharacterInput's `toggleCamera` and `menu` are `alwaysOn` and still fire.
@@ -623,10 +686,48 @@ cost are in [the design notes](docs/DESIGN-NOTES.md#textures-pbr-sets-ktx2).
 - `VehicleAudio` (`src/audio/VehicleAudio.js`) is an electric motor plus thruster synth: `audio.start()` in a gesture,
   then `audio.update(dt, state)` per frame with `{ speedKmh, rpmLike, thrust, grounded, mode, wheelSlip, ... }`.
   `CityAmbience` is a wind / city / gulls bed. The Miami V8 sound is the demo's own (`samples/miami-drive/audio.js`).
+- The sound kit: `new AudioBus({ master: 'safe' })` puts a compressor, a soft clipper (linear to 0.6, then
+  0.6 + 0.4 tanh) and the volume after the buses (`SAFE_MASTER`), and suspends the context while the tab is hidden;
+  the default chain is unchanged. Any bus: `setPaused(on, fade)` fades every bus but `ui`, `setMuffle(0..1)` low-passes
+  them (20000 * 0.03^z Hz), `duck(name, to, recoverPerSec)`. `context` takes an `OfflineAudioContext` (no gesture).
+- `new SoundBank(bus, { listener: camera })` plays the 18 `SOUND_PRESETS`: `ui.click`, `ui.confirm`, `ui.back`,
+  `pickup.chime`, `step.grass|concrete|gravel|wood`, `land.soft|hard`, `impact.metal|wood|thud`, and the loops
+  `tyre.squeal`, `road.roar`, `wind.rush`, `amb.dusk`, `lamp.hum`. `play(name, { at, gain, rate })` returns a voice
+  (an inert one before the first gesture, never null); `loop(name, { at, gain })` returns `{ setGain, setRate, stop }`
+  and, made before the gesture, starts with the bus; `update(dt)` per frame. 24 one-shot voices; per sound a cap and a
+  priority decide what is stolen (`VoicePool`). Variants round-robin, pitch +-3.5 % and gain -0..8 % per play.
+  Sounds are rendered in plain JavaScript (`src/audio/dsp.js`, `src/audio/presets.js`), so `bank.render(name, variant)`
+  runs in Node; `bank.define(name, spec)` adds one.
+- `new Footsteps(bank, { surface })`, then per step `steps.update(dt, { speed, grounded, landed, landingSpeed })`
+  (`CharacterController`'s fields): a footfall every 0.95 m at a walk to 2.1 m at a run, `land.soft` / `land.hard` by
+  landing speed.
+- Measured, not listened to: `test/audio-dsp.mjs` holds every preset variant to its peak, DC, ends or loop seam and
+  centroid band; `samples/sound-check/` renders a ten-second dusk-road scene offline (`audioSelfTest`) and checks no
+  NaN, nothing clipped, peak <= 0.85, no silent half-second and none 12 dB over the median (`MIX_LIMITS`).
+- `VehicleAudio({ wind: false, tyres: false })` leaves wind and tyre noise to the kit's loops (both default on).
 - UI (`src/ui/`): DOM widgets on a CSS-variable theme. `new UILayer()` is the overlay, `new Panel({ parent, corner })`
   a box in a corner, `panel.add(new Readout({ label, unit }))` a value with `set()`; gauges, bars, badges, a
   minimap, a loading screen, a help overlay and `QualityMenu`. Call `setTheme()` before building widgets that bake
   the accent colour (see the header of `src/ui/index.js`).
+- `GameShell` (`src/ui/GameShell.js`): a game's front door in one object. `new GameShell({ title, controls, quality,
+  storageKey })` shows a loading bar that keeps moving (`setProgress(p, label)`); `shell.use({ engine, audio, inputs })`
+  once they exist; `await shell.ready()` runs `engine.warmUp()` under the loading bar ("Compiling shaders…"; with
+  `?bench=1` `{ systems: false, frames: 12 }`), calls `engine.start()`, waits for a frame of the loop and shows the
+  start card over the live scene, blurred and dimmed (it does not wait for the click: set `window.__sample` after it).
+  So a game with a shell ends `boot()` with `await shell.ready()` and does not start the engine itself;
+  `shell.error(text)` shows a boot error on the loading screen. After a lost WebGL context the shell steps aside for
+  the engine's Reload notice (cards, pause button and loading screen go, the inputs stay off, the bus is paused,
+  `shell.lost` is true) and start / pause / resume do nothing; it never calls `engine.stop()`. The start click
+  calls `audio.start()` (the audio gesture), clears the blur in 1 s and turns the inputs back on (`enabled`). Esc, P,
+  the pad's Start or the round pause button (top right while playing, on every device; `pauseButton: 'auto'` keeps it
+  to touch screens) pause: `engine.clock.pause()`, `audio.setPaused(true)` when the bus has
+  it, inputs off; it also pauses when the tab is hidden or the pointer lock is lost. On-screen touch controls are
+  hidden while a card is up. The pause card has the volume, `addToggle(key, label)` / `addSlider(key, label, { min,
+  max, step })` rows and the quality tiers. Settings are saved (`shell.settings.get(k)`, `shell.settings.on(k, fn)`
+  runs fn now and on change); `createSettings(key, defaults, { version })` is the store on its own. `?autostart=1` and
+  `?bench=1` skip the card. `shell.state` is `'loading' | 'title' | 'playing' | 'paused'`; `onStart(fn)`,
+  `onPause(fn(paused))`.
+- `LoadingScreen({ compositor: true })` keeps its bar moving while the main thread is busy (transform animations).
 
 ## World
 
@@ -643,11 +744,13 @@ meshes and `PhysicsWorld.setSurfaceProvider` instead.
 | `MapData.js` | `loadMapData(url)`, `validateMapData(data)`, `prepareMapData(data, spawnOpts)` -> `{ offset, bounds, outerBox, spawn }`, `findSpawn(data, bounds, { road, at })`, `generateProceduralCity(seed, { waterfrontName, center })`, `MAP_KEYS`, `assetBase()` |
 | `Terrain.js` | `Terrain` (`load(url)`, `setData(json)`, `setOffset`, `heightAt`, `rawHeightAt`, `normalAt`, `attachSurface`), `GroundSurface` (nested lattice; `applyCorridors`, `finalize`, `heightAt`, `normalAt`), `sampleLevel`, `drapePolygon`, `clipConvex`, `latticeSplit` |
 | `RoadNetwork.js` | `RoadNetwork({ roads, rail, raster, isWater, surface, deckHolds })` (`prepare`, `build`, `meshes`, `list`, `deckHash`, `segHash`, `corridors`, `heldDecks`), `roadStyle`, `RBIT`, `createRoadMaterial`, `createTactileMaterial`, `SolidBuf`, `samplePolyline`, `quadUp`, `DEFAULT_DECK_HOLD` |
-| `Buildings.js` + `FacadeTextures.js` | `BuildingBuilder(region, { groundAt, streetAt, offset, baseGrid, detailGrid, lodDist, detailFloors, maxWindows, style, nearDetail, grid })` (`add(b, rnd, footprint?)`, `footprint(b)`, `build`), `TileBuildingBuilder(region, opts, 'low' \| 'full' \| 'near')` (`meshes(mats)` generator), `NullBuf`, `DEFAULT_BUILDING_STYLE` (`oldProb(xb, zb)`, `victorianProb(xb, zb)`, `namedRe`), `createFacadeMaterials`, `GeoBuf`, `MODE`, `enc`, `tintOf`, `insetRing`, `offsetRing`; `FACADE`, `WIN_RECTS`, `makeFacadeTextures`, `PBR`, `PBR_SETS`, `GROUND_SETS`, `loadPbrTextures` |
+| `Buildings.js` + `FacadeTextures.js` | `BuildingBuilder(region, { groundAt, streetAt, offset, baseGrid, detailGrid, lodDist, detailFloors, maxWindows, style, nearDetail, grid })` (`add(b, rnd, footprint?)`, `footprint(b)`, `build`), `TileBuildingBuilder(region, opts, 'low' \| 'full' \| 'near')` (`meshes(mats)` generator), `NullBuf`, `DEFAULT_BUILDING_STYLE` (`oldProb(xb, zb)`, `victorianProb(xb, zb)`, `namedRe`), `createFacadeMaterials`, `enableFacadeDetail(mats, { dimRooms, spill, paneVariation, shades, weathering })`, `GeoBuf`, `MODE`, `enc`, `tintOf`, `insetRing`, `offsetRing`; `FACADE`, `WIN_RECTS`, `makeFacadeTextures`, `PBR`, `PBR_SETS`, `GROUND_SETS`, `loadPbrTextures` |
 | `Props.js` + `Furniture.js` + `Vehicles.js` | `Props({ net, raster, colliders, data, isLand, groundAt, seed, streets, signStyle, treeRules, treeMix })`; furniture library (`makeFurnitureGeometry`, `FURNITURE_META`, `buildSignAtlas(names, style)`, `DEFAULT_SIGN_STYLE`, materials); vehicle library (`makeVehicleGeometry(type, { lod, livery })`, `VEHICLE_SPECS`, `pickVehicleColor`, `createVehicleMaterial`, `DEFAULT_BUS_LIVERY`, `PartBuilder`) |
+| `CarVisual.js` | `createCarVisual(type, { color, castShadow, contactShadow, shadowOpacity })` -> `{ root, wheels, spinners, spec, lamps, update(dt, car, { darkness, lights, brake, reverse }), setColor, dispose }`, `carSpecFor(type)` |
+| `Scenery.js` | small places to start a game in (the starters use them): `countryRoad({ physics, width, from, to, layby, trackName, seed })` (two-lane road along -Z, lay-by, paint, verges, fence, poles and wires, a named side track, trees; also `surfaces` for texturing) and `parkCorner({ physics, lamp, path, seed })` (gravel path, bench under the lamp, fence, boulders, trees) -> `{ group, update(dt, cameraPos, darkness), paths, counts }`; `groundCover({ paths, scale, seed, amount, dry, lush, earth, path })` (material patch for `applyPatches` on a flat grass ground: broad lush / dry / bare patches and gravel paths; up to `COVER_MAX_SEGMENTS` path segments; not with `weathering()` on the same material); `paintedLines(lines, { y, color })` (road paint as one mesh) |
 | `Traffic.js` | presenter: `Traffic({ world, data, net, props, seed, count, camera, busLivery, worker })` (`build`, `ready`, `update`, `queryColliders`, `setPlayer`, `setCamera`, `summary`, `pose(i)`, `mode`, `perf`, `sim`) |
 | `TrafficSim.js` + `traffic.worker.js` | simulation core (no scene objects): `TrafficSim({ roads, signals, groundAt \| baked, spawn, seed, count })` (`build`, `update(dt)`, `setView`, `setPlayer`, `readSignals`, `writePoses`, `queryColliders`, `summary`, `bakeError`, `lanes`, `vehicles`), `TrafficSim.roadsFrom(net)`, `buildSignalInfos({ data, net, props })`, `playerInfoFrom(src)`, `TRAFFIC_TYPES`, `POSE_STRIDE`, `typeCounts`; the module worker that runs it |
-| `Vegetation.js` (+ `VegModels.js`, `VegTextures.js`, `VegMaterials.js`) | `buildTreeMeshes(placements, { groundAt, colliders, seed, rules, mix })`, `bakeVegImpostors`, `SPECIES`, `makeVegAtlas`, `createVegMaterial`, `createVegImpostorMaterial` |
+| `Vegetation.js` (+ `VegModels.js`, `VegTextures.js`, `VegMaterials.js`) | `buildTreeMeshes(placements, { groundAt, colliders, seed, rules, mix, foliageLight })`, `bakeVegImpostors`, `SPECIES`, `makeVegAtlas`, `createVegMaterial`, `createVegImpostorMaterial`, `applyFoliageLighting`, `applyFoliageLightingTo`, `DEFAULT_FOLIAGE_LIGHT` |
 | `Water.js` / `Shore.js` / `Boats.js` | `Water`, `createWaterMaterial({ ..., refraction })` (0.8.0: `setWaterRefraction`, `setWaterSceneTextures`, `updateWaterRefraction`, `WATER_REFRACTION_DEFAULTS`), `buildShoreField`, Gerstner `waveHeight` / `waveSlope`; `Waterfront({ world, renderer, level, waterMat, pondMat, groundMat, ferryDock, islandFill, boats, farland })`, `createGroundMaterial`, `bakeLandClass`, `buildFarLand(json, world, level, opts)`; `Boats({ ..., ferryDock, ferryRoute, ferries, shipRoute, sailZones, sailCount, bridge })` |
 | `geom.js` | `hashStr`, `signedArea`, `pointInRing`, `RingIndex` (exact row-bucketed pointInRing for big rings), `pointInPoly`, `ringBounds`, `centroid`, `sanitizeRing`, `polylineLength` (+ re-exports of `render/noise.js`) |
 | `MeshChunker.js`, `ShadowPasses.js` | tiled static meshes, per-cascade shadow casters (see Conventions); `NearestLights.js` re-exports the render layer's class |

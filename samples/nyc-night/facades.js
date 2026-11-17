@@ -12,9 +12,14 @@
 //   - lit windows that look inhabited: sparse runs of lit windows on a few floors per building, a single lit window or
 //     corner office here and there, a warm or cool cast per building (not per window), and the distant-window average
 //     brighter at the top (a lit ceiling) instead of identical flat cards;
-//   - glass (window panes and curtain walls) mirrors the dusk sky gradient: the afterglow shows in west-facing glass.
+//   - glass (window panes and curtain walls) mirrors the dusk sky gradient: the afterglow shows in west-facing glass;
+//     below the far roofline it mirrors the block across the street (a dark wall, a few lit windows) and the nearest
+//     street lamp heads, so a glass wall is not an even black grid;
+//   - the engine's opt-in facade detail (Buildings.js enableFacadeDetail): dim rooms between dark and lit, room spill,
+//     panes that differ, roller shades and weathering on the curtain walls, stocked shops.
 // Both tiers get it (mobile: 8 lamps in the wash instead of 12).
 import * as THREE from 'three';
+import { enableFacadeDetail } from '@vibe/engine/world';
 
 const GLSL_UNIFORMS = /* glsl */`
 uniform vec4 uNycLamps[NYC_LAMPS];
@@ -23,6 +28,7 @@ uniform float uNycGround;
 uniform vec3 uNycWest;
 uniform vec3 uNycSkyZen, uNycSkyHor, uNycSkyGlow;
 uniform vec4 uNycGrade; // x canyon floor, y roof lift, z sky reflection gain, w wash gain
+uniform vec4 uNycOpp;   // what the glass mirrors across the street: x distance (m), y lowest roofline, z roofline spread, w lit windows
 float nycGround() { return vWall.z > 0.5 ? vWall.x : uNycGround; }
 // value noise (smooth), for slow variation across a wall
 float nycNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -54,6 +60,41 @@ if (fGlass > 0.5 && uNycGrade.z > 0.0) {
   sky *= mix(0.3, 1.0, smoothstep(5.0, 70.0, hsG)); // low in the canyon the opposite block hides the low sky
   float NdV = clamp(dot(gN, -wV), 0.0, 1.0);
   float F = mix(0.12, 1.0, pow(1.0 - NdV, 4.0));
+  if (uNycOpp.x > 0.0) {
+    // below the far roofline the glass mirrors the block across the street, not black: a dark wall with its few lit
+    // windows, and the street lamps (the nearest heads, as points)
+    // looked up with the pane's own plane (only a fifth of the per-pane bow): at the 24 m to the opposite wall the
+    // full bow sheared the mirrored windows into tilted pale squares floating in the panes
+    vec3 gO = normalize(mix(inverseTransformDirection(normalize(vNormal), viewMatrix), gN, 0.2));
+    vec3 Ro = reflect(wV, gO);
+    float Rn = dot(Ro, gO);
+    if (Rn > 0.02) {
+      vec2 tw = normalize(vec2(-gO.z, gO.x));
+      vec3 Hp = vWPos + Ro * (uNycOpp.x / Rn);
+      float hg = Hp.y - nycGround(), u = dot(Hp.xz, tw);
+      float roof = uNycOpp.y + uNycOpp.z * nycNoise(vec2(u / 35.0, 7.0 + fract(vInfo.z * 3.0) * 9.0));
+      float wall = smoothstep(roof + 2.0, roof - 2.0, hg);
+      vec2 wq = vec2(u / 2.7, hg / 3.5), ci = floor(wq), cf = fract(wq);
+      float win = smoothstep(0.18, 0.3, cf.x) * smoothstep(0.82, 0.7, cf.x) * smoothstep(0.28, 0.4, cf.y) * smoothstep(0.9, 0.78, cf.y) * step(1.0, ci.y);
+      float on = step(0.82, fHash(ci + 7.7 + floor(u / 60.0)));
+      vec3 wc = mix(vec3(1.0, 0.68, 0.4), vec3(0.72, 0.84, 1.0), step(0.7, fHash(ci + 3.1))) * (0.4 + 0.8 * fHash(ci + 1.3));
+      float aa = clamp(max(fwidth(wq.x), fwidth(wq.y)) * 1.5, 0.0, 1.0);
+      // a pane close by (looked up at from the pavement) shows one or two mirrored windows, sharp, in a black pane:
+      // they read as loose squares, so near panes keep only the soft average of the wall across
+      aa = max(aa, 1.0 - smoothstep(16.0, 32.0, length(vWPos - cameraPosition)));
+      vec3 lw = mix(wc * win * on, vec3(0.8, 0.66, 0.5) * 0.055, aa);
+      vec3 opp = uNycSkyHor * 0.12 + lw * uNycOpp.w;
+      opp *= step(0.0, hg); // the street itself: dark (its own lamps below)
+      sky = mix(sky, opp, wall);
+    }
+    // the lamp heads, mirrored: a tight core and a soft halo (a pane is not optically flat)
+    for (int i = 0; i < NYC_LAMPS; i++) {
+      vec4 L = uNycLamps[i];
+      vec3 d = L.xyz - vWPos; float dl = length(d);
+      float c = max(dot(d / max(dl, 1e-3), R), 0.0);
+      sky += uNycLampCol * L.w * (exp(-(1.0 - c) * 6000.0) * 6.0 + exp(-(1.0 - c) * 260.0) * 0.12) * (1.0 - smoothstep(30.0, 90.0, dl));
+    }
+  }
   totalEmissiveRadiance += sky * F * uNycGrade.z * fEnv;
 }
 `;
@@ -102,7 +143,9 @@ function rep(src, a, b, what) {
 /**
  * o: { world, camera, lamps = 12 (the nearest heads that wash the walls: each costs every wall pixel a little, lit or
  * not; the map's lamps stand 60 m and more apart and a pool reaches 17 m, so nyc-night passes 4), west: {x,z} (unit,
- * toward the afterglow), skyGain, canyon: [floor, roof], wash }.
+ * toward the afterglow), skyGain, canyon: [floor, roof], wash, opposite: [distance 24, lowest roofline 18, roofline
+ * spread 45, lit windows 0.3] (what the glass mirrors across the street and the mirrored lamp heads; distance 0 = off),
+ * detail: options for the engine's enableFacadeDetail (false = off) }.
  * Returns { uniforms, update(camera) }.
  */
 export function gradeFacades(o) {
@@ -114,6 +157,7 @@ export function gradeFacades(o) {
     uNycWest: { value: new THREE.Vector3(o.west.x, 0, o.west.z) },
     uNycSkyZen: { value: new THREE.Color() }, uNycSkyHor: { value: new THREE.Color() }, uNycSkyGlow: { value: new THREE.Color() },
     uNycGrade: { value: new THREE.Vector4(o.canyon?.[0] ?? 0.32, o.canyon?.[1] ?? 1.25, o.skyGain ?? 1, o.wash ?? 0.2) },
+    uNycOpp: { value: new THREE.Vector4(o.opposite?.[0] ?? 24, o.opposite?.[1] ?? 18, o.opposite?.[2] ?? 45, o.opposite?.[3] ?? 0.3) },
   };
   const setSky = () => { // the dusk sky's own twilight colours (Atmosphere uniforms), scaled by the afterglow
     const su = world.atmo.sky.material.uniforms, ag = su.uAfterglow ? su.uAfterglow.value : 1;
@@ -122,6 +166,8 @@ export function gradeFacades(o) {
     U.uNycSkyGlow.value.copy(su.uTwGlow.value).multiplyScalar(0.45 * ag);
   };
   setSky();
+  // the engine's opt-in facade detail (Buildings.js): dim rooms, room spill, pane variation, shades, curtain-wall weathering
+  if (o.detail !== false && world.mat.facadeSet) enableFacadeDetail(world.mat.facadeSet, o.detail || {});
   for (const m of [world.mat.facade, world.mat.facadeWin]) {
     if (!m) continue;
     const prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey.bind(m);

@@ -2,7 +2,7 @@
 // recipe says: the van spec is heavier and slower, PoseInterpolator blends between steps, static boxes and loose bodies collide, a car drives a small
 // track over a heightfield with a surface provider. The browser-only recipes run in test/browser/howto.mjs.
 import * as THREE from 'three';
-import { vanSpec, poseInterpolator, physicsBodies, smallTrack } from './howto/recipes.js';
+import { vanSpec, poseInterpolator, physicsBodies, smallTrack, weatheredProps } from './howto/recipes.js';
 import { PhysicsWorld, VehicleController, ROAD_CAR_SPEC } from '@vibe/engine/physics';
 
 let failures = 0;
@@ -77,6 +77,15 @@ const DT = 1 / 120;
   const out = physics.surfaceAt(20, 0);
   check('small-track: grass beside the road has less grip', out.tag === 'grass' && out.mu < 1);
   check('small-track: the ground mesh follows the heights', Math.abs(ground.attributes.position.getY(5000) - hills(ground.attributes.position.getX(5000), ground.attributes.position.getZ(5000))) < 1e-6);
+}
+
+// --- weathering: both materials carry the patch and compile with the weathering call
+{
+  const { wallMat, postMat } = weatheredProps();
+  const sh = { vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader, uniforms: {}, defines: {} };
+  wallMat.onBeforeCompile(sh, null);
+  check('weathering: the wall shader calls wxWeather', sh.fragmentShader.includes('wxWeather('));
+  check('weathering: each material has its own program key', wallMat.customProgramCacheKey().includes('weather') && postMat.customProgramCacheKey().includes('weather'));
 }
 
 console.log(failures ? `\n${failures} howto check(s) failed` : '\nhowto recipes: all checks passed');

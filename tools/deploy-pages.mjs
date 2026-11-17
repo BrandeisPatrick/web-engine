@@ -1,7 +1,7 @@
 // Publish the built samples (dist/, built with `npm run build:pages`, base /web-engine/) to GitHub Pages: the contents
 // of dist/ are committed on top of the `gh-pages` branch of this repository and pushed (a plain push, never a force
 // push: each deploy is one more commit on gh-pages; the first deploy creates the branch). GitHub serves that branch.
-// Run: npm run deploy    → https://<owner>.github.io/<repo>/ (samples index), .../halloween/ (Midnight Candy Run)
+// Run: npm run deploy    → https://<owner>.github.io/<repo>/ (samples index), .../nyc-night/, .../miami-drive/, ...
 // Optional argument: another build folder to publish instead of dist/.
 import { execSync } from 'node:child_process';
 import { existsSync, writeFileSync, rmSync } from 'node:fs';
@@ -30,4 +30,4 @@ try {
   execSync(`gh api -X POST repos/${repo}/pages -f build_type=legacy -f "source[branch]=gh-pages" -f "source[path]=/"`, { stdio: 'ignore' });
 } catch { /* already configured */ }
 const [owner, name] = repo.split('/');
-console.log(`Deployed to https://${owner.toLowerCase()}.github.io/${name}/  (game: .../${name}/halloween/)`);
+console.log(`Deployed to https://${owner.toLowerCase()}.github.io/${name}/  (samples index: the demos and the starters)`);

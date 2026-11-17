@@ -1,6 +1,6 @@
 // Recipe sources for docs/HOWTO.md: each marked region below is copied verbatim into a recipe, and
 // test/docs.mjs fails when the copy and the region differ. The regions run:
-//   - in Node by test/howto.mjs (npm test): vanSpec, poseInterpolator, physicsBodies, smallTrack;
+//   - in Node by test/howto.mjs (npm test): vanSpec, poseInterpolator, physicsBodies, smallTrack, weatheredProps;
 //   - in headless Chrome by test/browser/howto.mjs (on the starter-drive page, real WebGL): clusteredLights,
 //     lampsByTier, headlights, gpuParticles, vehicleSound, getInOut.
 // Each function takes the objects a game already has (engine, scene, camera, renderer, postfx, ...) and returns what
@@ -10,7 +10,9 @@ import { PoseInterpolator } from '@vibe/engine/core';
 import {
   PhysicsWorld, VehicleController, ROAD_CAR_SPEC, DynamicsWorld, attachToPhysicsWorld, boxShape, sphereShape,
 } from '@vibe/engine/physics';
-import { ClusteredLights, installClusteredChunks, syncClustered, NearestLights, GpuParticleSystem } from '@vibe/engine/render';
+import {
+  ClusteredLights, installClusteredChunks, syncClustered, NearestLights, GpuParticleSystem, applyPatches, weathering,
+} from '@vibe/engine/render';
 import { VehicleAudio } from '@vibe/engine/audio';
 import { CharacterInput, CHARACTER_ACTIONS, VehicleInput, VEHICLE_ACTIONS, VEHICLE_TOUCH_LAYOUT } from '@vibe/engine/input';
 import { ChaseRig, ThirdPersonRig } from '@vibe/engine/camera';
@@ -21,6 +23,17 @@ export function vanSpec() {
   const van = new VehicleController({ ...ROAD_CAR_SPEC, mass: 2200, motorPower: 90e3, vMax: 42 }); // kg, W, m/s (151 km/h)
   // #endregion howto:van-spec
   return van;
+}
+
+/** Weathered walls and props: world-space breakup (no UVs, no textures) on two materials, a wall and a post. */
+export function weatheredProps() {
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0xd8cbb4, roughness: 0.85 });
+  const postMat = new THREE.MeshStandardMaterial({ color: 0xc9c2b4, roughness: 0.6 });
+  // #region howto:weathering
+  applyPatches(wallMat, [weathering({ grime: 0.4, streaks: 0.35 })]);         // a wall standing on y = 0
+  applyPatches(postMat, [weathering({ ground: 'origin', streaks: 0, seed: 3 })]); // props: grime from each one's own base
+  // #endregion howto:weathering
+  return { wallMat, postMat };
 }
 
 /** Smooth rendering between fixed steps. `engine` needs only addSystem; `carMesh` is what you draw. */

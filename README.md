@@ -22,14 +22,12 @@ Each demo runs in the browser on a computer or a phone, with nothing to install.
 
 <table>
   <tr>
-    <td width="33%"><a href="https://brandeispatrick.github.io/web-engine/nyc-night/"><img src="docs/before-after/nyc-square-after.jpg" alt="Night NYC walk: lit billboards over a Times Square crossing, with taxis and pedestrians"></a></td>
-    <td width="33%"><a href="https://brandeispatrick.github.io/web-engine/miami-drive/"><img src="docs/before-after/miami-chase-after.jpg" alt="Miami drive: a sports car on a dune road at dusk, with palms and hotels ahead"></a></td>
-    <td width="33%"><a href="https://brandeispatrick.github.io/web-engine/halloween/"><img src="docs/before-after/halloween-gate-after.jpg" alt="Midnight Candy Run: a kid in a witch costume on a moonlit lane, between a haunted house and a graveyard gate"></a></td>
+    <td width="50%"><a href="https://brandeispatrick.github.io/web-engine/nyc-night/"><img src="docs/before-after/nyc-square-after.jpg" alt="Night NYC walk: lit billboards over a Times Square crossing, with taxis and pedestrians"></a></td>
+    <td width="50%"><a href="https://brandeispatrick.github.io/web-engine/miami-drive/"><img src="docs/before-after/miami-chase-after.jpg" alt="Miami drive: a sports car on a dune road at dusk, with palms and hotels ahead"></a></td>
   </tr>
   <tr>
     <td valign="top"><b><a href="https://brandeispatrick.github.io/web-engine/nyc-night/">Night NYC walk</a></b><br>Midtown Manhattan at dusk, on foot. Buildings baked from OpenStreetMap, street lamps and signs as clustered lights, wet-street reflections, traffic and pedestrians.</td>
     <td valign="top"><b><a href="https://brandeispatrick.github.io/web-engine/miami-drive/">Miami drive</a></b><br>South Beach at dusk, behind the wheel. Vehicle physics and driving feel, a detailed hero car, palms, hotels and a dune road.</td>
-    <td valign="top"><b><a href="https://brandeispatrick.github.io/web-engine/halloween/">Midnight Candy Run</a></b><br>The Halloween game: collect candy before midnight. Cloth ghosts, fracture, synthesised audio and touch controls. <a href="samples/halloween/README.md">About the game</a></td>
   </tr>
 </table>
 
@@ -191,17 +189,19 @@ Installed as a git submodule listed in a game's `workspaces`, the engine resolve
 ### Demo flags
 
 - `?quality=desktop|mobile` overrides the stored tier and the device's recommendation for that page load
-  (`resolveQuality` in `src/core/Quality.js`; the menu is `QualityMenu` in `src/ui/`). The Halloween game also reads
-  the old `low|high`.
+  (`resolveQuality` in `src/core/Quality.js`; the menu is `QualityMenu` in `src/ui/`); the old `low|high` still map
+  to them.
 - `window.__sample` is the bench harness (poses, settings, `run(plan)`; `createBenchHarness` in `src/core/Bench.js`):
-  always on in the NYC and Miami demos, only under `?bench=1` in the Halloween game, which also exposes its round
-  state as `window.__game`. `?bench=1&size=WxH` freezes the loop at load and pins the drawing buffer size.
+  always on in the demos and the starters. `?bench=1&size=WxH` freezes the loop at load and pins the drawing buffer
+  size.
 - Render flags shared by the demos are in `samples/shared/fx-flags.js`: `?gbuffer=1`, `?aa=taa|fxaa|msaa`,
   `?shadows=pcf|fast|pcss`, `?cascades=2|3|4`, `?ssr=1`, `?volumetric=1`, `?motionblur=1`, `?dof=1`,
   `?lut=warm|bleach`, `?aonormals=gbuffer`, `?fps=60`.
-- The Halloween game's own flags are in [its README](samples/halloween/README.md).
+- `?look=open` (nyc-night, miami-drive): a brighter, two-temperature grade of the same scene. The default
+  look is the low-key one the smoke look gate checks; `open` is not gated.
 - The earlier test samples (Canyon Run, the procedural city, Character, the physics sandbox) were removed in favour
-  of the current demos; they are in git history (`git show fc73161:samples/<name>/main.js`).
+  of the current demos; they are in git history (`git show fc73161:samples/<name>/main.js`). The Halloween game
+  (Midnight Candy Run) is retired and kept on the branch `archive/halloween`.
 
 ### Tests
 
@@ -209,27 +209,31 @@ Installed as a git submodule listed in a game's `workspaces`, the engine resolve
 
 - `test/car-sim.mjs`: the vehicle model (`ROADSTER_SPEC`) and the PhysicsWorld queries; the determinism gate
   (bit-identical since 0.4.0).
-- `test/world-build.mjs`, `world-lights`, `vehicles-hd`: the procedural city built headless, its stats, queries and
-  10 s of traffic; the vehicle detail levels.
-- `test/core.mjs`, `quality`, `look-stats`, `memory`, `texture-manifest`, `assets`, `rigs`, `character-input`, `anim`,
-  `character-sim`: core services, the quality tiers, the look statistics, memory trimming, loaders, camera rigs,
-  input, animation and the character controller.
+- `test/world-build.mjs`, `world-lights`, `vehicles-hd`, `scenery`: the procedural city built headless, its stats,
+  queries and 10 s of traffic; the vehicle detail levels; the starters' country road, park corner and ground cover.
+- `test/core.mjs`, `quality`, `shell`, `look-stats`, `memory`, `texture-manifest`, `assets`, `rigs`, `camera-feel`,
+  `character-input`, `steering-assist`, `anim`, `character-sim`, `car-visual`: core services, the quality tiers, the
+  game shell's state and settings, the look statistics, memory trimming, loaders, camera rigs and their road feel,
+  input and the steering assist, animation, the character controller and the drivable car body.
+- `test/audio-dsp.mjs`, `audio-voices`, `audio-bank`: the sound kit's presets measured one by one, the voice policy and
+  the mixer graphs.
 - `test/dyn-*.mjs`, `cloth-mesh`, `character-dyn`, `ragdoll`: the dynamics, from shapes and joints to cloth, soft
   bodies, buoyancy and fracture.
 - `test/gpu-particles.mjs`, `clustered`, `shadows`, `skip-unlit`, `postfx-options`, `render-scale`, `gbuffer-chunks`,
-  `ssr-ao`, `volumetric`, `blur-dof-lut`, `water`: the render pipeline's shaders, options and defaults.
-- `test/halloween-enemies.mjs`, `halloween-depth`, `miami-car`, `nyc-traffic-mix`: the demos' rules and engine
-  options.
+  `ssr-ao`, `volumetric`, `blur-dof-lut`, `water`, `tyre-fx`: the render pipeline's shaders, options and defaults, and
+  the tyre marks and smoke.
+- `test/miami-car.mjs`, `nyc-traffic-mix`: the demos' rules and engine options.
 - `test/agent-usability.mjs`: the APIs the starters rely on (road-car spec, texture ids, clip errors, static boxes).
 - `test/docs.mjs`: the docs name only paths, links and `@vibe/engine` imports that exist, and every recipe in
   docs/HOWTO.md equals its marked source region. `test/howto.mjs` runs the Node recipes (`test/howto/recipes.js`).
 - `test/asset-catalog.mjs`: the asset catalogue is in step with the files (every `samples/public` file covered,
   credits complete, generated `catalog.json` and `docs/ASSETS.md` current).
 
-`test/browser/` (`smoke`, `bench`, `perf`, `halloween`, `halloween-media`, `howto`, `check-page`, `phone-start`) needs
-Chrome and runs locally. `smoke` covers the demos and the starters, each also as a `-mobile` page (the same page on the mobile
-tier); `bench` takes `nyc-night`, `miami-drive` and their `-mobile` pages. `howto` runs the browser-only recipes
-(clustered lights, GPU particles, vehicle sound) on the starter-drive page; `check-page <name>` loads one page and
+`test/browser/` (`smoke`, `bench`, `perf`, `howto`, `check-page`, `phone-start`,
+`shell`, `sound-check`, `drive-feel`, `car-camera`) needs Chrome and runs locally. `smoke` covers the demos and the
+starters, each also as a `-mobile` page (the same page on the mobile tier); `bench` takes `nyc-night`, `miami-drive`
+and their `-mobile` pages. `howto` runs the browser-only recipes (clustered lights, GPU particles, vehicle sound) on
+the starter-drive page; `check-page <name>` loads one page and
 fails on any error; `phone-start` loads every demo and starter in play mode and checks the start-up (the loading
 screen stays until a frame is drawn, no long frame after it), a forced context loss (the Reload notice, no further
 errors) and the lighter reload. The scripts share `test/browser/playwright.config.mjs` (`startVite`, `launchChrome`,
@@ -267,8 +271,8 @@ are not pages. Add a link in `samples/index.html`.
 - **Textures and models** are from [Poly Haven](https://polyhaven.com) and [Quaternius](https://quaternius.com)
   (CC0), and the Miami hero car is the Khronos glTF sample "Car Concept" (CC-BY 4.0, logos removed).
 - Each demo lists every file, author and licence in its own credits:
-  [NYC](samples/public/nyc/CREDITS.md), [Miami](samples/public/miami/CREDITS.md),
-  [Halloween](samples/public/halloween/CREDITS.md). [docs/ASSETS.md](docs/ASSETS.md) has them all in one list.
+  [NYC](samples/public/nyc/CREDITS.md), [Miami](samples/public/miami/CREDITS.md). [docs/ASSETS.md](docs/ASSETS.md)
+  has them all in one list.
 
 The engine and its demos were built with Claude (AI agents).
 

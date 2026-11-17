@@ -16,6 +16,7 @@ import {
   createBenchHarness, readBenchParams, resolveQuality, isTouchDevice, lutFromFunction, DEFAULT_GRADE, TextureSets, loadTextureSet, loadTextureManifest,
 } from '@vibe/engine';
 import { createMemoryTrim } from '@vibe/engine/render';
+import { applyFoliageLightingTo, vegUV } from '@vibe/engine/world';
 import { QualityMenu } from '@vibe/engine/ui';
 import { MapWorld, ExtraLights, miamiPlugin, miamiWorldOptions, prepareMiamiData, MIAMI_MAP_URL, MIAMI_PRESETS } from './world.js';
 import { buildCarModel } from './car-model.js';
@@ -26,7 +27,7 @@ import { HUD, ACCENT, applyTheme } from './hud.js';
 import { DuskSky } from './sky.js';
 import { loadCarGlb } from './car-glb.js';
 import { buildRoadside } from './roadside.js';
-import { buildNearPalms } from './palm.js';
+import { buildNearPalms, canaryBark } from './palm.js';
 import { miamiBuildingsPlugin } from './buildings.js';
 
 const params = new URLSearchParams(location.search);
@@ -96,33 +97,39 @@ const TOUCH = [
 // After sunset the frame is a near-silhouette lit by the sky: fixed low exposure (no eye adaptation brightening the
 // dark), neutral-warm blacks (no teal / blue split toning), restrained saturation, bloom only on lamp cores (high
 // threshold, small radius), a slight vignette and fine grain. DUSK_EXPOSURE is the look knob (?exposure= overrides).
-const DUSK_EXPOSURE = +(new URLSearchParams(location.search).get('exposure') || 0.62);
+// ?look=open: the alternative, brighter dusk (the owner compares the two): exposure up, eye adaptation on, a softer
+// toe and natural saturation, a little more lifted black; still a calm dusk, not daylight. The smoke look gate holds
+// only the default ('low').
+const LOOK = params.get('look') === 'open' ? 'open' : 'low';
+const OPEN = LOOK === 'open';
+const DUSK_EXPOSURE = +(params.get('exposure') || (OPEN ? (MOBILE ? 1.0 : 1.1) : (MOBILE ? 0.55 : 0.62))); // (phones: no SSR / volumetrics, a brighter, smoother road under the afterglow key)
 const DUSK_GRADE = DEFAULT_GRADE.map((g) => {
   const dusk = g.el < 6 && g.el > -20;
   return {
     ...g,
-    aeS: 0,
+    aeS: OPEN ? 0.7 : 0,
     exp: dusk ? g.exp * DUSK_EXPOSURE : g.exp,
-    sat: dusk ? 0.82 : g.sat, con: dusk ? g.con + 0.04 : g.con,
-    wb: dusk ? [1.04, 1.0, 0.94] : g.wb,
-    sh: dusk ? [0.004, 0.001, -0.004] : g.sh, hi: dusk ? [0.01, 0.004, -0.01] : g.hi, split: dusk ? 0.6 : g.split,
+    sat: dusk ? (OPEN ? 0.93 : 0.85) : g.sat, con: dusk ? g.con + (OPEN ? 0.02 : 0.04) : g.con,
+    wb: dusk ? (OPEN ? [1.015, 1.0, 0.975] : [1.04, 1.0, 0.94]) : g.wb, // (open: less pink-orange over the whole frame)
+    sh: dusk ? (OPEN ? [-0.004, 0.0, 0.008] : [0.004, 0.001, -0.004]) : g.sh, hi: dusk ? [0.01, 0.004, -0.01] : g.hi, split: dusk ? 0.6 : g.split,
     bT: dusk ? 4.5 : g.bT, bS: dusk ? 0.2 : g.bS, bR: dusk ? 0.28 : g.bR,
-    vig: dusk ? 0.5 : g.vig, grain: dusk ? 0.03 : g.grain,
+    vig: dusk ? (OPEN ? 0.42 : 0.5) : g.vig, grain: dusk ? 0.03 : g.grain,
   };
 });
-/** A filmic display LUT: a long toe (the darks sink without crushing), warm-neutral shadows, a soft shoulder. */
+/** A filmic display LUT: a toe (the darks sink without crushing; shorter in the open look), warm-neutral shadows, a soft shoulder. */
 function duskLut() {
+  const k = OPEN ? 0.012 : 0.025, grey = OPEN ? 0.25 : 0.5;
   return lutFromFunction(17, (r, g, b, out) => {
     const c = [r, g, b];
     for (let i = 0; i < 3; i++) {
       const v = Math.min(1, Math.max(0, c[i]));
-      const toe = v * v / (v + 0.06) * 1.06;              // long toe
+      const toe = v * v / (v + k) * (1 + k);              // a short toe: the darks keep their value and colour
       out[i] = Math.min(1, toe < 0.8 ? toe : 0.8 + (toe - 0.8) * 0.6);
     }
     const l = 0.2126 * out[0] + 0.7152 * out[1] + 0.0722 * out[2], sh = Math.max(0, 1 - l * 2.4);
     // the darks go towards a neutral grey (photographic shadows carry little chroma)
-    for (let i = 0; i < 3; i++) out[i] = out[i] + (l - out[i]) * 0.75 * sh;
-  }, 'miami-dusk');
+    for (let i = 0; i < 3; i++) out[i] = out[i] + (l - out[i]) * grey * sh;
+  }, `miami-dusk-${LOOK}`);
 }
 
 const nextFrame = () => new Promise((r) => setTimeout(r, 0));
@@ -218,7 +225,11 @@ async function boot() {
       postfx = new PostFX(renderer, scene, camera, {
         atmosphere: atmo, width, height, pixelRatio: engine.pixelRatio, grade: DUSK_GRADE,
         ao: { radius: 1.4, thickness: 1.2, samples: 6, maxPixels: 0.45e6 }, bloom: { strength: 0.2, radius: 0.28, threshold: 4.5 }, autoExposure: false,
-        ...QS.postfx, lut: { texture: lut.texture, size: lut.size, strength: 1 },
+        ...QS.postfx, lut: { texture: lut.texture, size: lut.size, strength: 1 }, autoExposure: OPEN,
+        // AO on the ambient only (lit pixels keep their light), a cool tint in what AO leaves, a floor black lifted a
+        // little (a third of the open look's in the low-key default), TAA sharpened back after its blend
+        look: { aoLit: 0.8, aoTint: [0, 0.03, 0.07], lift: OPEN ? [0.006, 0.0085, 0.011] : [0.002, 0.0028, 0.0037] },
+        ...(QS.postfx.aa === 'taa' || QS.postfx.taa ? { taa: { ...(QS.postfx.taa || {}), sharpen: 0.25 } } : {}),
       });
       postfx.aoPass.enabled = !!QS.passes.ao; postfx.bloomPass.enabled = QS.passes.bloom !== false;
     } catch (e) { console.warn('[miami] post-processing unavailable', e); atmo.setFogMode('scene'); postfx = null; }
@@ -229,12 +240,14 @@ async function boot() {
   // below the horizon the moon is the caster: its shadows are faint, so trees, buildings and street furniture stop
   // casting (the car, the props and the palms by the beach still do); re-applied every 60 frames (tiles stream in)
   let casterLow = null, casterT = 0; // casterT: frames since the last full pass
+  const litFoliageRef = { fn: null }; // set once the plants are built (lit foliage, below)
   const casterRe = /^(veg-|buildings|building-|context-blocks|street-furniture|parked-cars|deco-trim|sidewalks)/;
   const syncCasters = (force) => {
     const low = atmo.sunDir.y < 0;
     if (!force && low === casterLow) return;
     casterLow = low;
     scene.traverse((o) => { if ((o.isMesh || o.isInstancedMesh || o.isBatchedMesh) && casterRe.test(o.name)) { if (o.userData.cast0 === undefined) o.userData.cast0 = o.castShadow; o.castShadow = low ? false : o.userData.cast0; } });
+    if (force && litFoliageRef.fn) litFoliageRef.fn();
   };
   let shadowFrame = 0, probeFrame = 0;
   const hold = { still: false }; // the bench harness holds TAA still (quiet): every harness frame resolves from a fresh history
@@ -271,7 +284,7 @@ async function boot() {
   placeCar(START.x, START.z, START.heading);
   // the photographic dusk sky (sky.js), its glow at the Dune Road's vanishing point
   const sky = await new DuskSky({ scene, renderer, atmo, 
-    glowAzimuth: START.dir ? Math.atan2(START.dir[0], -START.dir[1]) : 0, exposure: 1 }).load().catch((e) => { console.warn('[miami] dusk sky unavailable', e); return null; });
+    glowAzimuth: START.dir ? Math.atan2(START.dir[0], -START.dir[1]) : 0, exposure: 0.84 }).load().catch((e) => { console.warn('[miami] dusk sky unavailable', e); return null; });
   if (sky) car.sceneEnvWhen = () => sky.active; // phones: the paint reflects the graded dome (desktop: the live probe)
   if (sky) { sky.update(camera); engine.addSystem({ lateUpdate: () => sky.update(camera) }, 'sky'); }
   // the roadside from free scans (roadside.js): gravel ground, scanned pebbles / rocks, scrub and grass impostors
@@ -286,6 +299,20 @@ async function boot() {
   const nearPalms = !MOBILE && plugin.palmInstances && plugin.palmInstances.length ? buildNearPalms(plugin.palmInstances, { near: 52, fade: plugin.palmFade }) : null;
   if (nearPalms) { scene.add(nearPalms.group); console.info('[miami] near palms', nearPalms.stats); engine.addSystem({ lateUpdate: (dt) => nearPalms.update(camera, hold.still ? 0 : dt || 1 / 60) }, 'near-palms'); if (car.probe) car.probe.hide.push(nearPalms.group); }
   if (roadside && car.probe) car.probe.hide.push(roadside.group); // (the paint's probe does not need the near-field plants)
+  // lit foliage (engine option, VegMaterials.js applyFoliageLighting): the scrub, grass and palm fronds take the
+  // afterglow key through their leaves and on their edges, and more sky light, instead of reading as black cut-outs;
+  // re-applied with the caster pass below (tiles stream in), a no-op on materials already patched
+  const FOLIAGE = /^(roadside-plants|roadside-grass|near-palms|coconut-palms|veg-|dune-scrub|dune-grass)/;
+  const FOLIAGE_MAT = /^(nearPalmTrunk|coconutTrunk)$/; // trunks stay solid
+  const isFoliage = (m, o) => { if (FOLIAGE_MAT.test(m.name)) return false; for (let x = o; x; x = x.parent) if (FOLIAGE.test(x.name)) return true; return false; };
+  // (?look=open: less light through the leaves and a cooler tint; under its higher exposure the street palms went
+  // yellow-green)
+  const FOLIAGE_OPTS = OPEN ? { wrap: 0.5, translucency: 0.2, rim: 0.8, ambient: 0.3, tint: [0.92, 0.74, 0.6] } : { wrap: 0.5, translucency: 0.35, rim: 1.0, ambient: 0.3, tint: [1.0, 0.72, 0.55] };
+  // the street palms' bark: fibrous grey-brown with fine rings instead of the atlas's leaf-base lattice (palm.js),
+  // before the lit-foliage pass wraps the same material (re-applied with it: tiles stream in)
+  const palmBark = () => canaryBark(scene, vegUV('barkPalm'), OPEN ? { frond: vegUV('frond'), frondTint: [0.8, 0.86, 0.9] } : {}); // (open: the fronds less yellow)
+  const litFoliage = () => { palmBark(); applyFoliageLightingTo(scene, FOLIAGE_OPTS, isFoliage); };
+  litFoliage(); litFoliageRef.fn = litFoliage;
   if (roadside) { console.info('[miami] roadside', roadside.stats); engine.addSystem({ lateUpdate: (dt) => roadside.update(camera, atmo.darkness, hold.still ? 0 : dt || 1 / 60) }, 'roadside'); } // (the wind holds still for harness captures)
 
   // ---------------------------------------------------------------- props: cones down Ocean Drive, café sets by the neon, bins, the beach stack

@@ -1,5 +1,5 @@
 // Vegetation renderer. Props.js decides WHERE trees go; this module decides what they look like.
-// Contract (keep it): buildTreeMeshes(placements, { groundAt, colliders, seed, rules, mix })
+// Contract (keep it): buildTreeMeshes(placements, { groundAt, colliders, seed, rules, mix, foliageLight })
 //   placements: [{ x, z, s (scale 0.7..1.5), hue (0..1 random), kind: 'osm'|'street'|'park',
 //                  ctx: { road?: name, cls?: road class, side?, dx?, dz?, park?: park kind } }]
 //   rules (optional, the game's species rules per road): [{ road: RegExp | (name) => bool, species: 'palm',
@@ -20,7 +20,7 @@ import * as THREE from 'three';
 import { mulberry32, hashStr } from './geom.js';
 import { makeVegAtlas } from './VegTextures.js';
 import { getVegModels, SPECIES } from './VegModels.js';
-import { createVegMaterial, createImpostorMaterial } from './VegMaterials.js';
+import { createVegMaterial, createImpostorMaterial, applyFoliageLighting } from './VegMaterials.js';
 import { bakeImpostors as bakeAtlas, impostorViews, DEFAULT_RINGS } from '../render/Impostors.js';
 
 // Tree impostor bake: the engine's generic baker (render/Impostors.js). Every species is rendered from 20
@@ -98,11 +98,12 @@ const ruleTest = (r, name) => (typeof r.road === 'function' ? !!r.road(name) : r
 /**
  * Plant procedural trees (see the header for the placement fields, rules and mix).
  * @param {Array<{ x: number, z: number, s?: number, hue?: number, kind?: string, ctx?: object }>} placements
- * @param {{ groundAt?: (x: number, z: number) => number, colliders?: any, seed?: number, rules?: any[], mix?: object }} [opts]
- *   groundAt(x, z): the ground height under a tree (default 0)
+ * @param {{ groundAt?: (x: number, z: number) => number, colliders?: any, seed?: number, rules?: any[], mix?: object, foliageLight?: boolean|object }} [opts]
+ *   groundAt(x, z): the ground height under a tree (default 0). foliageLight (default false): applyFoliageLighting
+ *   (VegMaterials.js) on the leaves and impostors: true or its options
  * @returns {TreeMeshes}
  */
-export function buildTreeMeshes(placements, { groundAt = () => 0, colliders = null, seed = 1, rules = [], mix = null } = {}) {
+export function buildTreeMeshes(placements, { groundAt = () => 0, colliders = null, seed = 1, rules = [], mix = null, foliageLight = false } = {}) {
   const n = Math.min(placements.length, MAX_TREES);
   if (!n) return { group: null, count: 0, update() {} };
   const t0 = (globalThis.performance || Date).now();
@@ -240,6 +241,7 @@ export function buildTreeMeshes(placements, { groundAt = () => 0, colliders = nu
   const treeMat = createVegMaterial(atlas.texture, U, { ...TREE_FADE, wind: 1, drop: 0.1 });
   const shrubMat = createVegMaterial(atlas.texture, U, { ...SHRUB_FADE, wind: 1, drop: 0.12 });
   const grassMat = createVegMaterial(atlas.texture, U, { ...GRASS_FADE, wind: 1, drop: 0 });
+  for (const m of [treeMat, shrubMat, grassMat]) applyFoliageLighting(m, foliageLight);
   const group = new THREE.Group(); group.name = 'trees';
 
   const mkNear = (name, mat, cap, shadow) => {
@@ -296,6 +298,7 @@ export function buildTreeMeshes(placements, { groundAt = () => 0, colliders = nu
     ig.instanceCount = n;
     const spec = bakeModels.map((b) => ({ cx: b.center.x, cy: b.center.y, cz: b.center.z, r: b.radius }));
     const impMat = createImpostorMaterial(baked.albedo, baked.normal, U, spec, baked.layout, TREE_FADE);
+    applyFoliageLighting(impMat, foliageLight);
     impMesh = new THREE.Mesh(ig, impMat);
     impMesh.frustumCulled = false;
     impMesh.castShadow = false; impMesh.receiveShadow = true;

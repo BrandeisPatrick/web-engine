@@ -42,7 +42,7 @@ export const headlessArgs = [
 /** Headed Chrome for GPU numbers: ANGLE on Metal on macOS, vsync and the frame-rate limit left alone. */
 export const headedArgs = [...(mac ? ['--use-angle=metal'] : []), '--ignore-gpu-blocklist', '--enable-precise-memory-info', ...unthrottled];
 
-/** Globals of pages without the bench harness (the Halloween game's window.__game): one of these but no __sample is SKIPPED. */
+/** Globals of pages without the bench harness (window.__game, as the retired Halloween game had): one of these but no __sample is SKIPPED. */
 export const legacyGlobals = ['__game'];
 
 /** Console errors to ignore, matched against the message text and its source URL. */

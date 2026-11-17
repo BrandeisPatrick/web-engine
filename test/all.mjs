@@ -19,11 +19,21 @@ const SUITES = [
   { file: 'texture-manifest.mjs' },
   // world: the high-detail vehicle level (lod 'hd'), with LOD 0 / 1 pinned byte-identical
   { file: 'vehicles-hd.mjs', shim: true },
+  // createCarVisual: every HD type, wheels on the physics within 1 cm, a 10 s drive, lamps, contact shadow
+  { file: 'car-visual.mjs' },
+  // the starters' scenery (world/Scenery.js): country road, park corner, ground cover, road paint; colliders, determinism
+  { file: 'scenery.mjs' },
   // quality tiers (desktop / mobile): device recommendation, ?quality= / stored precedence, preset merge
   { file: 'quality.mjs' },
+  // ui: the game shell's state machine and saved settings (the DOM half is test/browser/shell.mjs)
+  { file: 'shell.mjs' },
   { file: 'assets.mjs' },
   { file: 'rigs.mjs' },
+  // camera feel: options off = main's poses (camera-feel-ref.json), road feel, trauma, landing dip, sprint FOV
+  { file: 'camera-feel.mjs' },
   { file: 'character-input.mjs' },
+  // drive feel: steering assist with and without on ROAD_CAR_SPEC (lock, handbrake catch, slalom, turning circle), rumble values
+  { file: 'steering-assist.mjs' },
   { file: 'anim.mjs' },
   { file: 'character-sim.mjs' },
   // dynamics (0.6.0): shapes -> broadphase -> narrowphase -> xpbd/joints -> world -> queries/bridge -> worker protocol
@@ -36,11 +46,15 @@ const SUITES = [
   { file: 'dyn-serialize.mjs' },
   // render (0.7.0)
   { file: 'gpu-particles.mjs', shim: true },
+  // skid marks and tyre smoke from wheels[i].slideHeat (TyreFx): clean corner leaves nothing, a slide marks and smokes
+  { file: 'tyre-fx.mjs', shim: true },
   { file: 'clustered.mjs' },
   { file: 'shadows.mjs' },
   // directional lights black at the pixel skip their BRDF (shadows.skipUnlit)
   { file: 'skip-unlit.mjs' },
   { file: 'postfx-options.mjs' },
+  // the weathering material patch: builds, deterministic, zero is identity, unpatched materials unchanged
+  { file: 'surface-detail.mjs' },
   // PostFX renderScale (temporal upscaling): sizes, defines, scale-1 texts pinned, sequences, allocation
   { file: 'render-scale.mjs' },
   { file: 'gbuffer-chunks.mjs' },
@@ -57,10 +71,6 @@ const SUITES = [
   { file: 'dyn-fracture.mjs' },
   { file: 'character-dyn.mjs' },
   { file: 'ragdoll.mjs', shim: true },
-  // the Halloween sample: its enemies' rules and per-frame allocation (samples/halloween/hands.js, thief.js), its
-  // depth and replay rules (potions.js, chain.js, secrets.js, badges.js, rng.js)
-  { file: 'halloween-enemies.mjs', shim: true },
-  { file: 'halloween-depth.mjs', shim: true },
   // the Miami drive sample: its road-car spec (samples/miami-drive/spec.js) on the VehicleController
   { file: 'miami-car.mjs' },
   // the NYC night walk sample's engine options: traffic fleet mix and the spawn area (TrafficSim)
@@ -71,6 +81,11 @@ const SUITES = [
   // agent usability: ROAD_CAR_SPEC, loadTextureSet role keys / warnings, missing-clip errors, addStaticBox object
   // forms, NearestLights from the render layer, PoseInterpolator
   { file: 'agent-usability.mjs' },
+  // audio (sound kit): the DSP and every preset measured (peak, DC, ends / loop seam, centroid band, seeds), the voice
+  // policy and the mixer graphs on a fake AudioContext, SoundBank / analyseMix without Web Audio
+  { file: 'audio-dsp.mjs' },
+  { file: 'audio-voices.mjs' },
+  { file: 'audio-bank.mjs' },
   // the docs (README.md, ENGINE.md, AGENTS.md, docs/HOWTO.md) name only paths, links and exports that exist
   { file: 'docs.mjs' },
   // the Node-capable recipes of docs/HOWTO.md (test/howto/recipes.js) run and do what they say

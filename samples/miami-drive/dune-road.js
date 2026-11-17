@@ -14,6 +14,11 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
+/** The twilight key's amount (0 by day, up to 1 at dusk; set by the miami plugin's update): the sand's dusk fill
+ *  (world.js) and the corridor's softer key highlight read it. (No fill on the corridor: the chase and car poses sit
+ *  at the look gate's under40 limit.) */
+export const DUSK_FILL = { value: 0 };
+
 const LANE = 3.35, HALF = 3.6, SHOULDER = 5.4;   // half width of the asphalt (with 25 cm of edge), gravel to 5.4 m
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 function rnd(seed) { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -432,8 +437,18 @@ float dRough = 0.88;
       .replace('#include <roughnessmap_fragment>', THREE.ShaderChunk.roughnessmap_fragment.replace('float roughnessFactor = roughness;', 'float roughnessFactor = dRough;') + `
 #ifdef ENGINE_GBUFFER
 engineGbRoughness = max(roughnessFactor, 0.6); // no screen-space reflections on the corridor: its sheen is the environment's
-#endif`);
+#endif`)
+      // the low afterglow key grazes the road straight toward the camera in the chase view: direct highlights at 0.45,
+      // the directional light's down to 0.15 at dusk (a broad patch of sky, not a disc: a soft sheen along the lane, not
+      // a bright band); the environment's sheen is kept
+      .replace('#include <lights_fragment_begin>', THREE.ShaderChunk.lights_fragment_begin
+        .replace('#if ( NUM_DIR_LIGHTS > 0 ) && defined( RE_Direct )', 'vec3 drSpec0 = reflectedLight.directSpecular;\n#if ( NUM_DIR_LIGHTS > 0 ) && defined( RE_Direct )')
+        .replace('#if ( NUM_RECT_AREA_LIGHTS > 0 )', 'reflectedLight.directSpecular = drSpec0 + ( reflectedLight.directSpecular - drSpec0 ) * mix( 1.0, 0.33, uDuskFill );\n#if ( NUM_RECT_AREA_LIGHTS > 0 )'))
+      .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.directSpecular *= 0.45;');
+    sh.uniforms.uDuskFill = DUSK_FILL;
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uDuskFill;');
   };
+  m.envMapIntensity = 0.6; // the low-sun environment's bright horizon: a softer sheen on the lane toward the glow
   m.customProgramCacheKey = () => { const sc = m.userData.scan; return `miami-dune-road-${asphalt && asphalt.map ? 1 : 0}-${sc ? 1 : 0}${sc && sc.road ? 'r' : ''}${sc && sc.bank ? 'b' : ''}`; };
   return m;
 }

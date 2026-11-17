@@ -295,6 +295,12 @@ if (vAnim.w > 2.5) { roughnessFactor = 0.14; diffuseColor.rgb = vec3(0.004); } /
 #ifdef ENGINE_GBUFFER
 engineGbRoughness = roughnessFactor;
 #endif`)
+      // shop glass: a lamp's highlight in the pane held to a small warm point. At roughness 0.14 a shop light 2 m off the
+      // glass peaked in the hundreds and bloomed into a white ball the size of a pendant lamp. The direct specular's
+      // flanks are pulled in (s / (s + 0.6): the lobe reads narrower, as clear glass) and its peak is held under 0.8
+      // (a soft knee), so the point keeps its colour and only a little halo (street lamps in the panes too)
+      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+if (vAnim.w > 2.5) { float sM = max(reflectedLight.directSpecular.r, max(reflectedLight.directSpecular.g, reflectedLight.directSpecular.b)); reflectedLight.directSpecular *= sM / (sM + 0.6) / (1.0 + sM / 0.8); }`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 {
   // vAnim: x frames (1 = static), y phase s, z s per frame, w kind (0 LED, 1 marquee, 2 neon); vLook: x gain, y seed
@@ -316,10 +322,32 @@ engineGbRoughness = roughnessFactor;
     float fx = fract(suv.x * panes), pane = floor(suv.x * panes);
     if (vAnim.y < 0.5) {
       float yaw0 = (vLook.y - 0.5) * 2.0 + (suv.x - 0.5) * 0.9;           // per shop, and across the front
-      float u = 0.5 + atan(d.x, d.z) / 6.2832 + yaw0 * 0.08;
-      float v = 0.5 + asin(clamp(d.y, -1.0, 1.0)) / 3.1416 * 0.92 - 0.06;
+      // the panoramas are 512 px round: along the true ray a 5 m front showed ~80 px of one, magnified into a smear.
+      // A wider lens (1.8x the angle across, 1.4x up: more of the room, more texels per pane), the photo a little
+      // dimmer, and crisp near things in front of it that move with the eye: a counter 0.9 m in with its lit top
+      // edge, pendant lamps 1.8 m in (the photo then reads as the room behind them, not as a blurred pane)
+      float u = 0.5 + atan(d.x, d.z) / 6.2832 * 1.8 + yaw0 * 0.08;
+      float v = 0.5 + asin(clamp(d.y, -1.0, 1.0)) / 3.1416 * 0.92 * 1.4 - 0.06;
       c = texture2D(uShops, vec2(vRect.x + fract(u) * vRect.z, vRect.y + clamp(v, 0.02, 0.98) * vRect.w)).rgb;
-      c *= c * 0.32; // display-referred panoramas back to linear-ish, and dim: a suggestion behind the reflections
+      c *= c * 0.3; // display-referred panoramas back to linear-ish, and dim: a suggestion behind the reflections
+      c = mix(vec3(dot(c, vec3(0.3, 0.55, 0.15))), c, 0.8) / (1.0 + 4.0 * c); // its highlights held down: a soft room, not a pale smear
+      if (sz.y > 1.2) {
+        vec2 e = suv * sz, dd = d.xy / max(d.z, 0.06);
+        vec2 hc = e + dd * 0.9;                                            // the counter's front plane
+        float cw = sz.x * (0.22 + 0.14 * vLook.y), cx = sz.x * (0.3 + 0.4 * fract(vLook.y * 7.3));
+        float inC = step(abs(hc.x - cx), cw) * step(hc.y, 0.62);
+        float lip = inC * (1.0 - smoothstep(0.0, 0.035 + fwidth(hc.y), 0.62 - hc.y));
+        c = mix(c, vec3(0.03, 0.021, 0.014) * (0.7 + 0.6 * hc.y), inC);
+        c += vec3(0.55, 0.38, 0.2) * lip * 0.35;
+        vec2 hp = e + dd * 1.8;                                            // pendants on a 1.4 m pitch
+        vec2 pq = vec2(fract(hp.x / 1.4 + vLook.y) - 0.5, hp.y / 1.4 - (sz.y - 0.55) / 1.4) * 1.4; // metres from a lamp
+        float aa = fwidth(hp.x) + 0.004;
+        float shade = smoothstep(1.0 + aa * 8.0, 1.0, length(pq / vec2(0.17, 0.11))) * step(-0.005, pq.y); // a dome shade
+        float under = smoothstep(0.06 + aa, 0.04, length(pq * vec2(1.0, 2.2))) * step(pq.y, 0.0);          // the lit underside
+        c = mix(c, vec3(0.02, 0.017, 0.014), shade);
+        c += vec3(1.0, 0.72, 0.4) * (under * 1.4 + exp(-length(pq) * 9.0) * 0.12);
+        c = mix(c, vec3(0.01), step(abs(pq.x), 0.006 + aa * 0.5) * step(0.1, pq.y)); // the cords
+      }
     } else {
       float band = 0.65 + 0.35 * smoothstep(0.0, 0.18, abs(fract(suv.y * 46.0) - 0.5));
       c = vec3(0.022, 0.021, 0.02) * band * (0.8 + 0.4 * sHash(pane + vLook.y * 37.0));
@@ -363,7 +391,7 @@ engineGbRoughness = roughnessFactor;
   totalEmissiveRadiance = c * gain * uSignGain;
 }`);
   };
-  m.customProgramCacheKey = () => 'nyc-sign-5';
+  m.customProgramCacheKey = () => 'nyc-sign-6';
   return m;
 }
 

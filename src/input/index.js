@@ -4,5 +4,12 @@ export { InputMap, approach as inputApproach, ramp as inputRamp, normalizeBindin
 export { GamepadState, PAD_BUTTONS, PAD_AXES, applyDeadzone } from './Gamepad.js';
 export { TouchControls, isTouchDevice, isPortrait, resolveTouchEntry, touchEdge } from './TouchControls.js';
 export { VehicleInput, VehicleInput as Input, VEHICLE_ACTIONS, VEHICLE_TOUCH_LAYOUT } from './VehicleInput.js';
+// steering assist (opt-in): lock held at the front tyres' grip limit, self-steer that catches slides
+export { SteeringAssist } from './SteeringAssist.js';
+/** @typedef {import('./SteeringAssist.js').SteeringAssistOptions} SteeringAssistOptions */
+/** @typedef {import('./SteeringAssist.js').SteeringAssistCar} SteeringAssistCar */
+// gamepad rumble from the car's slides, landings and hits (layered acc + m (1 - acc))
+export { VehicleHaptics } from './VehicleHaptics.js';
+/** @typedef {import('./VehicleHaptics.js').VehicleHapticsOptions} VehicleHapticsOptions */
 export { CharacterInput, CHARACTER_ACTIONS, CHARACTER_TOUCH_LAYOUT } from './CharacterInput.js';
 export { PointerLock } from './PointerLock.js';

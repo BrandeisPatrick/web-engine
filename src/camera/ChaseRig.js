@@ -25,8 +25,48 @@
 // orientation (reduced roll) and banks with the turn while state.mode === 'flight'; false keeps the ground
 // framing always (jumping ground vehicles); 'auto' only switches once 'flight' has lasted flightFramingDelay
 // seconds (ignores short hops, frames real flights).
+//
+// Road feel (follow mode, opt-in: `feel: 'road'`, or an object of ROAD_FEEL fields to tune; default off = the plain
+// follow above, pose for pose): the camera reacts to the car's acceleration in its own frame, read from state.accel
+// (a VehicleController's `localAccel`: x right, y up, z forward; without it, from the rig's own velocity differences).
+//   surge  the boom lengthens under acceleration and shortens under braking: surge * (sin(atan(1.5 aLong - 0.258)) -
+//          sin(atan(-0.258))) metres, aLong in g (1 g braking: about 0.3 m closer)
+//   sway   the camera moves to the outside of a corner: -sway * sin(atan(aLat)) metres (0.8 g: about 0.35 m), and the
+//          horizon tilts with it by tilt * sin(atan(aLat)) rad (under 1 degree)
+//   heave  vertical acceleration high-passed at heaveHz (a landing, a crest, not a steady load) moves the camera down /
+//          up by heave metres per m/s^2, at most heaveMax
+//   lagCap the follow direction never trails the car's heading by more than lagCap rad (0.35)
+// Accelerations are smoothed with `smooth` per 1/60 s frame as 1 - (1 - k)^(h * 60), and the follow spring runs in
+// sub-steps of at most 1 / springHz s, so 30, 60 and 120 Hz give the same path within a few millimetres. Road feel
+// replaces the plain follow's raw-acceleration push on the spring. rig.addTrauma(x) shakes any mode (CameraRig).
 import * as THREE from 'three';
-import { CameraRig, clamp, smooth01, damp, wrapPi, treeCanopy } from './CameraRig.js';
+import { CameraRig, clamp, smooth01, damp, damp60, wrapPi, treeCanopy } from './CameraRig.js';
+
+/**
+ * Road feel defaults (`feel: 'road'`); pass an object to override some: `feel: { sway: 0.4 }` (merged over these).
+ * @typedef {{ surge: number, sway: number, tilt: number, heave: number, heaveMax: number, heaveHz: number,
+ *   lagCap: number, smooth: number, springHz: number }} ChaseFeel
+ * @type {Readonly<ChaseFeel>}
+ */
+export const ROAD_FEEL = Object.freeze({
+  surge: 0.5,      // m of boom per unit of the surge curve (1 g braking ~ -0.31 m, 0.3 g acceleration ~ +0.22 m)
+  sway: 0.55,      // m toward the outside of a corner per unit of sin(atan(aLat))
+  tilt: 0.012,     // rad of horizon tilt per unit of sin(atan(aLat))
+  heave: 0.012,    // m per m/s^2 of high-passed vertical acceleration
+  heaveMax: 0.12,  // m
+  heaveHz: 1.2,    // high-pass corner (Hz)
+  lagCap: 0.35,    // rad between the follow direction and the car's heading
+  smooth: 0.08,    // acceleration smoothing per 1/60 s frame
+  springHz: 120,   // minimum sub-step rate of the follow spring
+});
+const G = 9.81;
+const SURGE0 = Math.sin(Math.atan(-0.258));
+function resolveFeel(f) {
+  if (!f || f === 'none' || f === 'off') return null;
+  if (f === 'road' || f === true) return { ...ROAD_FEEL };
+  if (typeof f === 'object') return { ...ROAD_FEEL, ...f };
+  throw new Error(`ChaseRig: unknown feel ${JSON.stringify(f)} (use 'road', an object of ROAD_FEEL fields, or null)`);
+}
 
 const _UP = new THREE.Vector3(0, 1, 0);
 const CINE_RADII = [1, 0.72, 0.5], CINE_LIFTS = [0, 2.5, 6], CINE_DIRS = [1, -1];
@@ -57,21 +97,31 @@ export function defaultChaseModes(rig) {
  *   What ChaseRig reads from setTarget's state getter (every field optional): velocity (world m/s, e.g. a
  *   VehicleController's `velocity`: speed-dependent distance / FOV, velocity-biased yaw; else speedKmh), mode ('flight'
  *   switches to flight framing), thrust / gForce / wheelSlip (0..1-ish: camera shake; wheelSlip only while grounded).
+ *   With `feel: 'road'` also accel (THREE.Vector3, the car's acceleration in its own frame, m/s^2: x right, y up,
+ *   z forward, i.e. a VehicleController's `localAccel`).
  */
 
 export class ChaseRig extends CameraRig {
   /**
    * @param {THREE.PerspectiveCamera} camera
-   * @param {HTMLElement} [domElement]
-   * @param {object} [opts]  minY, getGroundHeight, queryColliders, physics, occlusion, collisionMargin,
+   * @param {HTMLElement|null} [domElement]
+   * @param {{ feel?: null|'road'|Partial<ChaseFeel>, [key: string]: any }} [opts]  minY, getGroundHeight, queryColliders, physics, occlusion, collisionMargin,
    *                          offsets: { hood, cockpit }, modes: { name: config }, modeOrder: [names],
    *                          active (false = start inactive), flightFraming (true | false | 'auto'),
    *                          flightFramingDelay (s, 'auto' only, 0.6), canopyFromCollider (treeCanopy | null | fn),
-   *                          thinKinds ([2, 3] | [] | kinds)
+   *                          thinKinds ([2, 3] | [] | kinds), feel (null | 'road' | Partial<ChaseFeel>: see ROAD_FEEL),
+   *                          traumaDecay, traumaShake (CameraRig: addTrauma)
    */
   constructor(camera, domElement, opts = {}) {
     super(camera, withChaseDefaults(opts));
     this.domElement = domElement || null;
+    /** @type {ChaseFeel|null} road feel parameters (null = off); see ROAD_FEEL */
+    this.feel = resolveFeel(opts.feel);
+    this._fLong = 0; this._fLat = 0; this._fVlp = 0; this._fHeave = 0;
+    this._fAccel = new THREE.Vector3();
+    this._dirPrev = new THREE.Vector3(0, 0, -1);
+    this._idealPrev = new THREE.Vector3();
+    this._idealT = new THREE.Vector3();
     this.flightFraming = opts.flightFraming ?? true;
     this.flightFramingDelay = opts.flightFramingDelay ?? 0.6;
     this._flightT = 0;
@@ -278,6 +328,7 @@ export class ChaseRig extends CameraRig {
     const snap = this._snapPending;
     const cfg = this.modes[this.mode] || { type: 'follow' };
     const type = cfg.type;
+    if (this.feel) this._updateFeel(dt, state, snap);
 
     if (type === 'mounted') {
       this._updateMounted(cfg, dt);
@@ -299,11 +350,40 @@ export class ChaseRig extends CameraRig {
           }
         }
       }
-      if (snap) this._followDir.copy(this._dir);
-      else this._followDir.lerp(this._dir, damp(5, dt)).normalize();
-      if (this._followDir.lengthSq() < 1e-6) this._followDir.copy(this._dir);
-      const yaw = Math.atan2(-this._followDir.x, -this._followDir.z);
-      this._qGround.setFromAxisAngle(this._yAxis, yaw);
+      // flight: full target orientation with reduced roll
+      this._euler.setFromQuaternion(carQuat, 'YXZ');
+      this._euler.z *= this.flightRollFactor;
+      this._euler.x = clamp(this._euler.x, -1.2, 1.2) * 0.85;
+      this._qFlight.setFromEuler(this._euler);
+
+      let yaw;
+      if (this.feel && !snap) {
+        // road feel: the follow direction and the follow frame in sub-steps toward the direction interpolated from last
+        // frame's (frame-rate independent), then the lag cap
+        const n = Math.max(1, Math.ceil(dt * this.feel.springHz - 1e-6)), h = dt / n;
+        const w5 = damp(5, h), w6 = damp(inFlight ? 3.5 : 6, h);
+        for (let i = 1; i <= n; i++) {
+          this._followDir.lerp(this._tmp2.copy(this._dirPrev).lerp(this._dir, i / n).normalize(), w5).normalize();
+          if (this._followDir.lengthSq() < 1e-6) this._followDir.copy(this._dir);
+          this._qGround.setFromAxisAngle(this._yAxis, Math.atan2(-this._followDir.x, -this._followDir.z));
+          this._qDesired.copy(this._qGround).slerp(this._qFlight, this._flightBlend);
+          this._qFollow.slerp(this._qDesired, w6);
+        }
+        this._capLag();
+        yaw = Math.atan2(-this._followDir.x, -this._followDir.z);
+        this._qGround.setFromAxisAngle(this._yAxis, yaw);
+        this._qDesired.copy(this._qGround).slerp(this._qFlight, this._flightBlend);
+      } else {
+        if (snap) this._followDir.copy(this._dir);
+        else this._followDir.lerp(this._dir, damp(5, dt)).normalize();
+        if (this._followDir.lengthSq() < 1e-6) this._followDir.copy(this._dir);
+        yaw = Math.atan2(-this._followDir.x, -this._followDir.z);
+        this._qGround.setFromAxisAngle(this._yAxis, yaw);
+        this._qDesired.copy(this._qGround).slerp(this._qFlight, this._flightBlend);
+        if (snap) this._qFollow.copy(this._qDesired);
+        else this._qFollow.slerp(this._qDesired, damp(inFlight ? 3.5 : 6, dt));
+      }
+      this._dirPrev.copy(this._dir);
 
       // speed-dependent bank in flight (from the follow yaw rate)
       let yawRate = 0;
@@ -311,16 +391,6 @@ export class ChaseRig extends CameraRig {
       this._prevYaw = yaw; this._hasYaw = true;
       const bankT = snap ? 0 : clamp(yawRate * speed * this.flightBank, -0.35, 0.35) * this._flightBlend;
       this._roll += (bankT - this._roll) * damp(2.2, dt);
-
-      // flight: full target orientation with reduced roll
-      this._euler.setFromQuaternion(carQuat, 'YXZ');
-      this._euler.z *= this.flightRollFactor;
-      this._euler.x = clamp(this._euler.x, -1.2, 1.2) * 0.85;
-      this._qFlight.setFromEuler(this._euler);
-
-      this._qDesired.copy(this._qGround).slerp(this._qFlight, this._flightBlend);
-      if (snap) this._qFollow.copy(this._qDesired);
-      else this._qFollow.slerp(this._qDesired, damp(inFlight ? 3.5 : 6, dt));
 
       this.collision.gather(this._carPos, Math.max(this.distMax, this.orbitRadius) + 6);
       if (type === 'orbit') this._updateOrbit(dt, snap);
@@ -345,6 +415,7 @@ export class ChaseRig extends CameraRig {
 
     // ---------- flight bank + shake (applied after lookAt as small rotations) ----------
     if (type === 'follow' && Math.abs(this._roll) > 1e-4) cam.rotateZ(this._roll);
+    if (type === 'follow' && this.feel && !this.lookBack) cam.rotateZ(this.feel.tilt * Math.sin(Math.atan(this._fLat)));
     const shake = cfg.shake ?? (type === 'orbit' ? 0 : type === 'follow' ? 1 : 0.6);
     if (shake > 0) {
       // gForce includes gravity: a car at rest reads 1 g, so only load ABOVE ~1.15 g (hard braking, landings,
@@ -364,7 +435,46 @@ export class ChaseRig extends CameraRig {
       }
     }
 
+    this._applyTrauma(dt);
     this._snapPending = false;
+  }
+
+  /** Road feel: smoothed longitudinal / lateral g and the high-passed vertical heave from the car-frame acceleration. */
+  _updateFeel(dt, state, snap) {
+    const F = this.feel, a = this._fAccel;
+    const sa = state.accel;
+    if (sa && Number.isFinite(sa.x) && Number.isFinite(sa.y) && Number.isFinite(sa.z)) a.copy(sa);
+    else { // the rig's own world acceleration in the car frame (local -Z forward -> z forward)
+      a.copy(this._accel).applyQuaternion(this._qTmp.copy(this._carQuat).invert());
+      a.z = -a.z;
+    }
+    if (snap) { this._fLong = 0; this._fLat = 0; this._fHeave = 0; this._fVlp = a.y; } // a teleport starts calm
+    const k = damp60(F.smooth, dt);
+    this._fLong += (a.z / G - this._fLong) * k;
+    this._fLat += (a.x / G - this._fLat) * k;
+    this._fVlp += (a.y - this._fVlp) * damp(2 * Math.PI * F.heaveHz, dt);
+    const heaveT = clamp(-(a.y - this._fVlp) * F.heave, -F.heaveMax, F.heaveMax);
+    this._fHeave += (heaveT - this._fHeave) * k;
+  }
+
+  /** Road feel: keep the follow direction within lagCap of the car's horizontal heading. */
+  _capLag() {
+    const f = this._followDir, h = this._tmp2.set(this._fwd.x, 0, this._fwd.z);
+    if (h.lengthSq() < 1e-8) return;
+    h.normalize();
+    const cap = this.feel.lagCap;
+    let cross = h.x * f.z - h.z * f.x, dot = h.x * f.x + h.z * f.z, ang = Math.atan2(cross, dot);
+    if (Math.abs(ang) > cap) { // rotate the heading by +-cap in the XZ plane (the same sense as the measured angle)
+      const s = Math.sign(ang) * cap, c = Math.cos(s), sn = Math.sin(s);
+      f.set(h.x * c - h.z * sn, 0, h.x * sn + h.z * c);
+    }
+    // the follow frame itself (it trails the follow direction): turn it about world up back to the cap
+    const q = this._qFollow, v = this._vdir.set(0, 0, -1).applyQuaternion(q);
+    v.y = 0;
+    if (v.lengthSq() < 1e-8) return;
+    v.normalize();
+    cross = h.x * v.z - h.z * v.x; dot = h.x * v.x + h.z * v.z; ang = Math.atan2(cross, dot);
+    if (Math.abs(ang) > cap) q.premultiply(this._qTmp.setFromAxisAngle(this._yAxis, (Math.abs(ang) - cap) * Math.sign(ang)));
   }
 
   _distanceForSpeed(speedN) { return this.distMin + (this.distMax - this.distMin) * speedN; }
@@ -378,25 +488,37 @@ export class ChaseRig extends CameraRig {
     const back = this.lookBack ? -dist : dist;
     const base = Math.atan2(height, dist), el = base + this._elev * 0.75;
     const r = Math.hypot(height, dist);
-    this._idealOffset.set(0, Math.sin(el) * r, Math.sign(back) * Math.cos(el) * r).applyQuaternion(this._qFollow);
+    const F = this.lookBack ? null : this.feel;
+    if (F) { // road feel: boom surge, sway to the outside of the corner, heave
+      const surge = F.surge * (Math.sin(Math.atan(1.5 * this._fLong - 0.258)) - SURGE0);
+      this._idealOffset.set(-F.sway * Math.sin(Math.atan(this._fLat)), Math.sin(el) * r + this._fHeave, Math.cos(el) * r + surge);
+    } else this._idealOffset.set(0, Math.sin(el) * r, Math.sign(back) * Math.cos(el) * r);
+    this._idealOffset.applyQuaternion(this._qFollow);
 
     if (snap || this.lookBack !== this._lastLookBack) {
       this._offset.copy(this._idealOffset);
       this._offsetVel.set(0, 0, 0);
     } else {
       // spring-damper on the target-relative offset (stays stable at 400 km/h), slightly under-damped
+      // (road feel: sub-stepped toward the ideal interpolated from last frame's, no raw-acceleration push: the surge
+      // above replaces it)
       const k = 45, c = 2 * 0.86 * Math.sqrt(k);
-      this._tmp.copy(this._idealOffset).sub(this._offset).multiplyScalar(k);
-      this._tmp.addScaledVector(this._offsetVel, -c);
-      this._tmp.addScaledVector(this._accel, -1.6);      // inertia: acceleration pushes the camera back
-      this._offsetVel.addScaledVector(this._tmp, dt);
-      this._offset.addScaledVector(this._offsetVel, dt);
+      const n = this.feel ? Math.max(1, Math.ceil(dt * this.feel.springHz - 1e-6)) : 1, h = n > 1 ? dt / n : dt;
+      for (let i = 0; i < n; i++) {
+        const goal = this.feel ? this._idealT.copy(this._idealPrev).lerp(this._idealOffset, (i + 1) / n) : this._idealOffset;
+        this._tmp.copy(goal).sub(this._offset).multiplyScalar(k);
+        this._tmp.addScaledVector(this._offsetVel, -c);
+        if (!this.feel) this._tmp.addScaledVector(this._accel, -1.6);      // inertia: acceleration pushes the camera back
+        this._offsetVel.addScaledVector(this._tmp, h);
+        this._offset.addScaledVector(this._offsetVel, h);
+      }
       const maxDev = 3.5;
       this._tmp.copy(this._offset).sub(this._idealOffset);
       const dev = this._tmp.length();
       if (dev > maxDev) this._offset.copy(this._idealOffset).addScaledVector(this._tmp, maxDev / dev);
     }
     this._lastLookBack = this.lookBack;
+    this._idealPrev.copy(this._idealOffset);
 
     this._camUp.copy(_UP).applyQuaternion(this._qFollow);
     this._pivot.copy(this._carPos).addScaledVector(this._camUp, 1.05);

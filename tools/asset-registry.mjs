@@ -21,7 +21,6 @@ import { makeFurnitureGeometry } from '../src/world/Furniture.js';
 export const DEMOS = {
   'nyc-night': 'Night NYC walk',
   'miami-drive': 'Miami drive',
-  halloween: 'Midnight Candy Run',
 };
 
 export const CATEGORIES = {
@@ -34,45 +33,11 @@ export const CATEGORIES = {
 export const IGNORE = [
   { path: 'samples/public/catalog/', reason: 'the catalogue itself (catalog.json and the thumbnails)' },
   { path: 'samples/public/miami/basis/', reason: 'Basis Universal transcoder (from three/examples/jsm/libs/basis, Apache-2.0): a runtime library for the KTX2 textures, not an asset' },
-  { path: 'samples/public/halloween/apple-touch-icon.png', reason: 'home-screen icon of the Halloween page (made for the game)' },
-  { path: 'samples/public/halloween/icon-192.png', reason: 'web app manifest icon of the Halloween page' },
-  { path: 'samples/public/halloween/icon-512.png', reason: 'web app manifest icon of the Halloween page' },
-  { path: 'samples/public/halloween/manifest.webmanifest', reason: 'web app manifest of the Halloween page' },
-  { path: 'samples/public/halloween/share.jpg', reason: 'link-preview image of the Halloween page (a screenshot of the game)' },
   { path: 'samples/public/miami/textures-lite/manifest.json', reason: 'phone-tier texture manifest of the Miami drive: it lists no sets (procedural layers)' },
 ];
 
 // ------------------------------------------------------------------------------------------------ file assets
 const B = 'import.meta.env.BASE_URL';
-const HALLOWEEN_SETS = [
-  // [folder, Poly Haven id, name, author, real size (m), use]
-  ['ground', 'forrest_ground_01', 'Forest Ground 01', 'Rob Tuytel', 2, 'grass'],
-  ['ground', 'forest_leaves_02', 'Forest Leaves 02', 'Rob Tuytel', 3, 'leaf litter'],
-  ['ground', 'rocky_trail', 'Rocky Trail', 'Amal Kumar', 2, 'gravel lane, creek bed'],
-  ['props', 'green_rough_planks', 'Green Rough Planks', 'Rob Tuytel', 1.5, 'boards, walls, fences'],
-  ['props', 'roof_slates_02', 'Roof Slates 02', 'Rob Tuytel', 3, 'slate roofs'],
-  ['props', 'old_stone_wall', 'Old Stone Wall', 'Charlotte Baglioni', 2, 'masonry'],
-  ['props', 'lichen_rock', 'Lichen Rock', 'Rico Cilliers', 2, 'gravestones, standing stones'],
-  ['props', 'bark_brown_02', 'Bark Brown 02', 'Rob Tuytel', 1, 'tree bark'],
-];
-
-const halloweenSet = ([dir, pid, name, author, size, use]) => ({
-  id: `halloween-${pid}`, name, category: 'texture-set', usedBy: ['halloween'],
-  files: ['diff', 'nor', 'diff-512'].map((m) => `samples/public/halloween/${dir}/${pid}-${m}.jpg`),
-  credit: { file: 'samples/public/halloween/CREDITS.md', row: `(\`${pid}\`)`, author, url: `https://polyhaven.com/a/${pid}` },
-  tags: ['poly haven', 'pbr', dir, ...use.split(/,\s*/)],
-  facts: { realSize: `${size} x ${size} m`, maps: 'albedo, normal (OpenGL); 512 px albedo for phones', use },
-  description: `Poly Haven scan used by Midnight Candy Run for ${use} (loaded by ${dir === 'ground' ? 'loadGroundSets' : 'loadPropSets'} in samples/halloween/world.js; the remastered look only).`,
-  snippet: `import * as THREE from 'three';
-const loader = new THREE.TextureLoader(), base = ${B} + 'halloween/${dir}/';
-const map = await loader.loadAsync(base + '${pid}-diff.jpg');      // '-diff-512.jpg' on phones
-const normalMap = await loader.loadAsync(base + '${pid}-nor.jpg');
-map.colorSpace = THREE.SRGBColorSpace;
-for (const t of [map, normalMap]) t.wrapS = t.wrapT = THREE.RepeatWrapping;
-const ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map, normalMap, roughness: 0.9 }));
-scene.add(ball);`,
-});
-
 const gltfModel = (o) => ({
   snippet: `import * as THREE from 'three';
 import { Assets } from '@vibe/engine/core';
@@ -167,7 +132,6 @@ const lut = parseCubeLUT(await (await fetch(${B} + 'luts/${name}.cube')).text())
 });
 
 export const FILE_ENTRIES = [
-  ...HALLOWEEN_SETS.map(halloweenSet),
   {
     id: 'miami-coral_gravel', name: 'Coral Gravel', category: 'texture-set', usedBy: ['miami-drive'],
     files: ['diff', 'nor_gl', 'rough'].map((m) => `samples/public/miami/roadside/coral_gravel_${m}.jpg`),
@@ -385,7 +349,7 @@ scene.add(boat);`,
 const SKY = { dawn: 7.25, morning: 9.5, noon: 13, afternoon: 15.5, golden: 17.55, sunset: 18.45, dusk: 18.95, night: 22 };
 const skyEntry = ([preset, hours]) => ({
   id: `engine-sky-${preset}`, name: `Sky: ${preset}`, category: 'sky', module: 'src/render/Atmosphere.js', export: 'Atmosphere',
-  usedBy: ['halloween', 'nyc-night', 'miami-drive'], via: null,
+  usedBy: ['nyc-night', 'miami-drive'], via: null,
   tags: ['sky', 'time of day', 'sun', 'clouds', 'fog', preset],
   facts: { hours, preset },
   description: `The engine's physical sky at the '${preset}' preset (${hours} h): sun and moon, procedural clouds, stars, fog, hemisphere light, cascaded sun shadows and an environment map from the sky. Every demo runs an Atmosphere (the city demos through MapWorld, with their own sun model and looks).`,
@@ -419,6 +383,41 @@ scene.add(tile);`,
 
 export const CODE_ENTRIES = [
   ...Object.entries(VEH).map(vehicleEntry),
+  {
+    id: 'engine-car-visual', name: 'Drivable car (createCarVisual)', category: 'vehicle', module: 'src/world/CarVisual.js', export: 'createCarVisual',
+    usedBy: [], tags: ['car', 'drivable', 'hd', 'wheels', 'lamps', 'procedural', 'player'],
+    facts: { types: "VEHICLE_HD_TYPES (sedan, hatchback, suv, pickup, minivan, police, taxi, police_sedan)", physics: 'visual.spec = ROAD_CAR_SPEC resized to the body' },
+    description: 'A drivable HD car in one call: makeVehicleParts body, glass, interior and four wheels that roll, steer and ride the suspension of a VehicleController built from visual.spec (ROAD_CAR_SPEC resized to the body, so the wheels sit where the physics has them), brake / reverse / head lamps and a soft contact shadow. Faces -Z; the origin is on the ground at the middle of the body length, the controller\'s reference point. Call visual.update(dt, car, { darkness }) each frame after placing visual.root on the car\'s pose. The starter-drive page drives one.',
+    snippet: `import * as THREE from 'three';
+import { createCarVisual } from '@vibe/engine/world';
+import { VehicleController } from '@vibe/engine/physics';
+const visual = createCarVisual('hatchback', { color: 0x9e1416 });
+scene.add(visual.root);
+const car = new VehicleController(visual.spec);
+visual.update(0, car, { darkness: 0 });`,
+    preview: { az: 140, el: 16 },
+  },
+  {
+    id: 'engine-country-road', name: 'Country road (countryRoad)', category: 'road', module: 'src/world/Scenery.js', export: 'countryRoad',
+    usedBy: [], tags: ['road', 'lay-by', 'lane lines', 'verge', 'fence', 'utility poles', 'trees', 'procedural', 'starter'],
+    description: 'A quiet two-lane road along -Z to start a driving game on, in one call: the asphalt with a lay-by, lane and edge lines, gravel verges, a timber fence, utility poles with wires, a side track with a name sign, trees and a tree line, built from the engine\'s furniture, vegetation and PartBuilder. Static colliders go into a PhysicsWorld when one is given. Call place.update(dt, cameraPos, darkness) each frame (tree wind, the near / far tree split); place.paths feed groundCover, place.surfaces the road texture. starter-drive drives on it.',
+    snippet: `import { countryRoad } from '@vibe/engine/world';
+const place = countryRoad({ from: 20, to: -140 });
+for (const s of place.surfaces) s.mesh.material.color.set(0x34363a); // untextured asphalt (starter-drive puts a texture set on place.surfaces)
+scene.add(place.group);
+// every frame: place.update(dt, camera.position, 0);`,
+    preview: { frames: 4, target: [0, 0, -30], az: 30, el: 22, dist: 60 },
+  },
+  {
+    id: 'engine-park-corner', name: 'Park corner (parkCorner)', category: 'environment', module: 'src/world/Scenery.js', export: 'parkCorner',
+    usedBy: [], tags: ['park', 'gravel path', 'bench', 'fence', 'boulders', 'trees', 'procedural', 'starter'],
+    description: 'A small park corner to start a walking game in, in one call: a gravel path past a lamp, a bench under it, a fence run, boulders, trees and a tree line. Static colliders (bench, fence, boulders, near trunks) go into a PhysicsWorld when one is given. Call place.update(dt, cameraPos, darkness) each frame; place.paths feed groundCover({ paths }) for the path and the grass patches on your ground. starter-walk is set in one.',
+    snippet: `import { parkCorner } from '@vibe/engine/world';
+const place = parkCorner({ lamp: [3, -6] });
+scene.add(place.group);
+// every frame: place.update(dt, camera.position, 0);`,
+    preview: { frames: 4, target: [2, 0.4, -6], az: 35, el: 22, dist: 16 },
+  },
   ...Object.entries(FURN).map(furnitureEntry),
   ...Object.entries(SPECIES_NAMES).map(treeEntry),
   ...BOATS.map(boatEntry),
@@ -453,7 +452,7 @@ scene.add(sheet);`,
   },
   {
     id: 'engine-cloud-texture', name: 'Cloud noise atlas', category: 'texture', module: 'src/render/skyTextures.js', export: 'makeCloudTexture',
-    usedBy: ['halloween', 'nyc-night', 'miami-drive'], via: 'Atmosphere',
+    usedBy: ['nyc-night', 'miami-drive'], via: 'Atmosphere',
     tags: ['clouds', 'noise', 'sky', 'procedural'],
     description: 'RGBA cloud noise (cumulus, cirrus, detail) the Atmosphere\'s sky draws its drifting clouds from.',
     snippet: `import * as THREE from 'three';
@@ -716,167 +715,6 @@ cityNightSky(atmo);
   },
 );
 
-// ------------------------------------------------------------------------------------------------ Midnight Candy Run
-const HB = `import * as THREE from 'three';`;
-const batchSnippet = (imports, call, withGlow) => `${HB}
-import { Batch, ${imports} } from '../halloween/props.js';
-const solid = new Batch()${withGlow ? ', glow = new Batch()' : ''};${withGlow ? `
-const ctx = { glow: () => 0, use: () => {}, spot: () => 0 };   // the level's light bookkeeping: not needed alone` : ''}
-${call}
-scene.add(solid.build(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), 'solid'));${withGlow ? `
-const glowing = glow.build(new THREE.MeshBasicMaterial({ vertexColors: true }), 'glow');
-if (glowing) scene.add(glowing);` : ''}`;
-
-const HALLOWEEN_PROPS = [
-  // [export, id, name, category, call, glow, tags, note, preview]
-  ['hauntedHouse', 'haunted-house', 'Haunted house', 'building', "hauntedHouse(solid, glow, ctx, { x: 0, y: 0, z: 0, w: 11, d: 9, yaw: 0, door: true, lamp: 'lamp', tower: 0.6 });", true, ['house', 'tower', 'porch'], 'a crooked two-storey house with a tower, porch, shutters and a lamp'],
-  ['cottage', 'cottage', 'Cottage with porch', 'building', 'cottage(solid, glow, ctx, { x: 0, y: 0, z: 0, palette: 1 });', true, ['house', 'porch', 'village'], 'a village cottage with a porch deck, railing jack-o\'-lantern, doormat and hanging lamp; 5 palettes and a stone variant'],
-  ['crypt', 'crypt', 'Crypt (mausoleum)', 'building', 'crypt(solid, glow, ctx, { x: 0, y: 0, z: 0, door: true });', true, ['graveyard', 'tomb', 'mausoleum'], 'a stone mausoleum with a glowing crack'],
-  ['bridge', 'bridge', 'Footbridge', 'building', 'bridge(solid, glow, ctx, { x: 0, y: 0.6, z0: -3, z1: 3, w: 2.6, bedY: -0.4 });', true, ['bridge', 'creek', 'planks', 'candles'], 'a plank footbridge with candle lanterns'],
-  ['cauldron', 'cauldron', 'Witch\'s cauldron', 'prop', 'cauldron(solid, glow, ctx, { x: 0, y: 0, z: 0 });', true, ['witch', 'potion', 'fire'], 'a bubbling cauldron over embers'],
-  ['scarecrow', 'scarecrow', 'Scarecrow', 'prop', 'scarecrow(solid, glow, ctx, { x: 0, y: 0, z: 0 });', true, ['pumpkin head', 'farm'], 'a scarecrow with a glowing pumpkin head'],
-  ['jackOLantern', 'jack-o-lantern', 'Small jack-o\'-lantern', 'prop', 'jackOLantern(solid, glow, ctx, { x: 0, y: 0, z: 0, r: 0.17 });', true, ['pumpkin', 'lantern', 'carved'], 'a small carved jack-o\'-lantern for railings and porches'],
-  ['hollowOak', 'hollow-oak', 'Hollow oak', 'vegetation', 'hollowOak(solid, glow, ctx, { x: 0, y: 0, z: 0 });', true, ['tree', 'oak', 'hollow'], 'an old oak with a hollow you can look into'],
-  ['candleLantern', 'candle-lantern', 'Candle lantern', 'prop', 'candleLantern(solid, glow, 0, 0, 0);', true, ['candle', 'lantern', 'light'], 'a small candle lantern'],
-  ['gravestone', 'gravestones', 'Gravestones', 'prop', 'for (let k = 0; k < 4; k++) gravestone(solid, { x: k * 1.4 - 2.1, y: 0, z: 0, kind: k });', false, ['graveyard', 'tombstone', 'cross', 'obelisk'], 'four kinds: slab, cross, obelisk, low marker (the variant also follows the position)'],
-  ['deadTree', 'dead-tree', 'Dead tree', 'vegetation', 'deadTree(solid, { x: 0, y: 0, z: 0, h: 7, r: 0.3, phase: 0, crown: 1, seed: 3 });', false, ['tree', 'bare', 'spooky'], 'a bare, twisted tree'],
-  ['ironFence', 'iron-fence', 'Iron fence', 'prop', 'ironFence(solid, -4, 0, 4, 0, () => 0);', false, ['fence', 'graveyard', 'wrought iron'], 'a wrought-iron fence between two points (1,344 triangles per 10 m)'],
-  ['gateArch', 'gate-arch', 'Graveyard gate arch', 'building', 'gatePost(solid, -1.6, 0, 0); gatePost(solid, 1.6, 0, 0); gateArch(solid, -1.6, 1.6, 0, 0);', false, ['gate', 'graveyard', 'arch', 'crescent moon'], 'two stone gate posts and the iron arch with a crescent moon', 'gatePost, gateArch'],
-  ['hayBale', 'hay-bale', 'Hay bale', 'prop', 'hayBale(solid, { x: 0, y: 0, z: 0 });', false, ['hay', 'farm'], 'a round hay bale'],
-  ['standingStone', 'standing-stone', 'Standing stone', 'prop', 'standingStone(solid, { x: 0, y: 0, z: 0 });', false, ['stone', 'menhir'], 'a leaning standing stone'],
-  ['well', 'well', 'Stone well', 'prop', 'well(solid, { x: 0, y: 0, z: 0 });', false, ['well', 'village'], 'a stone well with a roof and bucket'],
-  ['signpost', 'signpost', 'Signpost', 'sign', "signpost(solid, { x: 0, y: 0, z: 0, arms: [[0.3, '#8a5a3a'], [2.1, '#6a4a6a'], [3.6, '#4a6a5a']] });", false, ['signpost', 'wooden', 'village'], 'a wooden signpost with arms'],
-  ['bench', 'bench', 'Wooden bench', 'prop', 'bench(solid, { x: 0, y: 0, z: 0 });', false, ['bench', 'village'], 'a wooden bench'],
-  ['pickets', 'picket-fence', 'Picket fence', 'prop', 'pickets(solid, -3, 0, 3, 0, () => 0);', false, ['fence', 'garden'], 'a picket fence between two points'],
-  ['reeds', 'reeds', 'Reeds', 'vegetation', 'reeds(solid, { x: 0, y: 0, z: 0, n: 9 });', false, ['reeds', 'creek', 'water plants'], 'a clump of reeds'],
-];
-for (const [fn, id, name, category, call, glow, tags, note, importList] of HALLOWEEN_PROPS) {
-  CODE_ENTRIES.push({
-    id: `halloween-${id}`, name, category, module: 'samples/halloween/props.js', export: fn, usedBy: ['halloween'],
-    tags: ['halloween', 'procedural', 'vertex colour', ...tags],
-    description: `${name} from Midnight Candy Run, built in code: ${note}. The builders append painted, placed parts to a Batch (solid parts and glowing parts), which the level merges into a few meshes; the variant follows the position.`,
-    snippet: batchSnippet(importList || fn, call, glow),
-    preview: { az: 35, el: 16 },
-  });
-}
-
-CODE_ENTRIES.push(
-  {
-    id: 'halloween-kid', name: 'Witch kid (animated)', category: 'character', module: 'samples/halloween/kid.js', export: 'buildKid', usedBy: ['halloween'],
-    tags: ['character', 'skinned', 'animated', 'witch', 'costume', 'procedural'],
-    description: 'Midnight Candy Run\'s player: a kid in a witch costume with a candy pail, modelled, rigged and animated entirely in code (Idle, Walking, Running, Jump clips).',
-    snippet: `import { AnimationController } from '@vibe/engine/anim';
-import { buildKid } from '../halloween/kid.js';
-const kid = buildKid({ detail: true });
-scene.add(kid.root);
-const anim = new AnimationController(kid.root, kid.clips, { states: { idle: { clip: 'Idle' }, walk: { clip: 'Walking' } } });
-anim.play('walk');
-// every frame: anim.update(dt);`,
-    preview: { result: 'kid', frames: 20, az: 25, el: 8 },
-  },
-  {
-    id: 'halloween-thief', name: 'Candy thief (raccoon)', category: 'character', module: 'samples/halloween/thief.js', export: 'Thief', usedBy: ['halloween'],
-    tags: ['character', 'skinned', 'raccoon', 'enemy', 'procedural'],
-    description: 'A raccoon in a bedsheet with a pink candy sack, modelled and rigged in code. The Thief class runs its game AI; it starts hidden in its den until the game wakes it.',
-    snippet: `import { Thief } from '../halloween/thief.js';
-const thief = new Thief({ scene, heightAt: () => 0, physics: {}, candy: {} });
-thief.root.visible = true;              // the game shows it when it emerges
-thief.root.position.set(0, 0, 0);`,
-    preview: { az: 30, el: 10 },
-  },
-  {
-    id: 'halloween-ghosts', name: 'Bedsheet ghosts (cloth)', category: 'character', module: 'samples/halloween/ghosts.js', export: 'Ghosts', usedBy: ['halloween'],
-    tags: ['ghost', 'cloth', 'xpbd', 'physics', 'enemy'],
-    description: 'Bedsheet ghosts simulated as engine XPBD cloth (13 x 13 particles) with painted faces and a scalloped hem.',
-    snippet: `import { PhysicsWorld, DynamicsWorld } from '@vibe/engine/physics';
-import { Ghosts } from '../halloween/ghosts.js';
-const physics = new PhysicsWorld();
-const dyn = new DynamicsWorld({ physics, maxParticles: 400 });
-const ghosts = new Ghosts({ scene, dyn, heightAt: () => 0, spawns: [[0, 0]], count: 1 });
-ghosts.summon(0, 1.6, 0);
-ghosts.settle(150);                         // hang the sheet from its head (the game does this at load)
-const glows = { set() {} };                 // the game's halo batch: not needed alone
-// every frame: ghosts.settle(2, dt / 2); ghosts.update(dt, 1, glows, 0);`,
-    preview: { result: 'ghosts', frames: 10, az: 20, el: 10 },
-  },
-  {
-    id: 'halloween-pumpkin', name: 'Pumpkin', category: 'vegetation', module: 'samples/halloween/props.js', export: 'pumpkinGeometry', usedBy: ['halloween'],
-    tags: ['pumpkin', 'lathe', 'procedural', 'autumn'],
-    description: 'A lobed pumpkin with a stem and optional vine and leaf, built in code (lathe profile); the same function makes the decor pumpkins and the lantern bodies.',
-    snippet: `import * as THREE from 'three';
-import { pumpkinGeometry } from '../halloween/props.js';
-const geometry = pumpkinGeometry(0.4, 48, 0, '#e8681c', '#5a5a24', { lobes: 8, depth: 0.11, vine: true, seed: 11 });
-scene.add(new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7 })));`,
-    preview: { az: 30, el: 22 },
-  },
-  {
-    id: 'halloween-lanterns', name: 'Smashable jack-o\'-lanterns', category: 'prop', module: 'samples/halloween/pumpkins.js', export: 'Lanterns', usedBy: ['halloween'],
-    tags: ['pumpkin', 'jack-o-lantern', 'carved', 'fracture', 'light'],
-    description: 'The carved jack-o\'-lanterns of Midnight Candy Run: three faces, squat / tall / lopsided shapes, real point lights from a pool, and pre-fractured pieces for smashing (engine fracture).',
-    snippet: `import { Lanterns } from '../halloween/pumpkins.js';
-const lanterns = new Lanterns({ scene, dyn: null, spots: [[-0.55, 0], [0.55, 0], [0, -1]], heightAt: () => 0, remaster: true });
-// every frame: lanterns.update(dt, { position: camera.position }, t);`,
-    preview: { frames: 60, az: 15, el: 14 },
-  },
-  {
-    id: 'halloween-candy', name: 'Candy pickups', category: 'prop', module: 'samples/halloween/candy.js', export: 'Candy', usedBy: ['halloween'],
-    tags: ['candy', 'pickup', 'lollipop', 'candy corn', 'sweets'],
-    description: 'The candy you collect: wrapped sweets in six colours, candy corn and swirl lollipops (with a light beam), instanced and patterned in the shader.',
-    snippet: `import * as THREE from 'three';
-import { Candy, CANDY_KIND } from '../halloween/candy.js';
-const candy = new Candy({ scene, heightAt: () => 0, candySpot: () => false, crisp: true });
-candy.place(-0.4, 0.3, 0.3, CANDY_KIND.WRAP);
-candy.place(0.4, 0.3, 0.3, CANDY_KIND.CORN);
-candy.place(0, 0.3, -0.6, CANDY_KIND.POP);
-const kid = new THREE.Vector3(0, 0, 50);    // the player: candy within reach is collected
-// every frame: candy.update(dt, kid, t, null);`,
-    preview: { frames: 4, az: 10, el: 14, target: [0, 0.75, 0], dist: 3.8, el: 16 },
-  },
-  {
-    id: 'halloween-bats', name: 'Bats', category: 'effect', module: 'samples/halloween/effects.js', export: 'Bats', usedBy: ['halloween'],
-    tags: ['bats', 'flock', 'animated', 'vertex shader'],
-    description: 'A flock of bats circling a point, flapping and flying in the vertex shader (one draw).',
-    snippet: `import { Bats } from '../halloween/effects.js';
-const bats = new Bats({ scene, count: 9, center: [0, 3, 0], radius: 4 });
-// every frame: bats.update(dt);`,
-    preview: { frames: 40, ground: false, el: 10, target: [0, 3, 0], dist: 13 },
-  },
-  {
-    id: 'halloween-clouds', name: 'Night cumulus', category: 'sky', module: 'samples/halloween/clouds.js', export: 'CumulusClouds', usedBy: ['halloween'],
-    tags: ['clouds', 'night', 'billboards'],
-    description: 'Billboard cumulus puffs lit by the moon (off in the game unless ?clouds=1).',
-    snippet: `import * as THREE from 'three';
-import { CumulusClouds } from '../halloween/clouds.js';
-const clouds = new CumulusClouds({ scene, count: 18 });
-const moonDir = new THREE.Vector3(0.3, 0.5, -1).normalize();
-// every frame: clouds.update(camera.position, moonDir, t);`,
-    preview: { mode: 'sky', frames: 6, look: [0, 0.35, -1] },
-  },
-  {
-    id: 'halloween-creek', name: 'Creek water and mist', category: 'water', module: 'samples/halloween/village.js', export: 'creekWater', usedBy: ['halloween'],
-    tags: ['water', 'creek', 'mist', 'shader'],
-    description: 'The village creek: a shader water strip with two additive mist layers, laid along the level\'s creek course.',
-    snippet: `import { creekWater } from '../halloween/village.js';
-import { CREEK, heightAt } from '../halloween/world.js';
-const time = { value: 0 };
-const creek = creekWater(CREEK, heightAt, time);
-scene.add(creek);
-// every frame: time.value = t;`,
-    preview: { frames: 4, el: 40, az: 20, target: [0, 0, 20.75], dist: 16 },
-  },
-  {
-    id: 'halloween-audio', name: 'Halloween music and sound effects', category: 'sound', module: 'samples/halloween/audio.js', export: 'GameAudio', usedBy: ['halloween'],
-    tags: ['music', 'music box', 'organ', 'wind', 'crickets', 'owl', 'wolf', 'sfx', 'synth'],
-    description: 'Midnight Candy Run\'s soundtrack and effects, all synthesised: a D-minor music-box loop with bass and organ, wind, crickets, owl and wolf, and about 30 game sounds (candy, smash, BOO, bell, potion ...).',
-    snippet: `import { GameAudio } from '../halloween/audio.js';
-const audio = new GameAudio();
-audio.unlock();                          // starts on the first click / key
-// later: audio.candy(1, false); audio.boo(); audio.bell(12, 0.9, 1);
-// every frame: audio.update(dt, true);`,
-    preview: { mode: 'card', label: 'Sound', note: 'Synthesised in code' },
-  },
-);
-
 // ------------------------------------------------------------------------------------------------ not reusable as is
 const notReusable = (o) => ({ reusable: false, snippet: null, preview: { mode: 'card', label: CATEGORIES[o.category], note: 'Not reusable as is' }, ...o });
 CODE_ENTRIES.push(
@@ -889,7 +727,4 @@ CODE_ENTRIES.push(
   notReusable({ id: 'miami-beach-dressing', name: 'Beach, huts and neon (Miami plugin)', category: 'prop', module: 'samples/miami-drive/world.js', export: 'miamiPlugin', usedBy: ['miami-drive'], tags: ['lifeguard hut', 'neon', 'sand', 'surf', 'palms'], reason: 'built inside the miamiPlugin MapWorld plugin from internal functions (hut, neonCanvas, coconutPalms, decoFrontage, sandMaterial); world.js also reads import.meta.env at load', description: 'Lifeguard huts, neon blade signs and marquees, deco frontage trim, beach sand with a wet band, surf foam, dune grass and the cheaper far coconut palms.' }),
   notReusable({ id: 'miami-dusk-grade', name: 'Miami dusk grade', category: 'grade', module: 'samples/miami-drive/main.js', symbol: 'duskLut', usedBy: ['miami-drive'], tags: ['lut', 'dusk', 'grade'], reason: 'defined inside main.js, which starts the demo when imported; about 25 lines to copy (lutFromFunction + DEFAULT_GRADE)', description: 'The Miami drive\'s dusk LUT and PostFX grade keyframes.' }),
   notReusable({ id: 'miami-car-effects', name: 'Car effects (skids, smoke, sparks, backfire)', category: 'effect', module: 'samples/miami-drive/car.js', export: 'HeroCar', usedBy: ['miami-drive'], tags: ['skid marks', 'tyre smoke', 'sparks', 'exhaust', 'backfire'], reason: 'part of the HeroCar rig, which needs a driven car (engine VehicleController + PhysicsWorld); the particle presets are a few lines in car.js to copy', description: 'Skid marks (DecalTrail), tyre smoke, sparks, exhaust and backfire flames (ParticleSystem), light pools and a tail glow.' }),
-  notReusable({ id: 'halloween-level', name: 'Halloween level (terrain, moon, tree line)', category: 'environment', module: 'samples/halloween/world.js', export: 'buildWorld', usedBy: ['halloween'], tags: ['terrain', 'moon', 'skyline', 'grass', 'graveyard'], reason: 'the terrain, moon, skyline tree line, grass and ground cover are internal to buildWorld, which builds the whole level at once and keeps module-level state', description: 'The level itself: terrain with ground scans, the moon disc and halo, the painted skyline tree line, grass tufts, leaf litter, mushrooms and puddles.' }),
-  notReusable({ id: 'halloween-environment', name: 'Living night (mist, crows, wind-blown leaves)', category: 'effect', module: 'samples/halloween/environment.js', export: 'Environment', usedBy: ['halloween'], tags: ['mist', 'crows', 'leaves', 'thunder'], reason: 'needs the built level (buildWorld output) and a real engine Atmosphere', description: 'Mist banks, grave mist, clouds over the moon, crows, wind-blown leaves, gusts, howls and thunder.' }),
-  notReusable({ id: 'halloween-hands', name: 'Grave hands', category: 'character', module: 'samples/halloween/hands.js', export: 'Hands', usedBy: ['halloween'], tags: ['hands', 'graveyard', 'enemy'], reason: 'the hands only appear through the game\'s state machine (they rise when the player comes near); the geometry is private (handGeometry)', description: 'Bony hands that reach out of the graves.' }),
 );

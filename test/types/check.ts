@@ -8,7 +8,8 @@ import { ClusteredLights, GBuffer, GpuParticleSystem } from '@vibe/engine/render
 import { AnimationController, Ragdoll, TwoBoneIK } from '@vibe/engine/anim';
 import { InputMap } from '@vibe/engine/input';
 import { ThirdPersonRig } from '@vibe/engine/camera';
-import { AudioBus } from '@vibe/engine/audio';
+import { AudioBus, SoundBank, Footsteps, SOUND_PRESETS, audioSelfTest, encodeWav, analyseMix, dsp } from '@vibe/engine/audio';
+import type { SoundVoice, LoopHandle, SelfTestReport, SoundPreset } from '@vibe/engine/audio';
 import { Minimap } from '@vibe/engine/ui';
 import { MapWorld } from '@vibe/engine/world';
 
@@ -184,3 +185,104 @@ trees.update(1 / 60, engine.camera.position, 0, 2.5);
 const treeCount: number = trees.count; void treeCount;
 createFurnitureMaterial().userData.u.uNight.value = 1;
 createVehicleMaterial({ hd: true }).userData.u.uDark.value = 1;
+
+// sound kit: safe master, bank, footsteps, self-test
+const kitBus = new AudioBus({ master: 'safe', volume: 0.7 });
+kitBus.setPaused(true, 0.2); kitBus.setMuffle(0.5); kitBus.duck('ambience', 0.5, 3.5);
+const sfx = new SoundBank(kitBus, { listener: new THREE.PerspectiveCamera(), seed: 1 });
+const hit: SoundVoice = sfx.play('impact.metal', { at: new THREE.Vector3(1, 0, 2), gain: 0.8, rate: 1 });
+hit.stop(0.1);
+const bed: LoopHandle = sfx.loop('amb.dusk', { gain: 0.14 });
+bed.setGain(0.2).setRate(1).stop(0.5);
+sfx.update(1 / 60);
+const kitSamples: Float32Array = sfx.render('step.wood', 2);
+const roarPreset: SoundPreset = SOUND_PRESETS['road.roar'];
+const steps = new Footsteps(sfx, { surface: 'grass', at: new THREE.Object3D() });
+const stepPlayed: string = steps.update(1 / 120, { speed: 2, grounded: true, landed: false, landingSpeed: 0 });
+const kitWav: Uint8Array = encodeWav([kitSamples, kitSamples], 44100);
+const kitMix = analyseMix([kitSamples], 44100, { peak: 0.9 });
+const kitCentroid: number = dsp.spectralCentroid(kitSamples, 44100) + roarPreset.peak + kitMix.peak + kitWav.length + stepPlayed.length;
+const kitReport: Promise<SelfTestReport> = audioSelfTest({ seconds: 2, build: (b) => { const s = new SoundBank(b); return (t: number) => { if (t > 1) s.play('ui.click'); }; } });
+void kitReport; void kitCentroid;
+new VehicleAudio({ volume: 0.6, ambience: false, wind: false, tyres: false });
+
+// ui: the game shell
+import { GameShell, createSettings, LoadingScreen } from '@vibe/engine/ui';
+const shell = new GameShell({ title: 'T', controls: [['W', 'Go']], storageKey: 't', defaults: { volume: 0.5, assist: true }, pauseCorner: 'tl' });
+shell.setProgress(0.5, 'Loading').use({ engine, audio: kitBus, inputs: [{ enabled: true }] });
+const shellState: 'loading' | 'title' | 'playing' | 'paused' = shell.state; void shellState;
+void shell.ready().then(() => shell.pause());
+// ready() runs engine.warmUp() and engine.start(); a boot error on the loading screen; stepped aside after a lost context
+const shellLost: boolean = shell.lost, shellWarmFence: string | undefined = shell.warm?.fence; void shellLost; void shellWarmFence;
+shell.error('Failed to start').setProgress(1);
+shell.onStart(() => {}).onPause((paused: boolean) => { void paused; }).addToggle('assist', 'Assist').addSlider('fov', 'Field of view', { min: 50, max: 90, step: 1 });
+const offAssist: () => void = shell.settings.on('assist', (v) => { void v; }); offAssist();
+const store = createSettings('k.settings', { a: 1 }, { version: 2 }); store.set('a', 2);
+new LoadingScreen({ title: 'T', compositor: true }).setProgress(0.5);
+
+// drive feel: steering assist, tyre marks and smoke, rumble
+import { SteeringAssist, VehicleHaptics, VehicleInput as DriveInput, type SteeringAssistOptions } from '@vibe/engine/input';
+import { TyreFx, type TyreFxOptions } from '@vibe/engine/render';
+import { VehicleController as DriveCar, ROAD_CAR_SPEC as DRIVE_SPEC } from '@vibe/engine/physics';
+{
+  const car = new DriveCar(DRIVE_SPEC);
+  const input = new DriveInput(undefined, { assist: { peak: 0.95 } });
+  input.update(1 / 60, car);
+  const steer: number = input.steer + input.rawSteer;
+  input.assist.enabled = false;
+  const ao: SteeringAssistOptions = { fadeSpeed: [6, 12], slideCatch: [0.85, 1.65] };
+  const out: number = new SteeringAssist(ao).apply(1 / 60, 0.5, car, true, false);
+  const tyre: number = car.steerLimit + car.slipFront + car.slipRear + car.slipPeakFront + car.slipPeakRear + car.wheels[0].slideHeat;
+  const fo: TyreFxOptions = { budget: { marks: 800, smoke: 120, rate: 20 }, lift: 0.04 };
+  const fx = new TyreFx(fo);
+  fx.update(1 / 60, car, null); fx.clear();
+  const level: number = fx.markLevel[0] + fx.smokeLevel[0] + fx.stats.puffs;
+  const rumble = new VehicleHaptics({ gain: 0.8 }).update(1 / 60, car, null);
+  const weak: number = rumble.weak + rumble.strong;
+  void steer; void out; void tyre; void level; void weak;
+}
+
+// car and camera: an HD car body on its physics, a chase camera with road feel, trauma, a landing dip
+import { createCarVisual, carSpecFor, type CarVisual } from '@vibe/engine/world';
+import { ROAD_FEEL, type ChaseFeel } from '@vibe/engine/camera';
+const visual: CarVisual = createCarVisual('hatchback', { color: 0x9e1416 });
+const vcar = new VehicleController(visual.spec);
+visual.update(1 / 60, vcar, { darkness: 0.4 });
+visual.update(1 / 60, null, { brake: 1, reverse: false, lights: true });
+const suvSpec = carSpecFor('suv'); void suvSpec;
+const roadChase = new ChaseRig(engine.camera, null, { physics, feel: 'road' });
+const tuned = new ChaseRig(engine.camera, null, { feel: { sway: 0.4, lagCap: 0.3 } as Partial<ChaseFeel> });
+roadChase.addTrauma(0.5).addTrauma(0.2); void tuned; void ROAD_FEEL.surge;
+const tpDip = new ThirdPersonRig(engine.camera, null, { landingDip: 1, sprintFov: 6 });
+tpDip.land(4.4);
+
+// the round's look options: weathering, a lit cloud deck and twilight key, lit foliage, facade detail, PostFX look,
+// lamp spots (all off unless asked for)
+import { weathering, applyPatches, bakeWeathering, WEATHERING_DEFAULTS, DEFAULT_TWILIGHT_KEY, DEFAULT_LOW_SUN_ENV } from '@vibe/engine/render';
+import { applyFoliageLighting, applyFoliageLightingTo, enableFacadeDetail, createFacadeMaterials, DEFAULT_FOLIAGE_LIGHT } from '@vibe/engine/world';
+const wallMat = new THREE.MeshStandardMaterial();
+applyPatches(wallMat, [weathering({ grime: 0.4, streaks: 0.35, ground: 'origin', seed: 2 })]);
+void bakeWeathering; void WEATHERING_DEFAULTS.grime; void DEFAULT_TWILIGHT_KEY.intensity; void DEFAULT_LOW_SUN_ENV.warm;
+const lookAtmo = new Atmosphere({ scene: engine.scene, renderer: engine.renderer, camera: engine.camera, timeOfDay: 'dusk', cloudStyle: 'lit', lowSunEnv: true, twilightKey: { intensity: 0.9 } });
+void lookAtmo;
+const leafU = applyFoliageLighting(new THREE.MeshStandardMaterial(), { wrap: 0.5 });
+const leafN: number = applyFoliageLightingTo(engine.scene, true, (m, o) => o.name.startsWith('veg-') && !!m);
+void leafU; void leafN; void DEFAULT_FOLIAGE_LIGHT.rim;
+void enableFacadeDetail; void createFacadeMaterials;
+const lookFx = new PostFX(engine.renderer, engine.scene, engine.camera, { look: { aoLit: 0.8, aoTint: [0, 0.03, 0.07], lift: [0.002, 0.003, 0.004] }, taa: { sharpen: 0.25 } });
+lookFx.set('look.aoLit', 0.6);
+const spotPool = new NearestLights({ count: 4, mode: 'clustered', spot: { cosInner: 0.82, cosOuter: 0.12 } });
+void spotPool;
+// the fix pass: a spot's near shield (metres; the spot's decay must stay below 8), and the starters' scenery
+const shieldPool = new NearestLights({ count: 4, mode: 'clustered', clustered: lights, spot: { cosInner: 0.82, cosOuter: 0.12, near: 5 } });
+void shieldPool;
+lights.setSpot(0, 0, 6, 0, 30, 1, 0.8, 0.6, 2, 0, -1, 0, 0.82, 0.12, 5);
+import { countryRoad, parkCorner, groundCover, paintedLines, COVER_MAX_SEGMENTS, type SceneryResult, type CoverPath } from '@vibe/engine/world';
+const road = countryRoad({ physics, width: 10, layby: { from: 10, to: -110, width: 7 }, trackName: 'Mill Lane', seed: 3 });
+const roadSurfaces: number = road.surfaces.length; void roadSurfaces;
+const park: SceneryResult = parkCorner({ physics, lamp: [3, -6] });
+park.update(0.016, engine.camera.position, 0.5);
+const parkPaths: CoverPath[] = park.paths;
+applyPatches(wallMat, [groundCover({ paths: parkPaths, scale: 1, amount: 1 })]);
+const paint: THREE.Mesh = paintedLines([{ x: 0, from: 0, to: -40, dash: [3, 9] }]); void paint;
+const coverMax: number = COVER_MAX_SEGMENTS + park.counts.trees + road.counts.posts; void coverMax;

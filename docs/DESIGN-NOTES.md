@@ -10,7 +10,7 @@ How to read it:
   (the retired Roadster game). In this repository they are `src/...` and `tools/...`.
 - The samples named here (`canyon-run`, `city`, `character`, `sandbox`) were removed; they are in git history at
   commit `fc73161` (for example `git show fc73161:samples/canyon-run/main.js`). The current demos are
-  `samples/nyc-night/`, `samples/miami-drive/` and `samples/halloween/`.
+  `samples/nyc-night/` and `samples/miami-drive/` (the Halloween game is retired, kept on the branch `archive/halloween`).
 - `dev/...` scripts (`dev/traffic-sim.mjs`, `dev/drive-sim.mjs`, ...) belonged to the Roadster game and are not in
   this repository.
 - The numbers are left as they were measured, on the hardware and builds named next to them.

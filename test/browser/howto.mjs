@@ -7,7 +7,13 @@
 //   3. get in and out of a vehicle (the starter's own game system switched off): drive, stop, E out, walk, E in, drive,
 //      and the car overlay's OUT button through its virtual source.
 // The headlight checks compare captures with the lights on and off: the road ahead of the car gets brighter, the road
-// behind it does not. Needs Chrome and the GPU, so it is not part of `npm test`; run it through the machine's GPU lock:
+// behind it does not. The captures are taken with the engine loop frozen (window.__sample.freeze()): the car settling
+// on its springs, the chase camera's road feel, tyre smoke and eye adaptation all move between live frames and shifted
+// the whole frame by about 1/255 now and then. Frozen, each state is re-pushed by hand and rendered for 24 frames at
+// dt = 0 (TAA's history converges on it, nothing else moves) before its capture. The car's meshes are hidden for the
+// three captures (its lights stay): from the chase camera the body covers the road a few metres ahead, and its roof
+// edge sat on the 14 m probe, where TAA's edge noise swung the reading by a whole step either way.
+// Needs Chrome and the GPU, so it is not part of `npm test`; run it through the machine's GPU lock:
 //   node test/browser/howto.mjs
 // Exit code 1 on a failed check, a console error or a page error.
 import { startVite, resolvePage, launchChrome, watchErrors, loadSample, repoRoot } from './playwright.config.mjs';
@@ -22,15 +28,20 @@ const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok 
 async function open(tier) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const errors = watchErrors(page);
-  const session = await loadSample(page, vite.base + (await resolvePage(vite, 'starter-drive')) + `?quality=${tier}`, errors);
+  const session = await loadSample(page, vite.base + (await resolvePage(vite, 'starter-drive')) + `?quality=${tier}&autostart=1`, errors); // autostart: no start card, the keys drive
   if (session.status !== 'ready') throw new Error(`starter-drive (${tier}) not ready: ${session.note}`);
   return { page, errors };
 }
 
 // in the page: mean brightness change (0..255) that the headlights make around the screen points of world positions ahead
 // of and behind the car (each a 9 x 9 box of 4 px cells). Captured on, off, on again: the mean of the two "on" captures
-// minus the "off" one cancels a slow drift of the whole frame (lamps fading in, exposure) between the captures.
+// minus the "off" one. __held(h, n) renders n frames with the loop frozen and captures the last one.
 const LIGHT_PROBE = `
+  window.__held = (h, n = 24) => { for (let i = 1; i < n; i++) h.render(); return h.capture(4); };
+  window.__hideCar = (h, hide) => {
+    if (hide) { window.__shown = []; h.body.traverse((o) => { if (o.isMesh && o.visible) { o.visible = false; window.__shown.push(o); } }); }
+    else for (const o of window.__shown.splice(0)) o.visible = true;
+  };
   window.__probe = (h, on1, off, on2, worldPoints) => {
     const cam = h.engine.camera, out = [], a = off, k = a.scale * a.scale;
     for (const p of worldPoints) {
@@ -54,7 +65,7 @@ try {
     const out = await page.evaluate(async ([U, probe]) => {
       eval(probe); // eslint-disable-line no-eval
       const R = await import(U.recipes), { PostFX } = await import(U.render), { resolveQuality } = await import(U.core);
-      const { ROAD_CAR_SPEC: SPEC } = await import(U.physics);  // the starter's car
+      const SPEC = window.__sample.visual.spec;  // the starter's car: the hatchback's spec (createCarVisual)
       const h = window.__sample, engine = h.engine, { scene, camera, renderer } = engine;
       const S = resolveQuality().settings;
       // a second PostFX only to read the internal size from (the starter's own is not exposed); the starter's renders
@@ -64,15 +75,16 @@ try {
       const cl = R.lampsByTier({ S, scene, camera, postfx, engine, lamps });
       const head = R.headlights({ engine, body: h.body, SPEC, cl, slot: lamps.length });
       await new Promise((r) => setTimeout(r, 2500));
-      // headlights on, off (the system off and its two entries cleared), on again; the car at rest at the start
+      // headlights on, off (their two entries cleared), on again; the car at rest at the start
       const V = h.body.position.constructor, pts = [[0, 0, -14], [0, 0, 3.5]].map(([x, y, z]) => h.body.localToWorld(new V(x, y, z)));
-      const wait = () => new Promise((r) => setTimeout(r, 300));
-      const on1 = h.capture(4);
-      engine.setSystemEnabled(head.system, false);
+      // frozen: nothing moves between the captures; the light list is pushed by hand (the two systems' own calls)
+      h.freeze(); window.__hideCar(h, true);
+      const push = () => engine.getSystem('lights').lateUpdate(0);
+      const on1 = window.__held(h);
       for (const i of [lamps.length, lamps.length + 1]) cl.setLight(i, 0, 0, 0, 1, 0, 0, 0);
-      await wait(); const off = h.capture(4);
-      engine.setSystemEnabled(head.system, true);
-      await wait(); const on2 = h.capture(4);
+      push(); const off = window.__held(h);
+      head.system.update(0); push(); const on2 = window.__held(h);
+      window.__hideCar(h, false); h.resume();
       const [ahead, behind] = window.__probe(h, on1, off, on2, pts);
       const clCount = cl ? cl.count : -1, clLights = cl ? cl.stats.lights : -1;
       // then the particles and the sound
@@ -92,7 +104,7 @@ try {
     console.log('[desktop]', JSON.stringify(out));
     check('lamps-tier (desktop): the clustered branch, 18 lamps + 2 headlight spots listed', out.tier === 'clustered' && out.clCount === 20 && out.clLights > 0, `count ${out.clCount}`);
     check('headlights (clustered): no SpotLight on this tier', out.spot === false);
-    check('headlights (clustered): the road 14 m ahead gets brighter (golden-hour sun: a small step)', out.ahead > 0.3, `+${out.ahead}`);
+    check('headlights (clustered): the road 14 m ahead gets brighter (golden-hour sun: about +1.7)', out.ahead > 0.8, `+${out.ahead}`);
     check('headlights (clustered): the road 3.5 m behind (between the car and the camera) does not', Number.isFinite(out.behind) && Math.abs(out.behind) < 0.25, `${out.behind}`);
     check('gpu-particles: particles alive', out.particles > 0);
     check('vehicle-sound: silent until a key press', out.audioStarted === false);
@@ -118,7 +130,7 @@ try {
       for (let z = -300; z > -500; z -= 12) garden.push([-7, 4, z], [7, 4, z]);
       for (let z = -300; z > -500; z -= 40) street.push([0, 8, z]);
       const cl = R.clusteredLights({ scene, camera, postfx, engine, lamps: garden, streetLamps: street });
-      const { ROAD_CAR_SPEC: SPEC } = await import(U.physics);
+      const SPEC = h.visual.spec;  // the starter's car: the hatchback's spec (createCarVisual)
       const head = R.headlights({ engine, body: h.body, SPEC, cl: null, slot: 0 });
       await new Promise((r) => setTimeout(r, 2500));
       const pool = []; scene.traverse((o) => { if (o.isPointLight && o.visible) pool.push(o); });
@@ -126,23 +138,22 @@ try {
       h.body.updateMatrixWorld(true);
       const target = head.spot.target.getWorldPosition(new h.body.position.constructor());
       const local = h.body.worldToLocal(target.clone());
-      const wait = () => new Promise((r) => setTimeout(r, 300));
-      const on1 = h.capture(4);
-      head.spot.intensity = 0;
-      await wait(); const off = h.capture(4);
-      head.spot.intensity = 520;
-      await wait(); const on2 = h.capture(4);
+      h.freeze(); window.__hideCar(h, true);              // nothing moves between the captures; the road ahead in view
+      const on1 = window.__held(h);
+      head.spot.intensity = 0; const off = window.__held(h);
+      head.spot.intensity = 520; const on2 = window.__held(h);
+      window.__hideCar(h, false); h.resume();
       const [ahead, behind] = window.__probe(h, on1, off, on2, pts);
       return {
         tierCl: tierCl === null, pool: pool.length, clCount: cl.count, clLights: cl.stats.lights,
-        spot: !!head.spot, targetLocal: local.toArray().map((v) => +v.toFixed(2)), ahead, behind,
+        spot: !!head.spot, targetLocal: local.toArray().map((v) => +v.toFixed(2)), len: SPEC.length, ahead, behind,
       };
     }, [urls, LIGHT_PROBE]);
     console.log('[mobile]', JSON.stringify(out));
     check('lamps-tier (mobile): no ClusteredLights, a pool of 4 real lights', out.tierCl && out.pool === 4, `${out.pool} point lights`);
     check('clustered-lights: 34 garden + 5 street lamps listed', out.clCount === 39 && out.clLights >= 0, `count ${out.clCount}`);
-    check('headlights (SpotLight): the target rides with the body, 20 m ahead', out.spot && Math.abs(out.targetLocal[2] - (-4.3 / 2 - 0.05 - 20)) < 0.01, `local ${out.targetLocal}`);
-    check('headlights (SpotLight): the road 14 m ahead gets brighter', out.ahead > 1, `+${out.ahead}`);
+    check('headlights (SpotLight): the target rides with the body, 20 m ahead', out.spot && Math.abs(out.targetLocal[2] - (-out.len / 2 - 0.05 - 20)) < 0.01, `local ${out.targetLocal}, car length ${out.len}`);
+    check('headlights (SpotLight): the road 14 m ahead gets brighter (about +11)', out.ahead > 4, `+${out.ahead}`);
     check('headlights (SpotLight): the road 3.5 m behind (between the car and the camera) does not', Number.isFinite(out.behind) && Math.abs(out.behind) < 0.25, `${out.behind}`);
     check('mobile page: no console or page errors', errors.length === 0);
     for (const e of errors) console.log('  ' + e);
@@ -157,7 +168,12 @@ try {
       const h = window.__sample, engine = h.engine, { scene, camera, renderer } = engine;
       engine.setSystemEnabled('game', false);                   // the starter's own loop: the recipe drives the car now
       const player = new h.body.constructor();             // a THREE.Group
-      const capsule = h.body.children[0].clone(); capsule.scale.set(0.3, 3, 0.15); capsule.position.set(0, 0.9, 0);
+      // a stand-in walker: a capsule made with the page's own three (the module URL the starter loaded)
+      const threeUrl = performance.getEntriesByType('resource').map((e) => e.name).find((n) => /\/deps\/three\.js/.test(n));
+      if (!threeUrl) throw new Error('the page\'s three module was not found');
+      const THREE = await import(threeUrl);
+      const capsule = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 1.2, 4, 12), new THREE.MeshStandardMaterial({ color: 0x8a8f96 }));
+      capsule.position.set(0, 0.9, 0); capsule.castShadow = true;
       player.add(capsule); scene.add(player);
       const cc = new CharacterController({ radius: 0.32, height: 1.8 });
       const g = R.getInOut({ engine, camera, renderer, physics: engine.physics, car: h.car, carBody: h.body, cc, player });

@@ -14,6 +14,12 @@
 // given canopyFromCollider: null / thinKinds: [] (or its own).
 // With only a `raycast(origin, dir, maxDist) -> {distance}|null` (no queryColliders) it falls back to rays.
 // No allocations per frame (apart from what queryColliders itself returns).
+//
+// Trauma (every rig): rig.addTrauma(x) adds x (0..1, clamped) to rig.trauma; while it is above 0 the rig ends each
+// update with a small rotation-only shake of strength trauma^2 (sums of 5..14 Hz sines; peak pitch / yaw / roll from
+// traumaShake, default 0.025 / 0.025 / 0.035 rad at trauma 1), and trauma falls by traumaDecay (1.7) per second. With
+// trauma 0 the rig's pose is exactly what it was without it. LandingSpring is the dip the character rigs use
+// (landingDip): a kick of min(0.36 * fall speed, 3.2) m/s into a spring of stiffness 150 and damping 17.
 import * as THREE from 'three';
 
 export function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
@@ -21,6 +27,11 @@ export function smooth01(e0, e1, x) { const t = clamp((x - e0) / (e1 - e0), 0, 1
 /** Frame-rate independent exponential smoothing factor (lerp weight for this frame). */
 export function damp(rate, dt) { return 1 - Math.exp(-rate * dt); }
 export function wrapPi(a) { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; }
+/**
+ * Frame-rate independent form of "move a fraction k of the way each 1/60 s frame": the weight for a step of h seconds,
+ * 1 - (1 - k)^(h * 60). (k = 1 - exp(-rate / 60) gives the same as damp(rate, h).)
+ */
+export function damp60(k, h) { return 1 - Math.pow(1 - k, h * 60); }
 /** Critically/under-damped spring step on a Vector3 (pos, vel toward goal). zeta 1 = critical. */
 export function springStep(pos, vel, goal, k, zeta, dt, tmp) {
   const c = 2 * zeta * Math.sqrt(k);
@@ -208,11 +219,39 @@ export class CameraCollision {
   }
 }
 
+/**
+ * Landing dip spring (Saltline's values): land(speed) kicks the spring downward by gain * min(0.36 * speed, 3.2) m/s;
+ * step(dt) integrates stiffness 150 / damping 17 (damping ratio 0.69) in sub-steps of at most 1/240 s, so it is the
+ * same at any frame rate. `y` is the vertical offset in metres (negative = down). Gain 1 dips ~6 cm after a 4.4 m/s
+ * landing (a 1 m fall) and ~11 cm at the cap.
+ */
+export class LandingSpring {
+  /** @param {number} [gain=1] */
+  constructor(gain = 1) { this.gain = gain; this.y = 0; this.v = 0; }
+  /** @param {number} speed  downward speed at touchdown (m/s, positive) */
+  kick(speed) { if (speed > 0 && this.gain > 0) this.v -= this.gain * Math.min(0.36 * speed, 3.2); return this; }
+  /** @param {number} dt */
+  step(dt) {
+    if (this.y === 0 && this.v === 0) return 0;
+    const n = Math.max(1, Math.ceil(dt * 240 - 1e-6)), h = dt / n;
+    for (let i = 0; i < n; i++) { this.v += (-150 * this.y - 17 * this.v) * h; this.y += this.v * h; }
+    if (Math.abs(this.y) < 1e-5 && Math.abs(this.v) < 1e-4) { this.y = 0; this.v = 0; }
+    return this.y;
+  }
+  /** @returns {number} 0 */
+  reset() { this.y = 0; this.v = 0; return 0; }
+}
+
+const TRAUMA_SHAKE = Object.freeze({ pitch: 0.025, yaw: 0.025, roll: 0.035 });
+const TAU = Math.PI * 2;
+
 export class CameraRig {
   /**
    * @param {THREE.PerspectiveCamera} camera
-   * @param {object} [opts]  minY (ground clearance), active (default true; false = start inactive until
-   *                         activate()) + CameraCollision options
+   * @param {{ traumaDecay?: number, traumaShake?: { pitch?: number, yaw?: number, roll?: number }, [key: string]: any }} [opts]
+   *   minY (ground clearance), active (default true; false = start inactive until activate()) + CameraCollision
+   *   options; traumaDecay (1.7: trauma lost per second, see addTrauma), traumaShake (peak shake angles in rad at
+   *   trauma 1, default { pitch: 0.025, yaw: 0.025, roll: 0.035 })
    */
   constructor(camera, opts = {}) {
     this.camera = camera;
@@ -222,6 +261,36 @@ export class CameraRig {
     this.target = null;
     this.getState = null;
     this._snapPending = true;
+    /** 0..1: shake strength is trauma^2; falls by traumaDecay per second (addTrauma) */
+    this.trauma = 0;
+    this.traumaDecay = opts.traumaDecay ?? 1.7;
+    /** @type {{ pitch: number, yaw: number, roll: number }} */
+    this.traumaShake = { ...TRAUMA_SHAKE, ...(opts.traumaShake || {}) };
+    this._shakeT = 0;
+  }
+
+  /**
+   * Add trauma (a hit, a crash, an explosion): x 0..1 is added to `trauma` (clamped to 0..1). The camera shakes with
+   * strength trauma^2, rotation only, and calms down as trauma falls by traumaDecay (1.7) per second: 0.5 shakes for
+   * ~0.3 s, 1 for ~0.6 s. Typical: rig.addTrauma(Math.min(0.6, car.impact / 15)) after a collision.
+   * @param {number} x
+   * @returns {this}
+   */
+  addTrauma(x) {
+    const v = this.trauma + (Number.isFinite(x) ? x : 0);
+    this.trauma = v < 0 ? 0 : v > 1 ? 1 : v;
+    return this;
+  }
+
+  /** End of update(): the trauma shake (rotation only), then decay. Does nothing at trauma 0. */
+  _applyTrauma(dt) {
+    if (!(this.trauma > 0)) return;
+    const s = this.trauma * this.trauma, S = this.traumaShake, cam = this.camera;
+    const t = (this._shakeT += dt);
+    cam.rotateX(S.pitch * s * (0.65 * Math.sin(t * TAU * 7.3) + 0.35 * Math.sin(t * TAU * 11.9 + 1.1)));
+    cam.rotateY(S.yaw * s * (0.65 * Math.sin(t * TAU * 6.1 + 0.5) + 0.35 * Math.sin(t * TAU * 13.7 + 2.3)));
+    cam.rotateZ(S.roll * s * (0.65 * Math.sin(t * TAU * 5.3 + 1.7) + 0.35 * Math.sin(t * TAU * 9.1 + 0.4)));
+    this.trauma = Math.max(0, this.trauma - this.traumaDecay * dt);
   }
 
   // world-query passthroughs (assignable after construction, like the old ChaseCamera fields)

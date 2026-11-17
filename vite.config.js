@@ -15,10 +15,10 @@ const SAMPLES = fs.readdirSync(here('./samples'), { withFileTypes: true })
   .map((d) => d.name).sort();
 // Two build passes (npm run build runs both). The first builds the games; the second, `vite build --mode extras`, builds
 // the pages that are not games: the Asset library (samples/assets/, whose 3D previews import engine and demo modules)
-// and the starters (samples/starter-*). Built together with the games, their imports make Rollup split the code the
-// demos share into many small chunks (each demo then loads 7 to 11 scripts instead of 4). Built apart, the demos'
-// chunks are what they were without those pages; the extra pages get their own chunks next to theirs.
-const isExtra = (name) => name === 'assets' || name.startsWith('starter-');
+// the sound check page (samples/sound-check/) and the starters (samples/starter-*). Built together with the games, their imports make Rollup split the code the
+// demos share into many small chunks (with three demos each loaded 7 to 11 scripts instead of 4). Built apart, each
+// demo loads 2 (its own chunk and the one the two demos share); the extra pages get their own chunks next to theirs.
+const isExtra = (name) => name === 'assets' || name === 'sound-check' || name.startsWith('starter-');
 const input = { index: here('./samples/index.html') };
 for (const s of SAMPLES) if (!isExtra(s)) input[s] = here(`./samples/${s}/index.html`);
 const extraInput = {};

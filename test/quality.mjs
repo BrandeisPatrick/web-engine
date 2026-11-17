@@ -96,7 +96,7 @@ const env = (o) => ({ ...DESK, ...o });
   q = res('?quality=bogus');
   check('unknown query value is ignored (falls to stored)', q.tier === 'mobile' && q.source === 'stored');
 
-  // legacy ?quality=high|low (the Halloween game's old flag) and legacy stored values
+  // legacy ?quality=high|low (the retired Halloween game's old flag) and legacy stored values
   q = res('?quality=low');
   check('legacy ?quality=low -> mobile', q.tier === 'mobile' && q.source === 'query');
   q = resolveQuality({ search: '?quality=high', env: PHONE });

@@ -6,7 +6,7 @@ export { MAP_KEYS, assetBase, validateMapData, loadMapData, prepareMapData, find
 export { Terrain, GroundSurface, sampleLevel, drapePolygon, clipConvex, latticeSplit } from './Terrain.js';
 export { RoadNetwork, RBIT, roadStyle, createRoadMaterial, createTactileMaterial, SolidBuf, samplePolyline, quadUp, DEFAULT_DECK_HOLD } from './RoadNetwork.js';
 export {
-  BuildingBuilder, TileBuildingBuilder, NullBuf, GeoBuf, createFacadeMaterials, MODE, enc, tintBytes, tintOf, insetRing, offsetRing, longAxis, UNIT_WINDOW_TRIS, DEFAULT_BUILDING_STYLE, buildingStyle,
+  BuildingBuilder, TileBuildingBuilder, NullBuf, GeoBuf, createFacadeMaterials, enableFacadeDetail, MODE, enc, tintBytes, tintOf, insetRing, offsetRing, longAxis, UNIT_WINDOW_TRIS, DEFAULT_BUILDING_STYLE, buildingStyle,
 } from './Buildings.js';
 export { FACADE, WIN_RECTS, makeFacadeTextures, PBR, PBR_SETS, GROUND_SETS, loadPbrTextures } from './FacadeTextures.js';
 export { Props } from './Props.js';
@@ -15,12 +15,21 @@ export {
   createFurnitureMaterial, createPanelMaterial, createShelterGlassMaterial, formatStreetName, buildSignAtlas, DEFAULT_SIGN_STYLE,
 } from './Furniture.js';
 export { PartBuilder, VM, VEHICLE_SPECS, VEHICLE_TYPES, VEHICLE_HD_TYPES, DEFAULT_BUS_LIVERY, makeVehicleGeometry, makeVehicleParts, getVehicleAtlas, geometryBytes, pickVehicleColor, createVehicleMaterial } from './Vehicles.js';
+// a drivable HD car matched to its VehicleController spec (wheels, lamps, contact shadow)
+export { createCarVisual, carSpecFor } from './CarVisual.js';
+/** @typedef {import('./CarVisual.js').CarVisual} CarVisual  what createCarVisual returns */
+/** @typedef {import('./CarVisual.js').CarVisualOptions} CarVisualOptions */
+/** @typedef {import('./CarVisual.js').CarVisualUpdateOptions} CarVisualUpdateOptions */
+// a small believable place to start in: a country road, a park corner, ground cover, road paint (the starters use them)
+export { countryRoad, parkCorner, groundCover, paintedLines, COVER_MAX_SEGMENTS } from './Scenery.js';
+/** @typedef {import('./Scenery.js').SceneryResult} SceneryResult */
+/** @typedef {import('./Scenery.js').CoverPath} CoverPath */
 export { Traffic } from './Traffic.js';
 export { TrafficSim, TRAFFIC_TYPES, POSE_STRIDE, buildSignalInfos, playerInfoFrom, typeCounts } from './TrafficSim.js';
 export { buildTreeMeshes, bakeVegImpostors, IMP_VIEWS, impostorView } from './Vegetation.js';
 export { SPECIES, getVegModels } from './VegModels.js';
 export { makeVegAtlas, vegUV, VEG_ATLAS_SIZE, VEG_REGIONS } from './VegTextures.js';
-export { createVegMaterial, createImpostorMaterial as createVegImpostorMaterial } from './VegMaterials.js';
+export { createVegMaterial, createImpostorMaterial as createVegImpostorMaterial, applyFoliageLighting, applyFoliageLightingTo, DEFAULT_FOLIAGE_LIGHT } from './VegMaterials.js';
 export {
   Water, WAVES, NWAVES, waveHeight, waveSlope, waveUniforms, WAVE_GLSL, makeWaterNormalMap, makeNoiseTexture, shoreSegments, buildShoreField, createWaterMaterial,
   // refraction (0.8.0): the scene behind the surface from a render/SceneCopy (MapWorld({ water: { refraction } }))

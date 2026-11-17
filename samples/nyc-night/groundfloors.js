@@ -185,6 +185,7 @@ if (gPat == 1.0) { // slats: each rib rounded top to bottom (lamps and the sky r
 export function buildGroundFloors(o) {
   const { world, signs } = o, R = rng(o.seed ?? 9091), C = o.center, R2 = (o.radius ?? 320) ** 2;
   const K = o.kit || new Kit(), counts = { shops: 0, closed: 0, simple: 0, awnings: 0, service: 0, docks: 0, lobbies: 0, lights: 0, standpipes: 0, drains: 0, cameras: 0, vents: 0 };
+  const closed = []; // closed shutters: { p: [x, y, z] mid-shutter, n: [nx, 0, nz], w } (look-review poses)
   const glass = []; // interior planes: { x, y, z, yaw, w, h, rect, anim, look }
   const gyAt = (x, z) => world.getGroundHeight(x, z);
   const near = (x, z) => (x - C.x) ** 2 + (z - C.z) ** 2 < R2;
@@ -322,6 +323,7 @@ export function buildGroundFloors(o) {
       const m = (a + b) / 2;
       box(K, F, m - 0.12, m + 0.12, g + 0.1, g + 0.14, oS + 0.02, oS + 0.06, lin('#2a2a2a'), MAT.steel, 'ftb'); // handle
       for (const s of [a + 0.35, b - 0.35]) { box(K, F, s - 0.05, s + 0.05, g + 0.03, g + 0.15, oS + 0.05, oS + 0.11, lin('#8a8478'), MAT.steel, 'ftblr'); box(K, F, s - 0.035, s + 0.035, g + 0.15, g + 0.22, oS + 0.07, oS + 0.09, lin('#b0aca0'), MAT.steel, 'ftlr'); }
+      closed.push({ p: F.P(m, (g + yH) / 2, oS), n: F.N, w: b - a });
       counts.closed++;
     }
   }
@@ -466,7 +468,7 @@ export function buildGroundFloors(o) {
   }
   counts.tris = K.tris;
   o.scene.add(group);
-  return { group, mesh, counts, material: mat };
+  return { group, mesh, counts, material: mat, closed };
 }
 
 /** The merged street-level geometry (groundfloors.js + windowkit.js share one Kit) as one mesh per quadrant round `center`. */

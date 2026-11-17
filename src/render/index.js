@@ -1,6 +1,6 @@
 // Render layer: lighting / sky / post-processing, texture sets, impostors, material patches and the
 // allocation-free instancing / culling / effects utilities. No game knowledge; nothing here imports src/.
-export { Atmosphere, TIME_PRESETS, DEFAULT_SUN, DEFAULT_LOOKS, DEFAULT_FLARE, sunPosition } from './Atmosphere.js';
+export { Atmosphere, TIME_PRESETS, DEFAULT_SUN, DEFAULT_LOOKS, DEFAULT_FLARE, DEFAULT_TWILIGHT_KEY, DEFAULT_LOW_SUN_ENV, sunPosition } from './Atmosphere.js';
 export { PostFX, DEFAULT_GRADE, gradeAt, resolveAA, AA_MODES } from './PostFX.js';
 // G-buffer path (0.7.0): TAA over the MRT scene pass, camera jitter / history matrices shared with later passes
 export { GBuffer, GBUFFER_UNIFORMS, GBUFFER_DEFINES, GBUFFER_VERTEX_TAIL, GBUFFER_CHUNK_TAILS, GBUFFER_GLSL_DECODE, installGBufferChunks, createGBufferTarget, updateGBufferView } from './GBuffer.js';
@@ -56,13 +56,20 @@ export { NearestLights } from './NearestLights.js';
 // GPU-simulated particles (0.7.0): the CPU ParticleSystem's API over GPUComputationRenderer ping-pong textures
 export { GpuParticleSystem, GpuParticleStaging } from './GpuParticles.js';
 export { DEFAULT_RINGS, impostorViews, bakeImpostors, createImpostorMaterial, ImpostorBatch } from './Impostors.js';
-export { createTimeUniforms, updateTimeUniforms, windSway, ditherFade, applyPatches, makeDepthMaterial, GLSL_IGN, GLSL_HASH } from './MaterialPatches.js';
+export {
+  createTimeUniforms, updateTimeUniforms, windSway, ditherFade, applyPatches, makeDepthMaterial, GLSL_IGN, GLSL_HASH,
+  weathering, weatheringUniforms, weatheringAt, bakeWeathering, GLSL_WEATHERING, WEATHERING_DEFAULTS,
+} from './MaterialPatches.js';
 export { InstancedPool } from './InstancedPool.js';
 // CPU copies of GPU data (opt-in, one-way): static geometry arrays and data / compressed texture pixels after upload
 export { releaseStaticGeometry, releaseTextureData, createMemoryTrim } from './Memory.js';
 export { LODGroup } from './LODGroup.js';
 export { ChunkCuller } from './Culling.js';
 export { DecalTrail } from './Decals.js';
+// skid marks and tyre smoke from VehicleController's wheels[i].slideHeat (one DecalTrail + one ParticleSystem)
+export { TyreFx } from './TyreFx.js';
+/** @typedef {import('./TyreFx.js').TyreFxOptions} TyreFxOptions */
+/** @typedef {import('./TyreFx.js').TyreFxBudget} TyreFxBudget */
 export { ParticleSystem, ParticleEmitter, softDotTexture, atmosphereSunFactor } from './Particles.js';
 // procedural noise: seeded simplex 2D / 3D, RNG, hash, tileable value noise; the whole module (incl. the
 // clamp / lerp / smoothstep easing helpers) is also available namespaced as Noise

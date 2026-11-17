@@ -14,7 +14,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MapWorld } from '@vibe/engine/world';
-import { buildDuneRoad } from './dune-road.js';
+import { buildDuneRoad, DUSK_FILL } from './dune-road.js';
+import { PALM_FADE_FS, PALM_DITHER_FS } from './palm.js';
 
 const BASE = import.meta.env.BASE_URL;
 export const MIAMI_MAP_URL = `${BASE}miami/map/city.json`;
@@ -101,6 +102,9 @@ export function miamiWorldOptions({ scene, renderer, map, q, timeOfDay, plugins,
       sun: MIAMI_SUN, timePresets: MIAMI_PRESETS, camera,
       shadows: { ...q.shadows, near: 45, far: [200, 420, 650] },
       cloudWind: [6, 2],
+      // the dusk look: the afterglow stays the key light after sunset (warm, low, from the glow), soft clouds lit
+      // by their relief toward the sun, and a warmer, brighter sky fill while the sun is low (engine options, off by default)
+      twilightKey: { intensity: 0.9, elevation: 5 }, cloudStyle: 'lit', lowSunEnv: true,
     },
     pbrSize: q.textures.maxSize >= 2048 ? 1024 : 512,
     // Ocean Drive between 8th and 9th Street, northbound (bake frame: x east, z south), the deco district
@@ -435,6 +439,7 @@ export function miamiPlugin(o = {}) {
     },
     update(dt, cam, darkness, world) {
       const on = THREE.MathUtils.smoothstep(darkness, 0.08, 0.3);
+      DUSK_FILL.value = world && world.atmo ? world.atmo.twilightKeyAmount || 0 : 0;
       P.time = (P.time || 0) + dt;
       if (P.tubeMat) P.tubeMat.color.setScalar(0.15 + 6 * on);
       if (P.lobbyMat) P.lobbyMat.userData.u.uGlow.value = 0.25 + 1.0 * on;
@@ -562,18 +567,43 @@ function decoFrontage(deco, tubes, best, ux, uz, nx, nz, gy, h, tag, neonCol, r)
 }
 
 // ------------------------------------------------------------------ beach
+/**
+ * The dry sand's look: x = dusk fill strength, y = brightness, z = how far the texture's cast goes to neutral beige.
+ * The smoke look gate (default look, beach pose: under40 >= 50 %) pins the dry sand's value at about what it was; the
+ * fill and the neutral cast turn it from the violet hemisphere's mauve-brown to a dim sand grey at that value.
+ */
+const SAND_LOOK = { value: new THREE.Vector3(0.05, 0.68, 0.75) };
 function sandMaterial(pbr, lod) {
   const m = new THREE.MeshStandardMaterial({ color: 0xc8b694, roughness: 0.95, metalness: 0, name: "sand" });
+  m.userData.look = SAND_LOOK;
   if (pbr && pbr.map) { m.map = pbr.map; if (pbr.normalMap) { m.normalMap = pbr.normalMap; m.normalScale.set(0.3, 0.3); } m.color.set(0xdccdb2); }
   m.onBeforeCompile = (sh) => {
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aWet; varying float vWet;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvWet = aWet;');
+    sh.uniforms.uDuskFill = DUSK_FILL; sh.uniforms.uSandLook = SAND_LOOK;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aWet; varying float vWet; varying vec2 vSandXZ;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWet = aWet; vSandXZ = (modelMatrix * vec4(position, 1.0)).xz;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vWet;')
-      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb * 1.45, diffuseColor.rgb * 0.5, vWet);')
-      // the wet band near the waterline is glossy (it mirrors the afterglow); written where three computes roughness
-      .replace('#include <roughnessmap_fragment>', THREE.ShaderChunk.roughnessmap_fragment.replace('float roughnessFactor = roughness;', 'float roughnessFactor = mix(roughness, 0.12, smoothstep(0.35, 0.9, vWet));'));
+      .replace('#include <common>', `#include <common>
+uniform float uDuskFill; uniform vec3 uSandLook; varying float vWet; varying vec2 vSandXZ;
+float sdH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float sdN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(sdH(i), sdH(i + vec2(1.0, 0.0)), f.x), mix(sdH(i + vec2(0.0, 1.0)), sdH(i + vec2(1.0, 1.0)), f.x), f.y); }`)
+      // the wet band's edge wanders (tongues of the last swash, ~2-6 m) instead of following the mesh's columns
+      .replace('#include <color_fragment>', `#include <color_fragment>
+float sWet = clamp(vWet + (sdN(vSandXZ * 0.25) - 0.5) * 0.45, 0.0, 1.0);
+// dry sand close to neutral (the texture's grain kept, its brown cast pulled toward a warm grey: uSandLook), the
+// wet band darker
+vec3 sDry = diffuseColor.rgb * 2.1;
+float sL = dot(sDry, vec3(0.2126, 0.7152, 0.0722));
+sDry = mix(sDry, sL * vec3(1.08, 1.0, 0.86), uSandLook.z) * uSandLook.y;
+diffuseColor.rgb = mix(sDry, sDry * vec3(0.6, 0.58, 0.58), smoothstep(0.3, 0.9, sWet));`)
+      // the wet band near the waterline is glossy (it mirrors the afterglow), coming in gradually; written where three
+      // computes roughness
+      .replace('#include <roughnessmap_fragment>', THREE.ShaderChunk.roughnessmap_fragment.replace('float roughnessFactor = roughness;', 'float roughnessFactor = mix(roughness, 0.3, smoothstep(0.15, 1.0, sWet));'))
+      // at dusk the low sky lights the whole beach (the dome's overhead is dark, the horizon all round is not): a
+      // neutral fill on the dry sand, so it reads as pale sand rather than the violet hemisphere's mauve
+      .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.indirectDiffuse += diffuseColor.rgb * vec3(1.0, 0.94, 0.88) * uSandLook.x * uDuskFill * (1.0 - 0.25 * sWet);');
   };
-  m.customProgramCacheKey = () => `miami-sand-${lod}`;
+  m.customProgramCacheKey = () => `miami-sand-2-${lod}`;
   return m;
 }
 
@@ -683,10 +713,11 @@ function buildBeach(P, ctx, o) {
         (m.material.color.getHex() === 0xf2efe6 ? whiteG : paintG).push(g);
       });
     }
-    const add = (list, mat, name) => { if (!list.length) return; const mesh = new THREE.Mesh(mergeGeometries(list), mat); mesh.name = name; mesh.castShadow = true; mesh.receiveShadow = true; P.group.add(mesh); };
-    add(paintG, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 }), 'lifeguard-huts');
-    add(whiteG, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7 }), 'lifeguard-huts-trim');
-    if (winMat) add(winG, winMat, 'lifeguard-huts-windows');
+    const add = (list, mat, name, cast = true) => { if (!list.length) return; const mesh = new THREE.Mesh(mergeGeometries(list), mat); mesh.name = name; mesh.castShadow = cast; mesh.receiveShadow = true; P.group.add(mesh); };
+    add(paintG, agedPaint(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7 }), 'paint'), 'lifeguard-huts');
+    add(whiteG, agedPaint(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75 }), 'trim'), 'lifeguard-huts-trim');
+    // (the panes lie 1 cm proud of the cabin walls: the cabin already casts their shadow, so they skip the shadow map)
+    if (winMat) add(winG, winMat, 'lifeguard-huts-windows', false);
   }
   // tall coconut palms in a loose line along the dune edge
   // shared with the detailed near palms (palm.js, desktop): the cheap ones dither out within uNear of the camera
@@ -791,22 +822,89 @@ function beachDressing(P, rows, r, o, world) {
   }
 }
 
+/** Drop the named faces of a BoxGeometry ('px nx py ny pz nz'), by its groups. */
+function dropFaces(geo, hide) {
+  if (!hide) return geo;
+  const names = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
+  const drop = new Set(hide.split(' ')), src = geo.index.array, keep = [];
+  for (const gr of geo.groups) if (!drop.has(names[gr.materialIndex])) for (let i = gr.start; i < gr.start + gr.count; i++) keep.push(src[i]);
+  geo.setIndex(keep); geo.clearGroups();
+  return geo;
+}
+
 function hut(x, z, color, r, y = 0) {
   const g = new THREE.Group();
   const paint = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
   const white = new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 0.7 });
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(3, 2.4, 3), paint); cabin.position.y = 2.9; cabin.castShadow = true;
-  const roof = new THREE.Mesh(new THREE.CylinderGeometry(0.0, 2.6, 1.2, 4, 1), white); roof.rotation.y = Math.PI / 4; roof.position.y = 4.7; roof.castShadow = true;
-  const deck = new THREE.Mesh(new THREE.BoxGeometry(4, 0.15, 4), white); deck.position.y = 1.65;
-  g.add(cabin, roof, deck);
-  for (const [sx, sz] of [[-1.7, -1.7], [1.7, -1.7], [-1.7, 1.7], [1.7, 1.7]]) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.7, 0.18), white); l.position.set(sx, 0.85, sz); g.add(l); }
-  const ramp = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.1, 4.2), white); ramp.position.set(-3.6, 0.85, 0); ramp.rotation.z = -0.42; g.add(ramp);
+  const dark = new THREE.MeshStandardMaterial({ color: 0x2b2824, roughness: 0.8 }); // the door, the flag halyard cleat
+  // hide: faces no camera can see (BoxGeometry order px nx py ny pz nz: buried in the deck or the ramp, coplanar with a
+  // face drawn on top of them, inside the cabin): dropped, so they cost no triangles in the view and the shadow map
+  const box = (w, h, d, mat, px, py, pz, rx = 0, ry = 0, rz = 0, hide = '') => { const m = new THREE.Mesh(dropFaces(new THREE.BoxGeometry(w, h, d), hide), mat); m.position.set(px, py, pz); m.rotation.set(rx, ry, rz); g.add(m); return m; };
+  const DY = 1.65; // deck top
+  // stilts with cross braces on the two long sides
+  for (const [sx, sz] of [[-1.75, -1.75], [1.75, -1.75], [-1.75, 1.75], [1.75, 1.75]]) box(0.22, DY, 0.22, white, sx, DY / 2, sz, 0, 0, 0, 'py ny');
+  for (const sz of [-1.75, 1.75]) { const L = Math.hypot(3.5, DY - 0.3); box(L, 0.08, 0.08, white, 0, DY / 2, sz, 0, 0, Math.atan2(DY - 0.3, 3.5)); }
+  for (const sx of [-1.75, 1.75]) { const L = Math.hypot(3.5, DY - 0.3); box(0.08, 0.08, L, white, sx, DY / 2, 0, -Math.atan2(DY - 0.3, 3.5), 0, 0); }
+  box(4.3, 0.16, 4.3, white, 0, DY - 0.08, 0);                                      // the deck
+  const cab = box(3, 2.4, 3, paint, 0, DY + 1.2, 0, 0, 0, 0, 'ny'); cab.castShadow = true;          // the cabin
+  box(3.08, 0.12, 3.08, white, 0, DY + 0.06, 0, 0, 0, 0, 'ny');                                    // a skirting board
+  box(0.05, 1.9, 0.95, dark, -1.53, DY + 0.98, -0.7);                               // the door (land side, by the ramp)
+  box(0.07, 2.0, 0.08, white, -1.53, DY + 1.0, -1.2, 0, 0, 0, 'px'); box(0.07, 2.0, 0.08, white, -1.53, DY + 1.0, -0.2, 0, 0, 0, 'px'); box(0.07, 0.08, 1.08, white, -1.53, DY + 1.98, -0.7, 0, 0, 0, 'px');
+  // the deck rail on three sides (not where the ramp lands)
+  for (const [sx, sz, w, d] of [[2.1, 0, 0.06, 4.2], [0, 2.1, 4.2, 0.06], [0, -2.1, 4.2, 0.06]]) { box(w, 0.07, d, white, sx, DY + 0.95, sz); box(w, 0.05, d, white, sx, DY + 0.5, sz); }
+  for (const [sx, sz] of [[2.1, 2.1], [2.1, -2.1], [-2.1, 2.1], [-2.1, -2.1], [2.1, 0], [0, 2.1], [0, -2.1]]) box(0.08, 0.95, 0.08, white, sx, DY + 0.47, sz, 0, 0, 0, 'ny');
+  // the roof: an eave slab with a deep overhang, a low hipped cap, a flag on a short pole
+  box(4.4, 0.14, 4.4, white, 0, DY + 2.47, 0);
+  const roof = new THREE.Mesh(new THREE.CylinderGeometry(0.0, 2.95, 0.95, 4, 1), paint); roof.rotation.y = Math.PI / 4; roof.position.y = DY + 2.54 + 0.47; roof.castShadow = true; g.add(roof);
+  box(0.05, 1.6, 0.05, white, 0, DY + 3.4 + 0.8, 0);
+  box(0.02, 0.42, 0.62, new THREE.MeshStandardMaterial({ color: 0xc8322a, roughness: 0.8 }), 0, DY + 4.6, 0.33);
+  // the ramp from the deck's land edge down to the sand, with slats and a hand rail each side
+  const RL = 4.6, ra = Math.asin(DY / RL), rcx = -2.15 - Math.cos(ra) * RL / 2;
+  box(RL, 0.1, 1.1, white, rcx, DY / 2 - 0.05, -0.7, 0, 0, ra);
+  for (let k = 1; k < 9; k++) { const t = k / 9, px = -2.15 - Math.cos(ra) * RL * t, py = DY - Math.sin(ra) * RL * t; box(0.05, 0.05, 1.1, white, px, py + 0.02, -0.7, 0, 0, 0, 'ny'); }
+  for (const sz of [-0.7 - 0.58, -0.7 + 0.58]) {
+    box(RL, 0.06, 0.06, white, rcx, DY / 2 + 0.9, sz, 0, 0, ra);
+    for (const t of [0.08, 0.5, 0.92]) { const px = -2.15 - Math.cos(ra) * RL * t, py = DY - Math.sin(ra) * RL * t; box(0.06, 0.9, 0.06, white, px, py + 0.45, sz); }
+  }
   const win = new THREE.Mesh(new THREE.PlaneGeometry(2, 0.8), new THREE.MeshStandardMaterial({ color: 0x0c1418, roughness: 0.1, metalness: 0.3, emissive: 0xffc27a, emissiveIntensity: 2.2, name: 'hutWindow' }));
-  const win2 = win.clone(); win2.position.set(-1.51, 3.1, 0); win2.rotation.y = -Math.PI / 2; g.add(win2); win.position.set(1.51, 3.1, 0); win.rotation.y = Math.PI / 2; g.add(win);
+  const win2 = win.clone(); win2.position.set(-1.51, DY + 1.45, 0.45); win2.rotation.y = -Math.PI / 2; win2.scale.x = 0.55; g.add(win2); win.position.set(1.51, DY + 1.45, 0); win.rotation.y = Math.PI / 2; g.add(win);
   g.position.set(x, Number.isFinite(y) ? y : 0, z); g.rotation.y = (r() - 0.5) * 0.3;
   g.traverse((m) => { if (m.isMesh) m.receiveShadow = true; });
   g.name = 'lifeguard-hut';
   return g;
+}
+
+/** Sun-bleached, peeling paint on the huts (world-space noise, no texture): boards on the cabin walls, pale primer
+ *  where the colour has flaked, sand-stained stilts. */
+function agedPaint(m, kind) {
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vHW; varying vec3 vHN;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvHW = (modelMatrix * vec4(position, 1.0)).xyz; vHN = normalize(mat3(modelMatrix) * normal);');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+varying vec3 vHW; varying vec3 vHN;
+float hH(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+float hN(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(hH(i), hH(i + vec3(1, 0, 0)), f.x), mix(hH(i + vec3(0, 1, 0)), hH(i + vec3(1, 1, 0)), f.x), f.y),
+             mix(mix(hH(i + vec3(0, 0, 1)), hH(i + vec3(1, 0, 1)), f.x), mix(hH(i + vec3(0, 1, 1)), hH(i + vec3(1, 1, 1)), f.x), f.y), f.z); }`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+{
+  float side = 1.0 - smoothstep(0.4, 0.7, abs(vHN.y));
+  float mott = hN(vHW * 1.7) * 0.6 + hN(vHW * 5.3) * 0.4;
+  vec3 c = diffuseColor.rgb;
+  ${kind === 'paint' ? `
+  c = mix(c, vec3(dot(c, vec3(0.3, 0.59, 0.11))) * 1.15 + 0.03, 0.22 + 0.25 * mott);       // bleached
+  float flake = smoothstep(0.66, 0.74, hN(vHW * 3.1 + 7.0) * 0.7 + hN(vHW * 11.0) * 0.3) * side;
+  c = mix(c, vec3(0.62, 0.6, 0.55), flake * 0.75);                                         // primer under flaked paint
+  float board = smoothstep(0.0, 0.05, fract(vHW.y * 5.2)) * smoothstep(0.0, 0.05, 1.0 - fract(vHW.y * 5.2));
+  c *= mix(1.0, 0.72 + 0.28 * board, side);                                                 // shiplap boards
+  c *= 0.9 + 0.12 * mott;` : `
+  c *= 0.82 + 0.16 * mott;                                                                  // grubby white
+  c = mix(c, c * vec3(0.78, 0.7, 0.58), (1.0 - smoothstep(0.1, 1.0, vHW.y)) * side);          // sand-stained feet`}
+  diffuseColor.rgb = c;
+}`);
+  };
+  m.customProgramCacheKey = () => `miami-hut-${kind}`;
+  return m;
 }
 
 /** Tall curved-trunk coconut palms: one instanced trunk + one instanced crown of frond cards. */
@@ -846,8 +944,8 @@ function coconutPalms(rows, spacing, r, gy = () => 0, keep = () => true, xFn = n
     fronds.push(g);
   }
   const crown = mergeGeometries(fronds); crown.computeVertexNormals();
-  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5f5244, roughness: 0.95 });
-  const frondMat = new THREE.MeshStandardMaterial({ color: 0x4a5a2e, roughness: 0.85, side: THREE.DoubleSide }); // a dry, sun-faded olive
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x766a5c, roughness: 0.95, name: 'coconutTrunk' }); // near the near palms' trunk on average (their cross-fade)
+  const frondMat = new THREE.MeshStandardMaterial({ color: 0x4a5a2e, roughness: 0.85, side: THREE.DoubleSide, name: 'coconutFrond' }); // a dry, sun-faded olive
   // instanced per 200 m chunk along the beach, so the camera's frustum culls the palms it cannot see
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const byChunk = new Map();
@@ -876,11 +974,10 @@ function coconutPalms(rows, spacing, r, gy = () => 0, keep = () => true, xFn = n
         .replace('#include <project_vertex>', '#include <project_vertex>\n#ifdef USE_INSTANCING\nvPalmW = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;\n#else\nvPalmW = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#endif');
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uViewPos; uniform float uNear; varying vec3 vPalmW;')
         .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
-  { float k = 1.0 - smoothstep(uNear - 4.0, uNear, distance(vPalmW, uViewPos));
-    float bayer = fract(dot(floor(gl_FragCoord.xy), vec2(0.5, 0.25)) + 0.125 * mod(floor(gl_FragCoord.x * 0.5) + floor(gl_FragCoord.y * 0.5), 2.0) + 0.0625);
-    if (k > bayer) discard; }`);
+  { float k = 1.0 - ${PALM_FADE_FS(mat === trunkMat).replace('DIST', 'distance(vPalmW, uViewPos)')};
+    if (k > ${PALM_DITHER_FS}) discard; }`);
     };
-    mat.customProgramCacheKey = () => `coconut-palm-far-${mat === trunkMat ? 't' : 'c'}`;
+    mat.customProgramCacheKey = () => `coconut-palm-far-2-${mat === trunkMat ? 't' : 'c'}`;
   }
   const g = new THREE.Group(); g.add(...meshes); g.name = 'coconut-palms'; g.count = pts.length;
   g.userData.instances = pts.map(([x, z, h, yaw, , lean]) => ({ x, y: gy(x, z), z, h, yaw, lean, leanDir: yaw + 0.8 }));
