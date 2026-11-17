@@ -49,6 +49,8 @@ const SUITES = [
   // directional lights black at the pixel skip their BRDF (shadows.skipUnlit)
   { file: 'skip-unlit.mjs' },
   { file: 'postfx-options.mjs' },
+  // the weathering material patch: builds, deterministic, zero is identity, unpatched materials unchanged
+  { file: 'surface-detail.mjs' },
   // PostFX renderScale (temporal upscaling): sizes, defines, scale-1 texts pinned, sequences, allocation
   { file: 'render-scale.mjs' },
   { file: 'gbuffer-chunks.mjs' },
