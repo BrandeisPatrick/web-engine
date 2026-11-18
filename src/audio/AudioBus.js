@@ -6,9 +6,20 @@
 //   voice.connect(bus.bus('effects'));     // buses: engine, effects, ambience, ui (+ any name, created on demand)
 //   bus.setMuted(true); bus.toggleMute(); bus.setVolume(0.5); bus.setBusVolume('ambience', 0.3);
 //   const send = bus.reverbSend(node, 0.2); // simple algorithmic reverb (created lazily)
+//   await bus.prepare();                   // behind a loading screen: start()'s slow parts now (below)
 //
 // Graph: bus gains -> master gain -> compressor -> destination; reverb return -> master.
-// Safe to import in Node (no AudioContext until start()).
+// Safe to import in Node (no AudioContext until start() or prepare()).
+//
+// Start without a stall. Two things made the first start() slow, and it runs inside the start click or the first key:
+// creating the AudioContext (the first one of a browser session starts the audio device: 115-150 ms on an M-series
+// Mac, whatever the CPU) and the samples a SoundBank renders for its loops when the bus starts (about 30 ms on a Mac,
+// about 4x on a phone-class CPU). prepare() does both before the gesture, behind a loading screen: it creates the
+// context at once, suspended (silent, no audio thread; start() resumes it inside the gesture, which iOS requires), then
+// runs every job added with onPrepare(fn) (a SoundBank adds its loop samples), one per task. GameShell.ready() calls it
+// under its loading bar. Without prepare() nothing changes. Chrome prints a warning that the AudioContext "was not
+// allowed to start" when prepare() creates it: expected, start() resumes it. `ctx`, `started`, `bus(name)` and the
+// onStart callbacks still wait for start().
 //
 // Options that change nothing unless given:
 //   new AudioBus({ master: 'safe' })     // the sound kit's master chain (below); the default chain is unchanged
@@ -96,6 +107,9 @@ export class AudioBus {
     this._muffle = null;
     this._onVis = null;
     this._hiddenSuspended = false;
+    this._early = null;      // the context prepare() created, until start() takes it
+    this._preparers = [];    // onPrepare jobs
+    this._prepareP = null;
   }
 
   /** True when the context renders offline (an injected OfflineAudioContext): it is never 'running' between steps. */
@@ -118,18 +132,64 @@ export class AudioBus {
     if (this._context) return this.offline || this.ctx.state === 'running' || !this.ctx.resume ? Promise.resolve(true) : this.ctx.resume().then(() => true, () => false);
     const AC = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
     if (!AC) return Promise.resolve(false);
+    const early = !this.ctx && !!this._early;
     if (!this.ctx) {
-      this.ctx = new AC({ latencyHint: this.latencyHint });
+      this.ctx = this._early || new AC({ latencyHint: this.latencyHint }); // prepare()'s context: no stall here
+      this._early = null;
       this._buildMaster();
       const cbs = this._onStart; this._onStart = [];
       for (const cb of cbs) cb(this.ctx, this);
     }
-    if (this.ctx.state !== 'running') return this.ctx.resume().then(() => true, () => false);
+    // prepare()'s context is always resumed here: a suspend() it asked for may still be on its way
+    if (early || this.ctx.state !== 'running') return this.ctx.resume().then(() => true, () => false);
     return Promise.resolve(true);
   }
 
   /** Run cb(ctx, bus) once the context exists (immediately if it already does). */
   onStart(cb) { if (this.ctx) cb(this.ctx, this); else this._onStart.push(cb); return this; }
+
+  /**
+   * Do start()'s slow parts now, before the gesture, behind a loading screen (see "Start without a stall"): create the
+   * context, suspended, and run the onPrepare jobs one per task. Needs no gesture. Does nothing for an injected
+   * `context` or once started, apart from the jobs. Safe to call repeatedly (the same promise); never rejects (a job
+   * that fails is logged and its work happens at start instead).
+   * @returns {Promise<void>}
+   */
+  prepare() {
+    if (this._prepareP) return this._prepareP;
+    if (!this.ctx && !this._context && !this._early) {
+      const AC = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
+      if (AC) {
+        try {
+          const ctx = this._early = new AC({ latencyHint: this.latencyHint });
+          // a context the autoplay policy lets run at once (a site the user often hears) waits suspended as well
+          if (ctx.state === 'running' && ctx.suspend) Promise.resolve(ctx.suspend()).catch(() => {});
+        } catch { this._early = null; } // start() creates it inside the gesture, as without prepare()
+      }
+    }
+    const jobs = this._preparers.splice(0);
+    let p = Promise.resolve();
+    for (const fn of jobs) p = p.then(() => this._prepareOne(fn));
+    return (this._prepareP = p);
+  }
+
+  /**
+   * Add a job for prepare() (a SoundBank adds its loop samples); a job added after prepare() was called runs after the
+   * ones before it.
+   * @param {() => (void | Promise<void>)} fn
+   * @returns {this}
+   */
+  onPrepare(fn) {
+    if (this._prepareP) this._prepareP = this._prepareP.then(() => this._prepareOne(fn));
+    else this._preparers.push(fn);
+    return this;
+  }
+
+  // one prepare job in a task of its own (a loading screen keeps animating between them)
+  async _prepareOne(fn) {
+    await new Promise((r) => setTimeout(r, 0));
+    try { await fn(); } catch (e) { console.warn('[AudioBus] a prepare job failed; its work runs at start instead', e); }
+  }
 
   /** Start on the first keydown / pointerdown / touchend on target. Returns a remover. */
   unlockOnGesture(target = typeof window !== 'undefined' ? window : null) {
@@ -311,6 +371,7 @@ export class AudioBus {
 
   dispose() {
     if (this._unlock) this._unlock();
+    if (this._early) { if (this._early.close) Promise.resolve(this._early.close()).catch(() => {}); this._early = null; }
     if (this._onVis) { document.removeEventListener('visibilitychange', this._onVis); this._onVis = null; }
     if (this.ctx && this.ctx.close && !this._context) this.ctx.close();
     this.ctx = null; this.master = null; this.buses = {}; this._reverb = null; this.output = null; this._muffle = null;

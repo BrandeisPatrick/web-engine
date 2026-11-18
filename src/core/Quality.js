@@ -19,6 +19,21 @@
 // mobile) goes straight to the cap. `?quality=` and a stored choice are never changed. The result says so:
 // `lighter: true`, `contextLosses` (the count) and a `reason` that ends in '; lighter after a graphics reset'
 // (`recommended` stays what the device would get). The count lives until the tab closes; `clearContextLosses()` forgets it.
+//
+// Lighter after a crash. A phone's OS can kill the whole tab for memory, and iOS does it without any event: no
+// `webglcontextlost`, so the count above never moved and the next load was as heavy as the one that died. So on a
+// device recommended 'mobile' the first resolveQuality() of a page load also runs the boot check (bootCheck): a boot
+// marker in localStorage, `vibe.boot:<location.pathname>` (BOOT_MARKER_KEY), set at boot and cleared when the run is
+// healthy (BOOT_HEALTHY_SECONDS, 15 s, of frames the Engine's loop drew: it calls bootHealthy()), on `pagehide` (a
+// normal close, reload or navigation) and while the page is hidden (a tab killed in the background was not killed by
+// us; it is set again when the page shows before it is healthy). Still there at the next boot, less than
+// BOOT_MARKER_MAX_AGE (10 min) old: the previous run of this page died before it was healthy. That counts as one lost
+// context (recordContextLoss), so the load takes the same lighter path and, as after a lost context, later loads in
+// this tab stay lighter until it closes; the run that comes up healthy clears the marker, not the count. One console
+// warning says so, and the result has `crashed: true` and a `reason` that ends in '; lighter after a crash'. A device
+// recommended 'desktop' gets no marker: a desktop browser does not kill a visible tab without a trace, and two tabs of
+// one page (side-by-side comparisons) would read each other's marker as a crash. Every storage access is in
+// try / catch (private mode); without storage, or in Node, nothing happens.
 
 /** Tier ids, best first. */
 export const TIER_IDS = ['desktop', 'mobile'];
@@ -27,6 +42,12 @@ export const QUALITY_STORAGE_KEY = 'vibe.quality';
 export const CONTEXT_LOSS_KEY = 'vibe.contextLost';
 /** The pixel-ratio cap of the lightest rung after lost contexts (see header). */
 export const LOST_MAX_PIXEL_RATIO = 1;
+/** localStorage key prefix of the boot marker; `:${location.pathname}` follows (see header). */
+export const BOOT_MARKER_KEY = 'vibe.boot';
+/** Seconds of frames the loop draws before a run is healthy and its boot marker is cleared (see header). */
+export const BOOT_HEALTHY_SECONDS = 15;
+/** A boot marker older than this many seconds is stale: ignored, not a crash (see header). */
+export const BOOT_MARKER_MAX_AGE = 600;
 
 /**
  * The presets. Groups: `engine` (Engine options), `shadows` (Atmosphere `shadows`), `postfx` (PostFX options),
@@ -135,6 +156,59 @@ export function recordContextLoss(key = CONTEXT_LOSS_KEY) {
 /** Forget this session's lost contexts: the next resolveQuality() is not lightened. */
 export function clearContextLosses(key = CONTEXT_LOSS_KEY) { const s = session(); try { if (s) s.removeItem(key); } catch { /* blocked */ } }
 
+let _boot = null; // this page load's boot check (bootCheck): { result, healthy, logged, disarm, stop }
+/**
+ * The boot check (see header), once per page load: resolveQuality() runs it first thing. Reads the marker the previous
+ * run of this page left (there: it died before it was healthy, so one lost context is recorded) and sets this run's;
+ * later calls return the first result. Nothing happens unless `mobile` (the device is recommended 'mobile').
+ * @param {{ mobile?: boolean, storage?: Storage | null, key?: string, now?: number, win?: any, doc?: any, force?: boolean }} [o]
+ *   storage / key / now (ms) / win / doc replace localStorage, the key from location.pathname, Date.now(), window and
+ *   document (tests); force: run it again (tests)
+ * @returns {{ key: string, armed: boolean, crashed: boolean, age: number | null }}  armed: this run's marker is set;
+ *   crashed: the previous run died (age: seconds since its marker was set)
+ */
+export function bootCheck(o = {}) {
+  if (_boot && !o.force) return _boot.result;
+  if (_boot) _boot.stop();
+  const result = { key: '', armed: false, crashed: false, age: null };
+  const b = _boot = { result, healthy: false, logged: false, disarm: () => {}, stop: () => {} };
+  const st = o.storage !== undefined ? o.storage : storage();
+  const key = result.key = o.key ?? (typeof location !== 'undefined' && location.pathname ? `${BOOT_MARKER_KEY}:${location.pathname}` : '');
+  if (!o.mobile || !st || !key) return result;
+  let prev = null;
+  try { prev = st.getItem(key); } catch { return result; } // private mode, blocked site data
+  const now = o.now ?? Date.now();
+  if (prev !== null) {
+    const age = (now - Number(prev)) / 1000;
+    if (age >= 0 && age <= BOOT_MARKER_MAX_AGE) { result.crashed = true; result.age = Math.round(age); }
+  }
+  const arm = () => { try { st.setItem(key, String(o.now ?? Date.now())); return true; } catch { return false; } };
+  b.disarm = () => { try { st.removeItem(key); } catch { /* blocked */ } };
+  result.armed = arm();
+  if (result.crashed) recordContextLoss();
+  if (!result.armed) return result;
+  // a normal close / reload / navigation, or hidden: no marker; shown again (bfcache, back in view) before healthy: set
+  const win = o.win !== undefined ? o.win : typeof window !== 'undefined' ? window : null;
+  const doc = o.doc !== undefined ? o.doc : typeof document !== 'undefined' ? document : null;
+  const onHide = () => b.disarm();
+  const onShow = (e) => { if (!b.healthy && (!e || e.type !== 'pageshow' || e.persisted)) arm(); };
+  const onVis = () => (doc.hidden ? onHide() : onShow());
+  const on = (t, ev, fn) => { if (t && typeof t.addEventListener === 'function') t.addEventListener(ev, fn); };
+  const off = (t, ev, fn) => { if (t && typeof t.removeEventListener === 'function') t.removeEventListener(ev, fn); };
+  on(win, 'pagehide', onHide); on(win, 'pageshow', onShow); on(doc, 'visibilitychange', onVis);
+  b.stop = () => { off(win, 'pagehide', onHide); off(win, 'pageshow', onShow); off(doc, 'visibilitychange', onVis); };
+  return result;
+}
+/**
+ * This run is healthy: its boot marker is cleared and stays cleared (see header). The Engine's loop calls it after
+ * BOOT_HEALTHY_SECONDS of drawn frames; once is enough.
+ */
+export function bootHealthy() {
+  const b = _boot;
+  if (!b || b.healthy) return;
+  b.healthy = true; b.disarm(); b.stop();
+}
+
 /**
  * @typedef {{
  *   label: string, blurb: string,
@@ -164,12 +238,14 @@ export function clearContextLosses(key = CONTEXT_LOSS_KEY) { const s = session()
  * @property {string} storageKey
  * @property {number} contextLosses  WebGL context losses recorded this session (see header)
  * @property {boolean} lighter  this load was stepped down because of them (only when source is 'recommended')
+ * @property {boolean} crashed  the previous run of this page died before it was healthy (boot check, see header); it
+ *   is counted in contextLosses
  */
 /**
  * Pick the tier for this page load.
- * @param {{ search?: string, overrides?: { desktop?: object, mobile?: object, [tier: string]: object | undefined }, env?: object, storageKey?: string, contextLosses?: number }} [opts]
+ * @param {{ search?: string, overrides?: { desktop?: object, mobile?: object, [tier: string]: object | undefined }, env?: object, storageKey?: string, contextLosses?: number, crashed?: boolean }} [opts]
  *   overrides: per tier, groups merged over the preset (a game's own groups too); contextLosses: instead of the
- *   session's count (tests)
+ *   session's count (tests); crashed: instead of the boot check's answer, for `crashed` and the reason (tests)
  * @returns {QualityChoice}
  */
 export function resolveQuality(opts = {}) {
@@ -178,6 +254,9 @@ export function resolveQuality(opts = {}) {
   const rec = recommendTier(opts.env);
   const fromQuery = normalise(new URLSearchParams(search).get('quality'));
   const fromStore = storedTier(storageKey);
+  // the boot check first (header): a previous run that died is recorded as one more lost context
+  const boot = bootCheck({ mobile: rec.tier === 'mobile' });
+  const crashed = typeof opts.crashed === 'boolean' ? opts.crashed : boot.crashed;
   const losses = Number.isFinite(opts.contextLosses) ? Math.max(0, opts.contextLosses) : contextLosses();
   // lighter after lost contexts (header): one rung per loss, recommended tiers only
   const lighter = !fromQuery && !fromStore && losses > 0;
@@ -185,9 +264,15 @@ export function resolveQuality(opts = {}) {
   if (rungs > 0 && tier === 'desktop') { tier = 'mobile'; rungs--; }
   const settings = tierSettings(tier, opts.overrides && opts.overrides[tier]);
   if (rungs > 0) settings.engine.maxPixelRatio = Math.min(settings.engine.maxPixelRatio ?? 2, LOST_MAX_PIXEL_RATIO);
+  const source = fromQuery ? 'query' : fromStore ? 'stored' : 'recommended';
+  if (boot.crashed && _boot && !_boot.logged) {
+    _boot.logged = true;
+    console.warn(`[engine] the last run of this page stopped before it ran smoothly (it started ${boot.age} s ago; a crash, or the tab killed for memory): `
+      + (lighter ? `loading lighter (${tier}, pixel ratio up to ${settings.engine.maxPixelRatio})` : `not lighter, the tier was chosen (${source})`));
+  }
   return {
-    tier, recommended: rec.tier, reason: lighter ? `${rec.reason}; lighter after a graphics reset` : rec.reason, storageKey,
-    source: fromQuery ? 'query' : fromStore ? 'stored' : 'recommended',
-    settings, contextLosses: losses, lighter,
+    tier, recommended: rec.tier, storageKey, source,
+    reason: lighter ? `${rec.reason}; lighter after ${crashed ? 'a crash' : 'a graphics reset'}` : rec.reason,
+    settings, contextLosses: losses, lighter, crashed,
   };
 }

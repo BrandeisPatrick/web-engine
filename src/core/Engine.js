@@ -74,7 +74,9 @@
 // (core/Quality.js recordContextLoss: the next resolveQuality() comes up lighter) and `engine.onContextLost(event)`
 // runs; its default (showContextLost) shows a notice with a Reload button. A frame that throws on a context that is
 // already lost (before the event arrives) takes the same path. start() does nothing afterwards. There is no
-// re-initialisation on `webglcontextrestored`: reloading is the robust path.
+// re-initialisation on `webglcontextrestored`: reloading is the robust path. A tab the OS kills for memory sends no
+// event at all: after BOOT_HEALTHY_SECONDS (15 s) of frames the loop calls core/Quality.js bootHealthy(), which clears
+// the page's boot marker (a marker still there at the next boot means the run died: that load comes up lighter).
 // Frame errors: an exception in tick() is caught, logged with console.error (every one, as an uncaught error was) and
 // passed to `engine.onFrameError(error)`; its default (showFrameError) shows the first one as a line at the bottom of
 // the page (a phone user can screenshot it). The loop keeps running, as before.
@@ -84,7 +86,7 @@
 import * as THREE from 'three';
 import { Profiler, ProfilerOverlay } from './Profiler.js';
 import { Clock } from './Clock.js';
-import { recordContextLoss } from './Quality.js';
+import { recordContextLoss, bootHealthy, BOOT_HEALTHY_SECONDS } from './Quality.js';
 import { shadowPixelStore } from './PixelStoreShadow.js';
 
 const noop = () => {};
@@ -191,6 +193,7 @@ export class Engine {
     this._errorShown = false; this._notices = new Map();
     this.time = 0; this.frameCount = 0; this.dt = 0; this.alpha = 0; this.substeps = 0;
     this._running = false; this._acc = 0; this._last = 0; this._raf = 0;
+    this._bootLeft = BOOT_HEALTHY_SECONDS; // s of drawn frames until the run is healthy (header, core/Quality.js)
     this._profileAt = o.profile ? (o.profile === true ? 10 : +o.profile) : 0;
     this._onWindowResize = () => this.resize();
     window.addEventListener('resize', this._onWindowResize);
@@ -399,6 +402,7 @@ export class Engine {
     if (dt > 0.25) dt = 0.25; // tab was hidden
     else if (!(dt >= 0)) dt = 0; // first rAF timestamp can precede start()
     try { this.tick(dt); } catch (e) { this._frameError(e); }
+    if (this._bootLeft > 0 && (this._bootLeft -= dt) <= 0) bootHealthy(); // a healthy run: its boot marker goes
   };
 
   // a frame threw (header): a lost context takes the lost path; anything else is logged and shown

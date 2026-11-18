@@ -15,7 +15,9 @@
 //
 // What it does to the other layers, by duck typing only (each call is skipped when the method or field is missing):
 //   - audio: start() inside the start click (or key), setVolume(v) from the saved volume, setPaused(on) on pause and
-//     resume. With the card skipped, unlockOnGesture() instead (no gesture happened yet).
+//     resume. With the card skipped, unlockOnGesture() instead (no gesture happened yet). ready() runs prepare() under
+//     the loading bar, alongside the warm-up (AudioBus "Start without a stall": the context and a SoundBank's loop
+//     samples, which made the start click or the first key stall for 170-240 ms).
 //   - inputs: each one's `enabled` is false while the card or the pause card is up (CharacterInput, VehicleInput and
 //     InputMap all have it). A key that started the game re-enables them only once it is released (no jump on start).
 //   - engine: ready() runs engine.warmUp() under the loading bar, labelled 'Compiling shaders…' (core Engine,
@@ -144,6 +146,7 @@ const nextFrame = () => new Promise((res) => {
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fin);
   setTimeout(fin, 120); // a hidden tab runs no rAF: never hang ready() on it
 });
+const nextTask = () => new Promise((res) => setTimeout(res, 0));
 
 export class GameShell {
   /** @param {GameShellOptions} [o] */
@@ -234,7 +237,12 @@ export class GameShell {
     if (this._readyP) return this._readyP;
     this._readyP = (async () => {
       this.setProgress(1, 'Compiling shaders…');
-      const e = this.engine, r = e && e.renderer;
+      const e = this.engine, r = e && e.renderer, a = this.audio;
+      // the audio's slow parts under the bar too (audio.prepare(): the context, a SoundBank's loop samples), so neither
+      // the start click nor the first key stalls on them. Begun a frame and two tasks into the warm-up, when the shaders
+      // compile in parallel and the main thread mostly waits; awaited before the card
+      const audioP = a && typeof a.prepare === 'function'
+        ? nextFrame().then(nextTask).then(nextTask).then(() => a.prepare()).catch(() => {}) : null;
       if (e && typeof e.warmUp === 'function') {
         // bench: renderFn only, 12 frames (the page's state as loaded; every-2nd / 3rd / 4th-frame counters in phase)
         this.warm = await e.warmUp(this.bench ? { systems: false, frames: 12 } : {});
@@ -247,6 +255,8 @@ export class GameShell {
       const f0 = e && typeof e.frameCount === 'number' ? e.frameCount : NaN, tw = performance.now();
       await nextFrame(); await nextFrame();
       while (e && !this.lost && !e.contextLost && e.frameCount < f0 + 2 && performance.now() - tw < 1500) await nextFrame();
+      if (this.lost || (e && e.contextLost)) { this._onLost(); return; }
+      if (audioP) await audioP;
       if (this.lost || (e && e.contextLost)) { this._onLost(); return; }
       this._canvas = (r && r.domElement) || null;
       const c = this._canvas;

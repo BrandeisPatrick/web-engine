@@ -602,7 +602,8 @@ away (`pauseButton: 'auto'` keeps it to touch screens); `shell.onPause((paused) 
 ## Play a sound
 
 `AudioBus`, `SoundBank`, `Footsteps` (audio). Browsers start audio only after a click or key press; a `GameShell`
-start click starts the bus (without a shell, `audio.unlockOnGesture()` waits for the first gesture). `master: 'safe'`
+start click starts the bus (without a shell, `audio.unlockOnGesture()` waits for the first gesture, and
+`await audio.prepare()` behind the loading screen keeps that gesture from stalling: the shell calls it). `master: 'safe'`
 adds a compressor and a soft clipper so nothing clips. `SoundBank` plays the kit's named sounds (`SOUND_PRESETS`,
 listed and measured on `samples/sound-check/`); before the gesture `play` returns an inert voice and `loop` waits for
 the start. Footsteps take the character controller's fields each fixed step (`howto:walk-step`), and `sfx.update(dt)`

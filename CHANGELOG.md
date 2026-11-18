@@ -64,6 +64,32 @@
   `npm test` runs the suites in parallel (81 s to 40 s on an M4); the five whose time or retained-heap limits a busy
   machine can break (core, car-visual, dyn-joints, dyn-soft, dyn-buoyancy) run one by one after the pool. No check
   changed. AGENTS.md "Commands", README, ENGINE.md.
+- Phones: lighter after a crash. iOS kills a tab for memory without any event, so no lost context was counted and the
+  next load was as heavy as the one that died. On a device recommended mobile the first `resolveQuality()` of a page
+  load now runs a boot check (`bootCheck`, core/Quality.js): a marker in localStorage, `vibe.boot:<path>`, set at boot
+  and cleared after 15 s of frames the loop drew (`bootHealthy()`, called from the Engine's frame loop), on `pagehide`
+  and while the page is hidden. Still there at the next boot (and under 10 minutes old): the previous run died, which
+  counts as one lost context, so the load takes the lost-context lighter path (on a phone the pixel ratio capped at 1)
+  and the tab stays lighter as after a lost context; one console warning, `crashed: true` and a reason ending in
+  '; lighter after a crash'. No marker on desktop-recommended devices (two tabs of one page would read each other's).
+  Storage errors (private mode) are caught. `npm test` (test/quality.mjs) and `phone-start.mjs` (new step (d), or
+  `--crash` alone) check it; not run on a real iPhone.
+- One download per texture file: a set that is both a `loadTextureSet` set and a `makeTextureArray` layer (the world
+  layer's ground grass, `leafy_grass`) was fetched twice, by two loaders with no shared cache. Loads that overlap in
+  time now share each file's download (render/TextureSets.js `fetchBody`, nothing kept after the load wave), and a
+  texture root's `manifest.json` is fetched once per page. Bytes to ready: nyc-night 21.2 to 20.0 MB (desktop tier) and
+  8.6 to 8.3 MB (mobile), miami-drive 28.6 to 26.9 MB (desktop). Left: the KTX2 transcoder (`basis_transcoder.js` and
+  `.wasm`) is still fetched by each of the texture-array workers on miami-drive's desktop tier.
+- No stall on the first key or the start click: `AudioBus.prepare()` creates the AudioContext before the gesture,
+  suspended (the first one of a browser session takes 115-150 ms), and runs `onPrepare` jobs (a `SoundBank` renders its
+  waiting loops ahead: `bank.prepare()`); `start()` takes the context and resumes it inside the gesture, as iOS needs.
+  `GameShell.ready()` runs it under its loading bar; miami-drive calls it at boot. starter-drive's first key went from
+  179 to 6 ms of main-thread work (234 to 17 at 4x CPU throttle), its start click from 174 to 6 (238 to 19),
+  starter-walk's first key from 173 to 2 and miami-drive's from 142 to 9 (headless Chrome on an M4). Same samples,
+  same graph; sound-check unchanged. The cost moved under the loading screen: on this Mac nothing there takes long
+  enough to hide it, so the starters' card shows about 0.1 s later (0.2 s at 4x CPU throttle) and miami-drive's
+  first frame about 0.1 s later; on a phone, where the shaders compile for far longer, the context is created while
+  they compile (not measured on a phone).
 
 ## 1.1.0 — 2026-11-17 — Sound, game shell, drive feel, car and camera kits; the open look; phone start-up; Halloween retired
 - The open look is the default in nyc-night and miami-drive: the owner chose it on 2026-11-17 after comparing the two
