@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+- Two test levels, one command each (`test/check.mjs`): `npm run check` for every change (`npm test`, the type check,
+  the build, check-page on both starters, sound-check, shell, howto; about 1.5 minutes on an M4) and
+  `npm run check:full` before `npm run deploy` or a release (the quick level, then smoke, phone-start, drive-feel,
+  car-camera, perf; about 6.5 minutes). Each stops at the first failing step and ends with a table of step, result
+  and seconds.
+  `npm test` runs the suites in parallel (81 s to 40 s on an M4); the five whose time or retained-heap limits a busy
+  machine can break (core, car-visual, dyn-joints, dyn-soft, dyn-buoyancy) run one by one after the pool. No check
+  changed. AGENTS.md "Commands", README, ENGINE.md.
+
 ## 1.1.0 — 2026-11-17 — Sound, game shell, drive feel, car and camera kits; the open look; phone start-up; Halloween retired
 - The open look is the default in nyc-night and miami-drive: the owner chose it on 2026-11-17 after comparing the two
   looks side by side (docs/BEFORE-AFTER.md, first section; the sheets are `docs/before-after/nyc-night-looks.jpg` and

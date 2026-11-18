@@ -80,6 +80,8 @@
     "deploy": "npm run build:pages && node tools/deploy-pages.mjs",
     "preview": "vite preview --port 5191",
     "test": "node test/all.mjs",
+    "check": "node test/check.mjs",
+    "check:full": "node test/check.mjs full",
     "pack:check": "npm pack --dry-run",
     "types": "tsc -p tsconfig.types.json",
     "smoke": "node test/browser/smoke.mjs",

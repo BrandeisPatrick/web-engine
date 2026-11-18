@@ -174,7 +174,9 @@ changed in each.
 |---|---|
 | `npm run dev` | Serves the demos at http://localhost:5190 |
 | `npm run build` | Builds every demo into `dist/`; `npm run preview` serves the build at http://localhost:5191 |
-| `npm test` | Runs every headless suite listed in `test/all.mjs` |
+| `npm run check` | The quick test level, for every change: `npm test`, the type check, the build and the quick browser scripts (`test/check.mjs`) |
+| `npm run check:full` | The full level, before a deploy or a release: the quick level, then smoke, phone-start, drive-feel, car-camera and perf |
+| `npm test` | Runs every headless suite listed in `test/all.mjs`, in parallel |
 | `npm run catalog` | Rebuilds the asset catalogue (`samples/public/catalog/catalog.json`, `docs/ASSETS.md`) from `tools/asset-registry.mjs`; `npm run catalog:thumbs -- --only=<id>` renders thumbnails in Chrome |
 | `npm run types` | Emits TypeScript declarations into `types/`; `npm run types:check` compiles a strict TypeScript consumer against them |
 | `npm run smoke` | Drives the demos in Chrome with Playwright and checks stability and the look limits |
@@ -206,7 +208,8 @@ Installed as a git submodule listed in a game's `workspaces`, the engine resolve
 
 ### Tests
 
-`npm test` runs the suites listed in `test/all.mjs` in Node, with no browser:
+`npm test` runs the suites listed in `test/all.mjs` in Node, with no browser, several at a time (the few whose time or
+heap limits a busy machine could break run one by one afterwards):
 
 - `test/car-sim.mjs`: the vehicle model (`ROADSTER_SPEC`) and the PhysicsWorld queries; the determinism gate
   (bit-identical since 0.4.0).
