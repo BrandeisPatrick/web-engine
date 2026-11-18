@@ -36,12 +36,15 @@ a CC0 model by Unity Fan (https://sketchfab.com/3d-models/free-concept-car-004-p
 Licensed CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/). **Changes:** the Khronos and 3D Commerce logos
 (trademarks, excluded from the licence) are removed: the logo image is replaced by a 4 x 4 black PNG, both marks are
 painted out of the tyre sidewall colour and normal maps, and the steering-wheel badge mesh is hidden at load; four
-PNG maps re-encoded as JPEG (AO at 1024 px); the transmission glass is replaced by a tinted glass and the paint
-recoloured at load (`samples/miami-drive/car-glb.js`). The phone tier uses the generated sedan (`car-model.js`).
+PNG maps re-encoded as JPEG (AO at 1024 px); the geometry meshopt-compressed with gltfpack 1.3
+(`gltfpack -cc -ce ext -kn -km -ke -vpf -vnf -vtf -vn 12 -vt 14`: EXT_meshopt_compression, float positions / normals /
+UVs at 14 / 12 / 14 bits, 8-bit tangents, no simplification; 9,489,764 -> 3,173,968 bytes); the transmission glass is
+replaced by a tinted glass and the paint recoloured at load (`samples/miami-drive/car-glb.js`). The phone tier uses the
+generated sedan (`car-model.js`).
 
 | File | Source file | Licence | Downloaded bytes | Committed bytes |
 |---|---|---|---|---|
-| `models/car-concept.glb` | `Models/CarConcept/glTF-Binary/CarConcept.glb` (raw.githubusercontent.com, main) | CC-BY 4.0 (logos excluded, removed) | 11,778,688 | 9,489,764 |
+| `models/car-concept.glb` | `Models/CarConcept/glTF-Binary/CarConcept.glb` (raw.githubusercontent.com, main) | CC-BY 4.0 (logos excluded, removed) | 11,778,688 | 3,173,968 |
 
 ## Roadside scans (Poly Haven, CC0 1.0)
 

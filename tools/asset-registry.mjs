@@ -33,6 +33,7 @@ export const CATEGORIES = {
 export const IGNORE = [
   { path: 'samples/public/catalog/', reason: 'the catalogue itself (catalog.json and the thumbnails)' },
   { path: 'samples/public/miami/basis/', reason: 'Basis Universal transcoder (from three/examples/jsm/libs/basis, Apache-2.0): a runtime library for the KTX2 textures, not an asset' },
+  { path: 'samples/public/nyc/basis/', reason: 'Basis Universal transcoder (from three/examples/jsm/libs/basis, Apache-2.0): a runtime library for the KTX2 textures, not an asset' },
   { path: 'samples/public/miami/textures-lite/manifest.json', reason: 'phone-tier texture manifest of the Miami drive: it lists no sets (procedural layers)' },
 ];
 

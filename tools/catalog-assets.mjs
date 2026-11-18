@@ -251,7 +251,7 @@ function manifestEntries(problems) {
     e.description = `Poly Haven PBR scan used by ${demo} as its '${e.facts.role}' surface${sn.ktx2 ? '; KTX2 (Basis) copies next to the JPGs, which stay as the fallback' : ''}. The engine's TextureSets loads it by manifest id.${tiers}`;
     e.snippet = `import * as THREE from 'three';
 import { ${sn.ktx2 ? 'TextureSets, ' : ''}loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
-${sn.ktx2 ? "TextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'miami/basis/' });   // KTX2 transcoder\n" : ''}const base = import.meta.env.BASE_URL + '${sn.base}';
+${sn.ktx2 ? `TextureSets.configure({ basisPath: import.meta.env.BASE_URL + '${sn.area}/basis/' });   // KTX2 transcoder\n` : ''}const base = import.meta.env.BASE_URL + '${sn.base}';
 const manifest = await loadTextureManifest(base);
 const set = await loadTextureSet('${sn.id}', { renderer, base, manifest });
 const ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));

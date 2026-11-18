@@ -34,7 +34,10 @@ function plateTexture() {
 /** @param {{ url: string, paint?: number }} o */
 export async function loadCarGlb(o) {
   const t0 = performance.now();
-  const gltf = await new GLTFLoader().loadAsync(o.url);
+  // the file is meshopt-compressed (EXT_meshopt_compression, gltfpack -cc with float positions / normals / UVs, see
+  // public/miami/CREDITS.md): three's decoder, imported here so pages without the car do not load it
+  const { MeshoptDecoder } = await import('three/addons/libs/meshopt_decoder.module.js');
+  const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(o.url);
   const src = gltf.scene;
   // The showcase model poses its wheels: the front pair steered 30 degrees and every wheel at its own roll angle. A
   // wheel node's local X is its axle, so clearing the node's rotation sets the wheel straight (axle along the car's

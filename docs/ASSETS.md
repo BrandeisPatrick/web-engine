@@ -1374,29 +1374,29 @@ scene.add(boat);
 |---|---|---|---|---|
 | <img src="../samples/public/catalog/thumbs/miami-asphalt_02.jpg" width="120" alt=""> | **Asphalt 02**<br>file, demo: miami-drive<br><sub>`miami-asphalt_02`</sub> | `miami/textures/asphalt_02/ao.jpg`<br>`miami/textures/asphalt_02/ao.ktx2`<br>`miami/textures/asphalt_02/diff.jpg`<br>+5 more | Rob Tuytel, CC0 1.0 ([source](https://polyhaven.com/a/asphalt_02)) | `const set = await loadTextureSet('asphalt_02', { renderer, base, manifest });`<br>[full snippet](#snippet-miami-asphalt_02) |
 | <img src="../samples/public/catalog/thumbs/miami-asphalt_02_2k.jpg" width="120" alt=""> | **Asphalt 02**<br>file, demo: miami-drive<br><sub>`miami-asphalt_02_2k`</sub> | `miami/road/asphalt_02_2k/diff.jpg`<br>`miami/road/asphalt_02_2k/diff.ktx2`<br>`miami/road/asphalt_02_2k/nor_gl.jpg`<br>+3 more | Rob Tuytel, CC0 1.0 ([source](https://polyhaven.com/a/asphalt_02)) | `const set = await loadTextureSet('asphalt_02_2k', { renderer, base, manifest });`<br>[full snippet](#snippet-miami-asphalt_02_2k) |
-| <img src="../samples/public/catalog/thumbs/nyc-asphalt_02.jpg" width="120" alt=""> | **Asphalt 02**<br>file, demo: nyc-night<br><sub>`nyc-asphalt_02`</sub> | `nyc/textures/asphalt_02/ao.jpg`<br>`nyc/textures/asphalt_02/diff.jpg`<br>`nyc/textures/asphalt_02/nor_gl.jpg`<br>+5 more | Rob Tuytel, CC0 1.0 ([source](https://polyhaven.com/a/asphalt_02)) | `const set = await loadTextureSet('asphalt_02', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-asphalt_02) |
+| <img src="../samples/public/catalog/thumbs/nyc-asphalt_02.jpg" width="120" alt=""> | **Asphalt 02**<br>file, demo: nyc-night<br><sub>`nyc-asphalt_02`</sub> | `nyc/textures/asphalt_02/ao.jpg`<br>`nyc/textures/asphalt_02/ao.ktx2`<br>`nyc/textures/asphalt_02/diff.jpg`<br>+13 more | Rob Tuytel, CC0 1.0 ([source](https://polyhaven.com/a/asphalt_02)) | `const set = await loadTextureSet('asphalt_02', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-asphalt_02) |
 | <img src="../samples/public/catalog/thumbs/miami-beige_wall_002.jpg" width="120" alt=""> | **Beige Wall 002**<br>file, demo: miami-drive<br><sub>`miami-beige_wall_002`</sub> | `miami/textures/beige_wall_002/ao.jpg`<br>`miami/textures/beige_wall_002/ao.ktx2`<br>`miami/textures/beige_wall_002/diff.jpg`<br>+5 more | Dimitrios Savva, Rico Cilliers, CC0 1.0 ([source](https://polyhaven.com/a/beige_wall_002)) | `const set = await loadTextureSet('beige_wall_002', { renderer, base, manifest });`<br>[full snippet](#snippet-miami-beige_wall_002) |
-| <img src="../samples/public/catalog/thumbs/nyc-beige_wall_002.jpg" width="120" alt=""> | **Beige Wall 002**<br>file, demo: nyc-night<br><sub>`nyc-beige_wall_002`</sub> | `nyc/textures/beige_wall_002/ao.jpg`<br>`nyc/textures/beige_wall_002/diff.jpg`<br>`nyc/textures/beige_wall_002/nor_gl.jpg`<br>+5 more | Dimitrios Savva, Rico Cilliers, CC0 1.0 ([source](https://polyhaven.com/a/beige_wall_002)) | `const set = await loadTextureSet('beige_wall_002', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-beige_wall_002) |
+| <img src="../samples/public/catalog/thumbs/nyc-beige_wall_002.jpg" width="120" alt=""> | **Beige Wall 002**<br>file, demo: nyc-night<br><sub>`nyc-beige_wall_002`</sub> | `nyc/textures/beige_wall_002/ao.jpg`<br>`nyc/textures/beige_wall_002/ao.ktx2`<br>`nyc/textures/beige_wall_002/diff.jpg`<br>+13 more | Dimitrios Savva, Rico Cilliers, CC0 1.0 ([source](https://polyhaven.com/a/beige_wall_002)) | `const set = await loadTextureSet('beige_wall_002', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-beige_wall_002) |
 | <img src="../samples/public/catalog/thumbs/miami-bitumen.jpg" width="120" alt=""> | **Bitumen**<br>file, demo: miami-drive<br><sub>`miami-bitumen`</sub> | `miami/textures/bitumen/ao.jpg`<br>`miami/textures/bitumen/ao.ktx2`<br>`miami/textures/bitumen/diff.jpg`<br>+5 more | Rob Tuytel, CC0 1.0 ([source](https://polyhaven.com/a/bitumen)) | `const set = await loadTextureSet('bitumen', { renderer, base, manifest });`<br>[full snippet](#snippet-miami-bitumen) |
-| <img src="../samples/public/catalog/thumbs/nyc-bitumen.jpg" width="120" alt=""> | **Bitumen**<br>file, demo: nyc-night<br><sub>`nyc-bitumen`</sub> | `nyc/textures/bitumen/ao.jpg`<br>`nyc/textures/bitumen/diff.jpg`<br>`nyc/textures/bitumen/nor_gl.jpg`<br>+5 more | Rob Tuytel, CC0 1.0 ([source](https://polyhaven.com/a/bitumen)) | `const set = await loadTextureSet('bitumen', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-bitumen) |
-| <img src="../samples/public/catalog/thumbs/nyc-brick_wall_006.jpg" width="120" alt=""> | **Brick Wall 006**<br>file, demo: nyc-night<br><sub>`nyc-brick_wall_006`</sub> | `nyc/textures/brick_wall_006/ao.jpg`<br>`nyc/textures/brick_wall_006/diff.jpg`<br>`nyc/textures/brick_wall_006/nor_gl.jpg`<br>+5 more | Jan Burghardt, CC0 1.0 ([source](https://polyhaven.com/a/brick_wall_006)) | `const set = await loadTextureSet('brick_wall_006', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-brick_wall_006) |
-| <img src="../samples/public/catalog/thumbs/nyc-brick_wall_10.jpg" width="120" alt=""> | **Brick Wall 10**<br>file, demo: nyc-night<br><sub>`nyc-brick_wall_10`</sub> | `nyc/textures/brick_wall_10/ao.jpg`<br>`nyc/textures/brick_wall_10/diff.jpg`<br>`nyc/textures/brick_wall_10/nor_gl.jpg`<br>+5 more | Dimitrios Savva, CC0 1.0 ([source](https://polyhaven.com/a/brick_wall_10)) | `const set = await loadTextureSet('brick_wall_10', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-brick_wall_10) |
-| <img src="../samples/public/catalog/thumbs/nyc-clean_asphalt.jpg" width="120" alt=""> | **Clean Asphalt**<br>file, demo: nyc-night<br><sub>`nyc-clean_asphalt`</sub> | `nyc/textures/clean_asphalt/ao.jpg`<br>`nyc/textures/clean_asphalt/diff.jpg`<br>`nyc/textures/clean_asphalt/nor_gl.jpg`<br>+5 more | Dimitrios Savva, CC0 1.0 ([source](https://polyhaven.com/a/clean_asphalt)) | `const set = await loadTextureSet('clean_asphalt', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-clean_asphalt) |
+| <img src="../samples/public/catalog/thumbs/nyc-bitumen.jpg" width="120" alt=""> | **Bitumen**<br>file, demo: nyc-night<br><sub>`nyc-bitumen`</sub> | `nyc/textures/bitumen/ao.jpg`<br>`nyc/textures/bitumen/ao.ktx2`<br>`nyc/textures/bitumen/diff.jpg`<br>+13 more | Rob Tuytel, CC0 1.0 ([source](https://polyhaven.com/a/bitumen)) | `const set = await loadTextureSet('bitumen', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-bitumen) |
+| <img src="../samples/public/catalog/thumbs/nyc-brick_wall_006.jpg" width="120" alt=""> | **Brick Wall 006**<br>file, demo: nyc-night<br><sub>`nyc-brick_wall_006`</sub> | `nyc/textures/brick_wall_006/ao.jpg`<br>`nyc/textures/brick_wall_006/ao.ktx2`<br>`nyc/textures/brick_wall_006/diff.jpg`<br>+13 more | Jan Burghardt, CC0 1.0 ([source](https://polyhaven.com/a/brick_wall_006)) | `const set = await loadTextureSet('brick_wall_006', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-brick_wall_006) |
+| <img src="../samples/public/catalog/thumbs/nyc-brick_wall_10.jpg" width="120" alt=""> | **Brick Wall 10**<br>file, demo: nyc-night<br><sub>`nyc-brick_wall_10`</sub> | `nyc/textures/brick_wall_10/ao.jpg`<br>`nyc/textures/brick_wall_10/ao.ktx2`<br>`nyc/textures/brick_wall_10/diff.jpg`<br>+13 more | Dimitrios Savva, CC0 1.0 ([source](https://polyhaven.com/a/brick_wall_10)) | `const set = await loadTextureSet('brick_wall_10', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-brick_wall_10) |
+| <img src="../samples/public/catalog/thumbs/nyc-clean_asphalt.jpg" width="120" alt=""> | **Clean Asphalt**<br>file, demo: nyc-night<br><sub>`nyc-clean_asphalt`</sub> | `nyc/textures/clean_asphalt/ao.jpg`<br>`nyc/textures/clean_asphalt/ao.ktx2`<br>`nyc/textures/clean_asphalt/diff.jpg`<br>+13 more | Dimitrios Savva, CC0 1.0 ([source](https://polyhaven.com/a/clean_asphalt)) | `const set = await loadTextureSet('clean_asphalt', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-clean_asphalt) |
 | <img src="../samples/public/catalog/thumbs/miami-coast_sand_01.jpg" width="120" alt=""> | **Coast Sand 01**<br>file, demo: miami-drive<br><sub>`miami-coast_sand_01`</sub> | `miami/textures/coast_sand_01/ao.jpg`<br>`miami/textures/coast_sand_01/ao.ktx2`<br>`miami/textures/coast_sand_01/diff.jpg`<br>+5 more | Rob Tuytel, CC0 1.0 ([source](https://polyhaven.com/a/coast_sand_01)) | `const set = await loadTextureSet('coast_sand_01', { renderer, base, manifest });`<br>[full snippet](#snippet-miami-coast_sand_01) |
 | <img src="../samples/public/catalog/thumbs/miami-coast_sand_rocks_02_2k.jpg" width="120" alt=""> | **Coast Sand Rocks 02**<br>file, demo: miami-drive<br><sub>`miami-coast_sand_rocks_02_2k`</sub> | `miami/road/coast_sand_rocks_02_2k/diff.jpg`<br>`miami/road/coast_sand_rocks_02_2k/diff.ktx2`<br>`miami/road/coast_sand_rocks_02_2k/disp.jpg`<br>+4 more | Rob Tuytel, CC0 1.0 ([source](https://polyhaven.com/a/coast_sand_rocks_02)) | `const set = await loadTextureSet('coast_sand_rocks_02_2k', { renderer, base, manifest });`<br>[full snippet](#snippet-miami-coast_sand_rocks_02_2k) |
-| <img src="../samples/public/catalog/thumbs/nyc-concrete_panels.jpg" width="120" alt=""> | **Concrete Panels**<br>file, demo: nyc-night<br><sub>`nyc-concrete_panels`</sub> | `nyc/textures/concrete_panels/ao.jpg`<br>`nyc/textures/concrete_panels/diff.jpg`<br>`nyc/textures/concrete_panels/nor_gl.jpg`<br>+5 more | Amal Kumar, CC0 1.0 ([source](https://polyhaven.com/a/concrete_panels)) | `const set = await loadTextureSet('concrete_panels', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-concrete_panels) |
+| <img src="../samples/public/catalog/thumbs/nyc-concrete_panels.jpg" width="120" alt=""> | **Concrete Panels**<br>file, demo: nyc-night<br><sub>`nyc-concrete_panels`</sub> | `nyc/textures/concrete_panels/ao.jpg`<br>`nyc/textures/concrete_panels/ao.ktx2`<br>`nyc/textures/concrete_panels/diff.jpg`<br>+13 more | Amal Kumar, CC0 1.0 ([source](https://polyhaven.com/a/concrete_panels)) | `const set = await loadTextureSet('concrete_panels', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-concrete_panels) |
 | <img src="../samples/public/catalog/thumbs/miami-concrete_pavement.jpg" width="120" alt=""> | **Concrete Pavement**<br>file, demo: miami-drive<br><sub>`miami-concrete_pavement`</sub> | `miami/textures/concrete_pavement/ao.jpg`<br>`miami/textures/concrete_pavement/ao.ktx2`<br>`miami/textures/concrete_pavement/diff.jpg`<br>+5 more | Charlotte Baglioni, CC0 1.0 ([source](https://polyhaven.com/a/concrete_pavement)) | `const set = await loadTextureSet('concrete_pavement', { renderer, base, manifest });`<br>[full snippet](#snippet-miami-concrete_pavement) |
-| <img src="../samples/public/catalog/thumbs/nyc-concrete_pavement.jpg" width="120" alt=""> | **Concrete Pavement**<br>file, demo: nyc-night<br><sub>`nyc-concrete_pavement`</sub> | `nyc/textures/concrete_pavement/ao.jpg`<br>`nyc/textures/concrete_pavement/diff.jpg`<br>`nyc/textures/concrete_pavement/nor_gl.jpg`<br>+5 more | Charlotte Baglioni, CC0 1.0 ([source](https://polyhaven.com/a/concrete_pavement)) | `const set = await loadTextureSet('concrete_pavement', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-concrete_pavement) |
+| <img src="../samples/public/catalog/thumbs/nyc-concrete_pavement.jpg" width="120" alt=""> | **Concrete Pavement**<br>file, demo: nyc-night<br><sub>`nyc-concrete_pavement`</sub> | `nyc/textures/concrete_pavement/ao.jpg`<br>`nyc/textures/concrete_pavement/ao.ktx2`<br>`nyc/textures/concrete_pavement/diff.jpg`<br>+13 more | Charlotte Baglioni, CC0 1.0 ([source](https://polyhaven.com/a/concrete_pavement)) | `const set = await loadTextureSet('concrete_pavement', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-concrete_pavement) |
 | <img src="../samples/public/catalog/thumbs/miami-concrete_wall_004.jpg" width="120" alt=""> | **Concrete Wall 004**<br>file, demo: miami-drive<br><sub>`miami-concrete_wall_004`</sub> | `miami/textures/concrete_wall_004/ao.jpg`<br>`miami/textures/concrete_wall_004/ao.ktx2`<br>`miami/textures/concrete_wall_004/diff.jpg`<br>+5 more | Dario Barresi, Charlotte Baglioni, CC0 1.0 ([source](https://polyhaven.com/a/concrete_wall_004)) | `const set = await loadTextureSet('concrete_wall_004', { renderer, base, manifest });`<br>[full snippet](#snippet-miami-concrete_wall_004) |
 | <img src="../samples/public/catalog/thumbs/miami-coral_gravel.jpg" width="120" alt=""> | **Coral Gravel**<br>file, demo: miami-drive<br><sub>`miami-coral_gravel`</sub> | `miami/roadside/coral_gravel_diff.jpg`<br>`miami/roadside/coral_gravel_nor_gl.jpg`<br>`miami/roadside/coral_gravel_rough.jpg` | Rob Tuytel, CC0 1.0 ([source](https://polyhaven.com/a/coral_gravel)) | `const loader = new THREE.TextureLoader(), base = import.meta.env.BASE_URL + 'miami/roadside/';`<br>[full snippet](#snippet-miami-coral_gravel) |
-| <img src="../samples/public/catalog/thumbs/nyc-corrugated_iron.jpg" width="120" alt=""> | **Corrugated Iron**<br>file, demo: nyc-night<br><sub>`nyc-corrugated_iron`</sub> | `nyc/textures/corrugated_iron/ao.jpg`<br>`nyc/textures/corrugated_iron/diff.jpg`<br>`nyc/textures/corrugated_iron/nor_gl.jpg`<br>+5 more | Jenelle van Heerden, Dimitrios Savva, CC0 1.0 ([source](https://polyhaven.com/a/corrugated_iron)) | `const set = await loadTextureSet('corrugated_iron', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-corrugated_iron) |
+| <img src="../samples/public/catalog/thumbs/nyc-corrugated_iron.jpg" width="120" alt=""> | **Corrugated Iron**<br>file, demo: nyc-night<br><sub>`nyc-corrugated_iron`</sub> | `nyc/textures/corrugated_iron/ao.jpg`<br>`nyc/textures/corrugated_iron/ao.ktx2`<br>`nyc/textures/corrugated_iron/diff.jpg`<br>+13 more | Jenelle van Heerden, Dimitrios Savva, CC0 1.0 ([source](https://polyhaven.com/a/corrugated_iron)) | `const set = await loadTextureSet('corrugated_iron', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-corrugated_iron) |
 | <img src="../samples/public/catalog/thumbs/miami-leafy_grass.jpg" width="120" alt=""> | **Leafy Grass**<br>file, demo: miami-drive<br><sub>`miami-leafy_grass`</sub> | `miami/textures/leafy_grass/ao.jpg`<br>`miami/textures/leafy_grass/ao.ktx2`<br>`miami/textures/leafy_grass/diff.jpg`<br>+5 more | Charlotte Baglioni, CC0 1.0 ([source](https://polyhaven.com/a/leafy_grass)) | `const set = await loadTextureSet('leafy_grass', { renderer, base, manifest });`<br>[full snippet](#snippet-miami-leafy_grass) |
-| <img src="../samples/public/catalog/thumbs/nyc-leafy_grass.jpg" width="120" alt=""> | **Leafy Grass**<br>file, demo: nyc-night<br><sub>`nyc-leafy_grass`</sub> | `nyc/textures/leafy_grass/ao.jpg`<br>`nyc/textures/leafy_grass/diff.jpg`<br>`nyc/textures/leafy_grass/nor_gl.jpg`<br>+5 more | Charlotte Baglioni, CC0 1.0 ([source](https://polyhaven.com/a/leafy_grass)) | `const set = await loadTextureSet('leafy_grass', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-leafy_grass) |
-| <img src="../samples/public/catalog/thumbs/nyc-painted_worn_brick.jpg" width="120" alt=""> | **Painted Worn Brick**<br>file, demo: nyc-night<br><sub>`nyc-painted_worn_brick`</sub> | `nyc/textures/painted_worn_brick/ao.jpg`<br>`nyc/textures/painted_worn_brick/diff.jpg`<br>`nyc/textures/painted_worn_brick/nor_gl.jpg`<br>+5 more | Dimitrios Savva, CC0 1.0 ([source](https://polyhaven.com/a/painted_worn_brick)) | `const set = await loadTextureSet('painted_worn_brick', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-painted_worn_brick) |
-| <img src="../samples/public/catalog/thumbs/nyc-sandstone_blocks_08.jpg" width="120" alt=""> | **Sandstone Blocks 08**<br>file, demo: nyc-night<br><sub>`nyc-sandstone_blocks_08`</sub> | `nyc/textures/sandstone_blocks_08/ao.jpg`<br>`nyc/textures/sandstone_blocks_08/diff.jpg`<br>`nyc/textures/sandstone_blocks_08/nor_gl.jpg`<br>+5 more | Rob Tuytel, CC0 1.0 ([source](https://polyhaven.com/a/sandstone_blocks_08)) | `const set = await loadTextureSet('sandstone_blocks_08', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-sandstone_blocks_08) |
-| <img src="../samples/public/catalog/thumbs/nyc-stone_block_wall.jpg" width="120" alt=""> | **Stone Block Wall**<br>file, demo: nyc-night<br><sub>`nyc-stone_block_wall`</sub> | `nyc/textures/stone_block_wall/ao.jpg`<br>`nyc/textures/stone_block_wall/diff.jpg`<br>`nyc/textures/stone_block_wall/nor_gl.jpg`<br>+5 more | Amal Kumar, CC0 1.0 ([source](https://polyhaven.com/a/stone_block_wall)) | `const set = await loadTextureSet('stone_block_wall', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-stone_block_wall) |
+| <img src="../samples/public/catalog/thumbs/nyc-leafy_grass.jpg" width="120" alt=""> | **Leafy Grass**<br>file, demo: nyc-night<br><sub>`nyc-leafy_grass`</sub> | `nyc/textures/leafy_grass/ao.jpg`<br>`nyc/textures/leafy_grass/ao.ktx2`<br>`nyc/textures/leafy_grass/diff.jpg`<br>+13 more | Charlotte Baglioni, CC0 1.0 ([source](https://polyhaven.com/a/leafy_grass)) | `const set = await loadTextureSet('leafy_grass', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-leafy_grass) |
+| <img src="../samples/public/catalog/thumbs/nyc-painted_worn_brick.jpg" width="120" alt=""> | **Painted Worn Brick**<br>file, demo: nyc-night<br><sub>`nyc-painted_worn_brick`</sub> | `nyc/textures/painted_worn_brick/ao.jpg`<br>`nyc/textures/painted_worn_brick/ao.ktx2`<br>`nyc/textures/painted_worn_brick/diff.jpg`<br>+13 more | Dimitrios Savva, CC0 1.0 ([source](https://polyhaven.com/a/painted_worn_brick)) | `const set = await loadTextureSet('painted_worn_brick', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-painted_worn_brick) |
+| <img src="../samples/public/catalog/thumbs/nyc-sandstone_blocks_08.jpg" width="120" alt=""> | **Sandstone Blocks 08**<br>file, demo: nyc-night<br><sub>`nyc-sandstone_blocks_08`</sub> | `nyc/textures/sandstone_blocks_08/ao.jpg`<br>`nyc/textures/sandstone_blocks_08/ao.ktx2`<br>`nyc/textures/sandstone_blocks_08/diff.jpg`<br>+13 more | Rob Tuytel, CC0 1.0 ([source](https://polyhaven.com/a/sandstone_blocks_08)) | `const set = await loadTextureSet('sandstone_blocks_08', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-sandstone_blocks_08) |
+| <img src="../samples/public/catalog/thumbs/nyc-stone_block_wall.jpg" width="120" alt=""> | **Stone Block Wall**<br>file, demo: nyc-night<br><sub>`nyc-stone_block_wall`</sub> | `nyc/textures/stone_block_wall/ao.jpg`<br>`nyc/textures/stone_block_wall/ao.ktx2`<br>`nyc/textures/stone_block_wall/diff.jpg`<br>+13 more | Amal Kumar, CC0 1.0 ([source](https://polyhaven.com/a/stone_block_wall)) | `const set = await loadTextureSet('stone_block_wall', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-stone_block_wall) |
 | <img src="../samples/public/catalog/thumbs/miami-white_stucco.jpg" width="120" alt=""> | **White Stucco**<br>file, demo: miami-drive<br><sub>`miami-white_stucco`</sub> | `miami/textures/white_stucco/ao.jpg`<br>`miami/textures/white_stucco/ao.ktx2`<br>`miami/textures/white_stucco/diff.jpg`<br>+5 more | Amal Kumar, CC0 1.0 ([source](https://polyhaven.com/a/white_stucco)) | `const set = await loadTextureSet('white_stucco', { renderer, base, manifest });`<br>[full snippet](#snippet-miami-white_stucco) |
-| <img src="../samples/public/catalog/thumbs/nyc-whitewashed_brick.jpg" width="120" alt=""> | **Whitewashed Brick**<br>file, demo: nyc-night<br><sub>`nyc-whitewashed_brick`</sub> | `nyc/textures/whitewashed_brick/ao.jpg`<br>`nyc/textures/whitewashed_brick/diff.jpg`<br>`nyc/textures/whitewashed_brick/nor_gl.jpg`<br>+1 more | Charlotte Baglioni, CC0 1.0 ([source](https://polyhaven.com/a/whitewashed_brick)) | `const set = await loadTextureSet('whitewashed_brick', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-whitewashed_brick) |
+| <img src="../samples/public/catalog/thumbs/nyc-whitewashed_brick.jpg" width="120" alt=""> | **Whitewashed Brick**<br>file, demo: nyc-night<br><sub>`nyc-whitewashed_brick`</sub> | `nyc/textures/whitewashed_brick/ao.jpg`<br>`nyc/textures/whitewashed_brick/ao.ktx2`<br>`nyc/textures/whitewashed_brick/diff.jpg`<br>+5 more | Charlotte Baglioni, CC0 1.0 ([source](https://polyhaven.com/a/whitewashed_brick)) | `const set = await loadTextureSet('whitewashed_brick', { renderer, base, manifest });`<br>[full snippet](#snippet-nyc-whitewashed_brick) |
 
 Snippets (texture set):
 
@@ -1436,11 +1436,12 @@ scene.add(ball);
 
 <details id="snippet-nyc-asphalt_02"><summary><b>Asphalt 02</b> <code>nyc-asphalt_02</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'asphalt\_a' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/asphalt\_02/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('asphalt\_02', { base }) reads \<base\>asphalt\_02/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC walk as its 'asphalt\_a' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/asphalt\_02/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('asphalt\_02', { base }) reads \<base\>asphalt\_02/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
-import { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+import { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+TextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder
 const base = import.meta.env.BASE_URL + 'nyc/textures/';
 const manifest = await loadTextureManifest(base);
 const set = await loadTextureSet('asphalt_02', { renderer, base, manifest });
@@ -1469,11 +1470,12 @@ scene.add(ball);
 
 <details id="snippet-nyc-beige_wall_002"><summary><b>Beige Wall 002</b> <code>nyc-beige_wall_002</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'stucco\_a' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 256) in nyc/textures/beige\_wall\_002/; nyc/textures-512/ holds a 512 x 128 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('beige\_wall\_002', { base }) reads \<base\>beige\_wall\_002/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC walk as its 'stucco\_a' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 256) in nyc/textures/beige\_wall\_002/; nyc/textures-512/ holds a 512 x 128 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('beige\_wall\_002', { base }) reads \<base\>beige\_wall\_002/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
-import { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+import { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+TextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder
 const base = import.meta.env.BASE_URL + 'nyc/textures/';
 const manifest = await loadTextureManifest(base);
 const set = await loadTextureSet('beige_wall_002', { renderer, base, manifest });
@@ -1502,11 +1504,12 @@ scene.add(ball);
 
 <details id="snippet-nyc-bitumen"><summary><b>Bitumen</b> <code>nyc-bitumen</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'roof\_tar' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/bitumen/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('bitumen', { base }) reads \<base\>bitumen/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC walk as its 'roof\_tar' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/bitumen/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('bitumen', { base }) reads \<base\>bitumen/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
-import { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+import { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+TextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder
 const base = import.meta.env.BASE_URL + 'nyc/textures/';
 const manifest = await loadTextureManifest(base);
 const set = await loadTextureSet('bitumen', { renderer, base, manifest });
@@ -1518,11 +1521,12 @@ scene.add(ball);
 
 <details id="snippet-nyc-brick_wall_006"><summary><b>Brick Wall 006</b> <code>nyc-brick_wall_006</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'brick\_red' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/brick\_wall\_006/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('brick\_wall\_006', { base }) reads \<base\>brick\_wall\_006/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC walk as its 'brick\_red' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/brick\_wall\_006/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('brick\_wall\_006', { base }) reads \<base\>brick\_wall\_006/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
-import { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+import { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+TextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder
 const base = import.meta.env.BASE_URL + 'nyc/textures/';
 const manifest = await loadTextureManifest(base);
 const set = await loadTextureSet('brick_wall_006', { renderer, base, manifest });
@@ -1534,11 +1538,12 @@ scene.add(ball);
 
 <details id="snippet-nyc-brick_wall_10"><summary><b>Brick Wall 10</b> <code>nyc-brick_wall_10</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'brick\_dark' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/brick\_wall\_10/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('brick\_wall\_10', { base }) reads \<base\>brick\_wall\_10/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC walk as its 'brick\_dark' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/brick\_wall\_10/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('brick\_wall\_10', { base }) reads \<base\>brick\_wall\_10/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
-import { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+import { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+TextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder
 const base = import.meta.env.BASE_URL + 'nyc/textures/';
 const manifest = await loadTextureManifest(base);
 const set = await loadTextureSet('brick_wall_10', { renderer, base, manifest });
@@ -1550,11 +1555,12 @@ scene.add(ball);
 
 <details id="snippet-nyc-clean_asphalt"><summary><b>Clean Asphalt</b> <code>nyc-clean_asphalt</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'asphalt\_b' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/clean\_asphalt/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('clean\_asphalt', { base }) reads \<base\>clean\_asphalt/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC walk as its 'asphalt\_b' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/clean\_asphalt/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('clean\_asphalt', { base }) reads \<base\>clean\_asphalt/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
-import { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+import { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+TextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder
 const base = import.meta.env.BASE_URL + 'nyc/textures/';
 const manifest = await loadTextureManifest(base);
 const set = await loadTextureSet('clean_asphalt', { renderer, base, manifest });
@@ -1600,11 +1606,12 @@ scene.add(ball);
 
 <details id="snippet-nyc-concrete_panels"><summary><b>Concrete Panels</b> <code>nyc-concrete_panels</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'concrete\_rough' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/concrete\_panels/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('concrete\_panels', { base }) reads \<base\>concrete\_panels/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC walk as its 'concrete\_rough' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/concrete\_panels/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('concrete\_panels', { base }) reads \<base\>concrete\_panels/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
-import { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+import { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+TextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder
 const base = import.meta.env.BASE_URL + 'nyc/textures/';
 const manifest = await loadTextureManifest(base);
 const set = await loadTextureSet('concrete_panels', { renderer, base, manifest });
@@ -1633,11 +1640,12 @@ scene.add(ball);
 
 <details id="snippet-nyc-concrete_pavement"><summary><b>Concrete Pavement</b> <code>nyc-concrete_pavement</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'sidewalk' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/concrete\_pavement/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('concrete\_pavement', { base }) reads \<base\>concrete\_pavement/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC walk as its 'sidewalk' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/concrete\_pavement/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('concrete\_pavement', { base }) reads \<base\>concrete\_pavement/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
-import { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+import { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+TextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder
 const base = import.meta.env.BASE_URL + 'nyc/textures/';
 const manifest = await loadTextureManifest(base);
 const set = await loadTextureSet('concrete_pavement', { renderer, base, manifest });
@@ -1681,11 +1689,12 @@ scene.add(ball);
 
 <details id="snippet-nyc-corrugated_iron"><summary><b>Corrugated Iron</b> <code>nyc-corrugated_iron</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'metal\_corrugated' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/corrugated\_iron/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('corrugated\_iron', { base }) reads \<base\>corrugated\_iron/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC walk as its 'metal\_corrugated' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/corrugated\_iron/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('corrugated\_iron', { base }) reads \<base\>corrugated\_iron/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
-import { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+import { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+TextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder
 const base = import.meta.env.BASE_URL + 'nyc/textures/';
 const manifest = await loadTextureManifest(base);
 const set = await loadTextureSet('corrugated_iron', { renderer, base, manifest });
@@ -1714,11 +1723,12 @@ scene.add(ball);
 
 <details id="snippet-nyc-leafy_grass"><summary><b>Leafy Grass</b> <code>nyc-leafy_grass</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'grass' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/leafy\_grass/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('leafy\_grass', { base }) reads \<base\>leafy\_grass/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC walk as its 'grass' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/leafy\_grass/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('leafy\_grass', { base }) reads \<base\>leafy\_grass/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
-import { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+import { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+TextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder
 const base = import.meta.env.BASE_URL + 'nyc/textures/';
 const manifest = await loadTextureManifest(base);
 const set = await loadTextureSet('leafy_grass', { renderer, base, manifest });
@@ -1730,11 +1740,12 @@ scene.add(ball);
 
 <details id="snippet-nyc-painted_worn_brick"><summary><b>Painted Worn Brick</b> <code>nyc-painted_worn_brick</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'brick\_painted' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/painted\_worn\_brick/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('painted\_worn\_brick', { base }) reads \<base\>painted\_worn\_brick/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC walk as its 'brick\_painted' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/painted\_worn\_brick/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('painted\_worn\_brick', { base }) reads \<base\>painted\_worn\_brick/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
-import { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+import { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+TextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder
 const base = import.meta.env.BASE_URL + 'nyc/textures/';
 const manifest = await loadTextureManifest(base);
 const set = await loadTextureSet('painted_worn_brick', { renderer, base, manifest });
@@ -1746,11 +1757,12 @@ scene.add(ball);
 
 <details id="snippet-nyc-sandstone_blocks_08"><summary><b>Sandstone Blocks 08</b> <code>nyc-sandstone_blocks_08</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'concrete\_panel' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/sandstone\_blocks\_08/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('sandstone\_blocks\_08', { base }) reads \<base\>sandstone\_blocks\_08/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC walk as its 'concrete\_panel' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/sandstone\_blocks\_08/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('sandstone\_blocks\_08', { base }) reads \<base\>sandstone\_blocks\_08/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
-import { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+import { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+TextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder
 const base = import.meta.env.BASE_URL + 'nyc/textures/';
 const manifest = await loadTextureManifest(base);
 const set = await loadTextureSet('sandstone_blocks_08', { renderer, base, manifest });
@@ -1762,11 +1774,12 @@ scene.add(ball);
 
 <details id="snippet-nyc-stone_block_wall"><summary><b>Stone Block Wall</b> <code>nyc-stone_block_wall</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'granite' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/stone\_block\_wall/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('stone\_block\_wall', { base }) reads \<base\>stone\_block\_wall/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC walk as its 'granite' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/stone\_block\_wall/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('stone\_block\_wall', { base }) reads \<base\>stone\_block\_wall/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
-import { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+import { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+TextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder
 const base = import.meta.env.BASE_URL + 'nyc/textures/';
 const manifest = await loadTextureManifest(base);
 const set = await loadTextureSet('stone_block_wall', { renderer, base, manifest });
@@ -1795,11 +1808,12 @@ scene.add(ball);
 
 <details id="snippet-nyc-whitewashed_brick"><summary><b>Whitewashed Brick</b> <code>nyc-whitewashed_brick</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'stucco\_b' surface. The engine's TextureSets loads it by manifest id.
+Poly Haven PBR scan used by the Night NYC walk as its 'stucco\_b' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id.
 
 ```js
 import * as THREE from 'three';
-import { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+import { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';
+TextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder
 const base = import.meta.env.BASE_URL + 'nyc/textures/';
 const manifest = await loadTextureManifest(base);
 const set = await loadTextureSet('whitewashed_brick', { renderer, base, manifest });
@@ -2582,6 +2596,7 @@ Files under `samples/public` that are not assets:
 
 - `samples/public/catalog/`: the catalogue itself (catalog.json and the thumbnails)
 - `samples/public/miami/basis/`: Basis Universal transcoder (from three/examples/jsm/libs/basis, Apache-2.0): a runtime library for the KTX2 textures, not an asset
+- `samples/public/nyc/basis/`: Basis Universal transcoder (from three/examples/jsm/libs/basis, Apache-2.0): a runtime library for the KTX2 textures, not an asset
 - `samples/public/miami/textures-lite/manifest.json`: phone-tier texture manifest of the Miami drive: it lists no sets (procedural layers)
 - every `CREDITS.md`: the credits this catalogue reads
 

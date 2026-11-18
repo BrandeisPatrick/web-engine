@@ -98,6 +98,10 @@
    "reason": "Basis Universal transcoder (from three/examples/jsm/libs/basis, Apache-2.0): a runtime library for the KTX2 textures, not an asset"
   },
   {
+   "path": "samples/public/nyc/basis/",
+   "reason": "Basis Universal transcoder (from three/examples/jsm/libs/basis, Apache-2.0): a runtime library for the KTX2 textures, not an asset"
+  },
+  {
    "path": "samples/public/miami/textures-lite/manifest.json",
    "reason": "phone-tier texture manifest of the Miami drive: it lists no sets (procedural layers)"
   }
@@ -129,12 +133,12 @@
     "url": "https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/CarConcept",
     "creditsFile": "samples/public/miami/CREDITS.md"
    },
-   "bytes": 9489764,
+   "bytes": 3173968,
    "facts": {
     "triangles": 213347,
     "meshes": 97,
     "materials": 29,
-    "textures": 15
+    "textures": 14
    },
    "tags": [
     "car",
@@ -4274,13 +4278,21 @@
    "where": {
     "files": [
      "samples/public/nyc/textures/asphalt_02/ao.jpg",
+     "samples/public/nyc/textures/asphalt_02/ao.ktx2",
      "samples/public/nyc/textures/asphalt_02/diff.jpg",
+     "samples/public/nyc/textures/asphalt_02/diff.ktx2",
      "samples/public/nyc/textures/asphalt_02/nor_gl.jpg",
+     "samples/public/nyc/textures/asphalt_02/nor_gl.ktx2",
      "samples/public/nyc/textures/asphalt_02/rough.jpg",
+     "samples/public/nyc/textures/asphalt_02/rough.ktx2",
      "samples/public/nyc/textures-512/asphalt_02/ao.jpg",
+     "samples/public/nyc/textures-512/asphalt_02/ao.ktx2",
      "samples/public/nyc/textures-512/asphalt_02/diff.jpg",
+     "samples/public/nyc/textures-512/asphalt_02/diff.ktx2",
      "samples/public/nyc/textures-512/asphalt_02/nor_gl.jpg",
-     "samples/public/nyc/textures-512/asphalt_02/rough.jpg"
+     "samples/public/nyc/textures-512/asphalt_02/nor_gl.ktx2",
+     "samples/public/nyc/textures-512/asphalt_02/rough.jpg",
+     "samples/public/nyc/textures-512/asphalt_02/rough.ktx2"
     ],
     "manifests": [
      "samples/public/nyc/textures/manifest.json",
@@ -4300,24 +4312,25 @@
     "url": "https://polyhaven.com/a/asphalt_02",
     "creditsFile": "samples/public/nyc/CREDITS.md"
    },
-   "bytes": 2878888,
+   "bytes": 5288492,
    "facts": {
     "role": "asphalt_a",
     "realSize": "3 x 3 m",
     "maps": "roughness, albedo, ambient occlusion, normal (OpenGL)",
-    "resolution": "1024 x 1024 in nyc/textures/; 512 x 512 in nyc/textures-512/",
+    "resolution": "1024 x 1024 (JPG + KTX2) in nyc/textures/; 512 x 512 (JPG + KTX2) in nyc/textures-512/",
     "triangles": 3968
    },
    "tags": [
     "poly haven",
     "pbr",
     "photo scan",
-    "asphalt_a"
+    "asphalt_a",
+    "ktx2"
    ],
    "thumb": "catalog/thumbs/nyc-asphalt_02.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'asphalt_a' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/asphalt_02/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('asphalt_02', { base }) reads <base>asphalt_02/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('asphalt_02', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'asphalt_a' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/asphalt_02/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('asphalt_02', { base }) reads <base>asphalt_02/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nTextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('asphalt_02', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -4388,13 +4401,21 @@
    "where": {
     "files": [
      "samples/public/nyc/textures/beige_wall_002/ao.jpg",
+     "samples/public/nyc/textures/beige_wall_002/ao.ktx2",
      "samples/public/nyc/textures/beige_wall_002/diff.jpg",
+     "samples/public/nyc/textures/beige_wall_002/diff.ktx2",
      "samples/public/nyc/textures/beige_wall_002/nor_gl.jpg",
+     "samples/public/nyc/textures/beige_wall_002/nor_gl.ktx2",
      "samples/public/nyc/textures/beige_wall_002/rough.jpg",
+     "samples/public/nyc/textures/beige_wall_002/rough.ktx2",
      "samples/public/nyc/textures-512/beige_wall_002/ao.jpg",
+     "samples/public/nyc/textures-512/beige_wall_002/ao.ktx2",
      "samples/public/nyc/textures-512/beige_wall_002/diff.jpg",
+     "samples/public/nyc/textures-512/beige_wall_002/diff.ktx2",
      "samples/public/nyc/textures-512/beige_wall_002/nor_gl.jpg",
-     "samples/public/nyc/textures-512/beige_wall_002/rough.jpg"
+     "samples/public/nyc/textures-512/beige_wall_002/nor_gl.ktx2",
+     "samples/public/nyc/textures-512/beige_wall_002/rough.jpg",
+     "samples/public/nyc/textures-512/beige_wall_002/rough.ktx2"
     ],
     "manifests": [
      "samples/public/nyc/textures/manifest.json",
@@ -4414,24 +4435,25 @@
     "url": "https://polyhaven.com/a/beige_wall_002",
     "creditsFile": "samples/public/nyc/CREDITS.md"
    },
-   "bytes": 292344,
+   "bytes": 869424,
    "facts": {
     "role": "stucco_a",
     "realSize": "3 x 3 m",
     "maps": "roughness, ambient occlusion, normal (OpenGL), albedo",
-    "resolution": "1024 x 256 in nyc/textures/; 512 x 128 in nyc/textures-512/",
+    "resolution": "1024 x 256 (JPG + KTX2) in nyc/textures/; 512 x 128 (JPG + KTX2) in nyc/textures-512/",
     "triangles": 3968
    },
    "tags": [
     "poly haven",
     "pbr",
     "photo scan",
-    "stucco_a"
+    "stucco_a",
+    "ktx2"
    ],
    "thumb": "catalog/thumbs/nyc-beige_wall_002.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'stucco_a' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 256) in nyc/textures/beige_wall_002/; nyc/textures-512/ holds a 512 x 128 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('beige_wall_002', { base }) reads <base>beige_wall_002/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('beige_wall_002', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'stucco_a' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 256) in nyc/textures/beige_wall_002/; nyc/textures-512/ holds a 512 x 128 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('beige_wall_002', { base }) reads <base>beige_wall_002/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nTextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('beige_wall_002', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -4502,13 +4524,21 @@
    "where": {
     "files": [
      "samples/public/nyc/textures/bitumen/ao.jpg",
+     "samples/public/nyc/textures/bitumen/ao.ktx2",
      "samples/public/nyc/textures/bitumen/diff.jpg",
+     "samples/public/nyc/textures/bitumen/diff.ktx2",
      "samples/public/nyc/textures/bitumen/nor_gl.jpg",
+     "samples/public/nyc/textures/bitumen/nor_gl.ktx2",
      "samples/public/nyc/textures/bitumen/rough.jpg",
+     "samples/public/nyc/textures/bitumen/rough.ktx2",
      "samples/public/nyc/textures-512/bitumen/ao.jpg",
+     "samples/public/nyc/textures-512/bitumen/ao.ktx2",
      "samples/public/nyc/textures-512/bitumen/diff.jpg",
+     "samples/public/nyc/textures-512/bitumen/diff.ktx2",
      "samples/public/nyc/textures-512/bitumen/nor_gl.jpg",
-     "samples/public/nyc/textures-512/bitumen/rough.jpg"
+     "samples/public/nyc/textures-512/bitumen/nor_gl.ktx2",
+     "samples/public/nyc/textures-512/bitumen/rough.jpg",
+     "samples/public/nyc/textures-512/bitumen/rough.ktx2"
     ],
     "manifests": [
      "samples/public/nyc/textures/manifest.json",
@@ -4528,24 +4558,25 @@
     "url": "https://polyhaven.com/a/bitumen",
     "creditsFile": "samples/public/nyc/CREDITS.md"
    },
-   "bytes": 504559,
+   "bytes": 2206394,
    "facts": {
     "role": "roof_tar",
     "realSize": "20 x 20 m",
     "maps": "ambient occlusion, roughness, albedo, normal (OpenGL)",
-    "resolution": "1024 x 1024 in nyc/textures/; 512 x 512 in nyc/textures-512/",
+    "resolution": "1024 x 1024 (JPG + KTX2) in nyc/textures/; 512 x 512 (JPG + KTX2) in nyc/textures-512/",
     "triangles": 3968
    },
    "tags": [
     "poly haven",
     "pbr",
     "photo scan",
-    "roof_tar"
+    "roof_tar",
+    "ktx2"
    ],
    "thumb": "catalog/thumbs/nyc-bitumen.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'roof_tar' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/bitumen/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('bitumen', { base }) reads <base>bitumen/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('bitumen', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'roof_tar' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/bitumen/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('bitumen', { base }) reads <base>bitumen/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nTextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('bitumen', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -4559,13 +4590,21 @@
    "where": {
     "files": [
      "samples/public/nyc/textures/brick_wall_006/ao.jpg",
+     "samples/public/nyc/textures/brick_wall_006/ao.ktx2",
      "samples/public/nyc/textures/brick_wall_006/diff.jpg",
+     "samples/public/nyc/textures/brick_wall_006/diff.ktx2",
      "samples/public/nyc/textures/brick_wall_006/nor_gl.jpg",
+     "samples/public/nyc/textures/brick_wall_006/nor_gl.ktx2",
      "samples/public/nyc/textures/brick_wall_006/rough.jpg",
+     "samples/public/nyc/textures/brick_wall_006/rough.ktx2",
      "samples/public/nyc/textures-512/brick_wall_006/ao.jpg",
+     "samples/public/nyc/textures-512/brick_wall_006/ao.ktx2",
      "samples/public/nyc/textures-512/brick_wall_006/diff.jpg",
+     "samples/public/nyc/textures-512/brick_wall_006/diff.ktx2",
      "samples/public/nyc/textures-512/brick_wall_006/nor_gl.jpg",
-     "samples/public/nyc/textures-512/brick_wall_006/rough.jpg"
+     "samples/public/nyc/textures-512/brick_wall_006/nor_gl.ktx2",
+     "samples/public/nyc/textures-512/brick_wall_006/rough.jpg",
+     "samples/public/nyc/textures-512/brick_wall_006/rough.ktx2"
     ],
     "manifests": [
      "samples/public/nyc/textures/manifest.json",
@@ -4585,24 +4624,25 @@
     "url": "https://polyhaven.com/a/brick_wall_006",
     "creditsFile": "samples/public/nyc/CREDITS.md"
    },
-   "bytes": 1669135,
+   "bytes": 4021172,
    "facts": {
     "role": "brick_red",
     "realSize": "3 x 3 m",
     "maps": "roughness, normal (OpenGL), ambient occlusion, albedo",
-    "resolution": "1024 x 1024 in nyc/textures/; 512 x 512 in nyc/textures-512/",
+    "resolution": "1024 x 1024 (JPG + KTX2) in nyc/textures/; 512 x 512 (JPG + KTX2) in nyc/textures-512/",
     "triangles": 3968
    },
    "tags": [
     "poly haven",
     "pbr",
     "photo scan",
-    "brick_red"
+    "brick_red",
+    "ktx2"
    ],
    "thumb": "catalog/thumbs/nyc-brick_wall_006.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'brick_red' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/brick_wall_006/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('brick_wall_006', { base }) reads <base>brick_wall_006/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('brick_wall_006', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'brick_red' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/brick_wall_006/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('brick_wall_006', { base }) reads <base>brick_wall_006/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nTextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('brick_wall_006', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -4616,13 +4656,21 @@
    "where": {
     "files": [
      "samples/public/nyc/textures/brick_wall_10/ao.jpg",
+     "samples/public/nyc/textures/brick_wall_10/ao.ktx2",
      "samples/public/nyc/textures/brick_wall_10/diff.jpg",
+     "samples/public/nyc/textures/brick_wall_10/diff.ktx2",
      "samples/public/nyc/textures/brick_wall_10/nor_gl.jpg",
+     "samples/public/nyc/textures/brick_wall_10/nor_gl.ktx2",
      "samples/public/nyc/textures/brick_wall_10/rough.jpg",
+     "samples/public/nyc/textures/brick_wall_10/rough.ktx2",
      "samples/public/nyc/textures-512/brick_wall_10/ao.jpg",
+     "samples/public/nyc/textures-512/brick_wall_10/ao.ktx2",
      "samples/public/nyc/textures-512/brick_wall_10/diff.jpg",
+     "samples/public/nyc/textures-512/brick_wall_10/diff.ktx2",
      "samples/public/nyc/textures-512/brick_wall_10/nor_gl.jpg",
-     "samples/public/nyc/textures-512/brick_wall_10/rough.jpg"
+     "samples/public/nyc/textures-512/brick_wall_10/nor_gl.ktx2",
+     "samples/public/nyc/textures-512/brick_wall_10/rough.jpg",
+     "samples/public/nyc/textures-512/brick_wall_10/rough.ktx2"
     ],
     "manifests": [
      "samples/public/nyc/textures/manifest.json",
@@ -4642,24 +4690,25 @@
     "url": "https://polyhaven.com/a/brick_wall_10",
     "creditsFile": "samples/public/nyc/CREDITS.md"
    },
-   "bytes": 1151598,
+   "bytes": 3370677,
    "facts": {
     "role": "brick_dark",
     "realSize": "1.9 x 1.9 m",
     "maps": "roughness, albedo, normal (OpenGL), ambient occlusion",
-    "resolution": "1024 x 1024 in nyc/textures/; 512 x 512 in nyc/textures-512/",
+    "resolution": "1024 x 1024 (JPG + KTX2) in nyc/textures/; 512 x 512 (JPG + KTX2) in nyc/textures-512/",
     "triangles": 3968
    },
    "tags": [
     "poly haven",
     "pbr",
     "photo scan",
-    "brick_dark"
+    "brick_dark",
+    "ktx2"
    ],
    "thumb": "catalog/thumbs/nyc-brick_wall_10.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'brick_dark' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/brick_wall_10/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('brick_wall_10', { base }) reads <base>brick_wall_10/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('brick_wall_10', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'brick_dark' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/brick_wall_10/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('brick_wall_10', { base }) reads <base>brick_wall_10/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nTextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('brick_wall_10', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -4673,13 +4722,21 @@
    "where": {
     "files": [
      "samples/public/nyc/textures/clean_asphalt/ao.jpg",
+     "samples/public/nyc/textures/clean_asphalt/ao.ktx2",
      "samples/public/nyc/textures/clean_asphalt/diff.jpg",
+     "samples/public/nyc/textures/clean_asphalt/diff.ktx2",
      "samples/public/nyc/textures/clean_asphalt/nor_gl.jpg",
+     "samples/public/nyc/textures/clean_asphalt/nor_gl.ktx2",
      "samples/public/nyc/textures/clean_asphalt/rough.jpg",
+     "samples/public/nyc/textures/clean_asphalt/rough.ktx2",
      "samples/public/nyc/textures-512/clean_asphalt/ao.jpg",
+     "samples/public/nyc/textures-512/clean_asphalt/ao.ktx2",
      "samples/public/nyc/textures-512/clean_asphalt/diff.jpg",
+     "samples/public/nyc/textures-512/clean_asphalt/diff.ktx2",
      "samples/public/nyc/textures-512/clean_asphalt/nor_gl.jpg",
-     "samples/public/nyc/textures-512/clean_asphalt/rough.jpg"
+     "samples/public/nyc/textures-512/clean_asphalt/nor_gl.ktx2",
+     "samples/public/nyc/textures-512/clean_asphalt/rough.jpg",
+     "samples/public/nyc/textures-512/clean_asphalt/rough.ktx2"
     ],
     "manifests": [
      "samples/public/nyc/textures/manifest.json",
@@ -4699,24 +4756,25 @@
     "url": "https://polyhaven.com/a/clean_asphalt",
     "creditsFile": "samples/public/nyc/CREDITS.md"
    },
-   "bytes": 1229955,
+   "bytes": 3284342,
    "facts": {
     "role": "asphalt_b",
     "realSize": "2.1 x 2.1 m",
     "maps": "normal (OpenGL), albedo, roughness, ambient occlusion",
-    "resolution": "1024 x 1024 in nyc/textures/; 512 x 512 in nyc/textures-512/",
+    "resolution": "1024 x 1024 (JPG + KTX2) in nyc/textures/; 512 x 512 (JPG + KTX2) in nyc/textures-512/",
     "triangles": 3968
    },
    "tags": [
     "poly haven",
     "pbr",
     "photo scan",
-    "asphalt_b"
+    "asphalt_b",
+    "ktx2"
    ],
    "thumb": "catalog/thumbs/nyc-clean_asphalt.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'asphalt_b' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/clean_asphalt/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('clean_asphalt', { base }) reads <base>clean_asphalt/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('clean_asphalt', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'asphalt_b' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/clean_asphalt/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('clean_asphalt', { base }) reads <base>clean_asphalt/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nTextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('clean_asphalt', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -4843,13 +4901,21 @@
    "where": {
     "files": [
      "samples/public/nyc/textures/concrete_panels/ao.jpg",
+     "samples/public/nyc/textures/concrete_panels/ao.ktx2",
      "samples/public/nyc/textures/concrete_panels/diff.jpg",
+     "samples/public/nyc/textures/concrete_panels/diff.ktx2",
      "samples/public/nyc/textures/concrete_panels/nor_gl.jpg",
+     "samples/public/nyc/textures/concrete_panels/nor_gl.ktx2",
      "samples/public/nyc/textures/concrete_panels/rough.jpg",
+     "samples/public/nyc/textures/concrete_panels/rough.ktx2",
      "samples/public/nyc/textures-512/concrete_panels/ao.jpg",
+     "samples/public/nyc/textures-512/concrete_panels/ao.ktx2",
      "samples/public/nyc/textures-512/concrete_panels/diff.jpg",
+     "samples/public/nyc/textures-512/concrete_panels/diff.ktx2",
      "samples/public/nyc/textures-512/concrete_panels/nor_gl.jpg",
-     "samples/public/nyc/textures-512/concrete_panels/rough.jpg"
+     "samples/public/nyc/textures-512/concrete_panels/nor_gl.ktx2",
+     "samples/public/nyc/textures-512/concrete_panels/rough.jpg",
+     "samples/public/nyc/textures-512/concrete_panels/rough.ktx2"
     ],
     "manifests": [
      "samples/public/nyc/textures/manifest.json",
@@ -4869,24 +4935,25 @@
     "url": "https://polyhaven.com/a/concrete_panels",
     "creditsFile": "samples/public/nyc/CREDITS.md"
    },
-   "bytes": 1001777,
+   "bytes": 2734903,
    "facts": {
     "role": "concrete_rough",
     "realSize": "8 x 8 m",
     "maps": "roughness, albedo, normal (OpenGL), ambient occlusion",
-    "resolution": "1024 x 1024 in nyc/textures/; 512 x 512 in nyc/textures-512/",
+    "resolution": "1024 x 1024 (JPG + KTX2) in nyc/textures/; 512 x 512 (JPG + KTX2) in nyc/textures-512/",
     "triangles": 3968
    },
    "tags": [
     "poly haven",
     "pbr",
     "photo scan",
-    "concrete_rough"
+    "concrete_rough",
+    "ktx2"
    ],
    "thumb": "catalog/thumbs/nyc-concrete_panels.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'concrete_rough' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/concrete_panels/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('concrete_panels', { base }) reads <base>concrete_panels/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('concrete_panels', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'concrete_rough' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/concrete_panels/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('concrete_panels', { base }) reads <base>concrete_panels/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nTextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('concrete_panels', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -4957,13 +5024,21 @@
    "where": {
     "files": [
      "samples/public/nyc/textures/concrete_pavement/ao.jpg",
+     "samples/public/nyc/textures/concrete_pavement/ao.ktx2",
      "samples/public/nyc/textures/concrete_pavement/diff.jpg",
+     "samples/public/nyc/textures/concrete_pavement/diff.ktx2",
      "samples/public/nyc/textures/concrete_pavement/nor_gl.jpg",
+     "samples/public/nyc/textures/concrete_pavement/nor_gl.ktx2",
      "samples/public/nyc/textures/concrete_pavement/rough.jpg",
+     "samples/public/nyc/textures/concrete_pavement/rough.ktx2",
      "samples/public/nyc/textures-512/concrete_pavement/ao.jpg",
+     "samples/public/nyc/textures-512/concrete_pavement/ao.ktx2",
      "samples/public/nyc/textures-512/concrete_pavement/diff.jpg",
+     "samples/public/nyc/textures-512/concrete_pavement/diff.ktx2",
      "samples/public/nyc/textures-512/concrete_pavement/nor_gl.jpg",
-     "samples/public/nyc/textures-512/concrete_pavement/rough.jpg"
+     "samples/public/nyc/textures-512/concrete_pavement/nor_gl.ktx2",
+     "samples/public/nyc/textures-512/concrete_pavement/rough.jpg",
+     "samples/public/nyc/textures-512/concrete_pavement/rough.ktx2"
     ],
     "manifests": [
      "samples/public/nyc/textures/manifest.json",
@@ -4983,24 +5058,25 @@
     "url": "https://polyhaven.com/a/concrete_pavement",
     "creditsFile": "samples/public/nyc/CREDITS.md"
    },
-   "bytes": 1648072,
+   "bytes": 3868901,
    "facts": {
     "role": "sidewalk",
     "realSize": "1.8 x 1.8 m",
     "maps": "roughness, ambient occlusion, albedo, normal (OpenGL)",
-    "resolution": "1024 x 1024 in nyc/textures/; 512 x 512 in nyc/textures-512/",
+    "resolution": "1024 x 1024 (JPG + KTX2) in nyc/textures/; 512 x 512 (JPG + KTX2) in nyc/textures-512/",
     "triangles": 3968
    },
    "tags": [
     "poly haven",
     "pbr",
     "photo scan",
-    "sidewalk"
+    "sidewalk",
+    "ktx2"
    ],
    "thumb": "catalog/thumbs/nyc-concrete_pavement.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'sidewalk' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/concrete_pavement/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('concrete_pavement', { base }) reads <base>concrete_pavement/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('concrete_pavement', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'sidewalk' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/concrete_pavement/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('concrete_pavement', { base }) reads <base>concrete_pavement/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nTextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('concrete_pavement', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -5117,13 +5193,21 @@
    "where": {
     "files": [
      "samples/public/nyc/textures/corrugated_iron/ao.jpg",
+     "samples/public/nyc/textures/corrugated_iron/ao.ktx2",
      "samples/public/nyc/textures/corrugated_iron/diff.jpg",
+     "samples/public/nyc/textures/corrugated_iron/diff.ktx2",
      "samples/public/nyc/textures/corrugated_iron/nor_gl.jpg",
+     "samples/public/nyc/textures/corrugated_iron/nor_gl.ktx2",
      "samples/public/nyc/textures/corrugated_iron/rough.jpg",
+     "samples/public/nyc/textures/corrugated_iron/rough.ktx2",
      "samples/public/nyc/textures-512/corrugated_iron/ao.jpg",
+     "samples/public/nyc/textures-512/corrugated_iron/ao.ktx2",
      "samples/public/nyc/textures-512/corrugated_iron/diff.jpg",
+     "samples/public/nyc/textures-512/corrugated_iron/diff.ktx2",
      "samples/public/nyc/textures-512/corrugated_iron/nor_gl.jpg",
-     "samples/public/nyc/textures-512/corrugated_iron/rough.jpg"
+     "samples/public/nyc/textures-512/corrugated_iron/nor_gl.ktx2",
+     "samples/public/nyc/textures-512/corrugated_iron/rough.jpg",
+     "samples/public/nyc/textures-512/corrugated_iron/rough.ktx2"
     ],
     "manifests": [
      "samples/public/nyc/textures/manifest.json",
@@ -5143,24 +5227,25 @@
     "url": "https://polyhaven.com/a/corrugated_iron",
     "creditsFile": "samples/public/nyc/CREDITS.md"
    },
-   "bytes": 879677,
+   "bytes": 2843703,
    "facts": {
     "role": "metal_corrugated",
     "realSize": "1.12 x 1.12 m",
     "maps": "ambient occlusion, roughness, albedo, normal (OpenGL)",
-    "resolution": "1024 x 1024 in nyc/textures/; 512 x 512 in nyc/textures-512/",
+    "resolution": "1024 x 1024 (JPG + KTX2) in nyc/textures/; 512 x 512 (JPG + KTX2) in nyc/textures-512/",
     "triangles": 3968
    },
    "tags": [
     "poly haven",
     "pbr",
     "photo scan",
-    "metal_corrugated"
+    "metal_corrugated",
+    "ktx2"
    ],
    "thumb": "catalog/thumbs/nyc-corrugated_iron.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'metal_corrugated' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/corrugated_iron/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('corrugated_iron', { base }) reads <base>corrugated_iron/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('corrugated_iron', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'metal_corrugated' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/corrugated_iron/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('corrugated_iron', { base }) reads <base>corrugated_iron/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nTextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('corrugated_iron', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -5231,13 +5316,21 @@
    "where": {
     "files": [
      "samples/public/nyc/textures/leafy_grass/ao.jpg",
+     "samples/public/nyc/textures/leafy_grass/ao.ktx2",
      "samples/public/nyc/textures/leafy_grass/diff.jpg",
+     "samples/public/nyc/textures/leafy_grass/diff.ktx2",
      "samples/public/nyc/textures/leafy_grass/nor_gl.jpg",
+     "samples/public/nyc/textures/leafy_grass/nor_gl.ktx2",
      "samples/public/nyc/textures/leafy_grass/rough.jpg",
+     "samples/public/nyc/textures/leafy_grass/rough.ktx2",
      "samples/public/nyc/textures-512/leafy_grass/ao.jpg",
+     "samples/public/nyc/textures-512/leafy_grass/ao.ktx2",
      "samples/public/nyc/textures-512/leafy_grass/diff.jpg",
+     "samples/public/nyc/textures-512/leafy_grass/diff.ktx2",
      "samples/public/nyc/textures-512/leafy_grass/nor_gl.jpg",
-     "samples/public/nyc/textures-512/leafy_grass/rough.jpg"
+     "samples/public/nyc/textures-512/leafy_grass/nor_gl.ktx2",
+     "samples/public/nyc/textures-512/leafy_grass/rough.jpg",
+     "samples/public/nyc/textures-512/leafy_grass/rough.ktx2"
     ],
     "manifests": [
      "samples/public/nyc/textures/manifest.json",
@@ -5257,24 +5350,25 @@
     "url": "https://polyhaven.com/a/leafy_grass",
     "creditsFile": "samples/public/nyc/CREDITS.md"
    },
-   "bytes": 2251682,
+   "bytes": 4697734,
    "facts": {
     "role": "grass",
     "realSize": "2 x 2 m",
     "maps": "roughness, ambient occlusion, albedo, normal (OpenGL)",
-    "resolution": "1024 x 1024 in nyc/textures/; 512 x 512 in nyc/textures-512/",
+    "resolution": "1024 x 1024 (JPG + KTX2) in nyc/textures/; 512 x 512 (JPG + KTX2) in nyc/textures-512/",
     "triangles": 3968
    },
    "tags": [
     "poly haven",
     "pbr",
     "photo scan",
-    "grass"
+    "grass",
+    "ktx2"
    ],
    "thumb": "catalog/thumbs/nyc-leafy_grass.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'grass' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/leafy_grass/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('leafy_grass', { base }) reads <base>leafy_grass/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('leafy_grass', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'grass' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/leafy_grass/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('leafy_grass', { base }) reads <base>leafy_grass/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nTextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('leafy_grass', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -5288,13 +5382,21 @@
    "where": {
     "files": [
      "samples/public/nyc/textures/painted_worn_brick/ao.jpg",
+     "samples/public/nyc/textures/painted_worn_brick/ao.ktx2",
      "samples/public/nyc/textures/painted_worn_brick/diff.jpg",
+     "samples/public/nyc/textures/painted_worn_brick/diff.ktx2",
      "samples/public/nyc/textures/painted_worn_brick/nor_gl.jpg",
+     "samples/public/nyc/textures/painted_worn_brick/nor_gl.ktx2",
      "samples/public/nyc/textures/painted_worn_brick/rough.jpg",
+     "samples/public/nyc/textures/painted_worn_brick/rough.ktx2",
      "samples/public/nyc/textures-512/painted_worn_brick/ao.jpg",
+     "samples/public/nyc/textures-512/painted_worn_brick/ao.ktx2",
      "samples/public/nyc/textures-512/painted_worn_brick/diff.jpg",
+     "samples/public/nyc/textures-512/painted_worn_brick/diff.ktx2",
      "samples/public/nyc/textures-512/painted_worn_brick/nor_gl.jpg",
-     "samples/public/nyc/textures-512/painted_worn_brick/rough.jpg"
+     "samples/public/nyc/textures-512/painted_worn_brick/nor_gl.ktx2",
+     "samples/public/nyc/textures-512/painted_worn_brick/rough.jpg",
+     "samples/public/nyc/textures-512/painted_worn_brick/rough.ktx2"
     ],
     "manifests": [
      "samples/public/nyc/textures/manifest.json",
@@ -5314,24 +5416,25 @@
     "url": "https://polyhaven.com/a/painted_worn_brick",
     "creditsFile": "samples/public/nyc/CREDITS.md"
    },
-   "bytes": 1496096,
+   "bytes": 3804101,
    "facts": {
     "role": "brick_painted",
     "realSize": "1.8 x 1.8 m",
     "maps": "albedo, normal (OpenGL), ambient occlusion, roughness",
-    "resolution": "1024 x 1024 in nyc/textures/; 512 x 512 in nyc/textures-512/",
+    "resolution": "1024 x 1024 (JPG + KTX2) in nyc/textures/; 512 x 512 (JPG + KTX2) in nyc/textures-512/",
     "triangles": 3968
    },
    "tags": [
     "poly haven",
     "pbr",
     "photo scan",
-    "brick_painted"
+    "brick_painted",
+    "ktx2"
    ],
    "thumb": "catalog/thumbs/nyc-painted_worn_brick.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'brick_painted' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/painted_worn_brick/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('painted_worn_brick', { base }) reads <base>painted_worn_brick/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('painted_worn_brick', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'brick_painted' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/painted_worn_brick/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('painted_worn_brick', { base }) reads <base>painted_worn_brick/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nTextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('painted_worn_brick', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -5345,13 +5448,21 @@
    "where": {
     "files": [
      "samples/public/nyc/textures/sandstone_blocks_08/ao.jpg",
+     "samples/public/nyc/textures/sandstone_blocks_08/ao.ktx2",
      "samples/public/nyc/textures/sandstone_blocks_08/diff.jpg",
+     "samples/public/nyc/textures/sandstone_blocks_08/diff.ktx2",
      "samples/public/nyc/textures/sandstone_blocks_08/nor_gl.jpg",
+     "samples/public/nyc/textures/sandstone_blocks_08/nor_gl.ktx2",
      "samples/public/nyc/textures/sandstone_blocks_08/rough.jpg",
+     "samples/public/nyc/textures/sandstone_blocks_08/rough.ktx2",
      "samples/public/nyc/textures-512/sandstone_blocks_08/ao.jpg",
+     "samples/public/nyc/textures-512/sandstone_blocks_08/ao.ktx2",
      "samples/public/nyc/textures-512/sandstone_blocks_08/diff.jpg",
+     "samples/public/nyc/textures-512/sandstone_blocks_08/diff.ktx2",
      "samples/public/nyc/textures-512/sandstone_blocks_08/nor_gl.jpg",
-     "samples/public/nyc/textures-512/sandstone_blocks_08/rough.jpg"
+     "samples/public/nyc/textures-512/sandstone_blocks_08/nor_gl.ktx2",
+     "samples/public/nyc/textures-512/sandstone_blocks_08/rough.jpg",
+     "samples/public/nyc/textures-512/sandstone_blocks_08/rough.ktx2"
     ],
     "manifests": [
      "samples/public/nyc/textures/manifest.json",
@@ -5371,24 +5482,25 @@
     "url": "https://polyhaven.com/a/sandstone_blocks_08",
     "creditsFile": "samples/public/nyc/CREDITS.md"
    },
-   "bytes": 499685,
+   "bytes": 1956012,
    "facts": {
     "role": "concrete_panel",
     "realSize": "3 x 3 m",
     "maps": "normal (OpenGL), ambient occlusion, albedo, roughness",
-    "resolution": "1024 x 1024 in nyc/textures/; 512 x 512 in nyc/textures-512/",
+    "resolution": "1024 x 1024 (JPG + KTX2) in nyc/textures/; 512 x 512 (JPG + KTX2) in nyc/textures-512/",
     "triangles": 3968
    },
    "tags": [
     "poly haven",
     "pbr",
     "photo scan",
-    "concrete_panel"
+    "concrete_panel",
+    "ktx2"
    ],
    "thumb": "catalog/thumbs/nyc-sandstone_blocks_08.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'concrete_panel' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/sandstone_blocks_08/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('sandstone_blocks_08', { base }) reads <base>sandstone_blocks_08/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('sandstone_blocks_08', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'concrete_panel' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/sandstone_blocks_08/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('sandstone_blocks_08', { base }) reads <base>sandstone_blocks_08/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nTextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('sandstone_blocks_08', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -5402,13 +5514,21 @@
    "where": {
     "files": [
      "samples/public/nyc/textures/stone_block_wall/ao.jpg",
+     "samples/public/nyc/textures/stone_block_wall/ao.ktx2",
      "samples/public/nyc/textures/stone_block_wall/diff.jpg",
+     "samples/public/nyc/textures/stone_block_wall/diff.ktx2",
      "samples/public/nyc/textures/stone_block_wall/nor_gl.jpg",
+     "samples/public/nyc/textures/stone_block_wall/nor_gl.ktx2",
      "samples/public/nyc/textures/stone_block_wall/rough.jpg",
+     "samples/public/nyc/textures/stone_block_wall/rough.ktx2",
      "samples/public/nyc/textures-512/stone_block_wall/ao.jpg",
+     "samples/public/nyc/textures-512/stone_block_wall/ao.ktx2",
      "samples/public/nyc/textures-512/stone_block_wall/diff.jpg",
+     "samples/public/nyc/textures-512/stone_block_wall/diff.ktx2",
      "samples/public/nyc/textures-512/stone_block_wall/nor_gl.jpg",
-     "samples/public/nyc/textures-512/stone_block_wall/rough.jpg"
+     "samples/public/nyc/textures-512/stone_block_wall/nor_gl.ktx2",
+     "samples/public/nyc/textures-512/stone_block_wall/rough.jpg",
+     "samples/public/nyc/textures-512/stone_block_wall/rough.ktx2"
     ],
     "manifests": [
      "samples/public/nyc/textures/manifest.json",
@@ -5428,24 +5548,25 @@
     "url": "https://polyhaven.com/a/stone_block_wall",
     "creditsFile": "samples/public/nyc/CREDITS.md"
    },
-   "bytes": 1286144,
+   "bytes": 3483496,
    "facts": {
     "role": "granite",
     "realSize": "2.1 x 2.1 m",
     "maps": "roughness, albedo, normal (OpenGL), ambient occlusion",
-    "resolution": "1024 x 1024 in nyc/textures/; 512 x 512 in nyc/textures-512/",
+    "resolution": "1024 x 1024 (JPG + KTX2) in nyc/textures/; 512 x 512 (JPG + KTX2) in nyc/textures-512/",
     "triangles": 3968
    },
    "tags": [
     "poly haven",
     "pbr",
     "photo scan",
-    "granite"
+    "granite",
+    "ktx2"
    ],
    "thumb": "catalog/thumbs/nyc-stone_block_wall.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'granite' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/stone_block_wall/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('stone_block_wall', { base }) reads <base>stone_block_wall/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('stone_block_wall', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'granite' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/stone_block_wall/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('stone_block_wall', { base }) reads <base>stone_block_wall/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.",
+   "snippet": "import * as THREE from 'three';\nimport { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nTextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('stone_block_wall', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {
@@ -5516,9 +5637,13 @@
    "where": {
     "files": [
      "samples/public/nyc/textures/whitewashed_brick/ao.jpg",
+     "samples/public/nyc/textures/whitewashed_brick/ao.ktx2",
      "samples/public/nyc/textures/whitewashed_brick/diff.jpg",
+     "samples/public/nyc/textures/whitewashed_brick/diff.ktx2",
      "samples/public/nyc/textures/whitewashed_brick/nor_gl.jpg",
-     "samples/public/nyc/textures/whitewashed_brick/rough.jpg"
+     "samples/public/nyc/textures/whitewashed_brick/nor_gl.ktx2",
+     "samples/public/nyc/textures/whitewashed_brick/rough.jpg",
+     "samples/public/nyc/textures/whitewashed_brick/rough.ktx2"
     ],
     "manifests": [
      "samples/public/nyc/textures/manifest.json"
@@ -5537,24 +5662,25 @@
     "url": "https://polyhaven.com/a/whitewashed_brick",
     "creditsFile": "samples/public/nyc/CREDITS.md"
    },
-   "bytes": 969236,
+   "bytes": 2625625,
    "facts": {
     "role": "stucco_b",
     "realSize": "2 x 2 m",
     "maps": "roughness, albedo, ambient occlusion, normal (OpenGL)",
-    "resolution": "1024 x 1024 in nyc/textures/",
+    "resolution": "1024 x 1024 (JPG + KTX2) in nyc/textures/",
     "triangles": 3968
    },
    "tags": [
     "poly haven",
     "pbr",
     "photo scan",
-    "stucco_b"
+    "stucco_b",
+    "ktx2"
    ],
    "thumb": "catalog/thumbs/nyc-whitewashed_brick.jpg",
    "preview3d": true,
-   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'stucco_b' surface. The engine's TextureSets loads it by manifest id.",
-   "snippet": "import * as THREE from 'three';\nimport { loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('whitewashed_brick', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
+   "description": "Poly Haven PBR scan used by the Night NYC walk as its 'stucco_b' surface; KTX2 (Basis) copies next to the JPGs, which stay as the fallback. The engine's TextureSets loads it by manifest id.",
+   "snippet": "import * as THREE from 'three';\nimport { TextureSets, loadTextureManifest, loadTextureSet } from '@vibe/engine/render';\nTextureSets.configure({ basisPath: import.meta.env.BASE_URL + 'nyc/basis/' });   // KTX2 transcoder\nconst base = import.meta.env.BASE_URL + 'nyc/textures/';\nconst manifest = await loadTextureManifest(base);\nconst set = await loadTextureSet('whitewashed_brick', { renderer, base, manifest });\nconst ball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap }));\nscene.add(ball);",
    "preview": {}
   },
   {

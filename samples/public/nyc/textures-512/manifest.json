@@ -18,7 +18,62 @@
     "nor_gl": "nor_gl.jpg",
     "AO": "ao.jpg",
     "Diffuse": "diff.jpg"
-   }
+   },
+   "ktx2Maps": {
+    "Rough": {
+     "file": "rough.ktx2",
+     "bytes": 39451,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "rough.jpg",
+     "srcBytes": 35427,
+     "psnr": 45.29,
+     "params": "etc1s q160 e2 linear mips yflip"
+    },
+    "nor_gl": {
+     "file": "nor_gl.ktx2",
+     "bytes": 330587,
+     "codec": "uastc",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "nor_gl.jpg",
+     "srcBytes": 137383,
+     "psnr": 36.46,
+     "params": "uastc l2 zstd linear normal mips yflip"
+    },
+    "AO": {
+     "file": "ao.ktx2",
+     "bytes": 58589,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "ao.jpg",
+     "srcBytes": 90947,
+     "psnr": 31.93,
+     "params": "etc1s q160 e2 linear mips yflip"
+    },
+    "Diffuse": {
+     "file": "diff.ktx2",
+     "bytes": 70241,
+     "codec": "etc1s",
+     "srgb": true,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "diff.jpg",
+     "srcBytes": 119119,
+     "psnr": 29.06,
+     "params": "etc1s q160 e2 srgb mips yflip"
+    }
+   },
+   "ktx2": true
   },
   "brick_painted": {
    "role": "brick_painted",
@@ -36,7 +91,62 @@
     "nor_gl": "nor_gl.jpg",
     "AO": "ao.jpg",
     "Rough": "rough.jpg"
-   }
+   },
+   "ktx2Maps": {
+    "Diffuse": {
+     "file": "diff.ktx2",
+     "bytes": 58505,
+     "codec": "etc1s",
+     "srgb": true,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "diff.jpg",
+     "srcBytes": 66382,
+     "psnr": 34.94,
+     "params": "etc1s q160 e2 srgb mips yflip"
+    },
+    "nor_gl": {
+     "file": "nor_gl.ktx2",
+     "bytes": 328431,
+     "codec": "uastc",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "nor_gl.jpg",
+     "srcBytes": 104116,
+     "psnr": 40.24,
+     "params": "uastc l2 zstd linear normal mips yflip"
+    },
+    "AO": {
+     "file": "ao.ktx2",
+     "bytes": 59196,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "ao.jpg",
+     "srcBytes": 84378,
+     "psnr": 30.84,
+     "params": "etc1s q160 e2 linear mips yflip"
+    },
+    "Rough": {
+     "file": "rough.ktx2",
+     "bytes": 37182,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "rough.jpg",
+     "srcBytes": 22262,
+     "psnr": 46.05,
+     "params": "etc1s q160 e2 linear mips yflip"
+    }
+   },
+   "ktx2": true
   },
   "brick_dark": {
    "role": "brick_dark",
@@ -54,7 +164,62 @@
     "Diffuse": "diff.jpg",
     "nor_gl": "nor_gl.jpg",
     "AO": "ao.jpg"
-   }
+   },
+   "ktx2Maps": {
+    "Rough": {
+     "file": "rough.ktx2",
+     "bytes": 31973,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "rough.jpg",
+     "srcBytes": 22976,
+     "psnr": 46.56,
+     "params": "etc1s q160 e2 linear mips yflip"
+    },
+    "Diffuse": {
+     "file": "diff.ktx2",
+     "bytes": 59641,
+     "codec": "etc1s",
+     "srgb": true,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "diff.jpg",
+     "srcBytes": 64914,
+     "psnr": 34.98,
+     "params": "etc1s q160 e2 srgb mips yflip"
+    },
+    "nor_gl": {
+     "file": "nor_gl.ktx2",
+     "bytes": 317292,
+     "codec": "uastc",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "nor_gl.jpg",
+     "srcBytes": 87668,
+     "psnr": 40.99,
+     "params": "uastc l2 zstd linear normal mips yflip"
+    },
+    "AO": {
+     "file": "ao.ktx2",
+     "bytes": 52251,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "ao.jpg",
+     "srcBytes": 65535,
+     "psnr": 34.08,
+     "params": "etc1s q160 e2 linear mips yflip"
+    }
+   },
+   "ktx2": true
   },
   "concrete_panel": {
    "role": "concrete_panel",
@@ -72,7 +237,62 @@
     "AO": "ao.jpg",
     "Diffuse": "diff.jpg",
     "Rough": "rough.jpg"
-   }
+   },
+   "ktx2Maps": {
+    "nor_gl": {
+     "file": "nor_gl.ktx2",
+     "bytes": 139084,
+     "codec": "uastc",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "nor_gl.jpg",
+     "srcBytes": 16260,
+     "psnr": 58.11,
+     "params": "uastc l2 zstd linear normal mips yflip"
+    },
+    "AO": {
+     "file": "ao.ktx2",
+     "bytes": 13700,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "ao.jpg",
+     "srcBytes": 13589,
+     "psnr": 49.99,
+     "params": "etc1s q160 e2 linear mips yflip"
+    },
+    "Diffuse": {
+     "file": "diff.ktx2",
+     "bytes": 38695,
+     "codec": "etc1s",
+     "srgb": true,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "diff.jpg",
+     "srcBytes": 23548,
+     "psnr": 40.32,
+     "params": "etc1s q160 e2 srgb mips yflip"
+    },
+    "Rough": {
+     "file": "rough.ktx2",
+     "bytes": 29573,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "rough.jpg",
+     "srcBytes": 21328,
+     "psnr": 46.56,
+     "params": "etc1s q160 e2 linear mips yflip"
+    }
+   },
+   "ktx2": true
   },
   "concrete_rough": {
    "role": "concrete_rough",
@@ -90,7 +310,62 @@
     "Diffuse": "diff.jpg",
     "nor_gl": "nor_gl.jpg",
     "AO": "ao.jpg"
-   }
+   },
+   "ktx2Maps": {
+    "Rough": {
+     "file": "rough.ktx2",
+     "bytes": 17045,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "rough.jpg",
+     "srcBytes": 17055,
+     "psnr": 47.45,
+     "params": "etc1s q160 e2 linear mips yflip"
+    },
+    "Diffuse": {
+     "file": "diff.ktx2",
+     "bytes": 58079,
+     "codec": "etc1s",
+     "srgb": true,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "diff.jpg",
+     "srcBytes": 59309,
+     "psnr": 36.15,
+     "params": "etc1s q160 e2 srgb mips yflip"
+    },
+    "nor_gl": {
+     "file": "nor_gl.ktx2",
+     "bytes": 228136,
+     "codec": "uastc",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "nor_gl.jpg",
+     "srcBytes": 79149,
+     "psnr": 40.8,
+     "params": "uastc l2 zstd linear normal mips yflip"
+    },
+    "AO": {
+     "file": "ao.ktx2",
+     "bytes": 41384,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "ao.jpg",
+     "srcBytes": 46591,
+     "psnr": 40.81,
+     "params": "etc1s q160 e2 linear mips yflip"
+    }
+   },
+   "ktx2": true
   },
   "stucco_a": {
    "role": "stucco_a",
@@ -109,7 +384,62 @@
     "AO": "ao.jpg",
     "nor_gl": "nor_gl.jpg",
     "Diffuse": "diff.jpg"
-   }
+   },
+   "ktx2Maps": {
+    "Rough": {
+     "file": "rough.ktx2",
+     "bytes": 7631,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 128,
+     "levels": 10,
+     "src": "rough.jpg",
+     "srcBytes": 9705,
+     "psnr": 46.71,
+     "params": "etc1s q160 e2 linear mips yflip"
+    },
+    "AO": {
+     "file": "ao.ktx2",
+     "bytes": 14700,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 128,
+     "levels": 10,
+     "src": "ao.jpg",
+     "srcBytes": 21019,
+     "psnr": 37.55,
+     "params": "etc1s q160 e2 linear mips yflip"
+    },
+    "nor_gl": {
+     "file": "nor_gl.ktx2",
+     "bytes": 79817,
+     "codec": "uastc",
+     "srgb": false,
+     "width": 512,
+     "height": 128,
+     "levels": 10,
+     "src": "nor_gl.jpg",
+     "srcBytes": 29856,
+     "psnr": 40.47,
+     "params": "uastc l2 zstd linear normal mips yflip"
+    },
+    "Diffuse": {
+     "file": "diff.ktx2",
+     "bytes": 10274,
+     "codec": "etc1s",
+     "srgb": true,
+     "width": 512,
+     "height": 128,
+     "levels": 10,
+     "src": "diff.jpg",
+     "srcBytes": 10686,
+     "psnr": 41.75,
+     "params": "etc1s q160 e2 srgb mips yflip"
+    }
+   },
+   "ktx2": true
   },
   "granite": {
    "role": "granite",
@@ -127,7 +457,62 @@
     "Diffuse": "diff.jpg",
     "nor_gl": "nor_gl.jpg",
     "AO": "ao.jpg"
-   }
+   },
+   "ktx2Maps": {
+    "Rough": {
+     "file": "rough.ktx2",
+     "bytes": 20757,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "rough.jpg",
+     "srcBytes": 18955,
+     "psnr": 47.33,
+     "params": "etc1s q160 e2 linear mips yflip"
+    },
+    "Diffuse": {
+     "file": "diff.ktx2",
+     "bytes": 46217,
+     "codec": "etc1s",
+     "srgb": true,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "diff.jpg",
+     "srcBytes": 36513,
+     "psnr": 41.31,
+     "params": "etc1s q160 e2 srgb mips yflip"
+    },
+    "nor_gl": {
+     "file": "nor_gl.ktx2",
+     "bytes": 325908,
+     "codec": "uastc",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "nor_gl.jpg",
+     "srcBytes": 120012,
+     "psnr": 39.7,
+     "params": "uastc l2 zstd linear normal mips yflip"
+    },
+    "AO": {
+     "file": "ao.ktx2",
+     "bytes": 52992,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "ao.jpg",
+     "srcBytes": 52779,
+     "psnr": 37.53,
+     "params": "etc1s q160 e2 linear mips yflip"
+    }
+   },
+   "ktx2": true
   },
   "metal_corrugated": {
    "role": "metal_corrugated",
@@ -146,7 +531,62 @@
     "Rough": "rough.jpg",
     "Diffuse": "diff.jpg",
     "nor_gl": "nor_gl.jpg"
-   }
+   },
+   "ktx2Maps": {
+    "AO": {
+     "file": "ao.ktx2",
+     "bytes": 16082,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "ao.jpg",
+     "srcBytes": 22783,
+     "psnr": 47.34,
+     "params": "etc1s q160 e2 linear mips yflip"
+    },
+    "Rough": {
+     "file": "rough.ktx2",
+     "bytes": 46262,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "rough.jpg",
+     "srcBytes": 39350,
+     "psnr": 43.33,
+     "params": "etc1s q160 e2 linear mips yflip"
+    },
+    "Diffuse": {
+     "file": "diff.ktx2",
+     "bytes": 55168,
+     "codec": "etc1s",
+     "srgb": true,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "diff.jpg",
+     "srcBytes": 73388,
+     "psnr": 35.75,
+     "params": "etc1s q160 e2 srgb mips yflip"
+    },
+    "nor_gl": {
+     "file": "nor_gl.ktx2",
+     "bytes": 258462,
+     "codec": "uastc",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "nor_gl.jpg",
+     "srcBytes": 59488,
+     "psnr": 46.61,
+     "params": "uastc l2 zstd linear normal mips yflip"
+    }
+   },
+   "ktx2": true
   },
   "roof_tar": {
    "role": "roof_tar",
@@ -164,7 +604,62 @@
     "Rough": "rough.jpg",
     "Diffuse": "diff.jpg",
     "nor_gl": "nor_gl.jpg"
-   }
+   },
+   "ktx2Maps": {
+    "AO": {
+     "file": "ao.ktx2",
+     "bytes": 8345,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "ao.jpg",
+     "srcBytes": 13268,
+     "psnr": 52.61,
+     "params": "etc1s q160 e2 linear mips yflip"
+    },
+    "Rough": {
+     "file": "rough.ktx2",
+     "bytes": 10120,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "rough.jpg",
+     "srcBytes": 18010,
+     "psnr": 50.33,
+     "params": "etc1s q160 e2 linear mips yflip"
+    },
+    "Diffuse": {
+     "file": "diff.ktx2",
+     "bytes": 36407,
+     "codec": "etc1s",
+     "srgb": true,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "diff.jpg",
+     "srcBytes": 29241,
+     "psnr": 40.67,
+     "params": "etc1s q160 e2 srgb mips yflip"
+    },
+    "nor_gl": {
+     "file": "nor_gl.ktx2",
+     "bytes": 287827,
+     "codec": "uastc",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "nor_gl.jpg",
+     "srcBytes": 45831,
+     "psnr": 53.22,
+     "params": "uastc l2 zstd linear normal mips yflip"
+    }
+   },
+   "ktx2": true
   },
   "grass": {
    "role": "grass",
@@ -182,7 +677,62 @@
     "AO": "ao.jpg",
     "Diffuse": "diff.jpg",
     "nor_gl": "nor_gl.jpg"
-   }
+   },
+   "ktx2Maps": {
+    "Rough": {
+     "file": "rough.ktx2",
+     "bytes": 41128,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "rough.jpg",
+     "srcBytes": 34922,
+     "psnr": 44.42,
+     "params": "etc1s q160 e2 linear mips yflip"
+    },
+    "AO": {
+     "file": "ao.ktx2",
+     "bytes": 60190,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "ao.jpg",
+     "srcBytes": 136571,
+     "psnr": 27.16,
+     "params": "etc1s q160 e2 linear mips yflip"
+    },
+    "Diffuse": {
+     "file": "diff.ktx2",
+     "bytes": 68333,
+     "codec": "etc1s",
+     "srgb": true,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "diff.jpg",
+     "srcBytes": 120463,
+     "psnr": 29.39,
+     "params": "etc1s q160 e2 srgb mips yflip"
+    },
+    "nor_gl": {
+     "file": "nor_gl.ktx2",
+     "bytes": 338139,
+     "codec": "uastc",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "nor_gl.jpg",
+     "srcBytes": 164455,
+     "psnr": 34.89,
+     "params": "uastc l2 zstd linear normal mips yflip"
+    }
+   },
+   "ktx2": true
   },
   "asphalt_a": {
    "role": "asphalt_a",
@@ -200,7 +750,62 @@
     "Diffuse": "diff.jpg",
     "AO": "ao.jpg",
     "nor_gl": "nor_gl.jpg"
-   }
+   },
+   "ktx2Maps": {
+    "Rough": {
+     "file": "rough.ktx2",
+     "bytes": 57495,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "rough.jpg",
+     "srcBytes": 108937,
+     "psnr": 31.45,
+     "params": "etc1s q160 e2 linear mips yflip"
+    },
+    "Diffuse": {
+     "file": "diff.ktx2",
+     "bytes": 60071,
+     "codec": "etc1s",
+     "srgb": true,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "diff.jpg",
+     "srcBytes": 117895,
+     "psnr": 29.19,
+     "params": "etc1s q160 e2 srgb mips yflip"
+    },
+    "AO": {
+     "file": "ao.ktx2",
+     "bytes": 58278,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "ao.jpg",
+     "srcBytes": 115544,
+     "psnr": 30.39,
+     "params": "etc1s q160 e2 linear mips yflip"
+    },
+    "nor_gl": {
+     "file": "nor_gl.ktx2",
+     "bytes": 321828,
+     "codec": "uastc",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "nor_gl.jpg",
+     "srcBytes": 115594,
+     "psnr": 39.02,
+     "params": "uastc l2 zstd linear normal mips yflip"
+    }
+   },
+   "ktx2": true
   },
   "asphalt_b": {
    "role": "asphalt_b",
@@ -218,7 +823,62 @@
     "Diffuse": "diff.jpg",
     "Rough": "rough.jpg",
     "AO": "ao.jpg"
-   }
+   },
+   "ktx2Maps": {
+    "nor_gl": {
+     "file": "nor_gl.ktx2",
+     "bytes": 270816,
+     "codec": "uastc",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "nor_gl.jpg",
+     "srcBytes": 44099,
+     "psnr": 56.16,
+     "params": "uastc l2 zstd linear normal mips yflip"
+    },
+    "Diffuse": {
+     "file": "diff.ktx2",
+     "bytes": 47236,
+     "codec": "etc1s",
+     "srgb": true,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "diff.jpg",
+     "srcBytes": 44439,
+     "psnr": 40.93,
+     "params": "etc1s q160 e2 srgb mips yflip"
+    },
+    "Rough": {
+     "file": "rough.ktx2",
+     "bytes": 47484,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "rough.jpg",
+     "srcBytes": 48398,
+     "psnr": 41.58,
+     "params": "etc1s q160 e2 linear mips yflip"
+    },
+    "AO": {
+     "file": "ao.ktx2",
+     "bytes": 52338,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "ao.jpg",
+     "srcBytes": 65337,
+     "psnr": 38.51,
+     "params": "etc1s q160 e2 linear mips yflip"
+    }
+   },
+   "ktx2": true
   },
   "sidewalk": {
    "role": "sidewalk",
@@ -236,7 +896,68 @@
     "AO": "ao.jpg",
     "Diffuse": "diff.jpg",
     "nor_gl": "nor_gl.jpg"
-   }
+   },
+   "ktx2Maps": {
+    "Rough": {
+     "file": "rough.ktx2",
+     "bytes": 21134,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "rough.jpg",
+     "srcBytes": 24776,
+     "psnr": 46.84,
+     "params": "etc1s q160 e2 linear mips yflip"
+    },
+    "AO": {
+     "file": "ao.ktx2",
+     "bytes": 56653,
+     "codec": "etc1s",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "ao.jpg",
+     "srcBytes": 95076,
+     "psnr": 33.18,
+     "params": "etc1s q160 e2 linear mips yflip"
+    },
+    "Diffuse": {
+     "file": "diff.ktx2",
+     "bytes": 57121,
+     "codec": "etc1s",
+     "srgb": true,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "diff.jpg",
+     "srcBytes": 82487,
+     "psnr": 34.59,
+     "params": "etc1s q160 e2 srgb mips yflip"
+    },
+    "nor_gl": {
+     "file": "nor_gl.ktx2",
+     "bytes": 303966,
+     "codec": "uastc",
+     "srgb": false,
+     "width": 512,
+     "height": 512,
+     "levels": 10,
+     "src": "nor_gl.jpg",
+     "srcBytes": 101779,
+     "psnr": 45.38,
+     "params": "uastc l2 zstd linear normal mips yflip"
+    }
+   },
+   "ktx2": true
   }
+ },
+ "ktx2": {
+  "tool": "engine/tools/compress-textures.mjs",
+  "encoder": "Basis Universal (ktx2-encoder WASM)",
+  "orientation": "ru",
+  "transcoder": "basis/"
  }
 }
