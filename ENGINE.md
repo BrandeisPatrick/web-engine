@@ -138,7 +138,9 @@ unchanged).
   `detAtan2 / detAcos / detAsin / detAtan` built from + - * / sqrt only (max error 4.4e-16 vs `Math.*`), for
   simulation code that must be bit-identical on every JS engine.
 - `createBenchHarness` (`core/Bench.js`): see "Bench harness and the page contract" below.
-- Tooling: `npm test` runs `test/all.mjs` (every headless suite); `npm run types` emits `types/` from the JSDoc
+- Tooling: `npm run check` (every change) and `npm run check:full` (before a deploy or a release) are the two test
+  levels (`test/check.mjs`, AGENTS.md "Commands"); `npm test` runs `test/all.mjs` (every headless suite, in
+  parallel); `npm run types` emits `types/` from the JSDoc
   (`tsconfig.types.json`); `npm run smoke` / `npm run bench` drive the samples in Chrome through Playwright
   (`test/browser/`); `.github/workflows/ci.yml` runs test + build + types on every push and pull request.
 

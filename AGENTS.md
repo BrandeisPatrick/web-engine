@@ -19,11 +19,17 @@ No registration is needed (`vite.config.js` finds every `samples/<name>/index.ht
 
 ## Commands
 
+Two test levels: run **`npm run check` for every change** (about 1.5 minutes on an M4) and **`npm run check:full`
+before `npm run deploy` or a release** (about 6.5 minutes). Both need Chrome and the GPU. Each runs its steps in order (listed in
+`test/check.mjs`), stops at the first failing step and ends with a table of step, result and seconds.
+
 | Command | What it does |
 |---|---|
 | `npm ci` | Install (Node 20.19 or newer) |
 | `npm run dev` | Dev server at http://localhost:5190 (port is strict: stop it when done) |
-| `npm test` | Every Node suite in `test/all.mjs`, no browser (includes the docs and recipe checks) |
+| `npm run check` | The quick level: `npm test`, `npm run types:check`, `npm run build`, then in headless Chrome `check-page` on both starters, `sound-check`, `shell` and `howto` |
+| `npm run check:full` | The quick level, then `npm run smoke`, `phone-start`, `drive-feel`, `car-camera` and `npm run perf` (exit code 2: perf's noise, run it again) |
+| `npm test` | Every Node suite in `test/all.mjs`, no browser (includes the docs and recipe checks); in parallel, one process per CPU but one (`npm test -- --jobs=1` runs them one at a time) |
 | `npm run types && npm run types:check` | Emit `types/` from the JSDoc, then compile a strict TypeScript consumer |
 | `npm run build` | Build every page into `dist/` |
 | `npm run smoke` | Every demo and starter on both quality tiers in headless Chrome (needs Chrome and a GPU) |
