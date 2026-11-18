@@ -6,5 +6,13 @@
     "nyc-night-mobile": { "page": "nyc-night", "tier": "mobile", "size": "1280x720", "ms": 5, "drawCalls": 300, "triangles": 1300000, "heapMB": 350, "assetMB": 10 },
     "miami-drive": { "page": "miami-drive", "tier": "desktop", "size": "2268x1473", "ms": 12, "drawCalls": 320, "triangles": 1800000, "heapMB": 300, "assetMB": 40 },
     "miami-drive-mobile": { "page": "miami-drive", "tier": "mobile", "size": "1280x720", "ms": 5, "drawCalls": 300, "triangles": 1300000, "heapMB": 250, "assetMB": 8 }
+  },
+  "played": {
+    "comment": "The played-frame check (test/browser/played-frame.mjs, npm run check:full): rAF intervals of the production build in headless Chrome with vsync and the frame-rate limit off, desktop tier, at `size` and DPR 1, over `window` ms after `warm` ms of play. median / p95 in ms on the reference machine class; with the unpack getParameter stall (before the pixel-store shadow, src/core/PixelStoreShadow.js) both read a median of 15-16 ms.",
+    "size": "1920x1080", "warm": 3000, "window": 6000,
+    "pages": {
+      "nyc-night": { "median": 12, "p95": 24 },
+      "miami-drive": { "median": 13, "p95": 28 }
+    }
   }
 }

@@ -1,5 +1,7 @@
 export { Engine } from './Engine.js';
 export { Profiler, ProfilerOverlay } from './Profiler.js';
+// WebGL2 unpack pixel-store reads answered in the page, not by a GPU round trip (the Engine installs it on its context)
+export { shadowPixelStore } from './PixelStoreShadow.js';
 export { Assets } from './Assets.js';
 export { Events } from './Events.js';
 export { Clock } from './Clock.js';
