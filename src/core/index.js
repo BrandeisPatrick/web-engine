@@ -16,5 +16,7 @@ export { createBenchHarness, readBenchParams, lookStats, LOOK_HUES } from './Ben
 export { QUALITY_TIERS, TIER_IDS, QUALITY_STORAGE_KEY, tierSettings, defineTier, recommendTier, storedTier, storeTier, resolveQuality } from './Quality.js';
 // lighter after a lost WebGL context (the Engine records each loss for the browser session; resolveQuality reads it)
 export { CONTEXT_LOSS_KEY, LOST_MAX_PIXEL_RATIO, contextLosses, recordContextLoss, clearContextLosses } from './Quality.js';
+// lighter after a crash: the boot marker (a tab killed for memory sends no event; resolveQuality runs the check)
+export { BOOT_MARKER_KEY, BOOT_HEALTHY_SECONDS, BOOT_MARKER_MAX_AGE, bootCheck, bootHealthy } from './Quality.js';
 /** @typedef {import('./Quality.js').TierSettings} TierSettings  one quality tier's settings (resolveQuality().settings) */
 /** @typedef {import('./Quality.js').QualityChoice} QualityChoice  resolveQuality's result */

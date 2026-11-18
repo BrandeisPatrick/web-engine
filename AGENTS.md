@@ -35,7 +35,7 @@ before `npm run deploy` or a release** (about 6.5 minutes). Both need Chrome and
 | `npm run smoke` | Every demo and starter on both quality tiers in headless Chrome (needs Chrome and a GPU) |
 | `node test/browser/check-page.mjs <name>` | Load one page headlessly (`?autostart=1`), hold W for 2 s, fail on any console or page error |
 | `node test/browser/sound-check.mjs --wav=mix.wav` | Render the sound kit's ten-second self-test scene in headless Chrome, print its measurements and save the mix |
-| `node test/browser/phone-start.mjs [name]` | Start-up and lost-context paths of every demo and starter (loading screen until a frame is drawn, no long frame after it, the Reload notice, a lighter reload) |
+| `node test/browser/phone-start.mjs [name]` | Start-up and lost-context paths of every demo and starter (loading screen until a frame is drawn, no long frame after it, the Reload notice, a lighter reload), and the crash fallback (a boot marker left by a run that died: a lighter load, the marker cleared by a healthy run; `--crash` runs only that) |
 
 **The start-up.** The first frames compile every shader and upload every texture, seconds on a phone, so they are
 drawn and finished under the loading screen (`engine.warmUp()`: dt 0, nothing moves). Without it a phone shows a
@@ -45,7 +45,8 @@ loop, then shows the start card over a drawn frame. Without a shell, end `boot()
 `loading.setLabel('Compiling shaders…'); await engine.warmUp(); engine.start(); loading.hide();` (a `LoadingScreen`
 from ui, created first). docs/HOWTO.md "Start without a stall". If the device later drops the WebGL context, the
 engine stops, shows a message with a Reload button (over the shell's cards) and the next `resolveQuality()` in that
-tab comes up lighter; do not try to restore the context.
+tab comes up lighter; do not try to restore the context. A phone tab the OS kills for memory sends no event: a boot
+marker (core/Quality.js, set by `resolveQuality()`, cleared after 15 s of frames) makes the next load lighter too.
 
 **The page contract.** The browser scripts wait for `window.__sample.ready`; a page without it fails after the timeout.
 End `boot()` with `window.__sample = createBenchHarness(engine, { name: '<name>' }).setReady();` (core), as the
@@ -132,6 +133,8 @@ Everything else, layer by layer: [ENGINE.md](ENGINE.md). Every source file start
 - Audio needs a user gesture: `bus.bus(name)` is null and nothing plays until `bus.start()` runs inside a click or a
   key press. `GameShell` does it on its start click (pass `audio: bus`); without a shell call `bus.unlockOnGesture()`.
   Before that `SoundBank.play` returns an inert voice (never null) and `SoundBank.loop` waits and starts with the bus.
+  Without a shell, also `await bus.prepare()` behind your loading screen (the shell does it): creating the context
+  and rendering the loops otherwise stall the first key or click for 150-250 ms.
   Mix quietly: the kit's beds sit near -30 dBFS, so start loops at the gains the starters use, not at 1.
 - Sound names are exact (`step.gravel`, not `gravel`); an unknown name throws and lists the 18.
 - Behind the `GameShell` start card the inputs are off: a script that presses keys must load the page with

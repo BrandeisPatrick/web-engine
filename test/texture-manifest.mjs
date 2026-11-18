@@ -1,7 +1,7 @@
 // render/TextureSets.js: the shared manifest (one request per texture root) and the "is this set shipped" rule the
 // world layer uses to decide whether to request a set's maps (world/Shore.js).
-// Also the maxAnisotropy option (texture arrays and loadTextureSet maps).
-import { sharedTextureManifest, manifestListsSet, TextureSets, textureBase, makeDataArrayTexture, loadTextureSet } from '../src/render/TextureSets.js';
+// Also the maxAnisotropy option (texture arrays and loadTextureSet maps), and one download per file while loads overlap.
+import { sharedTextureManifest, manifestListsSet, TextureSets, textureBase, makeDataArrayTexture, loadTextureSet, loadTextureManifest } from '../src/render/TextureSets.js';
 
 let failed = 0, n = 0;
 const check = (name, ok, got) => { n++; if (!ok) { failed++; console.log(`FAIL  ${name}`, got ?? ''); } else console.log(`PASS  ${name}`); };
@@ -59,6 +59,45 @@ try {
 } finally {
   globalThis.fetch = realFetch; globalThis.document = prevDoc;
   TextureSets.configure({ log: prevOpts.log, maxAnisotropy: prevOpts.maxAnisotropy });
+}
+
+// one download per file: loads that overlap in time (a wave) share each file (a set that is both a plain set and an
+// array layer was fetched twice); each caller still gets its own result; nothing is held once the wave is over; a
+// page's own loadTextureManifest and the world layer's sharedTextureManifest share one request
+{
+  const got = [], fm = { sets: { grass: { id: 'shared_grass', size: [2, 2] } } };
+  globalThis.document = { createElementNS: fakeImg };
+  globalThis.fetch = async (url) => {
+    got.push(String(url));
+    await new Promise((r) => setTimeout(r, 5));
+    if (/manifest\.json$/.test(url)) return { ok: true, json: async () => JSON.parse(JSON.stringify(fm)) };
+    return { ok: true, blob: async () => new Blob([new Uint8Array(100)]) };
+  };
+  const count = (re) => got.filter((u) => re.test(u)).length;
+  TextureSets.configure({ log: false }); TextureSets.resetStats();
+  try {
+    const m1 = await loadTextureManifest('/dd/'), s1 = await sharedTextureManifest('/dd/'), m2 = await loadTextureManifest('/dd/');
+    check('manifest: loadTextureManifest x2 + sharedTextureManifest -> one request, own copies', count(/\/dd\/manifest\.json$/) === 1
+      && m1 && m2 && s1 && m1 !== m2 && m1 !== s1 && JSON.stringify(m1) === JSON.stringify(fm) && JSON.stringify(m2) === JSON.stringify(s1), got);
+    const o = { base: '/dd/', manifest: m1, maps: ['map', 'normalMap', 'roughnessMap'] };
+    const [a, b] = await Promise.all([loadTextureSet('shared_grass', o), loadTextureSet('grass', o)]);
+    check('two loads of one set at once: each file fetched once', count(/shared_grass\/diff\.jpg$/) === 1 && count(/nor_gl\.jpg$/) === 1 && count(/rough\.jpg$/) === 1, got);
+    check('... and each gets its own textures', a && b && a.map && b.map && a.map !== b.map && a.normalMap !== b.normalMap && a.map.image && b.map.image);
+    await new Promise((r) => setTimeout(r, 400)); // the wave ends 300 ms after its last load
+    const T = TextureSets.stats.totals;
+    check('... the bytes counted once (300 of 600 downloaded)', T.bytes === 300, T.bytes);
+    await loadTextureSet('shared_grass', o);
+    check('after the wave: nothing held, a new load downloads again', count(/shared_grass\/diff\.jpg$/) === 2, got);
+    await new Promise((r) => setTimeout(r, 400));
+    globalThis.fetch = async (url) => { got.push(String(url)); return { ok: false, status: 404 }; };
+    await Promise.all([loadTextureSet('shared_grass', o), loadTextureSet('shared_grass', o)]);
+    globalThis.fetch = async (url) => { got.push(String(url)); return { ok: true, blob: async () => new Blob([new Uint8Array(100)]) }; };
+    const c = await loadTextureSet('shared_grass', o);
+    check('a failed download is not kept: the next load in the wave tries again', c && c.map && count(/shared_grass\/diff\.jpg$/) === 4, got);
+  } finally {
+    globalThis.fetch = realFetch; globalThis.document = prevDoc;
+    TextureSets.configure({ log: prevOpts.log });
+  }
 }
 console.log(failed ? `${failed} of ${n} check(s) FAILED` : `all ${n} checks passed`);
 process.exit(failed ? 1 : 0);

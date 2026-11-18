@@ -12,7 +12,10 @@
 //   TextureSets.options.manifestIds (opt-in)       arrays read a role's folder from the manifest `id` (own scans per role)
 //   TextureSets.options.maxAnisotropy (opt-in)     caps the anisotropy of the texture arrays and loadTextureSet maps
 //                                                  (unset = the GPU maximum, as before; e.g. a tier's textures.anisotropy)
-//   loadTextureManifest(base?, { quiet? })         -> manifest | null (never throws; warns once per missing root)
+//   loadTextureManifest(base?, { quiet? })         -> manifest | null (never throws; warns once per missing root;
+//                                                  downloaded once per root per page, each call gets its own copy)
+//   One download per file: loads that overlap in time (a wave) share each file's download, so a set that is both a
+//   loadTextureSet set and a makeTextureArray layer is fetched once (see fetchBody); nothing is kept after the wave.
 //   loadTextureSet(id, { renderer, base, manifest, maps?, ktx2?, basisPath?, quiet? })   id: set id or role key
 //                                                  -> { map, normalMap, roughnessMap, aoMap?, size } | null
 //        (KTX2 CompressedTextures when the manifest set has `ktx2: true` and the GPU has ASTC / BC7 / ETC2 / BC1,
@@ -248,9 +251,24 @@ const _warnedTex = new Set();
 /** console.warn once per key (missing manifests and sets: a game sees the problem once, not per call). */
 function warnTex(key, msg) { if (_warnedTex.has(key)) return; _warnedTex.add(key); console.warn(msg); }
 
+// manifest.json per texture root, downloaded once per page: base -> Promise<parsed JSON>. A failed download is not kept
+// (the next call tries again). A page that reads the manifest itself and then has the world layer read it
+// (sharedTextureManifest) fetched it twice before.
+const _manifestJson = new Map();
+function manifestJson(base) {
+  let p = _manifestJson.get(base);
+  if (!p) {
+    p = fetch(`${base}manifest.json`).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+    _manifestJson.set(base, p);
+    p.catch(() => { if (_manifestJson.get(base) === p) _manifestJson.delete(base); });
+  }
+  return p;
+}
+const copyJson = (v) => (typeof structuredClone === 'function' ? structuredClone(v) : JSON.parse(JSON.stringify(v)));
 /**
- * Fetch `${base}manifest.json`; null when missing or offline (never throws). A missing or unreadable manifest is
- * reported once per `base` with console.warn (`quiet: true` turns that off, e.g. for an optional root).
+ * Fetch `${base}manifest.json`; null when missing or offline (never throws). Downloaded once per root per page; each
+ * call returns its own copy. A missing or unreadable manifest is reported once per `base` with console.warn
+ * (`quiet: true` turns that off, e.g. for an optional root).
  * @param {string} [base]  texture root (a folder URL ending in '/'); default textureBase()
  * @param {{ quiet?: boolean }} [o]
  * @returns {Promise<TextureManifest|null>}
@@ -258,9 +276,7 @@ function warnTex(key, msg) { if (_warnedTex.has(key)) return; _warnedTex.add(key
 export async function loadTextureManifest(base = textureBase(), { quiet = false } = {}) {
   let why = '';
   try {
-    const r = await fetch(`${base}manifest.json`);
-    if (r.ok) return await r.json();
-    why = `HTTP ${r.status}`;
+    return copyJson(await manifestJson(base));
   } catch (e) { why = e && e.message ? e.message : String(e); /* offline, or not JSON (a dev server's HTML fallback) */ }
   if (!quiet) {
     warnTex(`manifest:${base}`, `[TextureSets] no texture manifest at ${base}manifest.json (${why}): loadTextureSet() calls on this root `
@@ -272,15 +288,16 @@ export async function loadTextureManifest(base = textureBase(), { quiet = false 
 
 const _manifests = new Map();
 /**
- * loadTextureManifest once per texture root per page: every caller of the same `base` shares one request (and one
- * result, null included). The world layer's loaders use it, so a root's manifest.json is fetched once however many
- * of them ask. Quiet: a missing manifest is not reported (the world layer's roots are optional).
+ * loadTextureManifest once per texture root per page: every caller of the same `base` shares one request (with
+ * loadTextureManifest's too) and one result object, null included. The world layer's loaders use it, so a root's
+ * manifest.json is fetched once however many of them ask. Quiet: a missing manifest is not reported (the world
+ * layer's roots are optional).
  * @param {string} [base]
  * @returns {Promise<TextureManifest|null>}
  */
 export function sharedTextureManifest(base = textureBase()) {
   let p = _manifests.get(base);
-  if (!p) { p = loadTextureManifest(base, { quiet: true }); _manifests.set(base, p); } // optional roots (world layer)
+  if (!p) { p = manifestJson(base).catch(() => null); _manifests.set(base, p); } // optional roots (world layer): quiet
   return p;
 }
 /** True when `manifest` lists a set with this id (or has no set list to go by: null / malformed counts as "unknown, try"). */
@@ -291,13 +308,32 @@ export function manifestListsSet(manifest, id) {
   return false;
 }
 
+// One download per file while a load wave runs (the stats' wave below: loads that overlap in time). loadTextureSet and
+// makeTextureArray ask for the same files when one set is both a plain set and an array layer (the world layer's
+// ground grass, leafy_grass, is both), and each fetched its own copy: nyc-night downloaded its three grass maps twice
+// (1.2 MB), miami-drive its three .ktx2 (1.7 MB). Now the first request's body is kept as a Blob, every consumer reads
+// its own bytes from it (a KTX2 transcode transfers its buffer), and the map is emptied when the wave ends, so nothing
+// is held after loading. A failed download is not kept.
+const _bodies = new Map();
+/** The body of `url` as a Blob, downloaded once per wave. */
+function fetchBody(url) {
+  let p = _bodies.get(url);
+  if (!p) {
+    p = fetch(url).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status} ${url}`); return r.blob(); });
+    _bodies.set(url, p);
+    p.catch(() => { if (_bodies.get(url) === p) _bodies.delete(url); });
+  }
+  return p;
+}
+/** True when `url` is already being (or was) downloaded in this wave: its bytes are counted once, by the first load. */
+const bodyShared = (url) => _bodies.has(url);
+
 async function loadBitmap(url) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`HTTP ${r.status} ${url}`);
-  const blob = await r.blob();
+  const shared = bodyShared(url);
+  const blob = await fetchBody(url);
   const t = performance.now();
   const bmp = await createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none', imageOrientation: 'none' });
-  return { bmp, bytes: blob.size, ms: performance.now() - t };
+  return { bmp, bytes: shared ? 0 : blob.size, ms: performance.now() - t };
 }
 function pixelsOf(bmp, S, scratch) {
   scratch.g.clearRect(0, 0, S, S);
@@ -357,7 +393,8 @@ function freshStats() {
     ktx2: null,            // { formats: [...] } once a renderer was probed, false when KTX2 is unavailable
     // `${consumer}:${id}` (consumer 'set' = loadTextureSet, 'array' = a makeTextureArray layer) ->
     //   { id, consumer, path: 'ktx2' | 'jpg' | 'mixed' | 'procedural' | 'missing', maps: { map: 'ktx2' | 'jpg' | 'missing', ... },
-    //     bytes (downloaded; per map in mapBytes), ms (wall time from the call to ready), decodeMs (per-map decode / transcode time after the
+    //     bytes (downloaded; per map in mapBytes; a file another load of the same wave already fetched counts 0 here, see
+    //     fetchBody), ms (wall time from the call to ready), decodeMs (per-map decode / transcode time after the
     //     download, summed; includes worker queueing), packMs (array layers: main-thread readback + packing, 0.1 ms;
     //     procedural layers: the whole generation in-thread, or the dispatch + tiling of a worker's texels),
     //     procIn: 'worker' | 'main' + workerMs (procedural layers only: where the noise ran, its time in the worker),
@@ -421,6 +458,7 @@ function endStat(st, path) {
 }
 function logSummary() {
   _logTimer = 0;
+  _bodies.clear(); // the wave is over: its downloads are not shared any longer (fetchBody)
   const S = TextureSets.stats, T = S.totals;
   T.wallMs = Math.round(performance.now() - 300 - _waveStart);
   if (!TextureSets.options.log) return;
@@ -477,8 +515,8 @@ let _warned = 0;
 function warnFallback(url, e) { if (_warned++ < 4) console.warn(`[TextureSets] ${url}: ${e && e.message ? e.message : e}; falling back to JPG`); }
 
 const withTimeout = (p, ms, msg) => new Promise((res, rej) => { const t = setTimeout(() => rej(new Error(msg)), ms); p.then((v) => { clearTimeout(t); res(v); }, (e) => { clearTimeout(t); rej(e); }); });
-const fetchBuffer = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.arrayBuffer(); });
-async function loadKtx2Texture(kx, bufP, url, st, slot) {
+const fetchBuffer = (url) => fetchBody(url).then((b) => b.arrayBuffer());
+async function loadKtx2Texture(kx, bufP, url, st, slot, shared = false) {
   try {
     const buf = await bufP;
     if (!(await kx.ready)) return null;
@@ -486,21 +524,20 @@ async function loadKtx2Texture(kx, bufP, url, st, slot) {
     const tex = await withTimeout(new Promise((res, rej) => kx.loader.parse(buf, res, rej)), 20000, 'transcode timed out');
     const fmt = FORMAT_NAMES[tex.format] || String(tex.format);
     let gpu = 0; for (const m of tex.mipmaps || []) gpu += m.data ? m.data.byteLength : 0;
-    st.gpuBytes += gpu; trackBytes(st, slot, bytes);
-    noteMap(st, slot, 'ktx2', bytes, performance.now() - t, fmt);
+    st.gpuBytes += gpu; trackBytes(st, slot, shared ? 0 : bytes);
+    noteMap(st, slot, 'ktx2', shared ? 0 : bytes, performance.now() - t, fmt);
     return tex;
   } catch (e) { if (!kx.failed) warnFallback(url, e); return null; }
 }
 async function loadJpgTexture(url, srgb, st, slot) {
   try {
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const blob = await r.blob(), t = performance.now();
+    const shared = bodyShared(url);
+    const blob = await fetchBody(url), t = performance.now();
     const obj = URL.createObjectURL(blob);
     const tex = await new THREE.TextureLoader().loadAsync(obj).finally(() => URL.revokeObjectURL(obj));
     const w = tex.image.width || 0, h = tex.image.height || 0;
-    st.gpuBytes += w * h * 4 * MIP; trackBytes(st, slot, blob.size);
-    noteMap(st, slot, 'jpg', blob.size, performance.now() - t, 'RGBA8');
+    st.gpuBytes += w * h * 4 * MIP; trackBytes(st, slot, shared ? 0 : blob.size);
+    noteMap(st, slot, 'jpg', shared ? 0 : blob.size, performance.now() - t, 'RGBA8');
     return tex;
   } catch { noteMap(st, slot, 'missing'); return null; }
 }
@@ -794,9 +831,10 @@ export async function loadTextureSet(id, { renderer = null, base = textureBase()
     const [jpg, srgb, key] = MAP_FILES[k];
     const info = kx && !kx.failed && m.ktx2Maps[key];
     const url = info ? `${base}${id}/${info.file}` : null;
+    const shared = url ? bodyShared(url) : false;
     const bufP = url ? fetchBuffer(url) : null; // download starts now, transcoder or not
     if (bufP) bufP.catch(() => {});
-    let t = bufP ? await loadKtx2Texture(kx, bufP, url, st, k) : null;
+    let t = bufP ? await loadKtx2Texture(kx, bufP, url, st, k, shared) : null;
     if (!t) t = await loadJpgTexture(`${base}${id}/${jpg}`, srgb, st, k);
     return t ? finish(t, srgb) : null;
   };
@@ -868,8 +906,8 @@ export async function makeTextureArray(renderer, sets, { size = 1024, base = tex
       if (pickKtx2(info)) {
         if (_rgbaFailed) warnRgba(_rgbaFailed);
         else {
-          const url = `${base}${s.id}/${info.file}`;
-          try { const r = await loadKtx2Rgba(fetchBuffer(url), S, l); trackBytes(st, slot, r.bytes); noteMap(st, slot, 'ktx2', r.bytes, r.ms, 'RGBA8 array'); return r; } catch (e) { if (_rgbaFailed) warnRgba(_rgbaFailed); else warnFallback(url, e); }
+          const url = `${base}${s.id}/${info.file}`, shared = bodyShared(url);
+          try { const r = await loadKtx2Rgba(fetchBuffer(url), S, l), b = shared ? 0 : r.bytes; trackBytes(st, slot, b); noteMap(st, slot, 'ktx2', b, r.ms, 'RGBA8 array'); return r; } catch (e) { if (_rgbaFailed) warnRgba(_rgbaFailed); else warnFallback(url, e); }
         }
       }
       try { const r = await loadBitmap(`${base}${s.id}/${jpg}`); trackBytes(st, slot, r.bytes); noteMap(st, slot, 'jpg', r.bytes, r.ms, 'RGBA8 array'); return r; } catch { noteMap(st, slot, 'missing'); return null; }

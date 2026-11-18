@@ -102,7 +102,9 @@ engine.start();
   tiers") and `engine.onContextLost(event)` runs. The default, `engine.showContextLost()`, shows "The graphics were
   reset by the device, probably low on memory." with a Reload button. A frame that throws on a context that is already
   lost takes the same path; `start()` does nothing afterwards. There is no re-initialisation on
-  `webglcontextrestored`: reloading is the robust path.
+  `webglcontextrestored`: reloading is the robust path. A tab the OS kills for memory (iOS) sends no event at all; for
+  that the loop calls `bootHealthy()` after `BOOT_HEALTHY_SECONDS` (15) of drawn frames, which clears the page's boot
+  marker (see "Quality tiers", lighter after a crash).
 - Frame errors: an exception thrown inside `tick()` is caught, logged with `console.error` (every one) and passed to
   `engine.onFrameError(error)`; the default, `engine.showFrameError(error)`, shows the first one as a line at the
   bottom of the page (a phone user can screenshot it). The loop keeps running.
@@ -199,6 +201,19 @@ mobile) goes straight to the cap. `?quality=` and a stored choice are never chan
 `lighter: true`, `contextLosses` (the count) and a `reason` ending in `'; lighter after a graphics reset'`
 (`recommended` stays what the device would get). A game whose Engine does not spread `settings.engine` applies
 `settings.engine.maxPixelRatio` itself.
+
+Lighter after a crash: a phone's OS can kill the whole tab for memory, and iOS does it without any event, so no lost
+context is counted. On a device recommended mobile the first `resolveQuality()` of a page load runs the boot check
+(`bootCheck()`): a marker in localStorage, `vibe.boot:<location.pathname>` (`BOOT_MARKER_KEY`), set at boot and cleared
+when the run is healthy (`BOOT_HEALTHY_SECONDS`, 15 s, of frames the Engine drew: it calls `bootHealthy()`), on
+`pagehide` and while the page is hidden (set again when it shows before it is healthy). Still there at the next boot,
+under `BOOT_MARKER_MAX_AGE` (600 s) old, it means the previous run died before it was healthy: the boot records one lost
+context, so the load takes the lighter path above and later loads in the tab stay lighter like after a lost context; the
+run that comes up healthy clears the marker, not the count. One console warning says so; the result has
+`crashed: true` and a `reason` ending in `'; lighter after a crash'`. A device recommended desktop gets no marker (a
+desktop browser does not kill a visible tab without a trace, and two tabs of one page would read each other's marker as
+a crash). Every storage access is guarded (private mode). Not verified on an iPhone: Playwright's iPhone profile in
+desktop Chrome only.
 
 ### Bench harness and the page contract
 
@@ -682,7 +697,13 @@ cost are in [the design notes](docs/DESIGN-NOTES.md#textures-pbr-sets-ktx2).
 - `AudioBus` (`src/audio/AudioBus.js`): the WebAudio context and mixer. No context exists until `bus.start()` runs
   inside a user gesture (`bus.unlockOnGesture()` does it on the first key or pointer press); `bus.bus(name)` is null
   before that. Default buses: `engine`, `effects`, `ambience`, `ui` (`DEFAULT_BUSES`); other names are created on
-  demand.
+  demand. `await bus.prepare()` behind a loading screen does `start()`'s slow parts before the gesture: it creates the
+  context at once, suspended (the first one of a browser session takes 115-150 ms on an M-series Mac: the audio
+  device starts), and runs the jobs added with `bus.onPrepare(fn)`, one per task (a `SoundBank` adds its waiting
+  loops, rendered ahead). `start()` then only builds the graph and resumes the context inside the gesture (iOS needs
+  that): the first key or the start click went from 170-240 ms of main-thread work to about 6 (under 20 at 4x CPU
+  throttle). `ctx`, `bus(name)` and the `onStart` callbacks still wait for `start()`; Chrome warns that the
+  AudioContext "was not allowed to start", which is expected. `GameShell.ready()` calls it under its loading bar.
 - Synth voices (`src/audio/Synth.js`): `playTone(bus.ctx, bus.bus('ui'), { pitch, peak, decay, ... })` for one-shot
   blips, `playNoiseBurst`, `OscStack`, `NoiseVoice`, `LFO`. `PositionalAudio` attaches emitters to Object3Ds;
   `SamplePlayer` plays decoded files (`registerAudioLoader` adds an `audio` loader to `Assets`).
@@ -700,7 +721,9 @@ cost are in [the design notes](docs/DESIGN-NOTES.md#textures-pbr-sets-ktx2).
   and, made before the gesture, starts with the bus; `update(dt)` per frame. 24 one-shot voices; per sound a cap and a
   priority decide what is stolen (`VoicePool`). Variants round-robin, pitch +-3.5 % and gain -0..8 % per play.
   Sounds are rendered in plain JavaScript (`src/audio/dsp.js`, `src/audio/presets.js`), so `bank.render(name, variant)`
-  runs in Node; `bank.define(name, spec)` adds one.
+  runs in Node; `bank.define(name, spec)` adds one. A sound renders on its first use (a loop: when the bus starts);
+  `bank.prepare(names)` renders the waiting loops and the named one-shots ahead, one per task (the bus's `prepare()`
+  runs it for the loops), with the same samples.
 - `new Footsteps(bank, { surface })`, then per step `steps.update(dt, { speed, grounded, landed, landingSpeed })`
   (`CharacterController`'s fields): a footfall every 0.95 m at a walk to 2.1 m at a run, `land.soft` / `land.hard` by
   landing speed.
@@ -715,7 +738,9 @@ cost are in [the design notes](docs/DESIGN-NOTES.md#textures-pbr-sets-ktx2).
 - `GameShell` (`src/ui/GameShell.js`): a game's front door in one object. `new GameShell({ title, controls, quality,
   storageKey })` shows a loading bar that keeps moving (`setProgress(p, label)`); `shell.use({ engine, audio, inputs })`
   once they exist; `await shell.ready()` runs `engine.warmUp()` under the loading bar ("Compiling shaders…"; with
-  `?bench=1` `{ systems: false, frames: 12 }`), calls `engine.start()`, waits for a frame of the loop and shows the
+  `?bench=1` `{ systems: false, frames: 12 }`) and `audio.prepare()` beside it (when the audio has it: the
+  AudioContext and the loop samples, so the start click does not stall), calls `engine.start()`, waits for a frame of
+  the loop and shows the
   start card over the live scene, blurred and dimmed (it does not wait for the click: set `window.__sample` after it).
   So a game with a shell ends `boot()` with `await shell.ready()` and does not start the engine itself;
   `shell.error(text)` shows a boot error on the loading screen. After a lost WebGL context the shell steps aside for
