@@ -1,6 +1,21 @@
 # Changelog
 
 ## Unreleased
+- Far glass towers no longer flicker (nyc-night: "the buildings flash when you walk"). The curtain walls' mullions
+  and transoms have two rounded faces (normals tilted either side of the centre line) and reflect the city as polished
+  metal. Where a mullion is about a pixel wide (a tower down the street, seen at a grazing angle) both faces fell in
+  one pixel and TAA's jitter standing still, or the motion when walking, picked one or the other each frame, so the
+  bright reflection flashed on and off along the whole facade. The faces now flatten as a mullion gets under a pixel
+  and a half wide (flat under two thirds of a pixel; `src/world/Buildings.js`, both quality tiers, every MapWorld city).
+  Measured on nyc-night's sidewalk view, a scripted walk at 1600x900 (4 s at walking pace, the same frames before and
+  after): on the glass tower down the street one-frame flashes 159 -> 60 per 10 000 pixel-frames and the mean flicker
+  1.23 -> 0.70 / 255; standing still the whole view flickers 0.364 -> 0.298, its brightest flicker (99.9th percentile)
+  20.9 -> 14.8. The other views change by a few % at most. The static captures change where far curtain walls show
+  (perf image guard: up to 0.34 mean / 0.9 % of pixels on nyc-night-mobile, under its limits). What it was not
+  (toggled on the same walks): SSR's every-other-frame trace (interval 1 flickers a little more, `SSRPass` header),
+  the moon's every-other-frame near shadow map, volumetrics, bloom, the lamp and sign light lists, the glass's own
+  pane-to-pane variation. New check `test/browser/flicker.mjs` in `npm run check:full`: nyc-night's bench views
+  standing still, each held to a flicker budget (it fails on the old mullions). AGENTS.md, README.
 - Two test levels, one command each (`test/check.mjs`): `npm run check` for every change (`npm test`, the type check,
   the build, check-page on both starters, sound-check, shell, howto; about 1.5 minutes on an M4) and
   `npm run check:full` before `npm run deploy` or a release (the quick level, then smoke, phone-start, drive-feel,

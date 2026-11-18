@@ -175,7 +175,7 @@ changed in each.
 | `npm run dev` | Serves the demos at http://localhost:5190 |
 | `npm run build` | Builds every demo into `dist/`; `npm run preview` serves the build at http://localhost:5191 |
 | `npm run check` | The quick test level, for every change: `npm test`, the type check, the build and the quick browser scripts (`test/check.mjs`) |
-| `npm run check:full` | The full level, before a deploy or a release: the quick level, then smoke, phone-start, drive-feel, car-camera and perf |
+| `npm run check:full` | The full level, before a deploy or a release: the quick level, then smoke, phone-start, drive-feel, car-camera, flicker and perf |
 | `npm test` | Runs every headless suite listed in `test/all.mjs`, in parallel |
 | `npm run catalog` | Rebuilds the asset catalogue (`samples/public/catalog/catalog.json`, `docs/ASSETS.md`) from `tools/asset-registry.mjs`; `npm run catalog:thumbs -- --only=<id>` renders thumbnails in Chrome |
 | `npm run types` | Emits TypeScript declarations into `types/`; `npm run types:check` compiles a strict TypeScript consumer against them |
@@ -234,14 +234,15 @@ heap limits a busy machine could break run one by one afterwards):
   credits complete, generated `catalog.json` and `docs/ASSETS.md` current).
 
 `test/browser/` (`smoke`, `bench`, `perf`, `howto`, `check-page`, `phone-start`,
-`shell`, `sound-check`, `drive-feel`, `car-camera`) needs Chrome and runs locally. `smoke` covers the demos and the
+`shell`, `sound-check`, `drive-feel`, `car-camera`, `flicker`) needs Chrome and runs locally. `smoke` covers the demos and the
 starters, each also as a `-mobile` page (the same page on the mobile tier), and the two demos once more as a `-low`
 page (`?look=low`, one pose); `bench` takes `nyc-night`, `miami-drive`
 and their `-mobile` pages. `howto` runs the browser-only recipes (clustered lights, GPU particles, vehicle sound) on
 the starter-drive page; `check-page <name>` loads one page and
 fails on any error; `phone-start` loads every demo and starter in play mode and checks the start-up (the loading
 screen stays until a frame is drawn, no long frame after it), a forced context loss (the Reload notice, no further
-errors) and the lighter reload. The scripts share `test/browser/playwright.config.mjs` (`startVite`, `launchChrome`,
+errors) and the lighter reload; `flicker` measures how much nyc-night's bench views flicker standing still (TAA
+jittering, as in play) and fails a view over its budget (it guards the far glass of the facades). The scripts share `test/browser/playwright.config.mjs` (`startVite`, `launchChrome`,
 `loadSample`, `watchErrors`) and wait for the page to set `window.__sample.ready` (`createBenchHarness(...)
 .setReady()`); a page without it fails after the timeout. CI (`.github/workflows/ci.yml`, Node 26) runs `npm test`,
 the build and `types:check`.

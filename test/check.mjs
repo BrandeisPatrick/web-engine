@@ -2,7 +2,7 @@
 //   npm run check        quick, for every change: the Node suites, the type check, the build, and the quick browser
 //                        scripts (two starters loaded, the sound kit, the game shell, the HOWTO recipes)
 //   npm run check:full   before `npm run deploy` or a release: the quick level, then smoke, phone-start, drive-feel,
-//                        car-camera and perf
+//                        car-camera, flicker and perf
 // Runs the steps in order with their output as it comes, stops at the first failing step and ends with a table:
 // step, result, seconds. Exit code: the failing step's (perf's 2 is noise, see bench/README.md), else 0. The browser
 // steps need Chrome and the GPU: run it through the machine's GPU lock when other jobs share the machine.
@@ -26,6 +26,7 @@ const FULL = [
   'node test/browser/phone-start.mjs',
   'node test/browser/drive-feel.mjs',
   'node test/browser/car-camera.mjs',
+  'node test/browser/flicker.mjs',
   'npm run perf',
 ];
 
