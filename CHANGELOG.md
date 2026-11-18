@@ -1,6 +1,46 @@
 # Changelog
 
 ## Unreleased
+- The played frame: the city demos played at 60 to 70 fps on an M4 that draws them at 85 to 115, because the main
+  thread kept stopping to wait for the GPU. three (r180) reads `UNPACK_ROW_LENGTH`, `UNPACK_SKIP_PIXELS` and
+  `UNPACK_SKIP_ROWS` with `gl.getParameter` on every upload of a texture with `updateRanges`, and the engine uploads
+  two such textures every frame (the clustered light lists, the GPU steam's spawn rows); in Chrome each read waits
+  until the GPU process has run everything queued before it, about 11 waits and 10 ms a frame on nyc-night, so the CPU
+  and the GPU took turns instead of overlapping. The Engine now puts a pixel-store shadow on its context
+  (`src/core/PixelStoreShadow.js`, `engine.pixelStore`, `shadowPixelStore(gl)` from core for a page with its own
+  renderer): those reads are answered from what `pixelStorei` set, every call still reaches the GPU with the same
+  values, and the shadow starts over on `webglcontextrestored`. Measured on an M4 (production build, headless Chrome,
+  vsync off, median frame interval over 10 s): nyc-night 13.8 -> 8.4 ms at 1920x1080 (70 -> 114 fps) and 16.7 -> 11.6
+  ms at 2268x1473 (60 -> 84 fps); miami-drive 15.2 -> 11.3 ms at 1920x1080 (65 -> 86 fps). The starters and the
+  mobile tier are unchanged. `npm run perf` scores main and this change alike (134.6 and 134.8 in one session) and its
+  image guard passes. The picture is the same: of the perf captures, from two loads of each build, every pose that
+  differs between main and this change also differs between two loads of main, in the same places (palms and verge
+  on the chase, the strip's traffic, the surf, nyc's avenue) by the same amounts, or matches main on another load.
+  A CPU profile and a count of every call that reads back from the context, after the fix: no other read in the frame
+  costs time (the profiler's GPU timer reads, `GPU_DISJOINT_EXT` and `getQueryParameter`, are answered without a
+  wait, 0.07 ms a frame). `test/pixel-store.mjs` pins the shadow (one read per value, the same values and the same
+  calls as without it over 20000 random calls, lost and restored contexts, three's upload sequence).
+- A played-frame check in `npm run check:full` (`test/browser/played-frame.mjs`, about 30 s): nyc-night and
+  miami-drive from the production build at 1920x1080, vsync off; the median and p95 frame interval against
+  `bench/budgets.json` "played" (median / p95: 12 / 24 and 13 / 28 ms) and no `getParameter` round trip for the
+  unpack state in the frame; on main it fails (about 11 and 6 round trips a frame, medians of 15-17 ms). `npm run
+  perf` times GPU-synchronised renders and could not see the stall. AGENTS.md, README, bench/README.md.
+- Adaptive resolution (`src/core/Engine.js`, header): every step is judged at the next check. A step down that did not
+  make the frame faster (a stalled frame does not get faster with fewer pixels; before, nyc-night slid to a pixel
+  ratio of 1.0 and miami-drive to 1.25 on a 14-inch MacBook Pro and stayed there) is undone and not retried for 30 s,
+  doubling to 240 s; a step up that put the frame over budget is undone the same way. Where the interval cannot show
+  room (vsync: 16.7 ms on a 60 Hz screen however light the frame) a frame that fits climbs as a probe, so the ratio
+  comes back on 60 Hz screens too (before, under vsync it only ever came down). `test/adaptive-resolution.mjs` runs
+  the controller on modelled frames. In a 1512x982 window at DPR 2 both city demos now hold their full 2268x1473
+  (miami-drive: before 1890x1227 at 61 fps, now 2268x1473 at 66 fps; nyc-night 84 fps), the starters 3024x1964.
+- Pacing, measured with Chrome's 60 Hz frame-rate limit on: nyc-night and miami-drive at 1920x1080 and 2268x1473 drop
+  0 or 1 frame in 600 (mean interval 16.67 ms, p95 under 19), so the periodic jobs stay where they are. Frame by frame:
+  nyc-night renders the near shadow map and the SSR trace on odd frames and the far map (every 8th) on an even one;
+  miami-drive the far map and a car-probe face together on every 4th frame and SSR on the odd ones; the heaviest kind
+  of frame is within 1 to 2 ms of the lightest, and moving the probe off the far map's frame would not lower the
+  heaviest (the SSR frames). 120 Hz could not be emulated in headless Chrome. With vsync off the intervals alternate
+  long and short (miami-drive's p95 reads 21 ms for a median of 11): that is not seen with the 60 Hz limit on.
+  `npm test` runs 58 suites.
 - Two test levels, one command each (`test/check.mjs`): `npm run check` for every change (`npm test`, the type check,
   the build, check-page on both starters, sound-check, shell, howto; about 1.5 minutes on an M4) and
   `npm run check:full` before `npm run deploy` or a release (the quick level, then smoke, phone-start, drive-feel,

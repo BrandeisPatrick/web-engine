@@ -32,8 +32,22 @@
 // so a 120 Hz screen keeps full resolution at 60 fps as before; with targetFps the budget is 1000 / min(targetFps,
 // max(refreshRate, 60)) ms, e.g. targetFps 120 on a 120 Hz display = 9.25 / 5.75 ms (chases 120 fps at lower
 // resolution), targetFps 60 anywhere = 18.5 / 11.5 ms. A reading under 60 Hz is not trusted for the budget (a scene
-// missing every other vsync from its first frame looks exactly like a 30 Hz screen). Under vsync the interval never
-// drops below the budget, so in practice the ratio only comes down (as it always did on 60 Hz screens).
+// missing every other vsync from its first frame looks exactly like a 30 Hz screen).
+// Every step is judged at the next check. A step down that did not make the frame faster (EMA not 5 % below the one
+// before it: a frame held up by the main thread, or by a wait on the GPU, does not get faster with fewer pixels) is
+// undone, and the ratio does not go below the one it came back to for 30 s, doubling (to 240 s) while retries keep
+// failing. A step up that put the EMA over 1.11 x budget is undone, and no step up follows for 30 s, doubling the same
+// way. Climbing: under 0.69 x budget; where the loop's shortest interval (the display's period, or 1000 / targetFps)
+// is not below 0.69 x budget, the interval cannot show room (vsync: 16.7 ms on a 60 Hz screen however light the
+// frame), so frames that fit (EMA within 3 % of that period and of the budget) climb as a probe, kept or undone at the
+// next check.
+//
+// Renderer: a WebGLRenderer (antialias, high-performance, sRGB output, ACES filmic, shadow maps; `o.renderer` adds
+// options), info.autoReset off (reset once per frame in tick()). Its context gets a pixel-store shadow
+// (core/PixelStoreShadow.js, `engine.pixelStore`): three reads three unpack pixel-store values with gl.getParameter on
+// every partial texture upload (texture.updateRanges: the clustered light lists, the GPU particles' spawn rows, every
+// frame), and in Chrome each read waits for the GPU to finish what was queued before it; the shadow answers them from
+// what pixelStorei set. Same calls to the GPU, same picture; the played frame of nyc-night went from 16 to 8.5 ms.
 //
 // Start-up: `await engine.warmUp()` before `engine.start()`, while the loading screen still covers the page. A
 // renderer compiles the scene's programs at their first draw (ANGLE's Metal backend, which every iOS browser and Chrome
@@ -71,6 +85,7 @@ import * as THREE from 'three';
 import { Profiler, ProfilerOverlay } from './Profiler.js';
 import { Clock } from './Clock.js';
 import { recordContextLoss } from './Quality.js';
+import { shadowPixelStore } from './PixelStoreShadow.js';
 
 const noop = () => {};
 const now = () => performance.now();
@@ -132,6 +147,8 @@ export class Engine {
     this.renderer.shadowMap.enabled = o.shadows !== false;
     this.renderer.shadowMap.type = o.shadowType ?? THREE.PCFShadowMap;
     this.renderer.info.autoReset = false; // reset once per frame in tick(): stats cover every pass of the frame
+    /** The context's pixel-store shadow (header "Renderer"; null without WebGL2). */
+    this.pixelStore = shadowPixelStore(this.renderer.getContext());
     this.container.appendChild(this.renderer.domElement);
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(o.fov || 60, 1, o.near || 0.1, o.far || 6000);
@@ -139,7 +156,7 @@ export class Engine {
     this.overlay = o.overlay === false ? null : new ProfilerOverlay(this.profiler, o.overlayParent || document.body);
     this.maxPR = Math.min(window.devicePixelRatio || 1, o.maxPixelRatio ?? 2);
     this.adaptive = o.adaptiveResolution !== false;
-    this.pixelRatio = this.maxPR; this._frameEMA = 1 / 60; this._prTimer = 0;
+    this.pixelRatio = this.maxPR; this._resetAdaptive();
     /** Cap on ticks per second, 0 = every rAF callback (default). Live: read on every callback. */
     this.targetFps = o.targetFps > 0 ? +o.targetFps : 0;
     /** Display refresh rate (Hz) estimated from rAF timestamps; 0 until known. */
@@ -429,16 +446,52 @@ export class Engine {
     if (this.overlay) this.overlay.update(raw);
     P.frameEnd(raw);
     if (this._profileAt && clock.unscaledTime >= this._profileAt) { this._profileAt = 0; console.table(P.snapshot()); }
-    if (this.adaptive && raw < 0.2) {
-      this._frameEMA += (raw - this._frameEMA) * 0.05; this._prTimer += raw;
-      if (this._prTimer > 2) {
-        this._prTimer = 0;
-        // uncapped: the 60 fps budget as before (a 120 Hz screen keeps full resolution at 60 fps); capped: the cap, but
-        // never a budget tighter than the screen allows. targetFps: 120 is how a game asks for a ProMotion display's rate
-        const fps = this.targetFps, budget = 1 / (fps > 0 ? Math.min(fps, Math.max(this.refreshRate, 60)) : 60); // s; header
-        if (this._frameEMA > budget * 1.11 && this.pixelRatio > 1) this.setPixelRatio(Math.max(1, this.pixelRatio - 0.25));
-        else if (this._frameEMA < budget * 0.69 && this.pixelRatio < this.maxPR) this.setPixelRatio(Math.min(this.maxPR, this.pixelRatio + 0.25));
+    if (this.adaptive && raw < 0.2) this._adapt(raw);
+  }
+
+  // adaptive resolution (header): the state, at start-up
+  _resetAdaptive() {
+    this._frameEMA = 1 / 60; this._prTimer = 0;
+    this._prDir = 0; this._prFrom = 0; this._prEma = 0; // the last step (-1 / +1), the ratio and the EMA before it
+    this._prDownHold = 0; this._prDownBack = 0; this._prFloor = 0; // no step down from <= floor while held (s)
+    this._prUpHold = 0; this._prUpBack = 0; // no step up while held (s)
+  }
+
+  // adaptive resolution (header), once per tick with the wall dt (s)
+  _adapt(raw) {
+    this._frameEMA += (raw - this._frameEMA) * 0.05; this._prTimer += raw;
+    if (this._prDownHold > 0) this._prDownHold -= raw;
+    if (this._prUpHold > 0) this._prUpHold -= raw;
+    if (this._prTimer <= 2) return;
+    this._prTimer = 0;
+    // uncapped: the 60 fps budget as before (a 120 Hz screen keeps full resolution at 60 fps); capped: the cap, but
+    // never a budget tighter than the screen allows. targetFps: 120 is how a game asks for a ProMotion display's rate
+    const fps = this.targetFps, budget = 1 / (fps > 0 ? Math.min(fps, Math.max(this.refreshRate, 60)) : 60); // s; header
+    const ema = this._frameEMA, pr = this.pixelRatio, dir = this._prDir;
+    this._prDir = 0;
+    // the last step first: a step down that did not make the frame faster, or a step up that put it over the budget,
+    // is undone and not tried again for 30 s, doubling while it keeps failing (up to 240 s)
+    if (dir < 0) {
+      if (ema > this._prEma * 0.95) {
+        this._prDownBack = Math.min(240, this._prDownBack * 2 || 30); this._prDownHold = this._prDownBack; this._prFloor = this._prFrom;
+        this.setPixelRatio(this._prFrom); return;
       }
+      this._prDownBack = 0;
+    } else if (dir > 0) {
+      if (ema > budget * 1.11) {
+        this._prUpBack = Math.min(240, this._prUpBack * 2 || 30); this._prUpHold = this._prUpBack;
+        this.setPixelRatio(this._prFrom); return;
+      }
+      this._prUpBack = 0;
+    }
+    // room to climb: under 0.69 x budget; where the loop's shortest interval (the display's period, or targetFps's) is
+    // not below that, the interval cannot show room, so frames that fit (within 3 % of it) climb as a probe
+    const period = Math.max(this.refreshRate > 0 ? 1 / this.refreshRate : 0, fps > 0 ? 1 / fps : 0);
+    const room = Math.min(budget * 1.03, Math.max(budget * 0.69, period * 1.03));
+    if (ema > budget * 1.11 && pr > 1 && !(this._prDownHold > 0 && pr <= this._prFloor)) {
+      this._prDir = -1; this._prFrom = pr; this._prEma = ema; this.setPixelRatio(Math.max(1, pr - 0.25));
+    } else if (ema < room && pr < this.maxPR && !(this._prUpHold > 0)) {
+      this._prDir = 1; this._prFrom = pr; this._prEma = ema; this.setPixelRatio(Math.min(this.maxPR, pr + 0.25));
     }
   }
 
@@ -449,6 +502,7 @@ export class Engine {
     this._notices.clear();
     for (const s of this.systems) if (s.dispose) s.dispose();
     if (this.overlay) this.overlay.dispose();
+    if (this.pixelStore) this.pixelStore.dispose();
     this.renderer.dispose(); this.renderer.domElement.remove();
   }
 }

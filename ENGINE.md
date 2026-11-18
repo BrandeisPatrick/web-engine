@@ -21,7 +21,7 @@ Order: core < physics < render < anim / input / camera / audio / ui < world. Low
 
 | Layer | Import | Main exports |
 |---|---|---|
-| core | `@vibe/engine/core` | `Engine` (renderer, scene, camera, fixed-step loop, systems, resize, adaptive pixel ratio), `Profiler`, `ProfilerOverlay`, `Events`, `Clock`, `Entity` / `EntitySystem`, `Assets`, `MathDet` and the `det*` functions, `PoseInterpolator` (render interpolation), quality tiers (`resolveQuality`, `QUALITY_TIERS`, `defineTier`), the bench harness (`createBenchHarness`, `readBenchParams`) |
+| core | `@vibe/engine/core` | `Engine` (renderer, scene, camera, fixed-step loop, systems, resize, adaptive pixel ratio), `shadowPixelStore`, `Profiler`, `ProfilerOverlay`, `Events`, `Clock`, `Entity` / `EntitySystem`, `Assets`, `MathDet` and the `det*` functions, `PoseInterpolator` (render interpolation), quality tiers (`resolveQuality`, `QUALITY_TIERS`, `defineTier`), the bench harness (`createBenchHarness`, `readBenchParams`) |
 | physics | `@vibe/engine/physics` | `PhysicsWorld` (query hub), `VehicleController` + `ROAD_CAR_SPEC` / `ROADSTER_SPEC`, `CharacterController`, `DynamicsWorld` (XPBD rigid bodies, joints, particles), `Cloth`, `Rope`, `SoftBody`, `Buoyancy`, `FracturedBody`, `DynamicsClient` (worker), the shape builders (`boxShape`, `sphereShape`, `capsuleShape`, ...) |
 | render | `@vibe/engine/render` | `Atmosphere`, `PostFX` and its passes, `GBuffer`, `ClusteredLights`, `NearestLights`, `GpuParticleSystem`, `ParticleSystem`, `TextureSets` / `loadTextureSet`, `registerRenderLoaders`, `InstancedPool`, `LODGroup`, impostors (`bakeImpostors`, `ImpostorBatch`), `DecalTrail`, `TyreFx`, `ChunkCuller`, `PhysicsDebug`, `ClothMesh` / `RopeMesh` / `SoftBodyMesh`, `FractureMesh`, LUT helpers |
 | anim | `@vibe/engine/anim` | `AnimationController`, `TwoBoneIK`, `CCDIK`, `Ragdoll` |
@@ -79,6 +79,14 @@ engine.start();
   `attachToPhysicsWorld` (or the world's own `colliderProvider`).
 - `engine.profiler.frame` gives per-system CPU ms and per-pass GPU ms (`EXT_disjoint_timer_query_webgl2`);
   `Profiler.benchThroughput` is the GPU-synchronised bench the measurements in the design notes come from.
+- The renderer's context carries a pixel-store shadow (`engine.pixelStore`, `shadowPixelStore(gl)` from core,
+  `src/core/PixelStoreShadow.js`). three reads `UNPACK_ROW_LENGTH`, `UNPACK_SKIP_PIXELS` and `UNPACK_SKIP_ROWS` with
+  `gl.getParameter` on every upload of a texture with `updateRanges` (the clustered light lists and the GPU particles'
+  spawn rows upload that way every frame), and in Chrome each read waits until the GPU process has run everything
+  queued before it, so the CPU and the GPU stop overlapping. The shadow answers those reads (and `UNPACK_IMAGE_HEIGHT`,
+  `UNPACK_SKIP_IMAGES`) from what `pixelStorei` set; every other call reaches the context, the uploads are the same
+  calls with the same values. It starts over on `webglcontextrestored`. A page with its own `WebGLRenderer` can call
+  `shadowPixelStore(renderer.getContext())`. Without it nyc-night played at 16 ms a frame for 9 ms of GPU work.
 
 ### Start-up, lost context, frame errors
 
