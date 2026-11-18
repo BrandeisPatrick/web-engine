@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.0 — 2026-11-18 — Far glass towers stop flickering; the city demos play at their drawn speed; phones lighter after a crash; two test levels
 - Far glass towers no longer flicker (nyc-night: "the buildings flash when you walk"). The curtain walls' mullions
   and transoms have two rounded faces (normals tilted either side of the centre line) and reflect the city as polished
   metal. Where a mullion is about a pixel wide (a tower down the street, seen at a grazing angle) both faces fell in
@@ -11,7 +11,9 @@
   after): on the glass tower down the street one-frame flashes 159 -> 60 per 10 000 pixel-frames and the mean flicker
   1.23 -> 0.70 / 255; standing still the whole view flickers 0.364 -> 0.298, its brightest flicker (99.9th percentile)
   20.9 -> 14.8. The other views change by a few % at most. The static captures change where far curtain walls show
-  (perf image guard: up to 0.34 mean / 0.9 % of pixels on nyc-night-mobile, under its limits). What it was not
+  (perf image guard: up to 0.34 mean / 0.9 % of pixels on nyc-night-mobile on its own; together with the rest of
+  this release nyc-night-mobile's square read 0.365, over the 0.35 limit, from the far tower's moiré going away, and
+  the owner accepted the new pictures on 2026-11-18, baseline 137.1; docs/BEFORE-AFTER.md, first section). What it was not
   (toggled on the same walks): SSR's every-other-frame trace (interval 1 flickers a little more, `SSRPass` header),
   the moon's every-other-frame near shadow map, volumetrics, bloom, the lamp and sign light lists, the glass's own
   pane-to-pane variation. New check `test/browser/flicker.mjs` in `npm run check:full`: nyc-night's bench views

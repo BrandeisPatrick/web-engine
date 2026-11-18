@@ -1,6 +1,6 @@
 # Before and after
 
-What changed on screen in 1.1.0-beta.1, and (first two sections) in 1.1.0. Every image is a capture of the samples in this repository, taken in Chrome on
+What changed on screen in 1.1.0-beta.1, in 1.1.0 (the second and third sections) and in 1.2.0 (the first). Every image is a capture of the samples in this repository, taken in Chrome on
 an Apple M4 (the desktop quality tier unless noted). "Before" is the first working pass of each demo or the engine's
 earlier output; "after" is this release. The city demos' camera poses moved between the two, so the pairs show the
 same place and subject rather than the same pixel.
@@ -9,6 +9,16 @@ The work was held to a reference standard for tone (a low-key dusk frame: dark, 
 which became a gate in `npm run smoke`, and then to asset detail: materials, construction and objects that hold up
 close. On 2026-11-17 the brighter open look became the demos' default (next section) and the gate now holds that
 look. `CHANGELOG.md` has the full list.
+
+## 1.2.0: far glass towers stop flickering
+
+The glass towers' window frames have rounded faces that reflect the city. Seen down the street, a frame is thinner
+than a pixel, and each small camera move picked a different face, so the tower flashed while walking and drew a wavy
+pattern standing still. The faces now flatten once a frame is under about a pixel and a half wide. The pair below is
+nyc-night's square pose on the mobile tier (no TAA there, so the pattern shows in a still frame), cropped from 1280 x
+720: 1.1.0 on the left, 1.2.0 on the right.
+
+<img src="before-after/nyc-tower-flicker.jpg" alt="Night NYC square on the mobile tier: the far glass tower with a wavy pattern in 1.1.0 (left), and without it in 1.2.0 (right)" width="960">
 
 ## 1.1.0: the open look is the default
 
