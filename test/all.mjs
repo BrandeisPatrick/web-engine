@@ -1,8 +1,19 @@
-// Runs every headless suite in sequence (`npm test`): each file is a standalone Node script that exits non-zero on
-// failure; suites that build world geometry need the no-op canvas shim. Add new suites here, keep car-sim first
-// (it is the determinism gate for the roadster vehicle model).
-import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+// Runs every headless suite (`npm test`): each file is a standalone Node script that exits non-zero on failure; suites
+// that build world geometry need the no-op canvas shim. The suites run in parallel, a pool of (CPUs - 1) processes
+// (`--jobs=N` to change it, `--jobs=1` runs them one by one), and each suite's output is printed in one block when it
+// ends. `slow` suites start first, so the longest one does not start last. `alone` suites run one at a time after the
+// pool, on a quiet machine, because a loaded one moves a reading they hold to a tight limit:
+//   - CPU work timed against a limit under 10x its idle reading (on an M4 with every suite in the pool, car-visual's
+//     sedan build took 172 of its 400 ms, 78 idle; every other timed check stayed at least 6x under its limit);
+//   - a retained heap (heapUsed after gc, one reading) held to a few KB: heapUsed counts code space, and under load a
+//     background compile can finish inside the window (dyn-soft read 1.38 KB of its 1 KB once, -0.08 otherwise).
+//     The GC-free windows of test/helpers/alloc.mjs count bytes per call over hundreds of calls or more: they held.
+// Mark a new suite `alone` by the same rules. Add new suites here, keep car-sim first (it is the determinism gate for
+// the roadster vehicle model).
+import { spawn } from 'node:child_process';
+import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs';
+import { availableParallelism, tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
@@ -11,7 +22,8 @@ const SUITES = [
   { file: 'car-sim.mjs' },
   { file: 'world-build.mjs', shim: true },
   { file: 'world-lights.mjs', shim: true },
-  { file: 'core.mjs' },
+  // alone: 1e6 event emits in 21 ms idle, limit 150 (44 under load)
+  { file: 'core.mjs', alone: true },
   // the Engine's start-up and failure paths: warmUp (dt 0, no fixed step, GPU fence polled), lost context, frame errors
   { file: 'engine-start.mjs' },
   { file: 'look-stats.mjs' },
@@ -20,7 +32,8 @@ const SUITES = [
   // world: the high-detail vehicle level (lod 'hd'), with LOD 0 / 1 pinned byte-identical
   { file: 'vehicles-hd.mjs', shim: true },
   // createCarVisual: every HD type, wheels on the physics within 1 cm, a 10 s drive, lamps, contact shadow
-  { file: 'car-visual.mjs' },
+  // (alone: each type builds in under 400 ms, 78 idle, 172 under load)
+  { file: 'car-visual.mjs', alone: true },
   // the starters' scenery (world/Scenery.js): country road, park corner, ground cover, road paint; colliders, determinism
   { file: 'scenery.mjs' },
   // quality tiers (desktop / mobile): device recommendation, ?quality= / stored precedence, preset merge
@@ -40,8 +53,9 @@ const SUITES = [
   { file: 'dyn-shapes.mjs' },
   { file: 'dyn-broadphase.mjs' },
   { file: 'dyn-narrowphase.mjs' },
-  { file: 'dyn-joints.mjs' },
-  { file: 'dyn-world.mjs' },
+  // alone: retained heap over 4800 substeps under 4 KB
+  { file: 'dyn-joints.mjs', alone: true },
+  { file: 'dyn-world.mjs', slow: true },
   { file: 'dyn-bridge.mjs', shim: true },
   { file: 'dyn-serialize.mjs' },
   // render (0.7.0)
@@ -64,11 +78,13 @@ const SUITES = [
   { file: 'blur-dof-lut.mjs' },
   { file: 'water.mjs', shim: true },
   // physics (0.9.0): particles / cloth / rope, soft bodies, coupling + buoyancy, fracture, character dynamics, ragdoll
-  { file: 'dyn-cloth.mjs' },
+  { file: 'dyn-cloth.mjs', slow: true },
   { file: 'cloth-mesh.mjs' },
-  { file: 'dyn-soft.mjs' },
-  { file: 'dyn-buoyancy.mjs' },
-  { file: 'dyn-fracture.mjs' },
+  // alone: retained heap over 500 steps under 1 KB
+  { file: 'dyn-soft.mjs', alone: true },
+  // alone: the cloth collider step in under 20 ms (4 idle); the hooks' retained heap under 4 KB
+  { file: 'dyn-buoyancy.mjs', alone: true },
+  { file: 'dyn-fracture.mjs', slow: true },
   { file: 'character-dyn.mjs' },
   { file: 'ragdoll.mjs', shim: true },
   // the Miami drive sample: its road-car spec (samples/miami-drive/spec.js) on the VehicleController
@@ -91,17 +107,39 @@ const SUITES = [
   // the Node-capable recipes of docs/HOWTO.md (test/howto/recipes.js) run and do what they say
   { file: 'howto.mjs' },
 ];
-let failed = 0, ran = 0;
-const t0 = performance.now();
-for (const s of SUITES) {
+const jobs = /^--jobs=(\d+)$/.exec(process.argv.find((a) => a.startsWith('--jobs=')) || '');
+const JOBS = Math.max(1, jobs ? +jobs[1] : availableParallelism() - 1);
+const logs = mkdtempSync(join(tmpdir(), 'vibe-test-'));
+const failures = [];
+let ran = 0;
+
+// One suite, its output into a file (a file is written synchronously, a pipe on macOS is not: a suite's last lines
+// before process.exit() could be lost), printed whole when the suite ends.
+function run(s) {
   const file = here(`./${s.file}`);
-  if (!existsSync(file)) { console.log(`skip  ${s.file} (missing)`); continue; }
-  const args = s.shim ? ['--import', SHIM, file] : [file];
-  const t = performance.now();
-  const r = spawnSync(process.execPath, args, { stdio: 'inherit' });
-  ran++;
-  const ms = Math.round(performance.now() - t);
-  if (r.status !== 0) { failed++; console.log(`FAIL  ${s.file} (exit ${r.status}, ${ms} ms)`); } else console.log(`ok    ${s.file} (${ms} ms)`);
+  if (!existsSync(file)) { console.log(`skip  ${s.file} (missing)`); return; }
+  const log = join(logs, `${s.file}.log`), fd = openSync(log, 'w'), t = performance.now();
+  const child = spawn(process.execPath, s.shim ? ['--import', SHIM, file] : [file], { stdio: ['ignore', fd, fd] });
+  closeSync(fd);
+  return new Promise((done) => child.on('close', (code, signal) => {
+    const ms = Math.round(performance.now() - t);
+    process.stdout.write(readFileSync(log, 'utf8'));
+    ran++;
+    if (code !== 0) { failures.push(s.file); console.log(`FAIL  ${s.file} (exit ${code ?? signal}, ${ms} ms)`); } else console.log(`ok    ${s.file} (${ms} ms)`);
+    done();
+  }));
 }
-console.log(`\n${ran - failed}/${ran} suites passed in ${Math.round(performance.now() - t0)} ms`);
-process.exit(failed ? 1 : 0);
+// The suites, at most n at a time, in the order given.
+async function pool(suites, n) {
+  const queue = [...suites];
+  await Promise.all(Array.from({ length: Math.min(n, queue.length) }, async () => { while (queue.length) await run(queue.shift()); }));
+}
+
+const t0 = performance.now();
+const alone = SUITES.filter((s) => s.alone), rest = SUITES.filter((s) => !s.alone);
+await pool([...rest.filter((s) => s.slow), ...rest.filter((s) => !s.slow)], JOBS);
+await pool(alone, 1);
+rmSync(logs, { recursive: true, force: true });
+console.log(`\n${ran - failures.length}/${ran} suites passed in ${Math.round(performance.now() - t0)} ms (${JOBS} at a time, then ${alone.length} alone)`);
+if (failures.length) console.log(`failed: ${failures.join(', ')}`);
+process.exitCode = failures.length ? 1 : 0; // no process.exit(): it could cut off the output still being written
