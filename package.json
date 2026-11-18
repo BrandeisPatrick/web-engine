@@ -1,6 +1,6 @@
 {
   "name": "@vibe/engine",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Browser game engine on Three.js/WebGL2: fixed-step core with services and a CPU/GPU profiler, deterministic pure-JS physics (query hub, vehicle and character controllers, unified XPBD rigid bodies / joints / cloth / ropes / soft bodies / buoyancy / fracture), a measured render pipeline (forward MSAA or G-buffer + TAA, clustered lights, cascaded shadows, SSR, volumetrics, water, motion blur, depth of field, LUTs, GPU particles), animation with IK and ragdolls, input, camera rigs, synth audio, DOM UI widgets and data-driven city worlds (OpenStreetMap + terrain, traffic AI)",
   "repository": {
     "type": "git",
