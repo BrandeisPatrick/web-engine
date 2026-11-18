@@ -1,13 +1,16 @@
 // Headless checks for the quality tiers (src/core/Quality.js): the device recommendation (phone, iPad reporting a Mac,
 // desktop, software renderer, low memory), resolveQuality's precedence (?quality= > stored choice > recommendation;
 // legacy high / low), the step down after lost WebGL contexts (sessionStorage count: desktop -> mobile -> pixel ratio
-// capped; never over ?quality= or a stored choice), tierSettings' deep merge (never mutating QUALITY_TIERS), defineTier,
+// capped; never over ?quality= or a stored choice), the step down after a crash (the boot marker: set at boot on a
+// phone, cleared by a healthy run, pagehide and a hidden page; still there at the next boot = one lost context; stale,
+// garbage and throwing storage ignored), tierSettings' deep merge (never mutating QUALITY_TIERS), defineTier,
 // and that the module stays Node-safe (no window: desktop, no storage, no ExperimentalWarning from Node's own
 // localStorage / sessionStorage getters).
 // Run: node test/quality.mjs
 import {
   QUALITY_TIERS, TIER_IDS, QUALITY_STORAGE_KEY, tierSettings, defineTier, recommendTier, storedTier, storeTier, resolveQuality,
   CONTEXT_LOSS_KEY, LOST_MAX_PIXEL_RATIO, contextLosses, recordContextLoss, clearContextLosses,
+  BOOT_MARKER_KEY, BOOT_HEALTHY_SECONDS, BOOT_MARKER_MAX_AGE, bootCheck, bootHealthy,
 } from '../src/core/Quality.js';
 import * as core from '@vibe/engine/core';
 
@@ -176,6 +179,85 @@ const env = (o) => ({ ...DESK, ...o });
   Object.defineProperty(globalThis, 'sessionStorage', { get() { throw new Error('SecurityError'); }, configurable: true });
   check('lost: blocked sessionStorage -> 0, recording does not throw', contextLosses() === 0 && !throws(() => recordContextLoss()) && res('').lighter === false);
   delete globalThis.sessionStorage; delete globalThis.localStorage; delete globalThis.window;
+}
+
+// ================================================================================================= lighter after a crash (boot marker)
+{
+  const local = new Map(), sess = new Map();
+  const mock = (m) => ({ getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) });
+  globalThis.window = globalThis;
+  Object.defineProperty(globalThis, 'localStorage', { value: mock(local), configurable: true, writable: true });
+  Object.defineProperty(globalThis, 'sessionStorage', { value: mock(sess), configurable: true, writable: true });
+  globalThis.location = { pathname: '/game/', search: '' };
+  const KEY = `${BOOT_MARKER_KEY}:/game/`, T0 = 1.7e12;
+  const win = new EventTarget(), doc = Object.assign(new EventTarget(), { hidden: false });
+  const fire = (t, type, extra) => t.dispatchEvent(Object.assign(new Event(type), extra || {}));
+  const boot = (o = {}) => bootCheck({ force: true, mobile: true, win, doc, now: T0, ...o });
+  const PHONE = env({ userAgent: UA.iphone, maxTouchPoints: 5, coarse: true });
+  const warned = [], warn = console.warn;
+  console.warn = (...a) => warned.push(a.join(' '));
+  try {
+    let b = bootCheck({ force: true, mobile: false, win, doc });
+    check('crash: a desktop-recommended device gets no marker', !b.armed && !b.crashed && !local.has(KEY));
+    b = boot();
+    check('crash: first boot on a phone sets the marker (key per page path), no crash', b.armed && !b.crashed && b.key === KEY && local.get(KEY) === String(T0) && contextLosses() === 0);
+    // the tab is killed here: no pagehide, the marker stays
+    b = boot({ now: T0 + 5000 });
+    check('crash: marker still there at the next boot -> crashed, age 5 s, one lost context recorded, marker set again',
+      b.crashed && b.age === 5 && contextLosses() === 1 && b.armed && local.get(KEY) === String(T0 + 5000));
+    let q = resolveQuality({ search: '', env: PHONE });
+    check('crash: resolveQuality takes the lighter path (phone: pixel ratio 1), says why', q.lighter && q.crashed && q.contextLosses === 1 && q.tier === 'mobile'
+      && q.settings.engine.maxPixelRatio === 1 && q.reason === 'phone; lighter after a crash', `${q.reason} / ${q.settings.engine.maxPixelRatio}`);
+    q = resolveQuality({ search: '', env: PHONE });
+    check('crash: one console line, once per page load', warned.length === 1 && /stopped before it ran smoothly/.test(warned[0]) && /loading lighter \(mobile, pixel ratio up to 1\)/.test(warned[0]), warned.join(' | '));
+    check('crash: a desktop device after a crash steps to mobile', resolveQuality({ search: '', env: DESK }).tier === 'mobile');
+    q = resolveQuality({ search: '?quality=desktop', env: PHONE });
+    check('crash: ?quality= is never overridden (crashed still reported)', q.tier === 'desktop' && !q.lighter && q.crashed);
+    // the lighter run is healthy: the marker goes, the count stays (later loads in the tab stay lighter)
+    bootHealthy();
+    check('crash: bootHealthy clears the marker, the count stays', !local.has(KEY) && contextLosses() === 1);
+    fire(doc, 'visibilitychange'); fire(win, 'pageshow', { persisted: true });
+    check('crash: once healthy, showing the page again does not set it', !local.has(KEY));
+    b = boot({ now: T0 + 60000 });
+    check('crash: the boot after a healthy run is not a crash', !b.crashed && b.armed && contextLosses() === 1);
+
+    // a normal close / reload / navigation, and a hidden page (killed there, it is not ours), clear it
+    fire(win, 'pagehide');
+    check('pagehide clears the marker', !local.has(KEY));
+    check('... so the next boot is no crash', !boot().crashed);
+    fire(win, 'pageshow', { persisted: false });
+    doc.hidden = true; fire(doc, 'visibilitychange');
+    check('hidden clears it', !local.has(KEY));
+    doc.hidden = false; fire(doc, 'visibilitychange');
+    check('shown again before healthy sets it again', local.get(KEY) === String(T0));
+    fire(win, 'pagehide'); fire(win, 'pageshow', { persisted: true });
+    check('restored from the back-forward cache before healthy: set again', local.has(KEY));
+    fire(win, 'pagehide'); fire(win, 'pageshow', { persisted: false });
+    check('a first pageshow does not set it again', !local.has(KEY));
+
+    // stale or unreadable markers are not crashes; storage that throws is ignored
+    clearContextLosses();
+    local.set(KEY, String(T0 - 601000));
+    b = boot();
+    check('a marker older than BOOT_MARKER_MAX_AGE is stale: no crash, nothing recorded', !b.crashed && contextLosses() === 0 && BOOT_MARKER_MAX_AGE === 600);
+    local.set(KEY, String(T0 + 30000));
+    check('a marker from the future (clock change) is no crash', !boot().crashed);
+    local.set(KEY, 'garbage');
+    check('a garbage marker is no crash', !boot().crashed && contextLosses() === 0);
+    const throwing = { getItem() { throw new Error('SecurityError'); }, setItem() { throw new Error('SecurityError'); }, removeItem() { throw new Error('SecurityError'); } };
+    check('storage that throws (private mode): no throw, nothing armed', !throws(() => { b = boot({ storage: throwing }); bootHealthy(); }) && !b.armed && !b.crashed);
+    const full = { getItem: () => String(T0 - 1000), setItem() { throw new Error('QuotaExceededError'); }, removeItem() {} };
+    b = boot({ storage: full });
+    check('storage that reads but cannot write: the crash still counts, nothing armed', b.crashed && !b.armed && contextLosses() === 1);
+    check('constants: 15 s healthy, key prefix vibe.boot', BOOT_HEALTHY_SECONDS === 15 && BOOT_MARKER_KEY === 'vibe.boot');
+    check('core index re-exports the boot marker API', core.bootCheck === bootCheck && core.bootHealthy === bootHealthy && core.BOOT_MARKER_KEY === BOOT_MARKER_KEY);
+    q = resolveQuality({ search: '', env: PHONE, crashed: false, contextLosses: 1 });
+    check('opts.crashed replaces the boot check\'s answer', !q.crashed && q.reason === 'phone; lighter after a graphics reset');
+  } finally {
+    console.warn = warn;
+    bootCheck({ force: true }); // leave no listeners behind
+    delete globalThis.location; delete globalThis.sessionStorage; delete globalThis.localStorage; delete globalThis.window;
+  }
 }
 
 // ================================================================================================= tierSettings / defineTier

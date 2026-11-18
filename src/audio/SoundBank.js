@@ -15,6 +15,10 @@
 // a { x, y, z } or an [x, y, z]; it routes the voice through a PannerNode (inverse distance, the preset's refDistance
 // and rolloff, equal-power panning). Buffers are rendered on first use (a few ms per variant) and cached.
 // bank.render(name, variant) is the finished Float32Array (runs in Node); bank.define(name, spec) adds a sound.
+// bank.prepare(names?) renders ahead, one sound per task: the loops waiting for the bus (and the one-shots named).
+// Without it the loops render when the bus starts, inside the start click (2 to 8 s of samples each). The bank adds it
+// to the bus's prepare() jobs (AudioBus "Start without a stall"; GameShell.ready() runs them under its loading bar).
+// The samples are the ones a first use would render (seeded), so the sound does not change.
 import { AudioListener3D } from './Positional.js';
 import { SOUND_PRESETS, renderPreset, PRESET_SAMPLE_RATE } from './presets.js';
 import { VoicePool } from './VoicePool.js';
@@ -142,6 +146,7 @@ export class SoundBank {
     this._rand = rng(seed * 7919 + 17);
     this._rr = {};
     this._buffers = new Map();
+    this._samples = new Map(); // `${name}#${variant}` -> samples prepare() rendered, until _buffer() makes them a buffer
     /** @type {Set<BankLoop>} */
     this._loops = new Set();
     /** @type {Set<BankVoice>} */
@@ -151,6 +156,7 @@ export class SoundBank {
       this._listener = new AudioListener3D(ctx);
       for (const l of this._loops) l._realise();
     });
+    if (typeof bus.onPrepare === 'function') bus.onPrepare(() => this.prepare());
   }
 
   /** Names of every sound this bank knows. */
@@ -166,7 +172,7 @@ export class SoundBank {
   define(name, spec) {
     if (!spec || typeof spec.render !== 'function') throw new Error(`SoundBank.define('${name}'): spec.render(c) must return a Float32Array`);
     this.presets[name] = { variants: 1, bus: 'effects', peak: 0.5, centroid: [20, 20000], seconds: 1, kind: 'shot', ...spec };
-    for (const k of [...this._buffers.keys()]) if (k.startsWith(`${name}#`)) this._buffers.delete(k);
+    for (const m of [this._buffers, this._samples]) for (const k of [...m.keys()]) if (k.startsWith(`${name}#`)) m.delete(k);
     return this;
   }
 
@@ -184,11 +190,31 @@ export class SoundBank {
    */
   render(name, variant = 0) { return renderPreset(this._spec(name), name, variant, { seed: this.seed, sampleRate: this.sampleRate }); }
 
+  /**
+   * Render ahead, one sound per task: every loop still waiting for the bus (its variant 0) and every variant of the
+   * one-shots in `names`, kept until the sound is first played. AudioBus.prepare() runs it for loops (the bank adds
+   * itself to the bus's jobs). Same samples as a first use renders. Resolves when done.
+   * @param {string[]} [names]  one-shots to render too
+   * @returns {Promise<void>}
+   */
+  async prepare(names = []) {
+    const want = [];
+    for (const l of this._loops) if (!l.voice) want.push([l.name, 0]);
+    for (const n of names) { const v = this._spec(n).variants || 1; for (let i = 0; i < v; i++) want.push([n, i]); }
+    for (const [name, variant] of want) {
+      const key = `${name}#${variant}`;
+      if (this._buffers.has(key) || this._samples.has(key)) continue;
+      if (want.length > 1) await new Promise((r) => setTimeout(r, 0));
+      if (!this._buffers.has(key)) this._samples.set(key, this.render(name, variant)); // (the bus may have started meanwhile)
+    }
+  }
+
   _buffer(name, variant) {
     const key = `${name}#${variant}`;
     let b = this._buffers.get(key);
     if (!b) {
-      const x = this.render(name, variant), ctx = this.bus.ctx;
+      const x = this._samples.get(key) || this.render(name, variant), ctx = this.bus.ctx;
+      this._samples.delete(key);
       b = ctx.createBuffer(1, x.length, this.sampleRate);
       if (b.copyToChannel) b.copyToChannel(x, 0); else b.getChannelData(0).set(x);
       this._buffers.set(key, b);
@@ -291,5 +317,5 @@ export class SoundBank {
     for (const l of [...this._loops]) l.stop(fade);
   }
 
-  dispose() { this.stopAll(0); this._buffers.clear(); this._followers.clear(); }
+  dispose() { this.stopAll(0); this._buffers.clear(); this._samples.clear(); this._followers.clear(); }
 }

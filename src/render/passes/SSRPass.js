@@ -101,7 +101,10 @@
 // reflection one frame late where the reflected content moves differently from the surface (parallax: wet street
 // highlights when walking forward, a car's hood edge), up to ~30-80 / 255 on a few pixels, and reflections near
 // silhouettes take the neighbour's velocity bilinearly; the TAA blend averages it with the traced frames. Trace and
-// denoise now cost every other frame, so frame times alternate by that much.
+// denoise now cost every other frame, so frame times alternate by that much. Flicker (nyc-night, scripted walks and
+// still views, the same frames with interval 1 and 2): the reuse does not make reflections flicker; interval 1 flickers
+// a little more (the wet street's puddles, where a trace's hit / miss changes with each frame's jitter), so the
+// reused frames halve that rate.
 // Limitations:
 //   - jitter does not integrate under this TAA: the TAA_SSR hook composites the SAME SSR texel into all 9 taps, so the
 //     clip box gets no variance from the reflection and the history is clipped to the current frame's hit / miss

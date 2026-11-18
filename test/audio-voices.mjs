@@ -2,7 +2,7 @@
 // VoicePool caps, priority and stealing order; SoundBank's inert voice before the gesture, deferred loops, routing,
 // caps and stealing through real plays, round-robin variants, per-play jitter, followers; AudioBus: the default graph
 // is today's (buses -> master -> compressor -> destination, nothing else), the 'safe' graph, setPaused, setMuffle,
-// duck and the offline flag.
+// duck and the offline flag; prepare() (the context before the gesture, loops rendered ahead, start() takes both).
 // Run: node test/audio-voices.mjs
 import { VoicePool } from '../src/audio/VoicePool.js';
 import { SoundBank, INERT_VOICE } from '../src/audio/SoundBank.js';
@@ -198,6 +198,76 @@ const reaches = (from, to) => { const seen = new Set(), st = [from]; while (st.l
   steps.surface = (x, z) => (x > 0 ? 'wood' : 'gravel'); steps.at = [1, 0, 0];
   run(2, 1);
   check('footsteps: surface lookup by position', played[played.length - 1][0] === 'step.wood');
+}
+
+// ------------------------------------------------------------------------------------------------- prepare()
+// AudioBus.prepare() before the gesture: the context created then, suspended, and taken by start() (resumed there);
+// a SoundBank's waiting loops rendered ahead, the same samples a first use renders; ctx / bus() still null until start
+{
+  const made = [];
+  class WinContext extends FakeContext {
+    constructor(o) { super(); this.state = WinContext.initial; this.opts = o; this.resumes = 0; this.suspends = 0; made.push(this); }
+    resume() { this.resumes++; return super.resume(); }
+    suspend() { this.suspends++; return super.suspend(); }
+  }
+  WinContext.initial = 'suspended';
+  const prevWin = globalThis.window;
+  globalThis.window = { AudioContext: WinContext };
+  const hash = (x) => { let h = 0; for (let i = 0; i < x.length; i++) h = (h * 31 + Math.round(x[i] * 1e6)) | 0; return h; };
+  try {
+    const bus = new AudioBus({ master: 'safe' });
+    const bank = new SoundBank(bus);
+    bank.loop('road.roar', { gain: 0 }); bank.loop('wind.rush', { gain: 0 });
+    const p1 = bus.prepare();
+    check('prepare: the context is created at once (suspended), ctx and buses still wait for start', made.length === 1 && made[0].state === 'suspended'
+      && bus.ctx === null && !bus.started && bus.bus('engine') === null && made[0].opts.latencyHint === 'interactive');
+    check('prepare: twice is the same promise, one context', bus.prepare() === p1 && made.length === 1);
+    await p1;
+    const want = hash(bank.render('road.roar', 0));
+    check('prepare: the waiting loops rendered ahead (the samples a first use renders)', bank._samples.size === 2 && hash(bank._samples.get('road.roar#0')) === want);
+    await bus.start();
+    const src = made[0].nodes.filter((n) => n.kind === 'source');
+    check('start: takes the prepared context (no second one) and resumes it', bus.ctx === made[0] && made.length === 1 && made[0].resumes === 1 && made[0].state === 'running');
+    check('start: the loops play the prepared samples, and the bank lets go of them', src.length === 2 && hash(src[0].buffer.getChannelData(0)) === want && bank._samples.size === 0);
+
+    // without prepare(): as before, the context comes with start()
+    const bus2 = new AudioBus(), bank2 = new SoundBank(bus2); bank2.loop('road.roar');
+    await bus2.start();
+    check('no prepare: start() creates the context, the loop renders then (same samples)', made.length === 2 && bus2.ctx === made[1]
+      && hash(made[1].nodes.find((n) => n.kind === 'source').buffer.getChannelData(0)) === want);
+
+    // a context the autoplay policy lets run at once waits suspended until start()
+    WinContext.initial = 'running';
+    const bus3 = new AudioBus();
+    await bus3.prepare();
+    check('prepare: a context that starts running is suspended until start()', made.length === 3 && made[2].suspends === 1 && made[2].state === 'suspended');
+    await bus3.start();
+    check('... and start() resumes it', made[2].state === 'running' && made[2].resumes === 1);
+    WinContext.initial = 'suspended';
+
+    // jobs: one added after prepare() still runs; a failing one warns and does not reject; one-shots by name
+    const bus4 = new AudioBus(), bank4 = new SoundBank(bus4), order = [];
+    bus4.onPrepare(() => { order.push('a'); });
+    bus4.onPrepare(() => { throw new Error('boom'); });
+    const warn = console.warn; const warned = []; console.warn = (...a) => warned.push(a.join(' '));
+    const p4 = bus4.prepare();
+    bus4.onPrepare(() => { order.push('late'); });
+    await bus4.prepare();
+    console.warn = warn;
+    check('jobs: run in order, one added later too; a failing job is logged, prepare() resolves', order.join() === 'a,late' && warned.length === 1 && /prepare job failed/.test(warned[0]) && p4 !== undefined);
+    await bank4.prepare(['impact.thud']);
+    check('bank.prepare(names): every variant of a one-shot', [0, 1, 2, 3].every((v) => bank4._samples.has(`impact.thud#${v}`)) && bank4._samples.size === 4, [...bank4._samples.keys()].join());
+
+    // an injected context: prepare() creates none; dispose() before start closes the prepared one
+    const n0 = made.length;
+    const bus5 = new AudioBus({ context: new FakeContext({ offline: true }) });
+    await bus5.prepare();
+    check('injected context: prepare() creates no other', made.length === n0);
+    const bus6 = new AudioBus(); bus6.prepare(); bus6.dispose();
+    check('dispose before start closes the prepared context', made.length === n0 + 1 && made[n0].state === 'closed' && bus6.ctx === null);
+  } finally {
+    if (prevWin === undefined) delete globalThis.window; else globalThis.window = prevWin;
+  }
 }
 
 for (const r of results) console.log(r);

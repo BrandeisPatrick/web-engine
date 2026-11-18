@@ -14,11 +14,16 @@
 //       shown, shell.lost) and neither shell.start() nor Enter restarts the loop;
 //   (c) clicking Reload loads the page again in the same tab, lighter: its resolved quality (window.__sample.quality)
 //       has lighter: true, contextLosses 1 and, on a desktop-recommended machine, tier 'mobile'; on the phone profile
-//       (iPhone 15 Pro emulation: recommended 'mobile') the engine's pixel ratio is capped at 1.
+//       (iPhone 15 Pro emulation: recommended 'mobile') the engine's pixel ratio is capped at 1;
+//   (d) the crash fallback (core/Quality.js boot marker), starter-walk on the phone profile: a boot marker left in
+//       localStorage (a run that died: iOS kills a tab for memory without any event) makes the load lighter (crashed,
+//       contextLosses 1, pixel ratio capped at 1, one console warning), and the run clears the marker once it has drawn
+//       BOOT_HEALTHY_SECONDS of frames (behind the start card).
 // Every page runs on the desktop profile; starter-walk also on the phone profile. Exit code 1 on any failure.
 //
-//   node test/browser/phone-start.mjs                       # nyc-night miami-drive starter-walk starter-drive (+ starter-walk phone)
+//   node test/browser/phone-start.mjs                       # nyc-night miami-drive starter-walk starter-drive (+ starter-walk phone, + (d))
 //   node test/browser/phone-start.mjs nyc-night --phone     # the given pages on the phone profile only
+//   node test/browser/phone-start.mjs --crash               # (d) only
 //   node test/browser/phone-start.mjs --shots=<dir>         # also save the loading label, the first frame and the notice
 import fs from 'node:fs';
 import path from 'node:path';
@@ -30,9 +35,10 @@ import {
 const LONG_MS = 250, MIN_LUMA = 8, SETTLE_MS = 3000, WATCH_MS = 1500;
 const args = parseArgs();
 const PAGES = ['nyc-night', 'miami-drive', 'starter-walk', 'starter-drive'];
-const runs = args._.length
+const runs = args.crash ? [] : args._.length
   ? args._.map((page) => ({ page, profile: args.phone ? 'phone' : 'desktop' }))
   : [...PAGES.map((page) => ({ page, profile: args.phone ? 'phone' : 'desktop' })), ...(args.phone ? [] : [{ page: 'starter-walk', profile: 'phone' }])];
+const crashRun = args.crash || (!args._.length && !args.phone);
 const shots = typeof args.shots === 'string' ? path.resolve(args.shots) : '';
 if (shots) fs.mkdirSync(shots, { recursive: true });
 
@@ -107,6 +113,42 @@ function meanLuma(buf) {
   let s = 0;
   for (let i = 0; i < width * height * 4; i += 4) s += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
   return s / (width * height);
+}
+
+// (d) a boot marker left by a run that died -> a lighter load, and a healthy run clears the marker
+async function crashFallback() {
+  const id = 'starter-walk', tag = `${id} (phone, crash)`, fail = (m) => failures.push(`${tag}: ${m}`);
+  const row = { page: id, profile: 'phone crash', next: '' };
+  rows.push(row);
+  const { devices } = await import('playwright');
+  const phone = { ...devices['iPhone 15 Pro'] }; delete phone.defaultBrowserType;
+  const context = await browser.newContext(phone);
+  // the marker a run that died 20 s ago left (only before the first document of this context)
+  await context.addInitScript(() => {
+    try { if (!sessionStorage.getItem('__seeded')) { localStorage.setItem(`vibe.boot:${location.pathname}`, String(Date.now() - 20000)); sessionStorage.setItem('__seeded', '1'); } } catch { /* no storage */ }
+  });
+  const page = await context.newPage();
+  const errors = watchErrors(page), warnings = [];
+  page.on('console', (m) => { if (m.type() === 'warning' && /stopped before it ran smoothly/.test(m.text())) warnings.push(m.text()); });
+  try {
+    await page.goto(vite.base + await resolvePage(vite, id), { waitUntil: 'load', timeout: readyTimeoutMs });
+    const q = await waitFor(page, () => {
+      const s = window.__sample, e = s && s.ready && s.engine;
+      return e ? { ...s.quality, settings: undefined, maxPR: e.maxPR, marker: localStorage.getItem(`vibe.boot:${location.pathname}`) } : null;
+    }, null, readyTimeoutMs, 'the page after a crash');
+    const t0 = Date.now();
+    if (!(q.crashed && q.lighter && q.contextLosses === 1 && q.tier === 'mobile' && q.maxPR <= 1 && /lighter after a crash/.test(q.reason))) fail(`not lighter after a crash: ${JSON.stringify(q)}`);
+    if (!q.marker) fail('this run set no boot marker');
+    if (warnings.length !== 1) fail(`${warnings.length} crash warnings (one expected)`);
+    // the loop runs behind the start card: BOOT_HEALTHY_SECONDS of frames, then the marker is gone
+    await waitFor(page, () => localStorage.getItem(`vibe.boot:${location.pathname}`) === null, null, 30000, 'the boot marker cleared by a healthy run');
+    row.next = `${q.tier} lighter (crashed) pr ${q.maxPR}, marker cleared ${((Date.now() - t0) / 1000).toFixed(1)} s after ready`;
+    if (errors.length) fail(`errors: ${errors.join(' | ')}`);
+  } catch (e) {
+    fail(e.message.split('\n')[0]);
+  } finally {
+    await withTimeout(context.close(), 15000, 'context close').catch(() => {});
+  }
 }
 
 let vite = null, browser = null;
@@ -226,6 +268,7 @@ try {
       await withTimeout(context.close(), 15000, 'context close').catch(() => {});
     }
   }
+  if (crashRun) await crashFallback();
 } catch (e) {
   failures.push(`phone-start: ${e.stack || e.message}`);
 } finally {

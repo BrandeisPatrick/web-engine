@@ -6,7 +6,9 @@
 //   - window-style layers (FacadeTextures.js FACADE: frames / glass mask, drawn procedurally),
 //   - PBR wall / roof sets (Poly Haven CC0 photo-scanned albedo + normal + roughness + AO, real-world scale).
 // Glass shows an interior-mapped room (parallax rooms with furniture, blinds, ceiling lights at night) behind
-// a reflective pane; texture windows get a parallax reveal so even flat walls read as recessed.
+// a reflective pane; texture windows get a parallax reveal so even flat walls read as recessed. Curtain-wall mullions
+// have rounded faces (tilted normals) that flatten as a mullion gets under about a pixel and a half wide, so a far
+// glass tower does not flicker under TAA's jitter or in motion.
 //
 // Geometry (all merged, few draw calls):
 //   base chunks  (2x2 inner + 4 outer sectors): shells of most buildings, roofs, parapets with coping, cornices,
@@ -299,7 +301,12 @@ if (fMode == 0 || fMode == 2) {
     fCol *= 1.0 - frame * uFd2.x * (0.25 * fHash(vec2(floor(g.x), cell.y + 3.0)) + 0.2 * tr * step(fv, 0.5));
     fRough = mix(fRough, 0.55, frame * uFd2.x * 0.5 * fHash(vec2(floor(g.x) + 7.0, cell.y)));
 #endif
-    fNxy = mix(fNxy, vec2((fu < 0.5 ? -1.0 : 1.0) * mull * 0.7, (fv < 0.5 ? -1.0 : 1.0) * tr * 0.5), frame);
+    // the mullions' and transoms' two rounded faces (normals tilted +-0.7 / 0.5 either side of the centre line) flatten
+    // as the bar gets under a pixel and a half wide (flat under two thirds of a pixel): with both faces in one pixel
+    // the TAA jitter (and any motion) picks one or the other each frame, and the bright reflection of the tilted
+    // metal flashed on and off along every far curtain wall
+    float mk = 1.0 - smoothstep(1.5 * mw, 3.0 * mw, fw.x), tk = 1.0 - smoothstep(1.5 * hw, 3.0 * hw, fw.y);
+    fNxy = mix(fNxy, vec2((fu < 0.5 ? -1.0 : 1.0) * mull * 0.7 * mk, (fv < 0.5 ? -1.0 : 1.0) * tr * 0.5 * tk), frame);
   }
   fAO = 1.0;
   fEnv = mix(0.6, 1.8, smoothstep(2.0, 25.0, g.y)) * envK; // scene.environmentIntensity is low (~0.5): glass reflects the full sky

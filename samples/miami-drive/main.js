@@ -357,6 +357,7 @@ async function boot() {
   const hud = new HUD({ world, touch: !!(input.touch && input.touch.visible) });
   const audio = new CarAudio({ volume: 0.7 });
   audio.bus.unlockOnGesture();
+  audio.bus.prepare(); // the AudioContext now, under the loading screen: the first key does not stall on it (AudioBus)
   const menu = new QualityMenu({ quality: Q, corner: 'tr' });
   void menu;
   const rig = new ChaseRig(camera, renderer.domElement, { minY: 0.6, physics, canopyFromCollider: null, thinKinds: [3, 'vehicle'], flightFraming: false, shakeScale: 0.7 });

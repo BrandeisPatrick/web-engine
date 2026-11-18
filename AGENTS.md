@@ -20,7 +20,7 @@ No registration is needed (`vite.config.js` finds every `samples/<name>/index.ht
 ## Commands
 
 Two test levels: run **`npm run check` for every change** (about 1.5 minutes on an M4) and **`npm run check:full`
-before `npm run deploy` or a release** (about 6.5 minutes). Both need Chrome and the GPU. Each runs its steps in order (listed in
+before `npm run deploy` or a release** (about 7 minutes). Both need Chrome and the GPU. Each runs its steps in order (listed in
 `test/check.mjs`), stops at the first failing step and ends with a table of step, result and seconds.
 
 | Command | What it does |
@@ -28,14 +28,16 @@ before `npm run deploy` or a release** (about 6.5 minutes). Both need Chrome and
 | `npm ci` | Install (Node 20.19 or newer) |
 | `npm run dev` | Dev server at http://localhost:5190 (port is strict: stop it when done) |
 | `npm run check` | The quick level: `npm test`, `npm run types:check`, `npm run build`, then in headless Chrome `check-page` on both starters, `sound-check`, `shell` and `howto` |
-| `npm run check:full` | The quick level, then `npm run smoke`, `phone-start`, `drive-feel`, `car-camera` and `npm run perf` (exit code 2: perf's noise, run it again) |
+| `npm run check:full` | The quick level, then `npm run smoke`, `played-frame`, `phone-start`, `drive-feel`, `car-camera`, `flicker` and `npm run perf` (exit code 2: perf's noise, run it again) |
 | `npm test` | Every Node suite in `test/all.mjs`, no browser (includes the docs and recipe checks); in parallel, one process per CPU but one (`npm test -- --jobs=1` runs them one at a time) |
 | `npm run types && npm run types:check` | Emit `types/` from the JSDoc, then compile a strict TypeScript consumer |
 | `npm run build` | Build every page into `dist/` |
 | `npm run smoke` | Every demo and starter on both quality tiers in headless Chrome (needs Chrome and a GPU) |
 | `node test/browser/check-page.mjs <name>` | Load one page headlessly (`?autostart=1`), hold W for 2 s, fail on any console or page error |
 | `node test/browser/sound-check.mjs --wav=mix.wav` | Render the sound kit's ten-second self-test scene in headless Chrome, print its measurements and save the mix |
-| `node test/browser/phone-start.mjs [name]` | Start-up and lost-context paths of every demo and starter (loading screen until a frame is drawn, no long frame after it, the Reload notice, a lighter reload) |
+| `node test/browser/flicker.mjs [--out=dir]` | Flicker of nyc-night's bench views standing still (TAA jittering as in play), each held to a budget; `--out` saves heat maps of where it flickers |
+| `node test/browser/played-frame.mjs [name]` | The played frame of nyc-night and miami-drive: the production build at 1920x1080, vsync off, median and p95 frame interval against `bench/budgets.json` "played", and no `getParameter` round trip for the unpack pixel-store state (the stall `npm run perf` cannot see) |
+| `node test/browser/phone-start.mjs [name]` | Start-up and lost-context paths of every demo and starter (loading screen until a frame is drawn, no long frame after it, the Reload notice, a lighter reload), and the crash fallback (a boot marker left by a run that died: a lighter load, the marker cleared by a healthy run; `--crash` runs only that) |
 
 **The start-up.** The first frames compile every shader and upload every texture, seconds on a phone, so they are
 drawn and finished under the loading screen (`engine.warmUp()`: dt 0, nothing moves). Without it a phone shows a
@@ -45,7 +47,8 @@ loop, then shows the start card over a drawn frame. Without a shell, end `boot()
 `loading.setLabel('Compiling shaders…'); await engine.warmUp(); engine.start(); loading.hide();` (a `LoadingScreen`
 from ui, created first). docs/HOWTO.md "Start without a stall". If the device later drops the WebGL context, the
 engine stops, shows a message with a Reload button (over the shell's cards) and the next `resolveQuality()` in that
-tab comes up lighter; do not try to restore the context.
+tab comes up lighter; do not try to restore the context. A phone tab the OS kills for memory sends no event: a boot
+marker (core/Quality.js, set by `resolveQuality()`, cleared after 15 s of frames) makes the next load lighter too.
 
 **The page contract.** The browser scripts wait for `window.__sample.ready`; a page without it fails after the timeout.
 End `boot()` with `window.__sample = createBenchHarness(engine, { name: '<name>' }).setReady();` (core), as the
@@ -132,6 +135,8 @@ Everything else, layer by layer: [ENGINE.md](ENGINE.md). Every source file start
 - Audio needs a user gesture: `bus.bus(name)` is null and nothing plays until `bus.start()` runs inside a click or a
   key press. `GameShell` does it on its start click (pass `audio: bus`); without a shell call `bus.unlockOnGesture()`.
   Before that `SoundBank.play` returns an inert voice (never null) and `SoundBank.loop` waits and starts with the bus.
+  Without a shell, also `await bus.prepare()` behind your loading screen (the shell does it): creating the context
+  and rendering the loops otherwise stall the first key or click for 150-250 ms.
   Mix quietly: the kit's beds sit near -30 dBFS, so start loops at the gains the starters use, not at 1.
 - Sound names are exact (`step.gravel`, not `gravel`); an unknown name throws and lists the 18.
 - Behind the `GameShell` start card the inputs are off: a script that presses keys must load the page with

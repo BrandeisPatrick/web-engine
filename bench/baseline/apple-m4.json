@@ -2,39 +2,39 @@
   "machine": "apple-m4",
   "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
   "chrome": "157.0.8103.79",
-  "updated": "2026-11-17",
-  "commit": "060c32c",
+  "updated": "2026-11-18",
+  "commit": "9ec667a",
   "frames": 24,
   "repeats": 5,
-  "score": 136.6,
+  "score": 137.1,
   "views": {
     "nyc-night": {
       "size": "2268x1473",
       "tier": "desktop",
-      "heapMB": 271.7,
-      "assetMB": 21.3,
-      "loadMs": 3668,
+      "heapMB": 272,
+      "assetMB": 20.07,
+      "loadMs": 3775,
       "poses": {
         "avenue": {
-          "ms": 11.68,
-          "spread": 0.004,
+          "ms": 11.83,
+          "spread": 0.007,
           "drawCalls": 212,
           "triangles": 1070373,
           "textures": 134,
           "programs": 118,
-          "hash": "60f20797",
+          "hash": "5bf08e09",
           "imageNoise": {
-            "meanAbs": 0.009,
+            "meanAbs": 0.003,
             "pctOver8": 0
           },
           "look": {
-            "lumMean": 54.51,
+            "lumMean": 54.53,
             "lumMedian": 48,
             "p90": 87,
             "p99": 153,
             "lumMax": 244.53,
             "under40": 32.01,
-            "under80": 85.3,
+            "under80": 85.25,
             "over160": 0.76,
             "over240": 0,
             "satMean": 0.206,
@@ -48,25 +48,25 @@
           }
         },
         "square": {
-          "ms": 11.99,
+          "ms": 12.02,
           "spread": 0.002,
           "drawCalls": 244,
           "triangles": 1169316,
           "textures": 134,
           "programs": 119,
-          "hash": "9b69ff42",
+          "hash": "64a507fc",
           "imageNoise": {
             "meanAbs": 0,
             "pctOver8": 0
           },
           "look": {
-            "lumMean": 52.48,
+            "lumMean": 52.52,
             "lumMedian": 47,
             "p90": 74,
             "p99": 149,
             "lumMax": 238.28,
-            "under40": 24.32,
-            "under80": 92.17,
+            "under40": 24.31,
+            "under80": 92.08,
             "over160": 0.84,
             "over240": 0,
             "satMean": 0.193,
@@ -80,13 +80,13 @@
           }
         },
         "sidewalk": {
-          "ms": 12.77,
+          "ms": 12.85,
           "spread": 0.019,
           "drawCalls": 226,
           "triangles": 1128346,
           "textures": 134,
           "programs": 119,
-          "hash": "cb0b2900",
+          "hash": "bb67b538",
           "imageNoise": {
             "meanAbs": 0,
             "pctOver8": 0
@@ -98,7 +98,7 @@
             "p99": 168,
             "lumMax": 252.45,
             "under40": 29.13,
-            "under80": 83.34,
+            "under80": 83.35,
             "over160": 1.24,
             "over240": 0,
             "satMean": 0.22,
@@ -115,30 +115,30 @@
     "nyc-night-mobile": {
       "size": "1280x720",
       "tier": "mobile",
-      "heapMB": 251.4,
-      "assetMB": 8.68,
-      "loadMs": 3177,
+      "heapMB": 251.6,
+      "assetMB": 8.38,
+      "loadMs": 3064,
       "poses": {
         "avenue": {
-          "ms": 3.44,
-          "spread": 0.018,
+          "ms": 3.42,
+          "spread": 0.004,
           "drawCalls": 182,
           "triangles": 799052,
           "textures": 91,
           "programs": 141,
-          "hash": "715d5c08",
+          "hash": "8a9a48ce",
           "imageNoise": {
             "meanAbs": 0.016,
             "pctOver8": 0.01
           },
           "look": {
-            "lumMean": 48.45,
+            "lumMean": 48.46,
             "lumMedian": 42,
             "p90": 80,
-            "p99": 129,
+            "p99": 130,
             "lumMax": 194.92,
-            "under40": 42.99,
-            "under80": 89.68,
+            "under40": 43.12,
+            "under80": 89.63,
             "over160": 0.1,
             "over240": 0,
             "satMean": 0.204,
@@ -146,68 +146,68 @@
               "red": 3,
               "orange": 1.7,
               "azure": 1.4,
-              "blue": 3.7
+              "blue": 3.6
             }
           }
         },
         "square": {
-          "ms": 3.78,
-          "spread": 0.036,
+          "ms": 3.68,
+          "spread": 0.006,
           "drawCalls": 200,
           "triangles": 863512,
           "textures": 91,
           "programs": 142,
-          "hash": "bbdf3eaa",
+          "hash": "86d175e0",
           "imageNoise": {
             "meanAbs": 0,
             "pctOver8": 0
           },
           "look": {
-            "lumMean": 51.41,
+            "lumMean": 51.5,
             "lumMedian": 45,
             "p90": 76,
             "p99": 140,
             "lumMax": 231,
-            "under40": 32.43,
-            "under80": 91.62,
+            "under40": 32.52,
+            "under80": 91.4,
             "over160": 0.53,
             "over240": 0,
-            "satMean": 0.192,
+            "satMean": 0.191,
             "hues": {
               "red": 4.7,
-              "orange": 1.9,
+              "orange": 2,
               "azure": 0.6,
-              "blue": 6.2
+              "blue": 6
             }
           }
         },
         "sidewalk": {
-          "ms": 3.75,
-          "spread": 0.014,
+          "ms": 3.74,
+          "spread": 0.003,
           "drawCalls": 185,
           "triangles": 864941,
           "textures": 91,
           "programs": 143,
-          "hash": "4a7677c6",
+          "hash": "e80f21ba",
           "imageNoise": {
             "meanAbs": 0,
             "pctOver8": 0
           },
           "look": {
-            "lumMean": 46.37,
+            "lumMean": 46.33,
             "lumMedian": 41,
             "p90": 77,
             "p99": 138,
             "lumMax": 226.47,
-            "under40": 46.02,
-            "under80": 91.36,
-            "over160": 0.5,
+            "under40": 46.04,
+            "under80": 91.42,
+            "over160": 0.51,
             "over240": 0,
             "satMean": 0.236,
             "hues": {
               "red": 5.3,
               "orange": 1.9,
-              "azure": 0.5,
+              "azure": 0.6,
               "blue": 2.1
             }
           }
@@ -217,24 +217,24 @@
     "miami-drive": {
       "size": "2268x1473",
       "tier": "desktop",
-      "heapMB": 225.9,
-      "assetMB": 28.2,
-      "loadMs": 5114,
+      "heapMB": 225.4,
+      "assetMB": 26.53,
+      "loadMs": 5187,
       "poses": {
         "chase": {
-          "ms": 12.62,
-          "spread": 0.006,
+          "ms": 12.68,
+          "spread": 0.001,
           "drawCalls": 202,
           "triangles": 1418073,
           "textures": 133,
           "programs": 181,
-          "hash": "f6425619",
+          "hash": "4f0d5622",
           "imageNoise": {
-            "meanAbs": 0.009,
-            "pctOver8": 0.02
+            "meanAbs": 0.011,
+            "pctOver8": 0.03
           },
           "look": {
-            "lumMean": 76.38,
+            "lumMean": 76.39,
             "lumMedian": 72,
             "p90": 123,
             "p99": 157,
@@ -253,13 +253,13 @@
           }
         },
         "strip": {
-          "ms": 11.23,
-          "spread": 0.007,
+          "ms": 11.14,
+          "spread": 0.014,
           "drawCalls": 213,
           "triangles": 1534629,
           "textures": 134,
           "programs": 187,
-          "hash": "4207def3",
+          "hash": "4da753a0",
           "imageNoise": {
             "meanAbs": 0.004,
             "pctOver8": 0
@@ -283,13 +283,13 @@
           }
         },
         "beach": {
-          "ms": 6.99,
-          "spread": 0.002,
+          "ms": 7.03,
+          "spread": 0.003,
           "drawCalls": 144,
           "triangles": 735710,
           "textures": 134,
           "programs": 187,
-          "hash": "f1952f98",
+          "hash": "925381d2",
           "imageNoise": {
             "meanAbs": 0,
             "pctOver8": 0
@@ -312,13 +312,13 @@
           }
         },
         "car": {
-          "ms": 11.68,
+          "ms": 11.55,
           "spread": 0.005,
           "drawCalls": 186,
           "triangles": 1264638,
           "textures": 134,
           "programs": 187,
-          "hash": "f5e1fc9e",
+          "hash": "74f53559",
           "imageNoise": {
             "meanAbs": 0,
             "pctOver8": 0
@@ -346,20 +346,20 @@
     "miami-drive-mobile": {
       "size": "1280x720",
       "tier": "mobile",
-      "heapMB": 167.7,
+      "heapMB": 168,
       "assetMB": 3.65,
-      "loadMs": 3973,
+      "loadMs": 3988,
       "poses": {
         "chase": {
-          "ms": 2.71,
-          "spread": 0.006,
+          "ms": 2.68,
+          "spread": 0.002,
           "drawCalls": 149,
           "triangles": 737555,
           "textures": 76,
           "programs": 154,
-          "hash": "7365456c",
+          "hash": "b768ff9d",
           "imageNoise": {
-            "meanAbs": 0.008,
+            "meanAbs": 0.006,
             "pctOver8": 0
           },
           "look": {
@@ -369,7 +369,7 @@
             "p99": 152,
             "lumMax": 219.72,
             "under40": 13.15,
-            "under80": 57.61,
+            "under80": 57.59,
             "over160": 0.65,
             "over240": 0,
             "satMean": 0.253,
@@ -381,26 +381,26 @@
           }
         },
         "strip": {
-          "ms": 2.77,
-          "spread": 0.003,
+          "ms": 2.74,
+          "spread": 0,
           "drawCalls": 163,
           "triangles": 856774,
           "textures": 76,
           "programs": 156,
-          "hash": "df437e30",
+          "hash": "75b36937",
           "imageNoise": {
             "meanAbs": 0.001,
             "pctOver8": 0
           },
           "look": {
-            "lumMean": 68.18,
+            "lumMean": 68.17,
             "lumMedian": 66,
             "p90": 102,
             "p99": 149,
             "lumMax": 230.05,
             "under40": 22.13,
-            "under80": 63.24,
-            "over160": 0.66,
+            "under80": 63.23,
+            "over160": 0.65,
             "over240": 0,
             "satMean": 0.216,
             "hues": {
@@ -411,13 +411,13 @@
           }
         },
         "beach": {
-          "ms": 1.8,
-          "spread": 0.007,
+          "ms": 1.79,
+          "spread": 0.005,
           "drawCalls": 139,
           "triangles": 586898,
           "textures": 76,
           "programs": 156,
-          "hash": "10deb856",
+          "hash": "95e75b9c",
           "imageNoise": {
             "meanAbs": 0,
             "pctOver8": 0
@@ -440,13 +440,13 @@
           }
         },
         "car": {
-          "ms": 2.62,
-          "spread": 0.006,
+          "ms": 2.6,
+          "spread": 0.002,
           "drawCalls": 139,
           "triangles": 687931,
           "textures": 76,
           "programs": 156,
-          "hash": "5a0a0d6c",
+          "hash": "268c8c9b",
           "imageNoise": {
             "meanAbs": 0,
             "pctOver8": 0
@@ -459,7 +459,7 @@
             "lumMax": 232.25,
             "under40": 9.45,
             "under80": 71.7,
-            "over160": 0.62,
+            "over160": 0.63,
             "over240": 0,
             "satMean": 0.21,
             "hues": {

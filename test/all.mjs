@@ -26,6 +26,11 @@ const SUITES = [
   { file: 'core.mjs', alone: true },
   // the Engine's start-up and failure paths: warmUp (dt 0, no fixed step, GPU fence polled), lost context, frame errors
   { file: 'engine-start.mjs' },
+  // the pixel-store shadow on the Engine's context: unpack getParameter answered in the page, the same calls and values
+  { file: 'pixel-store.mjs' },
+  // adaptive resolution on modelled frames: a stalled frame keeps its ratio, steps that do not help are undone and
+  // back off, the ratio climbs back (also under vsync, by probes)
+  { file: 'adaptive-resolution.mjs' },
   { file: 'look-stats.mjs' },
   { file: 'memory.mjs' },
   { file: 'texture-manifest.mjs' },
