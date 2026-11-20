@@ -530,6 +530,11 @@ export class SSRPass extends Pass {
       blending: THREE.NoBlending, depthTest: false, depthWrite: false,
     });
     this._blurQuad = new FullScreenQuad(this._blurMat);
+    // uDir of the two passes, one output texel along x / y, rewritten only when the trace target's size changes:
+    // render() swaps which one the uniform holds. uDir.value.set(1 / w, 0) per pass boxed both doubles (32 B / frame)
+    // whenever TurboFan compiled render() without inlining Vector2.set (CI, 1 run in 5)
+    this._blurDirs = [new THREE.Vector2(), new THREE.Vector2()];
+    this._blurDirW = 0; this._blurDirH = 0;
   }
 
   render(renderer, writeBuffer, readBuffer) {
@@ -565,16 +570,22 @@ export class SSRPass extends Pass {
     renderer.setRenderTarget(this._rt);
     this._quad.render(renderer);
     if (this._denoise > 0) {
-      this._ensureBlur();
+      // guarded here, not only inside: _ensureBlur's closure gives it a context that unoptimised code allocates on every
+      // entry (40 B / frame until it tiered up), even when it returns at once
+      if (this._blurRts === null) this._ensureBlur();
       const b = this._blurMat.uniforms, rts = this._blurRts, w = this._rt.width, ht = this._rt.height;
       b.tDepth.value = depth; b.tNormal.value = gb.normal;
       if (b.uNear.value !== cam.near) b.uNear.value = cam.near;
       if (b.uFar.value !== cam.far) b.uFar.value = cam.far;
       if (b.uRadius.value !== this._denoise) b.uRadius.value = this._denoise;
       if (b.uMaxRoughness.value !== this._maxRoughness) b.uMaxRoughness.value = this._maxRoughness;
-      b.tSsr.value = this._rt.texture; b.uDir.value.set(1 / w, 0);
+      const dirs = this._blurDirs;
+      if (this._blurDirW !== w || this._blurDirH !== ht) { // integers compared: no double per frame
+        this._blurDirW = w; this._blurDirH = ht; dirs[0].set(1 / w, 0); dirs[1].set(0, 1 / ht);
+      }
+      b.tSsr.value = this._rt.texture; b.uDir.value = dirs[0];
       renderer.setRenderTarget(rts[0]); this._blurQuad.render(renderer);
-      b.tSsr.value = rts[0].texture; b.uDir.value.set(0, 1 / ht);
+      b.tSsr.value = rts[0].texture; b.uDir.value = dirs[1];
       renderer.setRenderTarget(rts[1]); this._blurQuad.render(renderer);
     }
   }

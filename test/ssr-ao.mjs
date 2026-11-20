@@ -37,6 +37,32 @@ const near = (a, b, tol) => Math.abs(a - b) <= tol;
 // allocation gates (test/helpers/alloc.mjs: exact bytes per call of TurboFan code, with a control) report through these
 const note = (s) => results.push(`NOTE  ${s}`);
 const inRange = (name, v, lo, hi, unit) => check(name, Number.isFinite(v) && v >= lo && v <= hi, `${Number.isFinite(v) ? +v.toFixed(3) : v} ${unit} in [${lo}, ${hi}]`);
+// One gate of run(k) (k frames), and when it reads over its 1 B budget (or finds no valid window), every allocation of
+// 2000 more frames sampled and attributed (the loop is TurboFan code by then, as in the gate's window), so a failure
+// names the function that allocated with its callers instead of only a byte count. A boxed double is charged to the
+// function whose optimised code boxes it (a call it did not inline gets its double arguments boxed by the caller).
+async function allocGate(name, run, n) {
+  const m = bytesPerCall(run, n);
+  gate(inRange, note, name, m, { unit: 'frame' });
+  if (m.per <= 1) return;
+  try {
+    const inspector = await import('node:inspector/promises');
+    const s = new inspector.Session(); s.connect();
+    await s.post('HeapProfiler.enable');
+    await s.post('HeapProfiler.startSampling', { samplingInterval: 16, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true });
+    run(2000);
+    const { profile } = await s.post('HeapProfiler.stopSampling');
+    await s.post('HeapProfiler.disable'); s.disconnect();
+    const where = [], frame = (f) => `${f.functionName || '(anonymous)'} ${f.url.split('/').pop()}:${f.lineNumber + 1}`;
+    const walk = (nd, path) => {
+      const here = nd.callFrame.url ? [...path, frame(nd.callFrame)] : path;
+      if (nd.selfSize && here.length > 1 && /^file:/.test(nd.callFrame.url)) where.push(`${nd.selfSize} B in ${here.slice(-4).join(' > ')}`);
+      nd.children.forEach((c) => walk(c, here));
+    };
+    walk(profile.head, []);
+    note(`alloc: ${name}: sampled over 2000 frames (Node ${process.version}): ${where.length ? where.join('; ') : 'nothing sampled'}`);
+  } catch (err) { note(`alloc: ${name}: allocation sampling unavailable: ${err.message}`); }
+}
 
 // enough of WebGLRenderer for the passes' render() (draws are no-ops); records bound targets and clears
 function stubRenderer() {
@@ -246,7 +272,7 @@ const gbStub = { normal: new THREE.Texture() };
   check('no depth texture: cleared, not traced', r.clears === clears + 2 && r.bound === p._rt);
 
   // nothing allocates per render
-  gate(inRange, note, 'SSR render()', bytesPerCall((n) => { for (let i = 0; i < n; i++) p.render(r, null, read); }, 50000), { unit: 'frame' });
+  await allocGate('SSR render()', (n) => { for (let i = 0; i < n; i++) p.render(r, null, read); }, 50000);
 
   // denoise: trace -> blur H -> blur V, no allocation
   const bound = [], sr = r.setRenderTarget;
@@ -254,7 +280,11 @@ const gbStub = { normal: new THREE.Texture() };
   p.denoise = 3; p.render(r, null, read);
   check('render, denoise: trace -> blur H -> blur V, texture = blur V', bound.join() === [p._rt, p._blurRts[0], p._blurRts[1]].join() && bound[2] === p._blurRts[1] && p.texture === p._blurRts[1].texture);
   r.setRenderTarget = sr;
-  gate(inRange, note, 'SSR render() (denoise)', bytesPerCall((n) => { for (let i = 0; i < n; i++) p.render(r, null, read); }, 50000), { unit: 'frame' });
+  await allocGate('SSR render() (denoise)', (n) => { for (let i = 0; i < n; i++) p.render(r, null, read); }, 50000);
+  // uDir per pass: one trace texel along x, then y (the trace target is 32 x 16 at scale 0.5), following a resize (after
+  // the gate: wrapping the blur quad's render changes the type feedback the gate's loop is compiled from)
+  const dirsOk = (w, h) => { const dv = []; const qr = p._blurQuad.render; p._blurQuad.render = (rr) => { dv.push(p._blurMat.uniforms.uDir.value.toArray().join()); qr.call(p._blurQuad, rr); }; p.render(r, null, read); p._blurQuad.render = qr; return dv.join(' | ') === `${1 / w},0 | 0,${1 / h}`; };
+  check('render, denoise: uDir (1 / w, 0) for blur H, (0, 1 / h) for blur V, updated by setSize', dirsOk(32, 16) && (p.setSize(40, 20), dirsOk(20, 10)) && (p.setSize(64, 32), dirsOk(32, 16)));
   p.denoise = 0;
   check('dispose: no throw', !throws(() => { p.dispose(); q.dispose(); }));
 }
@@ -307,7 +337,7 @@ const gbStub = { normal: new THREE.Texture() };
   // the reuse bookkeeping allocates nothing (a pass without denoise: the blur's own reading on this stub is gated above)
   const g = new SSRPass(cam, h, gbStub, { interval: 2 }); g.setSize(64, 32);
   const plain = () => { h.begin(64, 32); g.render(r, null, read); h.end(); };
-  gate(inRange, note, 'SSR render() (interval 2: traced + reused frames)', bytesPerCall((n) => { for (let i = 0; i < n; i++) plain(); }, 50000), { unit: 'frame' });
+  await allocGate('SSR render() (interval 2: traced + reused frames)', (n) => { for (let i = 0; i < n; i++) plain(); }, 50000);
   g.dispose();
   p.dispose(); nh.dispose();
 }
@@ -607,7 +637,7 @@ const AO_DEFINES_SHA = '137fff3a94eb4cc7bfe6c9a08d7db6bb6651272d1952187bb619ac45
     check('same G-buffer / same normals again: no program change', gm.version === v0 + 1);
 
     // nothing allocates per render on the G-buffer path
-    gate(inRange, note, "AO render() ('gbuffer')", bytesPerCall((n) => { for (let i = 0; i < n; i++) g.render(r, null, read); }, 50000), { unit: 'frame' });
+    await allocGate("AO render() ('gbuffer')", (n) => { for (let i = 0; i < n; i++) g.render(r, null, read); }, 50000);
 
     // back to 'depth': the 0.7.0 program exactly
     g.normals = 'depth';
