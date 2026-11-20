@@ -128,7 +128,9 @@ export class CameraHistory {
     const j = u.uJitter.value, s = this._seq, i = (this._k++ % (s.length >> 1)) * 2; // frames since reset()
     u.uPrevJitter.value.copy(j);
     if (this.jitter && width > 0 && height > 0 && (s[i] !== 0 || s[i + 1] !== 0)) {
-      j.set(s[i], s[i + 1]);
+      // the fields written directly: j.set(s[i], s[i + 1]) boxed both doubles (32 B / frame) whenever TurboFan
+      // compiled begin() without inlining Vector2.set
+      j.x = s[i]; j.y = s[i + 1];
       this._proj.copy(cam.projectionMatrix);
       this._projInv.copy(cam.projectionMatrixInverse);
       const e = cam.projectionMatrix.elements, dx = j.x * 2 / width, dy = j.y * 2 / height;

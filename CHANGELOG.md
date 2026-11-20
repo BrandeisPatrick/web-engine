@@ -31,6 +31,26 @@
   (3 of 24 runs of the old code read 32 B, 0 of 24 now) and with `--no-turbo-inlining` (32 B before, 0 B now, also with
   `--no-sparkplug --no-maglev`). The suite's allocation gates now sample a failing reading's allocations and name the
   function that allocated, with its callers.
+- `CameraHistory.begin()` no longer allocates in any V8 tiering state. It set the TAA jitter with
+  `uJitter.value.set(s[i], s[i + 1])`, two doubles read from a Float64Array and boxed for the call (32 B a frame)
+  whenever TurboFan compiled `begin()` without inlining `Vector2.set`, the mechanism of the `SSRPass` entry above; it
+  now writes the two fields directly, the same values. `test/ssr-ao.mjs`'s gate `alloc: SSR render() (interval 2:
+  traced + reused frames)` had not failed on GitHub yet but read 31 B per frame under `--no-turbo-inlining`; 0 B now.
+- CI: `test/tyre-fx.mjs`'s gate `alloc: TyreFx.update(), smoke only` failed about 1 run in 10 on GitHub reading
+  -6.06 B per call: its window's `heapUsed` came out 12 KB below the floor, and the gate failed only because a
+  negative reading is out of range. `heapUsed` can fall without a GC while a concurrent compile job is running: in a
+  probe on Node 26.0 (a GC-free window opened right after queueing a TurboFan job), 5 of 720 windows read 11 to 340 KB
+  lower at their end (old and trusted space), none with `--no-concurrent-recompilation`, and the sweeping flags
+  (`--no-concurrent-sweeping`, `--single-threaded-gc`) made no difference. Not reproduced in the suite itself, here or
+  under load. The allocation helper (`test/helpers/alloc.mjs`) now waits for pending compile jobs before each window
+  (0 of 720 probe windows read low then), and a window below its floor, or whose floor windows held a GC, is invalid like a
+  window with a GC: listed in the reading's notes, re-warmed and retried, and after the last try the reading is NaN
+  and the gate fails. It is never clamped to 0. A new suite, `test/alloc-helper.mjs`, checks this on loops whose floor
+  reads above their window. A probe on a GitHub runner (the suite 300 times, 3 at a time, with each helper) failed
+  2 of 300 with the old helper (-5.65 B, and 0.9 B against the gate's 0.5 B) and 0 of 300 with the new one, which
+  retried one window that read 181 KB below its floor: the wait does not remove every such window, the retry handles
+  them. The 0.9 B failure was the suite's own: it took its readings with the default 1 B budget, so a single noisy
+  window between the gate's 0.5 B and 1 B was not retried. Each reading is now taken with its gate's budget.
 
 ## 1.2.0 — 2026-11-18 — Far glass towers stop flickering; the city demos play at their drawn speed; phones lighter after a crash; two test levels
 - Far glass towers no longer flicker (nyc-night: "the buildings flash when you walk"). The curtain walls' mullions
