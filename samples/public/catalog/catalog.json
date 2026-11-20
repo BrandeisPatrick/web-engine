@@ -129,12 +129,12 @@
     "url": "https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/CarConcept",
     "creditsFile": "samples/public/miami/CREDITS.md"
    },
-   "bytes": 9489764,
+   "bytes": 3173968,
    "facts": {
     "triangles": 213347,
     "meshes": 97,
     "materials": 29,
-    "textures": 15
+    "textures": 14
    },
    "tags": [
     "car",

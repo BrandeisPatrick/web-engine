@@ -516,9 +516,20 @@ function drop(table, rigOpts, seconds, onStep) {
     const { profile } = await s.post('HeapProfiler.stopSampling');
     await s.post('HeapProfiler.disable'); s.disconnect();
     let mine = 0;
-    const walk = (n) => { if (n.selfSize && /Ragdoll\.js$|three\.(core|module)\.(min\.)?js$|DynamicsWorld\.js$/.test(n.callFrame.url)) mine += n.selfSize; n.children.forEach(walk); };
-    walk(profile.head);
-    check('alloc: sampled bytes in Ragdoll.js / three / getPose over 3000 update() calls', mine, 0, 0, 'B');
+    const where = []; // who allocated, with its callers: a failure names the function instead of only a byte count
+    const frame = (f) => `${f.functionName || '(anonymous)'} ${f.url.split('/').pop()}:${f.lineNumber + 1}`;
+    const walk = (n, path) => {
+      const here = n.callFrame.url ? [...path, frame(n.callFrame)] : path;
+      if (n.selfSize && /Ragdoll\.js$|three\.(core|module)\.(min\.)?js$|DynamicsWorld\.js$/.test(n.callFrame.url)) { mine += n.selfSize; where.push(`${n.selfSize} B in ${here.slice(-4).join(' > ')}`); }
+      n.children.forEach((c) => walk(c, here));
+    };
+    walk(profile.head, []);
+    if (mine) note(`alloc: sampled allocations (Node ${process.version}): ${where.join('; ')}`);
+    // per update, as the gate above and the other suites' sampled checks: an allocation per update is at least one
+    // boxed double, 16 B / update. A one-off is not one: on GitHub's runner (Node 26.13) one call of
+    // Matrix4.multiplyMatrices under updateWorldMatrix ran unoptimised in about half the runs, 280 B in the 3000
+    // updates (0.09 B / update), which the earlier limit of 0 B in all failed on
+    check('alloc: sampled bytes per update() in Ragdoll.js / three / DynamicsWorld.js frames (3000 updates)', mine / 3000, 0, 1, 'B');
   } catch (err) { note(`allocation sampling unavailable: ${err.message}`); }
   rd.deactivate();
 }

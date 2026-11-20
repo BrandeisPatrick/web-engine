@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+- miami-drive's car downloads 6.3 MB less. `samples/public/miami/models/car-concept.glb` is meshopt-compressed
+  (EXT_meshopt_compression, made with gltfpack 1.3, `-cc -ce ext -kn -km -ke -vpf -vnf -vtf -vn 12 -vt 14`: float
+  positions, normals and UVs at 14 / 12 / 14 bits, node names, materials and extras kept, no simplification): 9.49 ->
+  3.17 MB, the same 213,347 triangles, 97 meshes, 29 materials and 14 images. `samples/miami-drive/car-glb.js` gives
+  its loader three's MeshoptDecoder, imported when the car loads (about 5 ms of decode); the phone tier has no car
+  file and is unchanged. The picture is the same: the car and chase poses and two close views at 1920x1080 differ from
+  1.2.0 by a mean of 0.005 to 0.026 of 255 (two loads of 1.2.0 differ by up to 0.01), a few pixels on the headlight's
+  LED glints, and `npm run perf`'s image guard passes on every pose; its count of miami-drive's assets goes from 26.5
+  to 20.5 MB. Ready about 1 s sooner on a 50 Mbit/s connection (9.65 -> 8.66 s), the same on localhost. The owner
+  chose it from side-by-side pictures on 2026-11-20. Shown in the same comparison and not taken: KTX2 for nyc-night's
+  texture sets (the same picture, but 1.6 MB more to download, because its JPG normal maps are smaller than UASTC;
+  only the GPU memory falls, 224 -> 176 MB), `renderScale` 0.87 and 0.75 (10 to 25 % more frames a second at
+  2268x1473; thin lines soften, visibly at 0.75) and the forward path with FXAA (no wet-street reflections).
+- CI: `test/ragdoll.mjs`'s sampled-allocation check failed in about half the runs on GitHub (Node 26.13; never on
+  Node 26.0 locally), on `main` too since the suites run in parallel: 280 B in 3000 `update()` calls, held to 0 B. It
+  now names what allocated (one unoptimised call of `Matrix4.multiplyMatrices` under `updateWorldMatrix`, a one-off
+  while V8 re-tiers the function) and is held per update like the gate above it and the other suites' sampled
+  checks: under 1 B / update (it read 0.09), where an allocation per update is at least 16.
+
 ## 1.2.0 — 2026-11-18 — Far glass towers stop flickering; the city demos play at their drawn speed; phones lighter after a crash; two test levels
 - Far glass towers no longer flicker (nyc-night: "the buildings flash when you walk"). The curtain walls' mullions
   and transoms have two rounded faces (normals tilted either side of the centre line) and reflect the city as polished
