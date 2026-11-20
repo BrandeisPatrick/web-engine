@@ -46,7 +46,11 @@
   (0 of 720 probe windows read low then), and a window below its floor, or whose floor windows held a GC, is invalid like a
   window with a GC: listed in the reading's notes, re-warmed and retried, and after the last try the reading is NaN
   and the gate fails. It is never clamped to 0. A new suite, `test/alloc-helper.mjs`, checks this on loops whose floor
-  reads above their window.
+  reads above their window. A probe on a GitHub runner (the suite 300 times, 3 at a time, with each helper) failed
+  2 of 300 with the old helper (-5.65 B, and 0.9 B against the gate's 0.5 B) and 0 of 300 with the new one, which
+  retried one window that read 181 KB below its floor: the wait does not remove every such window, the retry handles
+  them. The 0.9 B failure was the suite's own: it took its readings with the default 1 B budget, so a single noisy
+  window between the gate's 0.5 B and 1 B was not retried. Each reading is now taken with its gate's budget.
 
 ## 1.2.0 — 2026-11-18 — Far glass towers stop flickering; the city demos play at their drawn speed; phones lighter after a crash; two test levels
 - Far glass towers no longer flicker (nyc-night: "the buildings flash when you walk"). The curtain walls' mullions
