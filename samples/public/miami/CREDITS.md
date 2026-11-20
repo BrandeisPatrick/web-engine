@@ -36,12 +36,15 @@ a CC0 model by Unity Fan (https://sketchfab.com/3d-models/free-concept-car-004-p
 Licensed CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/). **Changes:** the Khronos and 3D Commerce logos
 (trademarks, excluded from the licence) are removed: the logo image is replaced by a 4 x 4 black PNG, both marks are
 painted out of the tyre sidewall colour and normal maps, and the steering-wheel badge mesh is hidden at load; four
-PNG maps re-encoded as JPEG (AO at 1024 px); the transmission glass is replaced by a tinted glass and the paint
-recoloured at load (`samples/miami-drive/car-glb.js`). The phone tier uses the generated sedan (`car-model.js`).
+PNG maps re-encoded as JPEG (AO at 1024 px); the geometry meshopt-compressed with gltfpack 1.3
+(`gltfpack -cc -ce ext -kn -km -ke -vpf -vnf -vtf -vn 12 -vt 14`: EXT_meshopt_compression, float positions / normals /
+UVs at 14 / 12 / 14 bits, 8-bit tangents, no simplification; 9,489,764 -> 3,173,968 bytes); the transmission glass is
+replaced by a tinted glass and the paint recoloured at load (`samples/miami-drive/car-glb.js`). The phone tier uses the
+generated sedan (`car-model.js`).
 
 | File | Source file | Licence | Downloaded bytes | Committed bytes |
 |---|---|---|---|---|
-| `models/car-concept.glb` | `Models/CarConcept/glTF-Binary/CarConcept.glb` (raw.githubusercontent.com, main) | CC-BY 4.0 (logos excluded, removed) | 11,778,688 | 9,489,764 |
+| `models/car-concept.glb` | `Models/CarConcept/glTF-Binary/CarConcept.glb` (raw.githubusercontent.com, main) | CC-BY 4.0 (logos excluded, removed) | 11,778,688 | 3,173,968 |
 
 ## Roadside scans (Poly Haven, CC0 1.0)
 
@@ -82,8 +85,8 @@ The round-3 sky photograph (`sky/dusk-sky.jpg` 420,695 bytes + JSON, from Poly H
 CC0, Sergej Majboroda / Jarod Guest, https://polyhaven.com/a/industrial_sunset_puresky; its 16,409,672-byte HDR was
 never committed) is no longer used: the dusk sky and its cumulus are procedural (`sky.js`).
 
-Total committed for this demo: 55.8 MB (textures 20.7 MB JPG + 12.7 MB KTX2, road / bank 10.9 MB, car 9.5 MB, roadside
-1.7 MB, transcoder 0.6 MB, map 0.47 MB). Downloaded by the desktop page: about 30 MB (KTX2 instead of the JPGs);
+Total committed for this demo: 49.5 MB (textures 20.7 MB JPG + 12.7 MB KTX2, road / bank 10.9 MB, car 3.2 MB, roadside
+1.7 MB, transcoder 0.6 MB, map 0.47 MB). Downloaded by the desktop page: about 24 MB (KTX2 instead of the JPGs);
 phones: the map, the sand and the gravel / rock scans (about 4 MB, no car file, no 2k sets).
 KTX2 compression (`tools/compress-textures.mjs`) was not run: its encoder packages are not installed here; the JPGs
 are the loader's fallback path.
