@@ -19,6 +19,18 @@
   now names what allocated (one unoptimised call of `Matrix4.multiplyMatrices` under `updateWorldMatrix`, a one-off
   while V8 re-tiers the function) and is held per update like the gate above it and the other suites' sampled
   checks: under 1 B / update (it read 0.09), where an allocation per update is at least 16.
+- `SSRPass.render()` with `denoise` on no longer allocates in any V8 tiering state. `test/ssr-ao.mjs`'s gate
+  `alloc: SSR render() (denoise)` failed about 1 run in 5 on GitHub (Node 26.13) and left `main` red: 32 B per frame,
+  the same on every try of a failing process. The blur set its direction with `uDir.value.set(1 / w, 0)` and
+  `set(0, 1 / ht)`; when TurboFan compiled `render()` without inlining `Vector2.set` (it decides by its inlining
+  budget and the feedback it has, which a loaded machine changes), it boxed both doubles for the call, 2 x 16 B a
+  frame. The pass now keeps one direction vector per blur pass, rewritten only when the target's size changes, and
+  points the uniform at one or the other. A second, shorter allocation went too: `render()` called `_ensureBlur()`
+  every frame, and its closure gave it a context that unoptimised code allocates on entry (40 B a frame until it
+  tiered up; CI's "try 2: 72 B" was both); the call is now guarded in `render()`. Reproduced on Node 26.0 under load
+  (3 of 24 runs of the old code read 32 B, 0 of 24 now) and with `--no-turbo-inlining` (32 B before, 0 B now, also with
+  `--no-sparkplug --no-maglev`). The suite's allocation gates now sample a failing reading's allocations and name the
+  function that allocated, with its callers.
 
 ## 1.2.0 — 2026-11-18 — Far glass towers stop flickering; the city demos play at their drawn speed; phones lighter after a crash; two test levels
 - Far glass towers no longer flicker (nyc-night: "the buildings flash when you walk"). The curtain walls' mullions
