@@ -101,7 +101,9 @@ let slide;
 // segment is laid every 5th call per wheel. ParticleSystem.update alone is read too (0 B).
 {
   const force = functionsOf(TyreFx, DecalTrail, ParticleSystem);
-  const reading = (opts) => {
+  // each reading is taken with its gate's budget: a reading over it is retried (a real allocation reads the same on
+  // every try). Read with the default 1 B, the smoke gate (0.5) failed on a single 0.9 B window (1 of 300 CI runs)
+  const reading = (opts, budget) => {
     const car = new VehicleController(ROAD_CAR_SPEC);
     car.reset(new Vector3(), 0, null); car.velocity.set(0, 0, -25);
     const c = { steer: -1, handbrake: true, throttle: 0.5 };
@@ -109,14 +111,14 @@ let slide;
     for (let i = 0; i < 60; i++) { car.step(DT, c, null); fx.update(FRAME, car); }
     let sink = 0;
     // the car holds its slide pose (heat stays up) and moves 5 cm per call, so the ribbons keep extending
-    const m = bytesPerCall((n) => { for (let i = 0; i < n; i++) { car.position.z -= 0.05; fx.update(FRAME, car); sink += fx.smoke.count; } }, 2000, { force });
+    const m = bytesPerCall((n) => { for (let i = 0; i < n; i++) { car.position.z -= 0.05; fx.update(FRAME, car); sink += fx.smoke.count; } }, 2000, { force, budget });
     if (!Number.isFinite(sink)) failures++;
     return { m, fx };
   };
-  const smokeOnly = reading({ markHeat: [1e9, 2e9] });
+  const smokeOnly = reading({ markHeat: [1e9, 2e9] }, 0.5);
   check('alloc: smoke-only run spawns puffs (sanity)', smokeOnly.fx.stats.puffs, 10, Infinity);
   gate(check, note, 'TyreFx.update(), smoke only, x2000', smokeOnly.m, { budget: 0.5 });
-  const both = reading({});
+  const both = reading({}, 32);
   gate(check, note, 'TyreFx.update(), marks + smoke, x2000 (DecalTrail._quad: 32 B per segment)', both.m, { budget: 32 });
   if (!ALLOC.ok) note(ALLOC.reason);
 }
