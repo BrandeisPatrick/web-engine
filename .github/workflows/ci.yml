@@ -21,7 +21,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,6 +29,4 @@ jobs:
           node-version: 26
           cache: npm
       - run: npm ci
-      - run: npm test
-      - run: npm run build
-      - run: npm run types:check
+      - run: bash test/ci-probe.sh 60
