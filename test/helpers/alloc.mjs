@@ -9,8 +9,9 @@
 //     two-field objects read 33 568 / 321 680 / 3 202 912 B on every repeat, 32 B each over a constant floor (the
 //     measurement's own result objects, calibrated with run(0)). v8 total_allocated_bytes is no help here: it moves
 //     in whole allocation-buffer steps (~256 KB, also when read twice with nothing in between).
-//   - a window is valid only when no GC ran in it and the forced functions are still TurboFan code afterwards; an
-//     invalid window is reported and retried after a fresh warm-up, and after `tries` invalid windows the reading is
+//   - a window is valid only when no GC ran in it or in its floor windows, it reads at or above its floor (below it,
+//     heapUsed moved for another reason) and the forced functions are still TurboFan code afterwards; an invalid
+//     window is reported and retried after a fresh warm-up, and after `tries` invalid windows the reading is
 //     NaN, which every suite's check() fails. A deopt never passes silently.
 //   - every reading comes with a control: the same loop plus one array per unit, measured the same way, which must
 //     read above the gate's budget, so the gate is known to see an allocation of that size.
@@ -89,7 +90,12 @@ export async function functionsOfDir(dir) {
   return functionsOf(...(await Promise.all(files.map((f) => import(new URL(f, dir).href)))));
 }
 
+// Concurrent compile jobs are awaited first: a job still running on a background thread when h0 is read can lower
+// heapUsed inside a GC-free window (old and trusted space shrank by 11-340 KB in 5 of 720 probe windows opened on a
+// queued TurboFan job; 0 of 720 with --no-concurrent-recompilation or with this await; the sweeping flags made no
+// difference): tyre-fx's smoke gate read -6 B / call (12 KB under its floor) on CI about 1 run in 10.
 const window = (run, n) => {
+  finalize();
   gc();
   const prof = new v8.GCProfiler();
   prof.start();
@@ -114,7 +120,8 @@ if (ALLOC.ok) {
 // if it did; each must be TurboFan or still marked after the window. Without them a whole-subsystem loop reads what
 // its callees' tiers happen to be (PostFX.render 160-195 B / frame with its passes in Maglev or TurboFan, a dynamics
 // step 59-185 B). The floor is run(0) through the same path.
-// A window with a GC, or after which a forced function is no longer TurboFan, is invalid: reported, re-warmed, retried
+// A window with a GC (or floor windows with one), below its floor, or after which a forced function is no longer
+// TurboFan, is invalid: reported, re-warmed, retried
 // (after a GC with half the units: under load the young generation is smaller; ~1 MB of garbage triggered a scavenge
 // on the M4's efficiency cores). So is a reading over `budget` (a callee V8 has not tiered up yet boxes too; a real
 // allocation in TurboFan code reads the same on every try, so it still fails): every such reading is listed in `why`.
@@ -127,13 +134,18 @@ function measure(run, n, { warm, tries, budget, force = [] }) {
     run(1);
     if (force.length) { for (const f of force) { prep(f); opt(f); } run(1); }
     finalize();
-    let floor = Infinity;
-    for (let k = 0; k < 3; k++) floor = Math.min(floor, window(run, 0).bytes);
+    let floor = Infinity, fgcs = 0;
+    for (let k = 0; k < 3; k++) { const f = window(run, 0); floor = Math.min(floor, f.bytes); fgcs += f.gcs; }
     const w = window(run, n), per = (w.bytes - floor) / n;
-    const cold = force.filter((f) => !turbo(f) && !(status(f) & MARKED)), valid = w.gcs === 0 && turbo(run) && cold.length === 0;
+    const cold = force.filter((f) => !turbo(f) && !(status(f) & MARKED));
+    // below the floor: the heap shrank without a GC, so the window measured something else (and could hide an
+    // allocation of up to that size): invalid on every try, never clamped to 0
+    const valid = w.gcs === 0 && fgcs === 0 && turbo(run) && cold.length === 0 && per >= 0;
     if (valid && (per <= budget || t === tries)) return { per, bytes: w.bytes - floor, n, floor, tries: t, why };
-    why.push(`try ${t}: ${w.gcs ? `${w.gcs} GC(s) in the window of ${n}` : !turbo(run) ? 'the loop deoptimised'
-      : cold.length ? `deoptimised: ${cold.slice(0, 3).map((f) => f.name || '(anonymous)').join(', ')}${cold.length > 3 ? ` and ${cold.length - 3} more` : ''}` : `${per.toFixed(2)} B / unit`}`);
+    why.push(`try ${t}: ${w.gcs ? `${w.gcs} GC(s) in the window of ${n}` : fgcs ? `${fgcs} GC(s) in the floor windows`
+      : !turbo(run) ? 'the loop deoptimised'
+      : cold.length ? `deoptimised: ${cold.slice(0, 3).map((f) => f.name || '(anonymous)').join(', ')}${cold.length > 3 ? ` and ${cold.length - 3} more` : ''}`
+      : per < 0 ? `${floor - w.bytes} B below the floor (${per.toFixed(2)} B / unit: the heap shrank without a GC)` : `${per.toFixed(2)} B / unit`}`);
     if (w.gcs) n = Math.max(1, Math.floor(n / 2));
     prep(run);
     run(warm);

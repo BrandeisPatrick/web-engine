@@ -33,6 +33,8 @@ const SUITES = [
   { file: 'adaptive-resolution.mjs' },
   { file: 'look-stats.mjs' },
   { file: 'memory.mjs' },
+  // the allocation gates' helper (test/helpers/alloc.mjs): a window below its floor is retried, and fails when it stays
+  { file: 'alloc-helper.mjs' },
   { file: 'texture-manifest.mjs' },
   // world: the high-detail vehicle level (lod 'hd'), with LOD 0 / 1 pinned byte-identical
   { file: 'vehicles-hd.mjs', shim: true },
