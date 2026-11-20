@@ -14,6 +14,11 @@
   texture sets (the same picture, but 1.6 MB more to download, because its JPG normal maps are smaller than UASTC;
   only the GPU memory falls, 224 -> 176 MB), `renderScale` 0.87 and 0.75 (10 to 25 % more frames a second at
   2268x1473; thin lines soften, visibly at 0.75) and the forward path with FXAA (no wet-street reflections).
+- CI: `test/ragdoll.mjs`'s sampled-allocation check failed in about half the runs on GitHub (Node 26.13; never on
+  Node 26.0 locally), on `main` too since the suites run in parallel: 280 B in 3000 `update()` calls, held to 0 B. It
+  now names what allocated (one unoptimised call of `Matrix4.multiplyMatrices` under `updateWorldMatrix`, a one-off
+  while V8 re-tiers the function) and is held per update like the gate above it and the other suites' sampled
+  checks: under 1 B / update (it read 0.09), where an allocation per update is at least 16.
 
 ## 1.2.0 — 2026-11-18 — Far glass towers stop flickering; the city demos play at their drawn speed; phones lighter after a crash; two test levels
 - Far glass towers no longer flicker (nyc-night: "the buildings flash when you walk"). The curtain walls' mullions
