@@ -4,7 +4,7 @@
 //   ?r=gpu-gl   C: WebGPURenderer with forceWebGL: true (its WebGL2 backend)
 // Other query: ?post=1 (the post-processing comparison, post.js), ?bundle=1 (B: the static city in a BundleGroup),
 // ?ts=1 (WebGPURenderer timestamp queries), ?lights=N (N street-lamp point lights: the engine's ClusteredLights under
-// WebGLRenderer, three's TiledLighting under WebGPU; indicative, not like-for-like), ?frames=N (rAF frames per pose, default 300), ?sync=N (GPU-synchronised
+// WebGLRenderer, three's TiledLighting / ClusteredLighting under WebGPU; indicative, not like-for-like), ?frames=N (rAF frames per pose, default 300), ?sync=N (GPU-synchronised
 // frames per pose, default 60), ?poses=a,b (default: every pose in poses.json), 
 // The same city (city.js) is drawn at 1920x1080, pixel ratio 1, from nyc-night's bench poses (poses.json, captured from
 // the production page by bench.mjs --poses). Results: the table on the page (Copy button) and window.__lab.
@@ -103,8 +103,13 @@ async function main() {
       draw = (cam) => { cl.update(cam); renderer.render(scene, cam); };
     } else {
       if (!R.device) throw new Error('?lights needs WebGLRenderer (ClusteredLights) or the WebGPU backend (TiledLighting)');
-      const { TiledLighting } = await import('three/addons/lighting/TiledLighting.js');
-      renderer.lighting = new TiledLighting();
+      // three's many-light system: TiledLighting up to r18x, ClusteredLighting (Forward+) in r187; whichever this
+      // three.js has (a glob, so a missing file is not an import error)
+      const mods = import.meta.glob('/node_modules/three/examples/jsm/lighting/{Tiled,Clustered}Lighting.js');
+      const [file, load] = Object.entries(mods)[0] || [];
+      if (!load) throw new Error('no TiledLighting / ClusteredLighting in this three.js');
+      const m = await load(), Lighting = m.ClusteredLighting || m.TiledLighting;
+      renderer.lighting = new Lighting(); lab.lighting = file.split('/').pop();
       for (const [x, y, z] of L) { const l = new THREE.PointLight(new THREE.Color(1, 0.72, 0.42), 150, 30, 2); l.position.set(x, y, z); scene.add(l); }
     }
   }

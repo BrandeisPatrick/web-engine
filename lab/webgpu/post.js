@@ -32,7 +32,8 @@ export async function makePost({ renderer, scene, camera, W, H, webgpu }) {
   const mr = sp.getTextureNode('metalrough'), vel = sp.getTextureNode('velocity');
   const aoN = ao(depth, nrm, camera);
   aoN.resolutionScale = 0.35; aoN.samples.value = 6; aoN.radius.value = 1.2; aoN.thickness.value = 1.2;
-  const ssrN = ssr(col, depth, nrm, mr.r, mr.g, camera);
+  // r187 takes the material inputs as options (r180: positional metalness, roughness, camera)
+  const ssrN = +THREE.REVISION >= 187 ? ssr(col, depth, nrm, { metalnessNode: mr.r, roughnessNode: mr.g, camera }) : ssr(col, depth, nrm, mr.r, mr.g, camera);
   ssrN.resolutionScale = 0.4; ssrN.maxDistance.value = 120; ssrN.thickness.value = 0.6;
   const lit = blendColor(col.mul(aoN.getTextureNode().r), ssrN);
   const aa = traa(lit, depth, vel, camera);
