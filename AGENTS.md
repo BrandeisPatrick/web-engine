@@ -20,7 +20,7 @@ No registration is needed (`vite.config.js` finds every `samples/<name>/index.ht
 ## Commands
 
 Two test levels: run **`npm run check` for every change** (about 1.5 minutes on an M4) and **`npm run check:full`
-before `npm run deploy` or a release** (about 7 minutes). Both need Chrome and the GPU. Each runs its steps in order (listed in
+before `npm run deploy` or a release** (about 9 minutes). Both need Chrome and the GPU. Each runs its steps in order (listed in
 `test/check.mjs`), stops at the first failing step and ends with a table of step, result and seconds.
 
 | Command | What it does |
@@ -28,13 +28,14 @@ before `npm run deploy` or a release** (about 7 minutes). Both need Chrome and t
 | `npm ci` | Install (Node 20.19 or newer) |
 | `npm run dev` | Dev server at http://localhost:5190 (port is strict: stop it when done) |
 | `npm run check` | The quick level: `npm test`, `npm run types:check`, `npm run build`, then in headless Chrome `check-page` on both starters, `sound-check`, `shell` and `howto` |
-| `npm run check:full` | The quick level, then `npm run smoke`, `played-frame`, `phone-start`, `drive-feel`, `car-camera`, `flicker` and `npm run perf` (exit code 2: perf's noise, run it again) |
+| `npm run check:full` | The quick level, then `npm run smoke`, `feature-matrix`, `played-frame`, `phone-start`, `drive-feel`, `car-camera`, `flicker` and `npm run perf` (exit code 2: perf's noise, run it again) |
 | `npm test` | Every Node suite in `test/all.mjs`, no browser (includes the docs and recipe checks); in parallel, one process per CPU but one (`npm test -- --jobs=1` runs them one at a time) |
 | `npm run types && npm run types:check` | Emit `types/` from the JSDoc, then compile a strict TypeScript consumer |
 | `npm run build` | Build every page into `dist/` |
 | `npm run smoke` | Every demo and starter on both quality tiers in headless Chrome (needs Chrome and a GPU) |
 | `node test/browser/check-page.mjs <name>` | Load one page headlessly (`?autostart=1`), hold W for 2 s, fail on any console or page error |
 | `node test/browser/sound-check.mjs --wav=mix.wav` | Render the sound kit's ten-second self-test scene in headless Chrome, print its measurements and save the mix |
+| `node test/browser/feature-matrix.mjs [--only=text]` | Every rendering option drawn on the GPU on nyc-night (one page load per shadow cascade count, 1 to 4): each PostFX pass and option on and off, the anti-aliasing modes with and without the G-buffer, shadow kernels x cascades, clustered lights, both tiers' defaults, a moving camera, resizes and an adaptive step. Per row: no console or GL error, a sane picture, two captures agree, and the picture changes against its reference by a plausible amount (an unchanged picture is a dead option); known engine bugs are listed at the top of the script |
 | `node test/browser/flicker.mjs [--out=dir]` | Flicker of nyc-night's bench views standing still (TAA jittering as in play), each held to a budget; `--out` saves heat maps of where it flickers |
 | `node test/browser/played-frame.mjs [name]` | The played frame of nyc-night and miami-drive: the production build at 1920x1080, vsync off, median and p95 frame interval against `bench/budgets.json` "played", and no `getParameter` round trip for the unpack pixel-store state (the stall `npm run perf` cannot see) |
 | `node test/browser/phone-start.mjs [name]` | Start-up and lost-context paths of every demo and starter (loading screen until a frame is drawn, no long frame after it, the Reload notice, a lighter reload), and the crash fallback (a boot marker left by a run that died: a lighter load, the marker cleared by a healthy run; `--crash` runs only that) |

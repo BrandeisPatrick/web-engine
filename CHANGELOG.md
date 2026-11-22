@@ -1,6 +1,21 @@
 # Changelog
 
 ## Unreleased
+- A feature-matrix browser test, `test/browser/feature-matrix.mjs`, in `npm run check:full` after smoke (about 1.5
+  minutes on an M4; 3 minutes with a cold shader cache). It draws every rendering option on the GPU on nyc-night, one
+  page load per shadow cascade count, and restores the state after each of its 33 rows: AO off and from G-buffer
+  normals, SSR, volumetric light, bloom, TAA against FXAA, `renderScale` 0.75, depth of field, motion blur on a still
+  and on a moving frame, the forward path with MSAA and with FXAA, clustered lights off, kernels 'pcf' / 'fast' /
+  'pcss' x 1 to 4 cascades (in the late-morning square, where the sun's shadows show), both tiers' own defaults, the
+  camera and walker travelling with TAA accumulating, a portrait canvas, pixel ratio 1.5, a forced adaptive step and
+  the return to the first picture. Per row: no console, page, shader or `gl.getError()` error, smoke's not-black /
+  not-blown-out / no-cast limits, two captures within perf's image guard, and a change against the row's reference
+  inside a measured range (an unchanged picture fails as a dead option; motion blur on a still frame, PCSS at
+  4 cascades (it falls back to PCF) and the restored canvas must equal theirs). It found no engine bug: every option
+  compiles and changes the picture on ANGLE / Metal. Shown to fail on a GLSL error in the DoF shader and on a 'fast'
+  kernel made to draw PCF. Rows that fail on a known bug go in the script's KNOWN_FAILING table (empty). The look
+  gate's limits (`PAGE_LOOK`, `lookFailure`) moved from smoke.mjs to playwright.config.mjs so both use them.
+  ENGINE.md no longer says smoke compares poses with stored hashes (it never did).
 - miami-drive's car downloads 6.3 MB less. `samples/public/miami/models/car-concept.glb` is meshopt-compressed
   (EXT_meshopt_compression, made with gltfpack 1.3, `-cc -ce ext -kn -km -ke -vpf -vnf -vtf -vn 12 -vt 14`: float
   positions, normals and UVs at 14 / 12 / 14 bits, node names, materials and extras kept, no simplification): 9.49 ->
