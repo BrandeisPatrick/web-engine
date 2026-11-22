@@ -267,6 +267,7 @@ async function boot() {
   // size (the drawing buffer x renderScale under TAA), which PostFX reports on every change
   engine.onResize = (w, h, pr) => { if (postfx) postfx.setSize(w, h, pr); else world.setSize(w, h, pr); };
   if (postfx) {
+    engine.onRenderScale = (s) => postfx.set('renderScale', s); // adaptive resolution: TAA's internal scale first
     postfx.onInternalResize = (w, h) => world.setSize(w, h, 1);
     postfx.onInternalResize(postfx.internalWidth, postfx.internalHeight);
   }

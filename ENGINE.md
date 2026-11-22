@@ -21,7 +21,7 @@ Order: core < physics < render < anim / input / camera / audio / ui < world. Low
 
 | Layer | Import | Main exports |
 |---|---|---|
-| core | `@vibe/engine/core` | `Engine` (renderer, scene, camera, fixed-step loop, systems, resize, adaptive pixel ratio), `shadowPixelStore`, `Profiler`, `ProfilerOverlay`, `Events`, `Clock`, `Entity` / `EntitySystem`, `Assets`, `MathDet` and the `det*` functions, `PoseInterpolator` (render interpolation), quality tiers (`resolveQuality`, `QUALITY_TIERS`, `defineTier`), the bench harness (`createBenchHarness`, `readBenchParams`) |
+| core | `@vibe/engine/core` | `Engine` (renderer, scene, camera, fixed-step loop, systems, resize, adaptive resolution: internal scale, then pixel ratio), `shadowPixelStore`, `Profiler`, `ProfilerOverlay`, `Events`, `Clock`, `Entity` / `EntitySystem`, `Assets`, `MathDet` and the `det*` functions, `PoseInterpolator` (render interpolation), quality tiers (`resolveQuality`, `QUALITY_TIERS`, `defineTier`), the bench harness (`createBenchHarness`, `readBenchParams`) |
 | physics | `@vibe/engine/physics` | `PhysicsWorld` (query hub), `VehicleController` + `ROAD_CAR_SPEC` / `ROADSTER_SPEC`, `CharacterController`, `DynamicsWorld` (XPBD rigid bodies, joints, particles), `Cloth`, `Rope`, `SoftBody`, `Buoyancy`, `FracturedBody`, `DynamicsClient` (worker), the shape builders (`boxShape`, `sphereShape`, `capsuleShape`, ...) |
 | render | `@vibe/engine/render` | `Atmosphere`, `PostFX` and its passes, `GBuffer`, `ClusteredLights`, `NearestLights`, `GpuParticleSystem`, `ParticleSystem`, `TextureSets` / `loadTextureSet`, `registerRenderLoaders`, `InstancedPool`, `LODGroup`, impostors (`bakeImpostors`, `ImpostorBatch`), `DecalTrail`, `TyreFx`, `ChunkCuller`, `PhysicsDebug`, `ClothMesh` / `RopeMesh` / `SoftBodyMesh`, `FractureMesh`, LUT helpers |
 | anim | `@vibe/engine/anim` | `AnimationController`, `TwoBoneIK`, `CCDIK`, `Ragdoll` |
@@ -62,6 +62,8 @@ const postfx = new PostFX(renderer, scene, camera, { atmosphere: atmo, width: in
   gbuffer: true, aa: 'taa', ssr: true, volumetric: true });                  // every 0.7.0+ feature is an option, off by default
 engine.renderFn = (sc, cam, dt) => postfx.render(dt);
 engine.onResize = (w, h, pr) => postfx.setSize(w, h, pr);  // PostFX keeps its first size otherwise
+engine.renderScales = [1, 0.87, 0.75];                      // long frames: TAA's internal scale first (the desktop tier's)
+engine.onRenderScale = (s) => postfx.set('renderScale', s); // then the pixel ratio below the lowest scale
 const dyn = new DynamicsWorld({ physics, substeps: 4, maxParticles: 4096 }); // rigid bodies, joints, particles, cloth, ...
 attachToPhysicsWorld(dyn, physics);                                           // the hub sees the bodies as 'rigid' colliders
 engine.addSystem({ fixedUpdate: (dt) => dyn.step(dt) }, 'dynamics'); // hooks: load?, earlyUpdate?, fixedUpdate?, update?, lateUpdate?, dispose?
@@ -174,7 +176,8 @@ What each tier sets (`QUALITY_TIERS` in `src/core/Quality.js`; `test/docs.mjs` f
 | Setting | desktop | mobile | What it is |
 |---|---|---|---|
 | `engine.maxPixelRatio` | `2` | `1.5` | device pixel ratio cap |
-| `engine.adaptiveResolution` | `true` | `true` | lowers the pixel ratio when frames run long |
+| `engine.adaptiveResolution` | `true` | `true` | lowers the resolution when frames run long |
+| `engine.renderScales` | `[1, 0.87, 0.75]` | - | adaptive resolution lowers TAA's internal scale through these before the pixel ratio (with `engine.onRenderScale` set) |
 | `shadows.cascades` | `3` | `1` | sun shadow cascades |
 | `shadows.kernel` | `'pcss'` | `'fast'` | shadow filter: 'pcss' soft, contact-hardening; 'fast' hardware PCF taps, cheaper |
 | `shadows.nearMapSize` | `2048` | - | near cascade map (px) |
@@ -545,9 +548,12 @@ Two paths, chosen per `PostFX` instance; the forward path is the default and ren
   `GPUComputationRenderer` ping-pong textures, 65k particles, deterministic slot assignment, optional depth-buffer
   collision.
 - **Temporal upscaling** (`renderScale` < 1, TAA only, default 1): the scene and the passes before TAA run at the
-  drawing buffer x s and the TAA resolve upscales; `postfx.set('renderScale', s)` changes it live. The demos keep 1
-  ([design notes](docs/DESIGN-NOTES.md#from-render-pipeline-070-the-measurements-enginemd-lines-128-179-at-d959298)
-  has the measurements).
+  drawing buffer x s and the TAA resolve upscales; `postfx.set('renderScale', s)` changes it live and keeps the TAA
+  history (no pop). The demos start at 1; adaptive resolution (`Engine`, `renderScales` + `onRenderScale`) steps
+  it down to 0.87 and 0.75 before it lowers the pixel ratio, so the canvas and the output size stay put. At 0.87 and
+  0.75 a still view flickers within `test/browser/flicker.mjs`'s budgets (the `TAAPass.js` header has the numbers;
+  [design notes](docs/DESIGN-NOTES.md#from-render-pipeline-070-the-measurements-enginemd-lines-128-179-at-d959298)
+  has the first measurements).
 - **Velocity for TAA and motion blur.** `postfx.track(object3d)` gives a moving mesh per-object velocity. A material
   shared with other meshes is cloned for it, with a one-line `[GBuffer] track()` console note (info, not a warning;
   `track(obj, { clone: true })` skips it); nothing else needs doing.

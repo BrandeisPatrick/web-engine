@@ -58,7 +58,7 @@ export const BOOT_MARKER_MAX_AGE = 600;
 export const QUALITY_TIERS = {
   desktop: {
     label: 'Mac / desktop', blurb: 'Full lighting: reflections, light shafts, soft shadows, every street lamp lit.',
-    engine: { maxPixelRatio: 2, adaptiveResolution: true },
+    engine: { maxPixelRatio: 2, adaptiveResolution: true, renderScales: [1, 0.87, 0.75] }, // scales: TAA upscaling (Engine)
     shadows: { cascades: 3, kernel: 'pcss', nearMapSize: 2048, skipUnlit: true },
     postfx: { gbuffer: true, aa: 'taa', ssr: true, volumetric: true, motionBlur: 0 },
     passes: { ao: true, bloom: true },
@@ -212,7 +212,7 @@ export function bootHealthy() {
 /**
  * @typedef {{
  *   label: string, blurb: string,
- *   engine: { maxPixelRatio: number, adaptiveResolution: boolean, [key: string]: any },
+ *   engine: { maxPixelRatio: number, adaptiveResolution: boolean, renderScales?: number[], [key: string]: any },
  *   shadows: { cascades: number, kernel: 'pcf' | 'fast' | 'pcss', skipUnlit?: boolean, [key: string]: any },
  *   postfx: { gbuffer: boolean, aa: string, ssr: boolean | object, volumetric: boolean | object, motionBlur: number, [key: string]: any },
  *   passes: { ao: boolean, bloom: boolean },

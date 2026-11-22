@@ -104,6 +104,7 @@ async function boot() {
   postfx.track(body); // per-object velocity for TAA / motion blur
   engine.renderFn = (sc, cam, dt) => postfx.render(dt);
   engine.onResize = (w, h, pr) => postfx.setSize(w, h, pr);
+  engine.onRenderScale = (s) => postfx.set('renderScale', s); // frames too long: fewer pixels under TAA first (S.engine.renderScales)
 
   // ---- input, tyre marks and the chase camera. The rig reads `state` each frame (ChaseTargetState: velocity, accel, ...)
   // #region howto:drive-controls

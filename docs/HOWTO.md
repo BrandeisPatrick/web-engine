@@ -65,6 +65,7 @@ if (postfx.bloomPass) postfx.bloomPass.enabled = S.passes.bloom;
 postfx.track(player); // per-object velocity for TAA / motion blur on moving meshes
 engine.renderFn = (sc, cam, dt) => postfx.render(dt);
 engine.onResize = (w, h, pr) => postfx.setSize(w, h, pr);
+engine.onRenderScale = (s) => postfx.set('renderScale', s); // frames too long: fewer pixels under TAA first (S.engine.renderScales)
 ```
 
 The starters put the tiers in the `GameShell` pause card ("Loading, a start screen and pause"); without a shell the

@@ -41,6 +41,13 @@
 // is not below 0.69 x budget, the interval cannot show room (vsync: 16.7 ms on a 60 Hz screen however light the
 // frame), so frames that fit (EMA within 3 % of that period and of the budget) climb as a probe, kept or undone at the
 // next check.
+// Internal scale first (`renderScales`, e.g. the desktop tier's [1, 0.87, 0.75], with `onRenderScale` set, e.g.
+// `engine.onRenderScale = (s) => postfx.set('renderScale', s)`, TAA's temporal upscaling): the ladder is then every
+// scale at the full ratio, then the ratio's steps at the lowest scale; a step down takes the next scale before any
+// ratio step, a step up takes the ratio back first. A scale step keeps the canvas and the output size (the TAA history
+// survives it). The holds and back-off above apply to the whole ladder (the floor is pixel ratio x scale). Without
+// both (the default; the mobile tier has no TAA and no `renderScales`) only the pixel ratio steps, as before. Set the
+// scales only where the scale takes effect (PostFX with TAA): a step that changes nothing is undone and held like any.
 //
 // Renderer: a WebGLRenderer (antialias, high-performance, sRGB output, ACES filmic, shadow maps; `o.renderer` adds
 // options), info.autoReset off (reset once per frame in tick()). Its context gets a pixel-store shadow
@@ -122,8 +129,10 @@ export class Engine {
    * @param {number} [o.targetFps=0]  cap on ticks per second, 0 = every rAF callback (live: engine.targetFps = 60;
    *   see header). At or below fixedHz / maxSubsteps (30 by default) a tick needs every substep and jitter makes the
    *   simulation drop time (slow motion): raise maxSubsteps for caps that low.
-   * @param {boolean} [o.adaptiveResolution=true]  scale the pixel ratio to hold the frame budget (see header)
+   * @param {boolean} [o.adaptiveResolution=true]  scale the internal scale / pixel ratio to hold the frame budget (see header)
    * @param {number} [o.maxPixelRatio=2]
+   * @param {number[]} [o.renderScales=[]]  internal scales adaptive resolution steps through first, from 1 down, when
+   *   onRenderScale is set (see header)
    * @param {object} [o.renderer]  extra WebGLRenderer options (e.g. { antialias: false } when post-processing)
    * @param {boolean} [o.shadows=true]
    * @param {number} [o.shadowType=THREE.PCFShadowMap]
@@ -158,6 +167,16 @@ export class Engine {
     this.overlay = o.overlay === false ? null : new ProfilerOverlay(this.profiler, o.overlayParent || document.body);
     this.maxPR = Math.min(window.devicePixelRatio || 1, o.maxPixelRatio ?? 2);
     this.adaptive = o.adaptiveResolution !== false;
+    /** Internal scales adaptive resolution tries before the pixel ratio (header); live. */
+    this.renderScales = o.renderScales ? [...o.renderScales] : [];
+    /** The internal scale adaptive resolution set last (1 until it steps one). */
+    this.renderScale = 1;
+    /**
+     * Applies an internal scale for adaptive resolution: `(s) => postfx.set('renderScale', s)`; null (default) = the
+     * pixel ratio only (see header).
+     * @type {((scale: number) => void) | null}
+     */
+    this.onRenderScale = null;
     this.pixelRatio = this.maxPR; this._resetAdaptive();
     /** Cap on ticks per second, 0 = every rAF callback (default). Live: read on every callback. */
     this.targetFps = o.targetFps > 0 ? +o.targetFps : 0;
@@ -245,6 +264,11 @@ export class Engine {
     this.renderer.setPixelRatio(pr);
     this.renderer.setSize(width, height);
     this.onResize(width, height, pr);
+  }
+  /** The internal scale (adaptive resolution's, header): renderScale and onRenderScale(s). */
+  setRenderScale(s) {
+    this.renderScale = s;
+    if (this.onRenderScale) this.onRenderScale(s);
   }
   resize() {
     const { width, height } = this.size;
@@ -456,8 +480,8 @@ export class Engine {
   // adaptive resolution (header): the state, at start-up
   _resetAdaptive() {
     this._frameEMA = 1 / 60; this._prTimer = 0;
-    this._prDir = 0; this._prFrom = 0; this._prEma = 0; // the last step (-1 / +1), the ratio and the EMA before it
-    this._prDownHold = 0; this._prDownBack = 0; this._prFloor = 0; // no step down from <= floor while held (s)
+    this._prDir = 0; this._prFrom = 0; this._sFrom = 1; this._prEma = 0; // the last step (-1 / +1), ratio, scale and EMA before it
+    this._prDownHold = 0; this._prDownBack = 0; this._prFloor = 0; // no step down from ratio x scale <= floor while held (s)
     this._prUpHold = 0; this._prUpBack = 0; // no step up while held (s)
   }
 
@@ -472,19 +496,20 @@ export class Engine {
     // never a budget tighter than the screen allows. targetFps: 120 is how a game asks for a ProMotion display's rate
     const fps = this.targetFps, budget = 1 / (fps > 0 ? Math.min(fps, Math.max(this.refreshRate, 60)) : 60); // s; header
     const ema = this._frameEMA, pr = this.pixelRatio, dir = this._prDir;
+    const S = this.onRenderScale ? this.renderScales : [], s = this.renderScale, i = S.indexOf(s), low = S.length - 1;
     this._prDir = 0;
     // the last step first: a step down that did not make the frame faster, or a step up that put it over the budget,
     // is undone and not tried again for 30 s, doubling while it keeps failing (up to 240 s)
     if (dir < 0) {
       if (ema > this._prEma * 0.95) {
-        this._prDownBack = Math.min(240, this._prDownBack * 2 || 30); this._prDownHold = this._prDownBack; this._prFloor = this._prFrom;
-        this.setPixelRatio(this._prFrom); return;
+        this._prDownBack = Math.min(240, this._prDownBack * 2 || 30); this._prDownHold = this._prDownBack; this._prFloor = this._prFrom * this._sFrom;
+        this._undo(); return;
       }
       this._prDownBack = 0;
     } else if (dir > 0) {
       if (ema > budget * 1.11) {
         this._prUpBack = Math.min(240, this._prUpBack * 2 || 30); this._prUpHold = this._prUpBack;
-        this.setPixelRatio(this._prFrom); return;
+        this._undo(); return;
       }
       this._prUpBack = 0;
     }
@@ -492,11 +517,22 @@ export class Engine {
     // not below that, the interval cannot show room, so frames that fit (within 3 % of it) climb as a probe
     const period = Math.max(this.refreshRate > 0 ? 1 / this.refreshRate : 0, fps > 0 ? 1 / fps : 0);
     const room = Math.min(budget * 1.03, Math.max(budget * 0.69, period * 1.03));
-    if (ema > budget * 1.11 && pr > 1 && !(this._prDownHold > 0 && pr <= this._prFloor)) {
-      this._prDir = -1; this._prFrom = pr; this._prEma = ema; this.setPixelRatio(Math.max(1, pr - 0.25));
-    } else if (ema < room && pr < this.maxPR && !(this._prUpHold > 0)) {
-      this._prDir = 1; this._prFrom = pr; this._prEma = ema; this.setPixelRatio(Math.min(this.maxPR, pr + 0.25));
+    // the ladder (header): the scales at the full ratio (i < low: a scale step down), then the ratio at the lowest
+    // scale; without scales (S empty, i -1) the ratio only
+    const scaleDown = i >= 0 && i < low, scaleUp = i > 0 && pr >= this.maxPR;
+    if (ema > budget * 1.11 && (scaleDown || pr > 1) && !(this._prDownHold > 0 && pr * s <= this._prFloor)) {
+      this._prDir = -1; this._prFrom = pr; this._sFrom = s; this._prEma = ema;
+      if (scaleDown) this.setRenderScale(S[i + 1]); else this.setPixelRatio(Math.max(1, pr - 0.25));
+    } else if (ema < room && (scaleUp || pr < this.maxPR) && !(this._prUpHold > 0)) {
+      this._prDir = 1; this._prFrom = pr; this._sFrom = s; this._prEma = ema;
+      if (scaleUp) this.setRenderScale(S[i - 1]); else this.setPixelRatio(Math.min(this.maxPR, pr + 0.25));
     }
+  }
+
+  // adaptive resolution: back to the ratio and scale before the last step
+  _undo() {
+    if (this._sFrom !== this.renderScale) this.setRenderScale(this._sFrom);
+    else this.setPixelRatio(this._prFrom);
   }
 
   dispose() {

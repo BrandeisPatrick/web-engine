@@ -56,16 +56,31 @@
 // velocity at the pixel, mostly cache hits of the motion reads below).
 // Upscaling (setUpscale(w, h), PostFX renderScale < 1; define TAA_UPSCALE, the TAA_UPSCALE_FRAGMENT text, so the plain
 // text above is unchanged): the input (colour, depth, G-buffer, the camera jitter) is the internal size w x h, the
-// output and history the size of setSize(). Per output pixel, with its centre at pin internal px:
-//   1. Current colour: the 3x3 internal texels around pin, each weighted by the window exp(-2.29 upscaleWindow d^2) of
+// output and history the size of setSize(). k = internal px per output px (s^2 at renderScale s): every internal
+// sample keeps the weight it has at scale 1, so blend, gamma and the window are applied per internal sample (uBlend =
+// 1 - (1 - blend) k, uGamma = gamma / sqrt k, window factor upscaleWindow k). Per output pixel, with its centre at pin
+// internal px:
+//   1. Current colour: the 3x3 internal texels around pin, each weighted by the window exp(-2.29 upscaleWindow k d^2) of
 //      the distance d, in OUTPUT px, from where it sampled the scene this frame (texel centre + uJitter) to the pixel
-//      centre; dn = the nearest sample's d^2. Moments and the variance clip from the same 9 texels.
+//      centre (scale 1's window in internal px); dn = the nearest sample's d^2. Moments and the variance clip (box
+//      half-size gamma / sqrt k sigma: the internal pixel's larger footprint) from the same 9 texels.
 //   2. Motion from the closest-depth internal texel of pin's texel and its diagonals; history at output resolution at
-//      uv - velocity (Catmull-Rom); disocclusion against the output history's depth, as above.
-//   3. This frame's weight wn = min(1, (1 - blend) * exp(-2.29 dn) / E), E = taaUpscaleMeanWeight (the mean of that
+//      uv - velocity (Catmull-Rom); disocclusion against the output history's depth, as above, but against the depth
+//      range [closest, farthest] of those five texels: a surface the coarser frame saw anywhere in the footprint is not
+//      disoccluded (the closest depth alone rejected the history of thin and silhouette pixels whenever this frame's
+//      samples missed them: one-frame flashes).
+//   3. This frame's weight wn = min(1, (1 - uBlend) * exp(-2.29 dn) / E), E = taaUpscaleMeanWeight (the mean of that
 //      factor over sample placements, uUp.y): a frame whose nearest sample lands on the pixel centre counts more, one
 //      whose samples all lie far from it less, so detail finer than the internal grid accumulates from the jitter
 //      instead of being overwritten by an upsampled frame. A rejected history takes wn = 1.
+//   setUpscale keeps the history (it is at the output size): a change of the internal size blends in.
+//   Flicker at rest (test/browser/flicker.mjs, nyc-night 1280x720, mean second difference / flashes per 10 000 px,
+//   avenue, square, sidewalk; scale 1: 0.299 / 27.0, 0.320 / 43.9, 0.307 / 32.4): before these rules 0.87 read
+//   0.360 / 32.6, 0.377 / 51.0, 0.359 / 37.2 and 0.75 0.368 / 35.1, 0.437 / 59.1, 0.405 / 41.0 (the current frame
+//   filtered too sharply for its sample spacing, each frame weighted as a whole output frame, a clip box of output
+//   size and the closest-depth rejection); now 0.87 0.293 / 26.3, 0.317 / 46.4, 0.292 / 32.0 and 0.75 0.235 / 24.2,
+//   0.317 / 49.5, 0.283 / 32.6, inside the scale-1 budgets (0.67: square 54.5 flashes, over its 50). A longer jitter
+//   pattern (Halton 32, 64), a 9-tap depth range and luminance-weighted blending changed nothing that mattered.
 //   4. Fresh history: the windowed upsample of 1. TAA_SSR composites into every tap; TAA_SSR_REUSE fetches the normal
 //      and velocity at pin's internal texel and shifts by the jitter change over the internal size.
 // API: render(renderer, writeBuffer, readBuffer), setSize(w, h), setUpscale(w, h), reset(), texture, ssr, upscale,
@@ -274,7 +289,7 @@ export const TAA_UPSCALE_FRAGMENT = FRAG_HEAD + /* glsl */`
     uniform vec3 uUp; // x: window factor on d^2 (output px); y: 1 / E[c] (the mean nearest-sample weight); z: its use
 
     #define TAAU_CLOSEST( X, Y ) { ivec2 q = clamp( ic + ivec2( X, Y ), ivec2( 0 ), imx ); \
-      float e = texelFetch( tDepth, q, 0 ).x; if ( e < d ) { d = e; bp = q; } }
+      float e = texelFetch( tDepth, q, 0 ).x; if ( e < d ) { d = e; bp = q; } df = max( df, e ); }
     #define TAAU_COL( q ) texelFetch( tColor, q, 0 ).rgb
     #ifdef TAA_SSR
     #undef TAAU_COL
@@ -292,8 +307,9 @@ export const TAA_UPSCALE_FRAGMENT = FRAG_HEAD + /* glsl */`
       ivec2 imx = ivec2( uInRes ) - 1, mx = ivec2( uRes ) - 1, ic = clamp( ivec2( pin ), ivec2( 0 ), imx );
       float d = texelFetch( tDepth, ic, 0 ).x;
       ivec2 bp = ic;
+      float df = d; // the farthest of the five: the footprint's depth range is [z, zf]
       TAAU_CLOSEST( - 1, - 1 ) TAAU_CLOSEST( 1, - 1 ) TAAU_CLOSEST( - 1, 1 ) TAAU_CLOSEST( 1, 1 )
-      float z = linearDepth( d );
+      float z = linearDepth( d ), zf = linearDepth( df );
     #ifdef TAA_SSR
      #ifdef TAA_SSR_REUSE
       vec4 sg = texelFetch( tNormal, ic, 0 );
@@ -315,7 +331,11 @@ export const TAA_UPSCALE_FRAGMENT = FRAG_HEAD + /* glsl */`
       if ( uSharpen > 0.0 ) { cur += ( cur - mean ) * uSharpen; cur.x = clamp( cur.x, 0.0, 0.999 ); }
 
       vec2 uvJ = ( vec2( bp ) + 0.5 + uJitter ) / uInRes; // where that texel's surface is, unjittered`
-  + FRAG_RESOLVE + /* glsl */`
+  // disocclusion against the footprint's depth range [z, zf], not its closest depth alone: a surface any of the five
+  // internal texels saw this frame is not disoccluded (the plain test rejected the history of thin and silhouette
+  // pixels whenever this frame's coarser samples missed them)
+  + FRAG_RESOLVE.replaceAll('abs( hz - z )', 'max( max( z - hz, hz - zf ), 0.0 )').replace('abs( hn - z )', 'max( max( z - hn, hn - zf ), 0.0 )')
+  + /* glsl */`
       // this frame's weight: (1 - blend) scaled by how close its nearest sample lies to the pixel centre (relative to
       // the mean over sample placements), so detail finer than the internal grid accumulates from the jitter
       float wn = a > 0.0 ? min( 1.0, ( 1.0 - a ) * mix( 1.0, exp( - 2.29 * dn ) * uUp.y, uUp.z ) ) : 1.0;
@@ -373,6 +393,7 @@ export class TAAPass extends Pass {
     this._ssrReuse = false; // TAA_SSR_REUSE defined
     this._w = 1; this._h = 1;
     this._inW = 0; this._inH = 0; // upscaling: the internal (input) size, 0 = off (input = output size)
+    this._density = 1; // internal px per output px (1 without upscaling)
     /** Upscaling: window factor on the squared distance (output px) of the current-frame reconstruction (1). */
     this.upscaleWindow = 1;
     /** Upscaling: how much the per-frame weight follows the nearest sample's distance (1; 0 = a fixed 1 - blend). */
@@ -469,8 +490,7 @@ export class TAAPass extends Pass {
     m.fragmentShader = on ? TAA_UPSCALE_FRAGMENT : TAA_SHADER.fragmentShader;
     if (on) m.defines.TAA_UPSCALE = 1; else delete m.defines.TAA_UPSCALE;
     m.needsUpdate = true;
-    this._syncUpscale();
-    this._reset = true;
+    this._syncUpscale(); // the history (output size) is kept
   }
 
   render(renderer, writeBuffer, readBuffer) {
@@ -491,8 +511,11 @@ export class TAAPass extends Pass {
     u.tSSR.value = ssrOn ? s.texture : null;
     this._cur ^= 1;
     u.uFresh.value = fresh ? 1 : 0;
-    u.uBlend.value = this.blend;
-    u.uGamma.value = this.gamma;
+    // upscaling: k = the internal samples per output pixel; each keeps the weight it has at scale 1 (blend), the clip box
+    // widens with the internal pixel (gamma / sqrt(k)), the reconstruction window is in internal px (see the header)
+    const k = this._density;
+    u.uBlend.value = k < 1 ? 1 - (1 - this.blend) * k : this.blend;
+    u.uGamma.value = k < 1 ? this.gamma / Math.sqrt(k) : this.gamma;
     u.uSharpen.value = this.sharpen;
     u.uNear.value = cam.near; u.uFar.value = cam.far;
     const iv = h.uniforms.uInvViewProj.value.elements;
@@ -505,7 +528,7 @@ export class TAAPass extends Pass {
       if (age === 0 || !tj) u.uSsrShift.value.set(0, 0);
       else u.uSsrShift.value.set((j.x - tj.x) / this.inputWidth, (j.y - tj.y) / this.inputHeight);
     }
-    if (this._inW > 0) { u.uUp.value.x = this.upscaleWindow; u.uUp.value.z = this.upscaleProximity; }
+    if (this._inW > 0) { u.uUp.value.x = this.upscaleWindow * k; u.uUp.value.z = this.upscaleProximity; }
     renderer.setRenderTarget(this._rt[this._cur]);
     this._quad.render(renderer);
   }
@@ -518,6 +541,7 @@ export class TAAPass extends Pass {
 
   // TAA_UPSCALE uniforms from the input / output sizes: uInRes, uUp.y = 1 / taaUpscaleMeanWeight
   _syncUpscale() {
+    this._density = this._inW > 0 ? Math.min(1, (this._inW * this._inH) / (this._w * this._h)) : 1;
     if (this._inW === 0) return;
     const u = this.material.uniforms;
     u.uInRes.value.set(this._inW, this._inH);

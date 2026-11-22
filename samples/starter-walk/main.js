@@ -118,6 +118,7 @@ async function boot() {
   postfx.track(player); // per-object velocity for TAA / motion blur on moving meshes
   engine.renderFn = (sc, cam, dt) => postfx.render(dt);
   engine.onResize = (w, h, pr) => postfx.setSize(w, h, pr);
+  engine.onRenderScale = (s) => postfx.set('renderScale', s); // frames too long: fewer pixels under TAA first (S.engine.renderScales)
   // #endregion howto:postfx
 
   // ---- input and camera
@@ -195,5 +196,4 @@ async function boot() {
   window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-walk', quality: Q }), { cc, anim, shell, audio }).setReady();
   // #endregion howto:page-contract
 }
-
 boot().catch((e) => { console.error('[starter-walk] boot failed', e); shell.error(`Failed to start: ${e.message}`); });

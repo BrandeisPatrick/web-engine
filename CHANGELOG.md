@@ -1,6 +1,28 @@
 # Changelog
 
 ## Unreleased
+- Automatic resolution draws fewer pixels before it shrinks the canvas. On the desktop tier (TAA), when frames run
+  long the engine now lowers the 3D scene's internal size (PostFX `renderScale`) to 87 % and then 75 % and TAA rebuilds
+  a full-size picture; only below 75 % does it lower the pixel ratio, as before. `Engine` options `renderScales`
+  (the desktop tier's `engine.renderScales: [1, 0.87, 0.75]`) and the hook `engine.onRenderScale = (s) =>
+  postfx.set('renderScale', s)` (the demos and starters set it); without the hook, or on the mobile tier (no TAA, no
+  `renderScales`), only the pixel ratio steps, unchanged. The holds and back-off apply to the whole ladder
+  (`test/adaptive-resolution.mjs`).
+- The upscaling resolve (`TAAPass`, renderScale < 1 only; scale 1 is byte for byte the same shader and picture) weighs
+  every internal sample as scale 1 does: the per-frame weight, the clip box and the reconstruction window follow the
+  number of internal samples per output pixel, and disocclusion is tested against the depth range of the pixel's
+  footprint instead of its closest depth (thin and silhouette pixels flashed whenever the coarser frame missed them).
+  Still views at 0.87 and 0.75 now flicker no more than at full size (nyc-night 1280x720, mean second difference /
+  flashes per 10 000 px, avenue / square / sidewalk): 0.75 went from 0.368 / 35.1, 0.437 / 59.1, 0.405 / 41.0 to
+  0.235 / 24.2, 0.317 / 49.5, 0.283 / 32.6 (scale 1: 0.299 / 27.0, 0.320 / 43.9, 0.307 / 32.4); 0.87 from 0.360 /
+  32.6, 0.377 / 51.0, 0.359 / 37.2 to 0.293 / 26.3, 0.317 / 46.4, 0.292 / 32.0. `test/browser/flicker.mjs` now holds
+  0.87 and 0.75 to the same budgets (0.67 still fails square's flashes, so the ladder stops at 0.75). The price: the
+  history keeps each frame a little longer at lower scales (the same weight per sample), and thin lines and small
+  text soften slightly at 0.75.
+- A change of `renderScale` keeps the TAA history (it is at the output size), so a step shows no pop: the frame of
+  the switch changes 1.6 to 2.5 x as much as an ordinary still frame, against 4.7 to 8.8 x when the history restarted.
+  Frame time on the M4 at 2268x1473: nyc-night 11.8-12.8 ms at full size, 1.2-1.4 ms less at 0.87, 2.5-2.9 ms less at
+  0.75; miami-drive's strip 11.3, 10.2, 9.3 ms.
 - miami-drive's car downloads 6.3 MB less. `samples/public/miami/models/car-concept.glb` is meshopt-compressed
   (EXT_meshopt_compression, made with gltfpack 1.3, `-cc -ce ext -kn -km -ke -vpf -vnf -vtf -vn 12 -vt 14`: float
   positions, normals and UVs at 14 / 12 / 14 bits, node names, materials and extras kept, no simplification): 9.49 ->
