@@ -11,6 +11,8 @@ export default (env) => {
     ...c, root, publicDir: `${root}samples/public`,
     server: { ...c.server, port: 5192 },
     cacheDir: `${root}lab/.cache`, // its own pre-bundle cache (git-ignored): another dev server re-optimising node_modules/.vite cannot pull it away mid-run
-    optimizeDeps: { include: ['three', 'three/webgpu', 'three/tsl'] },
+    // every three entry the lab imports, pre-bundled at start: one found later makes Vite re-optimise and the page's
+    // pending dynamic imports fail
+    optimizeDeps: { include: ['three', 'three/webgpu', 'three/tsl', ...['tsl/display/GTAONode', 'tsl/display/SSRNode', 'tsl/display/TRAANode', 'tsl/display/BloomNode', 'lighting/TiledLighting'].map((m) => `three/addons/${m}.js`)] },
   };
 };
