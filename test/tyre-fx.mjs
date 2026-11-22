@@ -1,7 +1,8 @@
 // Headless checks for TyreFx (src/render/TyreFx.js) fed by VehicleController's wheels[i].slideHeat on ROAD_CAR_SPEC:
 // a clean 0.8 g corner and hard straight braking leave no marks and no smoke; a handbrake slide leaves marks (mostly
-// from the rear tyres) and thin smoke; budgets hold; deterministic; clear(); no allocation per update. 120 Hz physics,
-// TyreFx at 60 Hz with the car's own pose (no body). Run: node test/tyre-fx.mjs
+// from the rear tyres) and thin smoke; budgets hold; deterministic; clear(); no allocation per update; an empty
+// ParticleSystem stays visible until its first draw (so warmUp compiles it). 120 Hz physics, TyreFx at 60 Hz with the
+// car's own pose (no body). Run: node test/tyre-fx.mjs
 import './helpers/dom-shim.mjs';
 import { Vector3 } from 'three';
 import { VehicleController, ROAD_CAR_SPEC } from '../src/physics/index.js';
@@ -137,6 +138,16 @@ let slide;
     for (let j = 0; j < ref[k].length; j++) if (fx.smoke[k][j] !== ref[k][j]) { same = 0; note(`_writePuff differs from spawn() in ${k}[${j}]`); break; }
   }
   check('_writePuff: the same arrays as ParticleSystem.spawn', same, 1, 1);
+}
+
+// ---- 6. an empty ParticleSystem is drawn until its first draw, so engine.warmUp() compiles it -----------------------
+{
+  const ps = new ParticleSystem({ max: 8 });
+  ps.update(0);
+  const before = ps.mesh.visible;
+  ps.mesh.onAfterRender();
+  ps.update(0);
+  check('ParticleSystem: empty, visible until drawn once, then hidden', before && !ps.mesh.visible ? 1 : 0, 1, 1);
 }
 
 console.log(lines.join('\n'));

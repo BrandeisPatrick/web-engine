@@ -166,6 +166,9 @@ function beginSize(fx) {
   check('0.75: TAA uInRes 600x338, uUp.y = 1 / mean weight',
       u.uInRes.value.x === 600 && u.uInRes.value.y === 338
       && Math.abs(u.uUp.value.y - 1 / taaUpscaleMeanWeight(800 / 600, 450 / 338)) < 1e-12);
+  const k = (600 * 338) / (800 * 450), near = (x, y) => Math.abs(x - y) < 1e-6;
+  check('0.75: per internal sample the scale-1 weights (blend 1 - 0.1 k, gamma / sqrt k, window k; k = 600x338 / 800x450)',
+      near(u.uBlend.value, 1 - 0.1 * k) && near(u.uGamma.value, 1 / Math.sqrt(k)) && near(u.uUp.value.x, k));
   // TAA off: effective 1, the request kept; back on: 0.75 again
   fx.set('aa', 'fxaa'); fx.render(0);
   check("aa 'fxaa': effective 1, no define, full size, request kept",
@@ -177,10 +180,9 @@ function beginSize(fx) {
     && sha1(fx.motionBlurPass._velocityMat.fragmentShader) === SHA1_AT_3BBA697.mbVelocity
     && sha1(fx.dofPass._compositeMat.fragmentShader) === SHA1_AT_3BBA697.dofComposite);
   fx.set('aa', 'taa');
-  check("aa 'taa' again: 0.75, history restarted",
-      fx.renderScaleInEffect === 0.75 && sizesOk(fx, 600, 338, 800, 450) && fx.history._reset === true
-      && fx.taaPass.resetPending);
   fx.render(0);
+  check("aa 'taa' again: 0.75, a fresh history (the frames TAA skipped)",
+      fx.renderScaleInEffect === 0.75 && sizesOk(fx, 600, 338, 800, 450) && u.uFresh.value === 1);
   fx.dispose();
 }
 
@@ -188,7 +190,7 @@ function beginSize(fx) {
 {
   const fx = make({ ...ALL, renderScale: 0.75 });
   fx.render(0); fx.render(0);
-  const restarted = () => fx.history._reset === true && fx.taaPass.resetPending;
+  const restarted = () => fx.taaPass.resetPending, kept = () => !fx.taaPass.resetPending && !fx.history._reset;
   fx.setSize(1000, 500, 1);
   check('setSize(1000, 500): internal 750x375, output 1000x500, history restarted',
       sizesOk(fx, 750, 375, 1000, 500) && restarted());
@@ -197,15 +199,16 @@ function beginSize(fx) {
   fx.setSize(640, 360, 2);
   check('setSize(640, 360, 2): internal 960x540, output 1280x720', sizesOk(fx, 960, 540, 1280, 720) && restarted());
   fx.render(0);
-  fx.set('renderScale', 0.6); check('live 0.75 -> 0.6: 768x432', sizesOk(fx, 768, 432, 1280, 720) && restarted());
+  fx.set('renderScale', 0.6); check('live 0.75 -> 0.6: 768x432, the TAA history kept', sizesOk(fx, 768, 432, 1280, 720) && kept());
   fx.render(0);
-  fx.set('renderScale', 1); check('live -> 1: full size, history restarted',
-      sizesOk(fx, 1280, 720, 1280, 720) && restarted());
+  check('live 0.75 -> 0.6: the next frame blends into the history', fx.taaPass.material.uniforms.uFresh.value === 0);
+  fx.set('renderScale', 1); check('live -> 1: full size, the TAA history kept',
+      sizesOk(fx, 1280, 720, 1280, 720) && kept());
   fx.render(0); // (the final pass syncs its defines as it renders)
   check('live -> 1: no define, the plain texts',
       !anyUpscaleDefine(fx) && fx.taaPass.material.fragmentShader === TAA_SHADER.fragmentShader
       && fx.finalPass.material.fragmentShader === FINAL_SHADER.fragmentShader);
-  fx.set('renderScale', 0.75); check('live 1 -> 0.75', sizesOk(fx, 960, 540, 1280, 720) && anyUpscaleDefine(fx));
+  fx.set('renderScale', 0.75); check('live 1 -> 0.75, the TAA history kept', sizesOk(fx, 960, 540, 1280, 720) && anyUpscaleDefine(fx) && kept());
   fx.render(0);
   fx.history.reset(); fx.render(0);
   check('history.reset(): sizes kept, fresh frame', sizesOk(fx, 960, 540, 1280, 720) && fx.history.fresh === true);

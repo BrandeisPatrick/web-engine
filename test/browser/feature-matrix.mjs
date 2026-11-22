@@ -15,7 +15,8 @@
 // Rows: every PostFX option and pass on / off, the anti-aliasing modes with the G-buffer on and off, shadow kernels
 // 'pcf' / 'fast' / 'pcss' x 1-4 cascades, clustered lights on / off, both quality tiers' own defaults
 // (core/Quality.js QUALITY_TIERS), the camera and walker travelling (velocity, TAA history, motion blur in motion),
-// and the canvas resized, its pixel ratio changed and one adaptive-resolution step forced, then back to the start.
+// and the canvas resized, its pixel ratio changed and two adaptive-resolution steps forced (the internal scale, then
+// the pixel ratio), then back to the start.
 // Prints one table (row, result, measured difference) and exits 1 on any failing row that is not KNOWN_FAILING.
 //
 //   node test/browser/feature-matrix.mjs [--headed] [--only=<substring>]
@@ -76,11 +77,14 @@ const ROWS = [
   ]),
   { id: 'desktop tier', load: QUALITY_TIERS.desktop.shadows.cascades, ...tierRow('desktop'), ref: 'base', change: [0.15, 3] },
   { id: 'mobile tier', load: QUALITY_TIERS.mobile.shadows.cascades, ...tierRow('mobile'), ref: 'base', change: [1.5, 15] },
-  // resize: portrait canvas, pixel ratio 1.5, one adaptive step down (1.5 -> 1.25), then back to the first capture
+  // resize: a portrait canvas, pixel ratio 1.5
   { id: 'portrait 540x960', load: 2, size: { w: 540, h: 960 } },
   { id: 'pixel ratio 1.5', load: 2, size: { w: 1280, h: 720, pr: 1.5 } },
-  { id: 'adaptive step', load: 2, size: { w: 1280, h: 720, pr: 1.5, adapt: true }, prIs: 1.25 },
-  { id: 'back to start', load: 2, size: { w: 1280, h: 720 }, ref: 'base', same: true },
+  // forced adaptive steps (Engine._adapt): the internal scale first (1 -> 0.87, canvas and pixel ratio kept), then at the
+  // lowest scale the pixel ratio (1.5 -> 1.25); back to start puts both back
+  { id: 'adaptive step: scale', load: 2, size: { w: 1280, h: 720, scale: 1, adapt: true }, scaleIs: 0.87, ref: 'base', change: [0.25, 4] },
+  { id: 'adaptive step: pixel ratio', load: 2, size: { w: 1280, h: 720, pr: 1.5, scale: 0.75, adapt: true }, prIs: 1.25, scaleIs: 0.75 },
+  { id: 'back to start', load: 2, size: { w: 1280, h: 720, scale: 1 }, scaleIs: 1, ref: 'base', same: true },
 ];
 
 // In the page: apply a row, pose, capture twice, restore. Returns the second capture (data as a plain array), the
@@ -111,9 +115,11 @@ async function runRow({ row, pose, scale, ref }) {
     if (row.size) {
       h.resize(row.size.w, row.size.h); // pixel ratio 1, adaptive off
       if (row.size.pr) { E.maxPR = row.size.pr; E.setPixelRatio(row.size.pr); }
-      if (row.size.adapt) { // frames of 50 ms at a 60 fps budget: the controller steps the pixel ratio down once
+      if (row.size.scale) E.setRenderScale(row.size.scale);
+      if (row.size.adapt) { // frames of 50 ms at a 60 fps budget: the controller takes one step down
+        const pr = E.pixelRatio, sc = E.renderScale;
         E._resetAdaptive();
-        for (let i = 0; i < 60 && E.pixelRatio === row.size.pr; i++) E._adapt(0.05);
+        for (let i = 0; i < 60 && E.pixelRatio === pr && E.renderScale === sc; i++) E._adapt(0.05);
       }
     }
     if (row.hours) N.atmo.setTime(row.hours);
@@ -124,7 +130,7 @@ async function runRow({ row, pose, scale, ref }) {
     const a = shot(), b = shot();
     const out = {
       w: b.w, h: b.h, data: Array.from(b.data), stable: h.diff(a, b), kernel: N.atmo.shadowKernel,
-      size: h.size, cascades: N.atmo.cascadeCount, clustered: N.world.clustered ? N.world.clustered.count : 0, glError: gl.getError(),
+      size: h.size, renderScale: P.get('renderScale'), cascades: N.atmo.cascadeCount, clustered: N.world.clustered ? N.world.clustered.count : 0, glError: gl.getError(),
     };
     if (ref) out.vs = ref.w === b.w && ref.h === b.h ? h.diff({ ...ref, scale, data: Uint16Array.from(ref.data) }, b) : 'size';
     return out;
@@ -161,6 +167,7 @@ function judge(row, res, newErrors) {
   if (lk) bad.push(`look: ${lk}`);
   if (res.cascades !== row.load) bad.push(`${res.cascades} shadow cascades in effect, expected ${row.load}`);
   if (row.kernelIs && res.kernel !== row.kernelIs) bad.push(`kernel in effect ${res.kernel}, expected ${row.kernelIs}`);
+  if (row.scaleIs && res.renderScale !== row.scaleIs) bad.push(`render scale ${res.renderScale}, expected ${row.scaleIs}`);
   if (row.prIs && res.size.pixelRatio !== row.prIs) bad.push(`pixel ratio ${res.size.pixelRatio} after the adaptive step, expected ${row.prIs}`);
   if (row.size && (res.size.w !== Math.floor(row.size.w * (row.prIs || row.size.pr || 1)) || res.size.h !== Math.floor(row.size.h * (row.prIs || row.size.pr || 1)))) bad.push(`drawing buffer ${res.size.w}x${res.size.h}`);
   if (row.ref) {

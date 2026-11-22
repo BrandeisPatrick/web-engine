@@ -6,7 +6,9 @@
 // It guards the far glass: before the curtain walls' mullions flattened their two rounded faces as they get under a
 // pixel and a half wide (src/world/Buildings.js), the glass tower down the sidewalk pose's street canyon flickered
 // under TAA's jitter (sidewalk 0.379 mean, 45.5 flashes; 0.307 / 32.4 after, Apple M4). Each pose has a budget about 12 % above what it
-// measured when it was set (BUDGETS); a pose over it fails. Heat maps of the flicker with --out=<dir>.
+// measured when it was set (BUDGETS); a pose over it fails. The same budgets hold at the upscaling render scales
+// adaptive resolution steps through (SCALES: PostFX renderScale 0.87 and 0.75, the TAA resolve upscaling to the same
+// output). Heat maps of the flicker with --out=<dir>.
 // Needs Chrome and the GPU (part of `npm run check:full`); run it through the machine's GPU lock:
 //   node test/browser/flicker.mjs [--out=<dir>]
 // Exit code 1 on a pose over budget, a console error or a page error.
@@ -16,7 +18,7 @@ import { startVite, resolvePage, launchChrome, watchErrors, loadSample, parseArg
 
 // per pose: mean second difference (0..255) and one-frame flashes per 10 000 pixel-frames
 const BUDGETS = { avenue: { d2: 0.34, flashes: 32 }, square: { d2: 0.36, flashes: 50 }, sidewalk: { d2: 0.34, flashes: 38 } };
-const SIZE = { w: 1280, h: 720 }, START = 18, FRAMES = 66;
+const SIZE = { w: 1280, h: 720 }, START = 18, FRAMES = 66, SCALES = [1, 0.87, 0.75];
 
 const args = parseArgs();
 const out = args.out ? path.resolve(args.out) : null;
@@ -29,12 +31,13 @@ try {
   const errors = watchErrors(page);
   const session = await loadSample(page, `${vite.base}${await resolvePage(vite, 'nyc-night')}?quality=desktop&bench=1&size=${SIZE.w}x${SIZE.h}`, errors);
   if (session.status !== 'ready') throw new Error(`nyc-night not ready: ${session.note}`);
-  const rows = await page.evaluate(async ({ poses, start, frames, heat }) => {
+  const rows = await page.evaluate(async ({ poses, start, frames, heat, scales }) => {
     const h = window.__sample, E = h.engine, P = window.__nyc.postfx, gl = E.renderer.getContext();
     const W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, n = W * H, buf = new Uint8Array(n * 4);
     const L = [new Float32Array(n), new Float32Array(n), new Float32Array(n)], acc = new Float32Array(n);
     const res = [];
-    for (const pose of poses) {
+    for (const scale of scales) for (const pose of poses) {
+      P.set('renderScale', scale);
       h.pose(pose); await h.settle();
       h.live.begin(h);
       acc.fill(0);
@@ -70,15 +73,16 @@ try {
         }
         g.putImageData(im, 0, 0); url = cv.toDataURL('image/png');
       }
-      res.push({ pose, d2: sum / cnt / n, flashes: 1e4 * flashes / cnt / n, url });
+      res.push({ pose, scale, d2: sum / cnt / n, flashes: 1e4 * flashes / cnt / n, url });
     }
+    P.set('renderScale', 1);
     return res;
-  }, { poses: Object.keys(BUDGETS), start: START, frames: FRAMES, heat: !!out });
+  }, { poses: Object.keys(BUDGETS), start: START, frames: FRAMES, heat: !!out, scales: SCALES });
   const table = rows.map((r) => {
     const b = BUDGETS[r.pose], ok = r.d2 <= b.d2 && r.flashes <= b.flashes;
     if (!ok) failed++;
-    if (out && r.url) fs.writeFileSync(path.join(out, `flicker-${r.pose}.png`), Buffer.from(r.url.slice(r.url.indexOf(',') + 1), 'base64'));
-    return { pose: r.pose, d2: r.d2.toFixed(3), 'd2 budget': b.d2, flashes: r.flashes.toFixed(1), 'flashes budget': b.flashes, result: ok ? 'pass' : 'FAIL' };
+    if (out && r.url) fs.writeFileSync(path.join(out, `flicker-${r.pose}${r.scale < 1 ? `-${r.scale}` : ''}.png`), Buffer.from(r.url.slice(r.url.indexOf(',') + 1), 'base64'));
+    return { pose: r.pose, scale: r.scale, d2: r.d2.toFixed(3), 'd2 budget': b.d2, flashes: r.flashes.toFixed(1), 'flashes budget': b.flashes, result: ok ? 'pass' : 'FAIL' };
   });
   console.log(formatTable(table));
   if (out) console.log(`heat maps in ${out}`);

@@ -13,10 +13,15 @@
 // which must be 0, and the other calls that read state back from the context (getParameter of anything else,
 // getError, readPixels, checkFramebufferStatus, get*Parameter, clientWaitSync, getBufferSubData, finish), reported per
 // frame (the profiler's GPU timer reads, GPU_DISJOINT_EXT and getQueryParameter, are answered without a wait).
+// Shader compiles and program links (the same wrapper, on compileShader and linkProgram) are counted over
+// a longer period: from the moment the page reports ready (the loading screen closed, play started) to the end of the
+// window, so the `warm` ms of play are in it. Any one fails the check, and the three.js programs made in that period are
+// named (renderer.info.programs: the material's name, else its program cache key): a program first drawn in play is
+// compiled in the middle of a frame, the stutter engine.warmUp() exists to prevent (draw it behind the loading screen).
 // Takes about 30 s. Run it through the machine's GPU lock when other GPU jobs share the machine: their load moves the
 // intervals.
 //   node test/browser/played-frame.mjs [page ...] [--json]
-// Exit code: 0 within budget, 1 over budget, a round trip, an error or a page that did not load.
+// Exit code: 0 within budget, 1 over budget, a round trip, a compile in play, an error or a page that did not load.
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
@@ -62,9 +67,10 @@ await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}`;
 
 // ------------------------------------------------------------------------------------------------ in-page parts
-// before the page's scripts: count the synchronous WebGL calls that reach the context while __played.on
+// before the page's scripts: count the synchronous WebGL calls that reach the context while __played.on, and the shader
+// compiles and program links while __played.late is set
 function countSyncCalls() {
-  const S = window.__played = { on: false, unpack: 0, other: {} };
+  const S = window.__played = { on: false, unpack: 0, other: {}, late: null };
   const UNPACK = new Set([0x0cf2, 0x0cf3, 0x0cf4, 0x806d, 0x806e]); // ROW_LENGTH, SKIP_ROWS, SKIP_PIXELS, SKIP_IMAGES, IMAGE_HEIGHT
   const SYNC = ['getParameter', 'getError', 'readPixels', 'checkFramebufferStatus', 'getProgramParameter', 'getShaderParameter',
     'getQueryParameter', 'getSyncParameter', 'clientWaitSync', 'getBufferSubData', 'getFramebufferAttachmentParameter', 'finish'];
@@ -80,6 +86,10 @@ function countSyncCalls() {
         return o.apply(this, arguments);
       };
     }
+    for (const n of ['compileShader', 'linkProgram']) {
+      const o = G[n];
+      G[n] = function () { if (S.late) S.late[n]++; return o.apply(this, arguments); };
+    }
   }
 }
 // the window: rAF intervals for `ms`, with the calls counted
@@ -90,7 +100,9 @@ function playWindow(ms) {
     const f = (x) => { t.push(performance.now()); if (t.at(-1) < end) requestAnimationFrame(f); else { S.on = false; done(); } };
     const done = () => {
       const e = window.__sample.engine, gl = e.renderer.getContext();
-      resolve({ t, unpack: S.unpack, other: S.other, buffer: `${gl.drawingBufferWidth}x${gl.drawingBufferHeight}`, shadow: !!e.pixelStore, pixelRatio: e.pixelRatio });
+      const late = { ...S.late, programs: e.renderer.info.programs.filter((p) => !S.late.programs.has(p)).map((p) => p.name || p.cacheKey.slice(0, 100)) };
+      S.late = null;
+      resolve({ t, unpack: S.unpack, other: S.other, late, buffer: `${gl.drawingBufferWidth}x${gl.drawingBufferHeight}`, shadow: !!e.pixelStore, pixelRatio: e.pixelRatio });
     };
     requestAnimationFrame(f);
   });
@@ -110,6 +122,7 @@ try {
     await page.addInitScript(countSyncCalls);
     const session = await loadSample(page, `${base}/${id}/?autostart=1&quality=desktop`, errors);
     if (session.status !== 'ready') { problems.push(`${id}: not ready (${session.note})`); rows.push({ page: id, result: 'FAIL', note: session.note }); await ctx.close(); continue; }
+    await page.evaluate(() => { window.__played.late = { compileShader: 0, linkProgram: 0, programs: new Set(window.__sample.engine.renderer.info.programs) }; });
     await page.waitForTimeout(cfg.warm);
     const r = await withTimeout(page.evaluate(playWindow, cfg.window), cfg.window + 30000, `${id} window`);
     await ctx.close();
@@ -121,12 +134,15 @@ try {
     if (r.buffer !== cfg.size) bad.push(`drawing buffer ${r.buffer}, not ${cfg.size}`);
     if (!r.shadow) bad.push('engine.pixelStore is not installed');
     if (r.unpack > 0) bad.push(`${r.unpack} getParameter round trips for the unpack pixel-store state (${(r.unpack / n).toFixed(1)} per frame): the stall is back`);
+    if (r.late.compileShader || r.late.linkProgram) {
+      bad.push(`${r.late.compileShader} shader compile(s) and ${r.late.linkProgram} program link(s) in play, a stutter (draw it in engine.warmUp()); new programs: ${r.late.programs.map((p) => `'${p}'`).join(', ') || 'none from three.js'}`);
+    }
     if (med > b.median) bad.push(`median ${med.toFixed(1)} ms over its budget of ${b.median}`);
     if (p95 > b.p95) bad.push(`p95 ${p95.toFixed(1)} ms over its budget of ${b.p95}`);
     for (const x of bad) problems.push(`${id}: ${x}`);
     rows.push({ page: id, frames: n, median: med.toFixed(1), p95: p95.toFixed(1), budget: `${b.median} / ${b.p95}`, fps: (1000 / mean).toFixed(0),
-      'unpack reads': r.unpack, 'other reads / frame': other.toFixed(1), s: ((Date.now() - t0) / 1000).toFixed(0), result: bad.length ? 'FAIL' : 'pass' });
-    out.push({ page: id, frames: n, medianMs: +med.toFixed(2), p95Ms: +p95.toFixed(2), meanMs: +mean.toFixed(2), budget: b, unpackReads: r.unpack,
+      'unpack reads': r.unpack, compiles: r.late.compileShader, 'other reads / frame': other.toFixed(1), s: ((Date.now() - t0) / 1000).toFixed(0), result: bad.length ? 'FAIL' : 'pass' });
+    out.push({ page: id, frames: n, medianMs: +med.toFixed(2), p95Ms: +p95.toFixed(2), meanMs: +mean.toFixed(2), budget: b, unpackReads: r.unpack, lateCompiles: r.late,
       otherReadsPerFrame: Object.fromEntries(Object.entries(r.other).map(([k, v]) => [k, +(v / n).toFixed(2)])), buffer: r.buffer });
   }
 } catch (e) {

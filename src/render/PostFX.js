@@ -60,12 +60,14 @@
 // pixel budget (maxPixels binds at the city demos' sizes down to s 0.67, so their AO is unchanged); SSR and volumetric
 // keep their scale OF THE INTERNAL size (not compensated: their absolute resolution falls with s, which is part of the
 // saving and of the measured difference); bloom, flare scale (setFlareScale(H)), grain, dither and the final pass's
-// uRes are output pixels. Every change of the effective scale or size restarts the history. Measured on the city demos'
-// desktop poses (2268x1473 output, M4, converged captures against scale 1): s 0.87 saves 1.0-1.4 ms (0.5 on miami
-// beach), 0.75 1.9-2.9 ms (1.2); but the image differs beyond the perf guard on nyc-night's square and sidewalk (0.38 /
-// 0.53 mean / 255 at 0.87, capture(8)) and the per-pixel flicker at rest rises 8-64 % at every scale tried, so the
-// demos stay at 1 (CHANGELOG). Engine adaptive resolution could drive renderScale instead of the pixel ratio (the
-// output size and the history stay put); not done.
+// uRes are output pixels. A change of the scale alone keeps the TAA history (it is at the output size: the new
+// internal frames blend in, no pop); a new output size restarts it. The resolve weighs each internal sample as at
+// scale 1 (TAAPass "Upscaling"), so a still view at 0.87 and 0.75 flickers no more than at 1 (test/browser/flicker.mjs
+// holds both to the scale-1 budgets; 0.67 does not hold them). The demos start at 1, and Engine adaptive resolution
+// drives renderScale (renderScales [1, 0.87, 0.75], the desktop tier's, via engine.onRenderScale) before it lowers the
+// pixel ratio: the canvas and the output size stay put. Frame (M4, 2268x1473, bench live frames): nyc-night avenue /
+// square / sidewalk 11.8 / 12.1 / 12.8 ms at 1, 10.7 / 10.8 / 11.4 at 0.87, 9.4 / 9.6 / 9.9 at 0.75; miami strip 11.3,
+// 10.2, 9.3. The picture softens a little at 0.75 (thin lines, small text).
 // Then the Atmosphere's lens-flare overlay. Anti-aliasing (`aa`, see resolveAA): 'auto' = forward: 4x MSAA on the
 // scene target by day (alpha-to-coverage foliage, thin bridge cables), FXAA inside the final pass once it is dark or
 // the drawing buffer is larger than msaaMaxPixels; G-buffer: TAA. 'msaa' | 'fxaa' fixed ('msaa' falls back to FXAA
@@ -1197,7 +1199,8 @@ export class PostFX {
   // renderScale in effect = the request while TAA is on, else 1 (the request is kept), as _syncSsrJitter. Below 1 the
   // internal size (_iw x _ih = the drawing buffer x s, rounded) holds the G-buffer and the passes before TAA, the TAA
   // resolve upscales to the drawing buffer, and the passes after it map their depth / G-buffer reads (setUpscale).
-  // Applies a change of state or size only (a no-op at scale 1 throughout); every change restarts the history.
+  // Applies a change of state or size only (a no-op at scale 1 throughout). The TAA history (output size) is kept:
+  // a scale change alone blends into it; a new output size restarts it (TAAPass.setSize), as at scale 1.
   _syncScale() {
     const taa = this.taaPass !== null && this.taaPass.enabled, s = taa ? this._renderScale : 1, on = s < 1;
     const W = this._W, H = this._H, w = on ? scaled(W, s) : W, h = on ? scaled(H, s) : H;
@@ -1210,7 +1213,6 @@ export class PostFX {
       if (p !== null) this._scalePass(g, p);
     }
     if (this.taaPass !== null) this.taaPass.setUpscale(on ? w : 0, h);
-    if (this.history !== null) this.history.reset();
     if (this.onInternalResize) this.onInternalResize(w, h);
   }
 
