@@ -74,7 +74,13 @@
 // started in; a multiple of 12 ends all three in phase (the demos' bench pages use 12). Not counted in frameCount, the
 // profiler or adaptive resolution. Resolves { frames, ms, compileMs, fence: 'signaled' |
 // 'timeout' | 'none' (no fences) | 'lost', lost }; never rejects on a lost context (lost: true; onContextLost has
-// run). An error a frame throws rejects (the game's boot shows it).
+// run). An error a frame throws rejects (the game's boot shows it). With adaptive resolution's scales below the current
+// one (`renderScales`, `onRenderScale` set) the LAST warm frame is drawn at the first of them and the scale is set back
+// right after it: TAA's upscaling variants (TAA, final pass, motion blur, DoF) compile under the loading screen and the
+// materials keep both programs, so a step in play compiles nothing (nyc-night: 4 compiles and 2 links, a missed frame,
+// before). The last frame, because the upscale define is then added after every other define, in the order a step in
+// play adds it (a program's cache key follows the define order: frame 1 compiled a variant play never used). The
+// frame count, and so the warm frames' schedule phases, are unchanged; the TAA history keeps that frame's samples.
 //
 // Lost WebGL context (phones drop it under GPU memory pressure): on `webglcontextlost` of the canvas the loop stops
 // (no frame runs on the dead context), `engine.contextLost` becomes true, the loss is recorded for the browser session
@@ -310,8 +316,13 @@ export class Engine {
       out.compileMs = Math.round(now() - tc);
       if (lost()) return out;
     }
+    // the last warm frame at the first scale below the current one adaptive resolution can step to (header "Start-up"):
+    // the upscaling variants compile here, not at that step in play
+    const s0 = this.renderScale, up = this.onRenderScale ? this.renderScales.find((s) => s < s0) : undefined;
     for (let i = 0; i < frames; i++) {
-      try { this._warmFrame(systems); } catch (e) { if (lost()) return out; throw e; }
+      const u = i === frames - 1 && up !== undefined;
+      if (u) this.setRenderScale(up);
+      try { this._warmFrame(systems); } catch (e) { if (lost()) return out; throw e; } finally { if (u) this.setRenderScale(s0); }
       out.frames++;
       await sleep(0);
       if (lost()) return out;

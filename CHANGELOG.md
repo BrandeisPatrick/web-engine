@@ -7,7 +7,10 @@
   (the desktop tier's `engine.renderScales: [1, 0.87, 0.75]`) and the hook `engine.onRenderScale = (s) =>
   postfx.set('renderScale', s)` (the demos and starters set it); without the hook, or on the mobile tier (no TAA, no
   `renderScales`), only the pixel ratio steps, unchanged. The holds and back-off apply to the whole ladder
-  (`test/adaptive-resolution.mjs`).
+  (`test/adaptive-resolution.mjs`). The first step compiles nothing in play: with `onRenderScale` set before
+  `engine.warmUp()`, the last warm frame is drawn at 87 % and the scale set back, so the upscaling shaders compile
+  under the loading screen (nyc-night: the first step was 4 shader compiles, 2 links and a 26-31 ms frame, now 0, 0
+  and 15-18 ms; the warm-up time did not grow measurably, 1.1-1.3 s either way; `test/engine-start.mjs`).
 - The upscaling resolve (`TAAPass`, renderScale < 1 only; scale 1 is byte for byte the same shader and picture) weighs
   every internal sample as scale 1 does: the per-frame weight, the clip box and the reconstruction window follow the
   number of internal samples per output pixel, and disocclusion is tested against the depth range of the pixel's
