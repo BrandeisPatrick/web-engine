@@ -559,7 +559,7 @@ last enabled pass of TAA -> MotionBlur -> DoF, read by Bloom and Final). Every o
 default output is byte-identical to 0.7.0: the new GLSL lives under defines that are absent by default (`FINAL_SSR`,
 `FINAL_VOLUMETRIC`, `FINAL_LUT`, `TAA_SSR`), pinned by sha1 in `test/postfx-options.mjs`. `npm run smoke` holds
 no stored pictures (it asks two captures of a pose in one run to hash equal); only `npm run perf` compares poses with
-golden pictures, kept locally in `bench/.golden/`; `test/browser/feature-matrix.mjs` draws every option on the GPU.
+golden pictures, kept only on the reference machine (`bench/README.md`); `test/browser/feature-matrix.mjs` draws every option on the GPU.
 All knobs are live through `postfx.set(path, value)` / `postfx.get(path)`
 (`'ssr'`, `'ssr.<option>'`, `'volumetric'`, `'volumetric.<option>'`, `'motionBlur'` (0 removes the pass),
 `'motionBlur.<option>'`, `'dof'` (null | true | options), `'dof.<option>'`, `'lut'`, `'lut.strength'`,
