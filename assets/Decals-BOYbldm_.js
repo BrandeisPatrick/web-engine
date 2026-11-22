@@ -1,4 +1,4 @@
-import{U as y}from"./three.module-Dt1S_jJM.js";import{n as p,t as g}from"./Particles-DsON8qAt.js";import{G as u,d7 as v,z as w,v as x,D as _,bD as A,C as S,i as U,V as f}from"./three.core-BG5Iv3B7.js";const D=`
+import{U as y}from"./three.module-Dt1S_jJM.js";import{n as p,t as g}from"./Particles-vTNuOllx.js";import{G as u,d7 as v,z as w,v as x,D as _,bD as A,C as S,i as U,V as f}from"./three.core-BG5Iv3B7.js";const D=`
 attribute float aAlpha;
 attribute float aId;
 uniform float uHead;
