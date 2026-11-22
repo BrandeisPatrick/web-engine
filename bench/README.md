@@ -43,13 +43,13 @@ A faster frame that breaks a guard is not an improvement, and the tool refuses t
 | look | tone and palette limits per pose (the demos' default open look: neither dark nor blown out, warm lamps against cool shade, no colour cast) | `npm run smoke` |
 | stability | two captures of a pose are bit-identical | `npm run smoke` |
 | correctness | the engine suites, including the pinned shader hashes and the determinism of the physics | `npm test` |
-| played frame | the city demos' frame intervals as played (production build, vsync off, 1920x1080): median and p95 against `budgets.json` "played", and no `getParameter` round trip for the unpack pixel-store state in the frame | `node test/browser/played-frame.mjs` (in `npm run check:full`) |
+| played frame | the city demos' frame intervals as played (production build, vsync off, 1920x1080): median and p95 against `budgets.json` "played", no `getParameter` round trip for the unpack pixel-store state in the frame, and no shader compiled or program linked after the page is ready (a stutter `engine.warmUp()` should have prevented) | `node test/browser/played-frame.mjs` (in `npm run check:full`) |
 
 The score times GPU-synchronised renders: it measures the GPU's work and the CPU's submission, but not a main thread
 that stops in the middle of a frame to wait for the GPU (a synchronous `gl.getParameter`, `readPixels`, `getError`).
 Such a wait makes CPU and GPU take turns instead of overlapping: three's partial texture uploads did it 11 times a
 frame until the pixel-store shadow (`src/core/PixelStoreShadow.js`), and nyc-night played at 16 ms a frame while its
-GPU work took 9. The played-frame check is the guard for that.
+GPU work took 9. The played-frame check is the guard for that, and for a shader first compiled in play.
 
 ## The ratchet
 

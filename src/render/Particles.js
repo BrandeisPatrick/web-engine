@@ -10,6 +10,8 @@
 //   const smoke = new ParticleEmitter(system, { rate: 40, position, velocity, spread: 1.5, life: [1, 2] });
 //   per frame: smoke.update(dt); system.update(dt);
 //   const dust = new ParticleSystem({ blending: 'normal', floorAt: (x, z) => terrain.heightAt(x, z), lit: true, sun: atmosphere });
+// The mesh is hidden while empty, except until it has been drawn once (with no instances): so engine.warmUp() compiles
+// its program behind the loading screen, not the frame of the first spawn in play.
 import * as THREE from 'three';
 import { touchRange, newRange } from './bufferRanges.js';
 
@@ -140,7 +142,9 @@ export class ParticleSystem {
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = o.renderOrder ?? 8;
     this.mesh.name = o.name || 'particles';
-    this.mesh.visible = false;
+    this._drawn = false;
+    this.mesh.onAfterRender = () => { this._drawn = true; };
+    this.mesh.visible = true;
     this._r3 = [newRange(), newRange(), newRange()]; this._r4 = newRange();
   }
 
@@ -203,7 +207,7 @@ export class ParticleSystem {
     touchRange(this.aPos, this._r3[0], 0, m * 3); touchRange(this.aVel, this._r3[1], 0, m * 3); touchRange(this.aColor, this._r3[2], 0, m * 3);
     touchRange(this.aData, this._r4, 0, m * 4);
     this.geometry.instanceCount = n;
-    this.mesh.visible = n > 0;
+    this.mesh.visible = n > 0 || !this._drawn;
     if (this.lit) this._applyLight();
   }
 
@@ -222,7 +226,7 @@ export class ParticleSystem {
   get light() { return this._light; }
   set light(v) { this._light = v; this._applyLight(); }
 
-  clear() { this.count = 0; this.geometry.instanceCount = 0; this.mesh.visible = false; }
+  clear() { this.count = 0; this.geometry.instanceCount = 0; this.mesh.visible = !this._drawn; }
   dispose() { this.geometry.dispose(); this.material.dispose(); }
 }
 
