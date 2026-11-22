@@ -45,8 +45,9 @@
   fails as a dead option; motion blur on a still frame, PCSS at 4 cascades (it falls back to PCF) and the restored
   canvas must equal theirs). It found no engine bug: every option compiles and changes the picture on ANGLE / Metal.
   Shown to fail on a GLSL error in the DoF shader and on a 'fast' kernel made to draw PCF. Rows that fail on a known
-  bug go in the script's KNOWN_FAILING table (empty). The look gate's limits (`PAGE_LOOK`, `lookFailure`) moved from smoke.mjs to playwright.config.mjs so both use them.
-  ENGINE.md no longer says smoke compares poses with stored hashes (it never did).
+  bug go in the script's KNOWN_FAILING table (empty). The look gate's limits (`PAGE_LOOK`, `lookFailure`) moved from
+  smoke.mjs to playwright.config.mjs so both use them. ENGINE.md no longer says smoke compares poses with stored
+  hashes (it never did).
 - miami-drive's car downloads 6.3 MB less. `samples/public/miami/models/car-concept.glb` is meshopt-compressed
   (EXT_meshopt_compression, made with gltfpack 1.3, `-cc -ce ext -kn -km -ke -vpf -vnf -vtf -vn 12 -vt 14`: float
   positions, normals and UVs at 14 / 12 / 14 bits, node names, materials and extras kept, no simplification): 9.49 ->
