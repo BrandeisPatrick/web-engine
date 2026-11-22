@@ -41,9 +41,9 @@
   camera and walker travelling with TAA accumulating, a portrait canvas, pixel ratio 1.5, two forced adaptive steps
   (render scale 1 -> 0.87, then pixel ratio 1.5 -> 1.25 at scale 0.75) and the return to the first picture. Per row:
   no console, page, shader or `gl.getError()` error, smoke's not-black / not-blown-out / no-cast limits, two captures
-  within perf's image guard, and a change against the row's reference inside a measured range (an unchanged picture fails as a dead option; motion blur on a still frame, PCSS at
-  4 cascades (it falls back to PCF) and the restored canvas must equal theirs). It found no engine bug: every option
-  compiles and changes the picture on ANGLE / Metal. Shown to fail on a GLSL error in the DoF shader and on a 'fast'
+  within perf's image guard, and a change against the row's reference inside a measured range (an unchanged picture
+  fails as a dead option; motion blur on a still frame, PCSS at 4 cascades (it falls back to PCF) and the restored
+  canvas must equal theirs). It found no engine bug: every option compiles and changes the picture on ANGLE / Metal. Shown to fail on a GLSL error in the DoF shader and on a 'fast'
   kernel made to draw PCF. Rows that fail on a known bug go in the script's KNOWN_FAILING table (empty). The look
   gate's limits (`PAGE_LOOK`, `lookFailure`) moved from smoke.mjs to playwright.config.mjs so both use them.
   ENGINE.md no longer says smoke compares poses with stored hashes (it never did).
