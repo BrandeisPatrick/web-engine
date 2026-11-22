@@ -10,6 +10,7 @@ export default (env) => {
   return {
     ...c, root, publicDir: `${root}samples/public`,
     server: { ...c.server, port: 5192 },
+    cacheDir: `${root}lab/.cache`, // its own pre-bundle cache (git-ignored): another dev server re-optimising node_modules/.vite cannot pull it away mid-run
     optimizeDeps: { include: ['three', 'three/webgpu', 'three/tsl'] },
   };
 };

@@ -1,5 +1,5 @@
 // Runs the renderer comparison (lab/webgpu/index.html) in Chrome and prints one table. Lab tooling, not a check.
-//   node lab/webgpu/bench.mjs [--runs=3] [--modes=gl,gpu,gpu-gl] [--post] [--bundle] [--ts] [--frames=300] [--sync=60]
+//   node lab/webgpu/bench.mjs [--runs=3] [--modes=gl,gpu,gpu-gl] [--post] [--bundle] [--ts] [--lights=N] [--frames=300] [--sync=60]
 //                             [--headed] [--json=file] [--pics=dir]
 //   node lab/webgpu/bench.mjs --poses     capture poses.json from the production nyc-night page (its bench poses)
 // Headless Chrome on macOS gives the real GPU to both WebGL (ANGLE on Metal) and WebGPU (Dawn on Metal) with the
@@ -43,7 +43,7 @@ try {
     await ctx.close();
   } else {
     const modes = String(args.modes || 'gl,gpu,gpu-gl').split(','), runs = +args.runs || 3;
-    const extra = `${args.post ? '&post=1' : ''}${args.bundle ? '&bundle=1' : ''}${args.ts ? '&ts=1' : ''}&frames=${+args.frames || 300}&sync=${+args.sync || 60}`;
+    const extra = `${args.post ? '&post=1' : ''}${args.bundle ? '&bundle=1' : ''}${args.ts ? '&ts=1' : ''}${args.lights ? `&lights=${+args.lights}` : ''}&frames=${+args.frames || 300}&sync=${+args.sync || 60}`;
     const all = [];
     for (let run = 1; run <= runs; run++) {
       for (const mode of modes) {
@@ -60,7 +60,7 @@ try {
           fs.mkdirSync(args.pics, { recursive: true });
           for (const r of lab.rows) {
             await page.evaluate((id) => window.__lab.showPose(id), r.pose);
-            await page.locator('#c').screenshot({ path: path.join(args.pics, `${mode}${args.post ? '-post' : ''}${args.bundle ? '-bundle' : ''}-${r.pose}.png`) });
+            await page.locator('#c').screenshot({ path: path.join(args.pics, `${mode}${args.post ? '-post' : ''}${args.bundle ? '-bundle' : ''}${args.lights ? `-lights${args.lights}` : ''}-${r.pose}.png`) });
           }
         }
         await ctx.close();
@@ -73,7 +73,7 @@ try {
     }
     console.log(`\nper run (ms)\n${formatTable(all.map(({ backend, heapMB, ...r }) => ({ ...r, heapMB })))}`);
     // across runs: the median of each column's per-run medians and the spread (max - min) / median
-    const keys = ['cpuMed', 'frameMed', 'frameP95', 'syncMed', 'syncP95', 'syncMax', 'gpuTsMed', 'firstCall', 'firstPresented'];
+    const keys = ['cpuMed', 'frameMed', 'frameP95', 'loopMs', 'syncMed', 'syncP95', 'syncMax', 'gpuTsMed', 'firstCall', 'firstPresented'];
     const sum = [];
     for (const mode of modes) for (const pose of [...new Set(all.map((r) => r.pose))]) {
       const rs = all.filter((r) => r.mode === mode && r.pose === pose), row = { mode, pose };
