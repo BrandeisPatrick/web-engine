@@ -5,7 +5,9 @@
 // the pixels) keeps its full ratio instead of sliding to 1 (a step down that does not help is undone, retried after
 // 30, 60, 120, 240 s); a GPU-bound frame steps down to the ratio that fits and stays; after a start-up hitch, or when
 // the load drops, the ratio climbs back, also on a 60 Hz screen where the interval cannot go under the budget (a probe,
-// undone when it does not fit, with the same back-off). Run: node test/adaptive-resolution.mjs
+// undone when it does not fit, with the same back-off). With internal scales (renderScales + onRenderScale, TAA
+// upscaling) the same controller steps the scale first and the ratio below the lowest scale, the canvas kept; without
+// them the ratio alone, as above. Run: node test/adaptive-resolution.mjs
 import { Engine } from '../src/core/Engine.js';
 
 let failures = 0;
@@ -18,14 +20,17 @@ function check(name, ok, detail = '') {
 
 /**
  * Run the controller for `secs` seconds of modelled frames.
- * @param {(pr: number, t: number) => number} work  frame work (ms) at pixel ratio pr, time t (s)
- * @param {{ maxPR?: number, hz?: number, targetFps?: number, secs?: number }} o  hz: display rate (0: vsync off)
+ * @param {(pr: number, t: number) => number} work  frame work (ms) at the effective ratio pr (pixel ratio x scale), time t (s)
+ * @param {{ maxPR?: number, hz?: number, targetFps?: number, secs?: number, scales?: number[] }} o  hz: display rate
+ *   (0: vsync off); scales: renderScales with onRenderScale set unless wired is false (changes: [t, ratio, scale])
  */
-function run(work, { maxPR = 1.5, hz = 0, targetFps = 0, secs = 600 } = {}) {
+function run(work, { maxPR = 1.5, hz = 0, targetFps = 0, secs = 600, scales = null, wired = true } = {}) {
   const e = Object.create(Engine.prototype);
   const changes = [];
-  Object.assign(e, { adaptive: true, maxPR, pixelRatio: maxPR, targetFps, refreshRate: hz });
-  e.setPixelRatio = function (pr) { changes.push([+t.toFixed(2), pr]); this.pixelRatio = pr; };
+  Object.assign(e, { adaptive: true, maxPR, pixelRatio: maxPR, targetFps, refreshRate: hz, renderScale: 1, renderScales: scales || [], onRenderScale: null });
+  const log = () => changes.push(scales ? [+t.toFixed(2), e.pixelRatio, e.renderScale] : [+t.toFixed(2), e.pixelRatio]);
+  e.setPixelRatio = function (pr) { this.pixelRatio = pr; log(); };
+  if (scales && wired) e.onRenderScale = log;
   e._resetAdaptive();
   let t = 0;
   const timeAt = new Map(); // pixel ratio -> seconds spent there
@@ -33,17 +38,17 @@ function run(work, { maxPR = 1.5, hz = 0, targetFps = 0, secs = 600 } = {}) {
   const tail = after(secs - 60);
   const period = hz > 0 ? 1000 / hz : 0, cap = targetFps > 0 ? 1000 / targetFps : 0;
   while (t < secs) {
-    const ms = Math.max(work(e.pixelRatio, t), period, cap);
-    const dt = ms / 1000;
-    timeAt.set(e.pixelRatio, (timeAt.get(e.pixelRatio) || 0) + dt);
-    tail.add(e.pixelRatio, dt);
+    const ms = Math.max(work(e.pixelRatio * e.renderScale, t), period, cap);
+    const dt = ms / 1000, k = scales ? `${e.pixelRatio}x${e.renderScale}` : e.pixelRatio;
+    timeAt.set(k, (timeAt.get(k) || 0) + dt);
+    tail.add(k, dt);
     t += dt;
     if (dt < 0.2) e._adapt(dt); // as tick() calls it
   }
   const share = (pr, m = timeAt) => (m.get(pr) || 0) / [...m.values()].reduce((a, b) => a + b, 0);
-  return { changes, final: e.pixelRatio, share, tailShare: (pr) => share(pr, tail.m), downs: changes.filter((c, i) => c[1] < (i ? changes[i - 1][1] : maxPR)).length };
+  return { changes, final: e.pixelRatio, scale: e.renderScale, share, tailShare: (pr) => share(pr, tail.m), downs: changes.filter((c, i) => c[1] < (i ? changes[i - 1][1] : maxPR)).length };
 }
-const fmt = (r) => `final ${r.final}, ${r.changes.length} changes: ${r.changes.slice(0, 10).map((c) => `${c[0]}s->${c[1]}`).join(' ')}${r.changes.length > 10 ? ' ...' : ''}`;
+const fmt = (r) => `final ${r.final}${r.scale !== 1 ? `x${r.scale}` : ''}, ${r.changes.length} changes: ${r.changes.slice(0, 10).map((c) => `${c[0]}s->${c.slice(1).join('x')}`).join(' ')}${r.changes.length > 10 ? ' ...' : ''}`;
 
 // ---------------------------------------------------------------------------------------- stall-bound frame
 {
@@ -115,6 +120,35 @@ const fmt = (r) => `final ${r.final}, ${r.changes.length} changes: ${r.changes.s
   // targetFps 120 on a 120 Hz screen: budget 8.3 ms; 1 + 4 per pr^2 = 10 ms at 1.5, 7.25 at 1.25, 5 at 1.0
   const r = run((pr) => 1 + 4 * pr * pr, { hz: 120, targetFps: 120 });
   check('targetFps 120 at 120 Hz: settles at the ratio that fits 8.3 ms (1.25)', r.final === 1.25 && r.tailShare(1.25) > 0.95, fmt(r));
+}
+
+// ------------------------------------------------------------------------- internal scales (TAA upscaling)
+{
+  const scales = [1, 0.87, 0.75, 0.67];
+  // 2 ms + 9 per (ratio x scale)^2: 22.3 ms at 1.5, 17.3 at 1.5 x 0.87 (fits): one scale step, the ratio kept
+  const a = run((q) => 2 + 9 * q * q, { scales });
+  check('scales, GPU-bound: one scale step (0.87), the pixel ratio kept, then holds', a.final === 1.5 && a.scale === 0.87
+    && a.changes.length === 1, fmt(a));
+  // 3 + 14 per q^2: 34.5 ms at 1.5, 20.7 at 1.5 x 0.75, 17.1 at 1.5 x 0.67 (fits): every scale, no ratio step
+  const b = run((q) => 3 + 14 * q * q, { scales });
+  check('scales, heavy: down the scales to 0.67, the pixel ratio kept', b.final === 1.5 && b.scale === 0.67
+    && b.changes.length === 3 && b.changes.every((c) => c[1] === 1.5), fmt(b));
+  // 4 + 20 per q^2: 49 ms at 1.5, 24.2 at 1.5 x 0.67, 18.0 at 1.25 x 0.67 (fits): the ratio steps below the lowest scale
+  const c = run((q) => 4 + 20 * q * q, { scales });
+  check('scales, heavier: below the lowest scale the ratio steps (1.25 x 0.67)', c.final === 1.25 && c.scale === 0.67
+    && c.changes.length === 4, fmt(c));
+  // heavy for 60 s, then light: climbs back, the ratio first, then the scales, to 1.5 x 1
+  const d = run((q, t) => (t < 60 ? 4 + 20 * q * q : 2 + 3 * q * q), { scales, secs: 120 });
+  const up = d.changes.filter((ch) => ch[0] > 60);
+  check('scales, load drops: climbs the ratio first, then the scales, back to 1.5 x 1', d.final === 1.5 && d.scale === 1
+    && up[0][1] === 1.5 && up[0][2] === 0.67 && up.length === 4, fmt(d));
+  // a stall (20 ms whatever the pixels): the scale steps are undone with the back-off, never below 0.87
+  const e = run((q) => 20 + 0.3 * q * q, { scales });
+  check('scales, stall: at full size over 95 % of the time, never below the first scale step', e.final === 1.5 && e.scale === 1
+    && e.share('1.5x1') > 0.95 && e.changes.every((ch) => ch[1] === 1.5 && ch[2] >= 0.87), fmt(e));
+  // the scales without onRenderScale (no TAA wired): the pixel ratio as before
+  const f = run((q) => 3 + 12 * q * q, { scales, wired: false });
+  check('scales without onRenderScale: the pixel ratio steps (to 1.0), the scale stays 1', f.final === 1 && f.scale === 1, fmt(f));
 }
 
 for (const r of results) console.log(r);

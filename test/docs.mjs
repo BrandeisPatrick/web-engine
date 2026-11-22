@@ -202,7 +202,7 @@ async function checkTierTable() {
   const lines = readFileSync(join(root, rel), 'utf8').split('\n');
   const start = lines.findIndex((l) => /^###\s+Quality tiers\s*$/.test(l));
   if (start < 0) { checks++; fail(rel, 0, 'no "### Quality tiers" section'); return; }
-  const fmt = (v) => (v === undefined ? '-' : `\`${typeof v === 'string' ? `'${v}'` : String(v)}\``);
+  const fmt = (v) => (v === undefined ? '-' : `\`${typeof v === 'string' ? `'${v}'` : Array.isArray(v) ? `[${v.join(', ')}]` : String(v)}\``);
   const want = new Map();
   for (const g of Object.keys(T.desktop)) {
     if (g === 'label' || g === 'blurb') continue;

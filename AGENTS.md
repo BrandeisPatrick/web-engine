@@ -35,7 +35,7 @@ before `npm run deploy` or a release** (about 7 minutes). Both need Chrome and t
 | `npm run smoke` | Every demo and starter on both quality tiers in headless Chrome (needs Chrome and a GPU) |
 | `node test/browser/check-page.mjs <name>` | Load one page headlessly (`?autostart=1`), hold W for 2 s, fail on any console or page error |
 | `node test/browser/sound-check.mjs --wav=mix.wav` | Render the sound kit's ten-second self-test scene in headless Chrome, print its measurements and save the mix |
-| `node test/browser/flicker.mjs [--out=dir]` | Flicker of nyc-night's bench views standing still (TAA jittering as in play), each held to a budget; `--out` saves heat maps of where it flickers |
+| `node test/browser/flicker.mjs [--out=dir]` | Flicker of nyc-night's bench views standing still (TAA jittering as in play) at render scale 1, 0.87 and 0.75, each held to a budget; `--out` saves heat maps of where it flickers |
 | `node test/browser/played-frame.mjs [name]` | The played frame of nyc-night and miami-drive: the production build at 1920x1080, vsync off, median and p95 frame interval against `bench/budgets.json` "played", no `getParameter` round trip for the unpack pixel-store state (the stall `npm run perf` cannot see), and no shader compile or program link from ready to the end of the window (a stutter `engine.warmUp()` should prevent; the new programs are named) |
 | `node test/browser/phone-start.mjs [name]` | Start-up and lost-context paths of every demo and starter (loading screen until a frame is drawn, no long frame after it, the Reload notice, a lighter reload), and the crash fallback (a boot marker left by a run that died: a lighter load, the marker cleared by a healthy run; `--crash` runs only that) |
 
@@ -70,7 +70,9 @@ expose state that changes through a function (`{ game: () => ({ mode, score }) }
   into `Atmosphere`, `postfx` into `PostFX`, and set `postfx.aoPass.enabled` / `postfx.bloomPass.enabled` from
   `passes` yourself. Add your own groups freely.
 - **Everything in PostFX is off by default**, and PostFX keeps its first size unless you set
-  `engine.onResize = (w, h, pr) => postfx.setSize(w, h, pr)`.
+  `engine.onResize = (w, h, pr) => postfx.setSize(w, h, pr)`. Automatic resolution lowers TAA's internal scale
+  (`renderScale`, the desktop tier's `engine.renderScales`) before the pixel ratio only with
+  `engine.onRenderScale = (s) => postfx.set('renderScale', s)`; without it, only the pixel ratio steps.
 - **Asset URLs** go through `import.meta.env.BASE_URL`, so a page works under a sub-path.
 
 ## API by task

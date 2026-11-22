@@ -65,6 +65,7 @@ if (postfx.bloomPass) postfx.bloomPass.enabled = S.passes.bloom;
 postfx.track(player); // per-object velocity for TAA / motion blur on moving meshes
 engine.renderFn = (sc, cam, dt) => postfx.render(dt);
 engine.onResize = (w, h, pr) => postfx.setSize(w, h, pr);
+engine.onRenderScale = (s) => postfx.set('renderScale', s); // frames too long: fewer pixels under TAA first (S.engine.renderScales)
 ```
 
 The starters put the tiers in the `GameShell` pause card ("Loading, a start screen and pause"); without a shell the
@@ -87,7 +88,8 @@ Without a shell, create a `LoadingScreen` (ui) at the top of the module (`const 
 'MY GAME', label: 'Loading…' })`) and end `boot()` with `loading.setLabel('Compiling shaders…'); await
 engine.warmUp(); engine.start(); loading.hide();`. A page with bench poses passes `{ systems: false, frames: 12 }`
 under `?bench=1`, as the demos do: the poses keep their loaded state, and 12 frames leave a renderFn's every-2nd, 3rd
-and 4th-frame counters in phase.
+and 4th-frame counters in phase. Set `engine.onRenderScale` before the warm-up: its last frame is drawn at the first
+smaller internal scale, so adaptive resolution's first step in play compiles no shader.
 
 If the device drops the WebGL context later (phones do when GPU memory runs short), the engine stops the loop, shows
 a message with a Reload button (`engine.onContextLost` replaces it) and the next `resolveQuality()` in that tab comes up

@@ -5,7 +5,7 @@
 // fallback without fences, and resolves (lost: true) instead of rejecting when the context is lost; a lost context
 // stops the loop once, records the loss for the session and calls onContextLost; a frame that throws is logged with
 // console.error and passed to onFrameError, or takes the lost path when the context is gone; start() does nothing
-// after a loss. Run: node test/engine-start.mjs
+// after a loss; with adaptive resolution's scales the first warm frame is drawn below 1. Run: node test/engine-start.mjs
 import { Engine } from '../src/core/Engine.js';
 import { CONTEXT_LOSS_KEY, contextLosses } from '../src/core/Quality.js';
 
@@ -88,6 +88,19 @@ globalThis.cancelAnimationFrame = globalThis.cancelAnimationFrame || (() => {});
   const r = await e.warmUp({ frames: 2, systems: false, compile: false });
   check('warmUp({ systems: false }): renderFn only', r.frames === 2 && count(e.log, 'render') === 2 && count(e.log, 'update') === 0 && count(e.log, 'early') === 0 && count(e.log, 'late') === 0);
   check('warmUp({ compile: false }): no compileAsync', count(e.log, 'compile') === 0 && r.compileMs === 0);
+}
+{
+  // adaptive resolution's scales: the last warm frame at the first scale below 1 (its upscaling programs compile
+  // there), the others at 1, and back at 1 after it; without the hook every frame at 1
+  for (const hook of [true, false]) {
+    const e = fakeEngine(fakeGL(), { compileAsync: false }), seen = [];
+    Object.assign(e, { renderScale: 1, renderScales: [1, 0.87, 0.75], onRenderScale: hook ? (s) => e.log.push(['scale', s]) : null });
+    e.renderFn = () => seen.push(e.renderScale);
+    const r = await e.warmUp({ frames: 4, systems: false });
+    check(hook ? 'warmUp with scales: the last frame at 0.87, the others at 1, ends at 1 (4 frames)' : 'warmUp with scales, no onRenderScale: every frame at 1',
+      r.frames === 4 && seen.join() === (hook ? '1,1,1,0.87' : '1,1,1,1') && e.renderScale === 1
+      && e.log.filter((x) => x[0] === 'scale').map((x) => x[1]).join() === (hook ? '0.87,1' : ''), seen.join());
+  }
 }
 {
   const e = fakeEngine(fakeGL({ fences: false }), { compileAsync: false });
