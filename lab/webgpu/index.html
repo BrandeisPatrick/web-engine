@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab: WebGL vs WebGPU</title>
+<style>
+  body { margin: 0; background: #0b0d12; color: #e6e9ef; font: 13px/1.45 ui-monospace, Menlo, monospace; }
+  canvas { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+  nav { padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+  nav a, button { color: inherit; background: #1d2230; border: 1px solid #3a4152; border-radius: 6px; padding: 6px 10px; font: inherit; text-decoration: none; }
+  pre { margin: 0; padding: 8px 12px 24px; white-space: pre-wrap; word-break: break-word; user-select: text; }
+</style>
+</head>
+<body>
+<nav>
+  <a href="?r=gl">A: WebGL</a><a href="?r=gpu">B: WebGPU</a><a href="?r=gpu-gl">C: WebGPU forceWebGL</a>
+  <a href="?r=gl&post=1">A + PostFX</a><a href="?r=gpu&post=1">B + TSL post</a>
+  <button id="copy">Copy results</button>
+</nav>
+<canvas id="c" width="1920" height="1080"></canvas>
+<pre id="out"></pre>
+<script type="module" src="./main.js"></script>
+</body>
+</html>
