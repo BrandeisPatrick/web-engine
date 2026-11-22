@@ -1,6 +1,12 @@
 # Changelog
 
 ## Unreleased
+- The played-frame check (`test/browser/played-frame.mjs`, in `npm run check:full`) also fails on a shader compiled in
+  play: it counts `compileShader` and `linkProgram` from the moment the page reports ready to the end of its window
+  (the 3 s of play and the 6 s measured), and names the three.js programs made then (the material's name, else its
+  program cache key). It found one on miami-drive: the car's `exhaust` particles compiled their program on the first
+  played frame, at the first idle puff. `ParticleSystem` (render) hid its mesh while empty, so `engine.warmUp()` never
+  drew it; an empty system now stays visible (drawing no instances) until it has been drawn once. nyc-night had none.
 - miami-drive's car downloads 6.3 MB less. `samples/public/miami/models/car-concept.glb` is meshopt-compressed
   (EXT_meshopt_compression, made with gltfpack 1.3, `-cc -ce ext -kn -km -ke -vpf -vnf -vtf -vn 12 -vt 14`: float
   positions, normals and UVs at 14 / 12 / 14 bits, node names, materials and extras kept, no simplification): 9.49 ->
