@@ -1,4 +1,4 @@
-// Headless checks for the opt-in traffic options the Night NYC walk uses (src/world/TrafficSim.js): typeCounts(n)
+// Headless checks for the opt-in traffic options the Night NYC drive uses (src/world/TrafficSim.js): typeCounts(n)
 // without a mix is the fleet split of before (pinned per type), a mix replaces the named types' shares and renormalises
 // (counts still sum to n), and a TrafficSim built on the procedural city with `mix` / `recycleRadius` / `spawnRadius`
 // keeps them while the defaults stay 700 / 620 m. Run: node test/nyc-traffic-mix.mjs
@@ -64,7 +64,7 @@ const asObj = (c) => Object.fromEntries(names.map((n, i) => [n, c[i]]));
   check('area sim: steps without errors', sim.vehicles.every((v) => Number.isFinite(v.x) && Number.isFinite(v.z)));
 }
 
-console.log('Traffic fleet mix and area (src/world/TrafficSim.js, Night NYC walk)\n');
+console.log('Traffic fleet mix and area (src/world/TrafficSim.js, Night NYC drive)\n');
 for (const r of results) console.log(r);
 console.log(`\n${failures ? `${failures} FAILED` : 'all passed'} (${results.length} checks)`);
 process.exit(failures ? 1 : 0);

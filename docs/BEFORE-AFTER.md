@@ -38,7 +38,7 @@ default in nyc-night and miami-drive. The low-key look is still there with `?loo
 pose at 1280 x 720 on the desktop tier: on the left the low-key look, on the right the open look. The labels are the
 ones from the comparison, made before the switch.
 
-<img src="before-after/nyc-night-looks.jpg" alt="Night NYC walk, every bench pose: the low-key look on the left, the open look on the right" width="960">
+<img src="before-after/nyc-night-looks.jpg" alt="Night NYC, every bench pose: the low-key look on the left, the open look on the right" width="960">
 
 <img src="before-after/miami-drive-looks.jpg" alt="Miami drive, every bench pose: the low-key look on the left, the open look on the right" width="960">
 
@@ -51,7 +51,7 @@ warm hue family). The round also added the open look, a brighter two-temperature
 exposure, cool shade against warm lamps, a small lifted black), the default since the section above: one example
 per demo below.
 
-### Night NYC walk
+### Night NYC
 
 Lamps as shielded downward spots (round pools, the pole left dark), glass that reflects the street, lit and dim
 rooms, lit street trees, weathered street kit, shop interiors with a counter and pendant lamps.
@@ -64,7 +64,7 @@ rooms, lit street trees, weathered street kit, shop interiors with a counter and
 
 The open look (`?look=open` then, the default now):
 
-<img src="before-after/nyc-avenue-look-open.jpg" alt="Night NYC walk, the avenue in the open look" width="720">
+<img src="before-after/nyc-avenue-look-open.jpg" alt="Night NYC, the avenue in the open look" width="720">
 
 ### Miami drive
 
@@ -95,7 +95,7 @@ The open look (`?look=open` then, the default now):
 <table><tr><th>Before (main)</th><th>This round</th></tr><tr><td><img src="before-after/starter-drive-run-before.jpg" alt="Before (main)"></td><td><img src="before-after/starter-drive-run-after.jpg" alt="This round"></td></tr></table>
 
 
-## Night NYC walk (`samples/nyc-night`)
+## Night NYC (`samples/nyc-night`)
 
 Late dusk replaced the neon night: the hero view looks west down a cross street into the afterglow.
 

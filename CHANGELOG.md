@@ -32,6 +32,52 @@
   `EngineAudio` as a four-cylinder on the default `Gearbox` (five speeds), engine bus 0.5; the sound-check scene uses
   the same. `VehicleAudio` itself is unchanged (the electric car with thrusters). AGENTS.md, ENGINE.md and HOWTO
   "Car sounds" describe the new pair.
+- Night NYC is a driving game now; walking is gone from it. The page starts with your car on 7th Avenue, about 400 m
+  north of Times Square, facing down the avenue, in the same city and the same dusk look. You pick the car on the
+  start card, or change it in the pause card, and the choice is saved. There are three cars, slow to fast, each an
+  HD body from the engine (`createCarVisual`) with its own physics over the body's spec, in one data file
+  (`samples/nyc-night/cars.js`): a yellow cab (slow and heavy, soft springs; 0-100 km/h in 12.0 s, 156 km/h), a sedan
+  (balanced; 7.8 s, 196 km/h) and an interceptor (a black-and-white police sedan with all-wheel drive, stiff and
+  sharp; 4.7 s, 250 km/h). A held steer key no longer spins any of them (more rear grip, less lock at speed, as the
+  Miami car). The drive has what the other driving pages have: the steering assist, a chase camera with
+  the road feel, skid marks and tyre smoke, each car's own engine voice and gearbox (`EngineAudio` on a `Gearbox`: a four-cylinder cab with four gears, a
+  six-cylinder sedan with five, a V8 interceptor with six, with the torque cut at each shift) over road, wind and tyre
+  sounds and the city's hum (`CityAmbience`), a speed readout, gamepad
+  rumble on a hit, keyboard, gamepad and touch controls (stick, GAS, BRK, HB, CAM, RST), and a `GameShell` (loading
+  bar, start card, pause with volume, the assist, the car and the quality tiers) in place of the old help overlay and
+  gear button. R (pad X, RST) puts the car back on the nearest street, standing, facing along it (with the traffic on a
+  one-way street).
+- Headlights that light the street: on the desktop tier the car's lamps are one clustered spot from the middle of the
+  nose (reach 60 m) and its tail lamps two small red lights that brighten when it brakes (`lights.js`); one spot pair
+  measured 0.5 ms a frame at 1920x1080, one spot half that. On the mobile tier one real spot light sits between the
+  lamps; it is always in the scene, dark while the car is out of view, so no material's program changes.
+- What a fast car found in the city, checked in the page: 300 runs at 144 to 259 km/h into the streets in random
+  directions hit something 283 times and never ended inside a building (the 120 Hz step and the collision sweep hold
+  at 70 m/s); the traffic's cars stay solid (rear-ending them at 90 km/h never passes through them), and the traffic
+  now brakes for the player's car and never drives into it (`Traffic.setPlayer`). Kerbs are climbed through the
+  suspension. The edge of the baked map, where the streets end on bare ground, is a wall 6 m inside it, and a message
+  says to turn back. People stay on the sidewalks (they never cross a road); when the car comes onto the sidewalk at
+  them they step aside within it, and one the car would still reach steps out of the scene; nobody is shown being
+  hit, and nothing reacts to an impact (`pedestrians.js`). Streaming and the traffic area needed no change: the
+  streamer had nothing pending during full-throttle runs, and recycled traffic reappears outside the view.
+- The cost: the played frame (1920x1080, vsync off) while driving down 7th Avenue is a median of 10.8 ms and a 95th
+  percentile of 21.5 ms (budget 12 / 24); the walk page standing at its start read 8.6 / 16.8. Most of the difference
+  is the view (the chase camera on the avenue looks down the long street at the square); the car itself (body, lights,
+  shadow) costs about 0.5 ms. `npm run perf` is unchanged within its noise, except the pictures noted below.
+- The bench poses are where they were and the car is out of every pose. The `sidewalk` pose no longer has the walker
+  in it: its picture changed by a mean of 0.689 / 255 with 1.42 % of pixels over 8 on the desktop tier, and 0.294 /
+  1.19 % on the mobile tier, over perf's image guard (0.35 / 1 %). The golden pictures and the baseline wait for the
+  owner's decision; `avenue` and `square` are unchanged.
+- Tests: `test/nyc-cars.mjs` (Node, in `npm test`) drives the three cars: 0-100 km/h and top speed in their class,
+  braking from 100 km/h, a 25 m corner at 45 km/h held within 1 m of the line, a steer key held 4 s at 60, 100 and
+  140 km/h (throttle held or lifted) with the slide under 15 degrees, every gear used flat out and a 100 km/h cruise in
+  top gear under 3600 rpm, and the interceptor at most half the
+  cab's 0-100 time and 60 to 120 km/h faster. `test/browser/nyc-drive.mjs` (in `npm run check`) loads the page with
+  `?autostart=1`, checks the player is a car, holds W and checks it drives down the avenue, picks another car, then
+  for each car checks its engine voice is the only one on the engine bus, audible at idle and louder or higher under
+  full throttle (an analyser on the bus), and fails on any console error. The played-frame check holds W on nyc-night, so its budget is now met while driving.
+  The feature matrix's moving row moves the camera and the car (it moved the walker). The page's title, README,
+  AGENTS.md, ENGINE.md, the samples index and the asset catalogue call it a drive.
 
 ## 1.3.0 — 2026-11-22 — Automatic resolution draws fewer pixels before it shrinks the canvas; no shader compiled in play; every rendering option checked on the GPU; a smaller Miami car
 - Automatic resolution draws fewer pixels before it shrinks the canvas. On the desktop tier (TAA), when frames run

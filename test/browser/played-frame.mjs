@@ -6,8 +6,9 @@
 //
 // Per page (bench/budgets.json "played"): the production build (dist/, built first when it is missing or older than a
 // source file) served as static files, headless Chrome on the real GPU with vsync and the frame-rate limit off (a
-// frame then takes as long as its work), 1920x1080 at DPR 1, `?autostart=1&quality=desktop`, the camera at the
-// start. After `warm` ms of play the rAF intervals over `window` ms give the median and the p95, each held to the
+// frame then takes as long as its work), 1920x1080 at DPR 1, `?autostart=1&quality=desktop`, played from the start:
+// the camera stays put on miami-drive, and on nyc-night (a driving game) the throttle is held from the start, so the
+// car drives down 7th Avenue toward Times Square through the whole run (DRIVE). After `warm` ms of play the rAF intervals over `window` ms give the median and the p95, each held to the
 // page's budget. Also counted in that window, by a wrapper on the WebGL2 prototype installed before the page's
 // scripts (so a call the shadow answers is not counted): gl.getParameter round trips for the unpack pixel-store state,
 // which must be 0, and the other calls that read state back from the context (getParameter of anything else,
@@ -33,6 +34,7 @@ const cfg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'bench', 'budgets.jso
 const pages = args._.length ? args._ : Object.keys(cfg.pages);
 for (const p of pages) if (!cfg.pages[p]) { console.error(`[played-frame] unknown page '${p}' (bench/budgets.json played: ${Object.keys(cfg.pages).join(', ')})`); process.exit(1); }
 const [W, H] = cfg.size.split('x').map(Number);
+const DRIVE = new Set(['nyc-night']); // pages played with W held down
 const dist = path.join(repoRoot, 'dist');
 
 // ------------------------------------------------------------------------------------------- production build
@@ -123,8 +125,10 @@ try {
     const session = await loadSample(page, `${base}/${id}/?autostart=1&quality=desktop`, errors);
     if (session.status !== 'ready') { problems.push(`${id}: not ready (${session.note})`); rows.push({ page: id, result: 'FAIL', note: session.note }); await ctx.close(); continue; }
     await page.evaluate(() => { window.__played.late = { compileShader: 0, linkProgram: 0, programs: new Set(window.__sample.engine.renderer.info.programs) }; });
+    if (DRIVE.has(id)) await page.keyboard.down('KeyW');
     await page.waitForTimeout(cfg.warm);
     const r = await withTimeout(page.evaluate(playWindow, cfg.window), cfg.window + 30000, `${id} window`);
+    if (DRIVE.has(id)) await page.keyboard.up('KeyW');
     await ctx.close();
     const d = r.t.slice(1).map((x, i) => x - r.t[i]), s = [...d].sort((x, y) => x - y);
     const med = q(s, 0.5), p95 = q(s, 0.95), mean = d.reduce((x, y) => x + y, 0) / d.length, n = d.length;

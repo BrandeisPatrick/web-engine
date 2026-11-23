@@ -294,7 +294,7 @@ Snippets (character):
 
 <details id="snippet-nyc-Woman"><summary><b>Animated Woman</b> <code>nyc-Woman</code></summary>
 
-Rigged, animated low-poly character by Quaternius (CC0). One of the Night NYC walk's pedestrians (tinted per person). The demo plays its clips through the engine's AnimationController (player.js) and AnimationMixer (pedestrians.js).
+Rigged, animated low-poly character by Quaternius (CC0). One of the Night NYC drive's pedestrians (tinted per person). The demo plays its walk and idle clips through an AnimationMixer per person (pedestrians.js).
 
 ```js
 import * as THREE from 'three';
@@ -316,7 +316,7 @@ mixer.clipAction(gltf.animations.find((c) => c.name === 'Armature|Walking')).pla
 
 <details id="snippet-nyc-BusinessMan"><summary><b>Business Man</b> <code>nyc-BusinessMan</code></summary>
 
-Rigged, animated low-poly character by Quaternius (CC0). The Night NYC walk's player character (suit colour set in code) and one of its pedestrians. The demo plays its clips through the engine's AnimationController (player.js) and AnimationMixer (pedestrians.js).
+Rigged, animated low-poly character by Quaternius (CC0). One of the Night NYC drive's pedestrians. The demo plays its walk and idle clips through an AnimationMixer per person (pedestrians.js).
 
 ```js
 import * as THREE from 'three';
@@ -338,7 +338,7 @@ mixer.clipAction(gltf.animations.find((c) => c.name === 'CharacterArmature|Walk'
 
 <details id="snippet-nyc-ManInSuit"><summary><b>Man in Suit</b> <code>nyc-ManInSuit</code></summary>
 
-Rigged, animated low-poly character by Quaternius (CC0). One of the Night NYC walk's pedestrians. The demo plays its clips through the engine's AnimationController (player.js) and AnimationMixer (pedestrians.js).
+Rigged, animated low-poly character by Quaternius (CC0). One of the Night NYC drive's pedestrians. The demo plays its walk and idle clips through an AnimationMixer per person (pedestrians.js).
 
 ```js
 import * as THREE from 'three';
@@ -470,7 +470,7 @@ Snippets (prop):
 
 <details id="snippet-nyc-street-box"><summary><b>Cardboard box</b> <code>nyc-street-box</code></summary>
 
-Cardboard box from the Night NYC walk's street kit: a Poly Haven scan merged, simplified and UV-packed into one shared atlas by samples/nyc-night/tools/bake-street.mjs (meshes 'box', each with a \_lod1 in street.gltf). The demo places them along its streets (streetkit.js).
+Cardboard box from the Night NYC drive's street kit: a Poly Haven scan merged, simplified and UV-packed into one shared atlas by samples/nyc-night/tools/bake-street.mjs (meshes 'box', each with a \_lod1 in street.gltf). The demo places them along its streets (streetkit.js).
 
 ```js
 import * as THREE from 'three';
@@ -489,7 +489,7 @@ scene.add(mesh);
 
 <details id="snippet-nyc-street-hydrant"><summary><b>Fire hydrant</b> <code>nyc-street-hydrant</code></summary>
 
-Fire hydrant from the Night NYC walk's street kit: a Poly Haven scan merged, simplified and UV-packed into one shared atlas by samples/nyc-night/tools/bake-street.mjs (meshes 'hydrant', 'hydrant\_aged', each with a \_lod1 in street.gltf). The demo places them along its streets (streetkit.js).
+Fire hydrant from the Night NYC drive's street kit: a Poly Haven scan merged, simplified and UV-packed into one shared atlas by samples/nyc-night/tools/bake-street.mjs (meshes 'hydrant', 'hydrant\_aged', each with a \_lod1 in street.gltf). The demo places them along its streets (streetkit.js).
 
 ```js
 import * as THREE from 'three';
@@ -508,7 +508,7 @@ scene.add(mesh);
 
 <details id="snippet-nyc-street-bag"><summary><b>Garbage bag</b> <code>nyc-street-bag</code></summary>
 
-Garbage bag from the Night NYC walk's street kit: a Poly Haven scan merged, simplified and UV-packed into one shared atlas by samples/nyc-night/tools/bake-street.mjs (meshes 'bag', 'bagclear', each with a \_lod1 in street.gltf). The demo places them along its streets (streetkit.js).
+Garbage bag from the Night NYC drive's street kit: a Poly Haven scan merged, simplified and UV-packed into one shared atlas by samples/nyc-night/tools/bake-street.mjs (meshes 'bag', 'bagclear', each with a \_lod1 in street.gltf). The demo places them along its streets (streetkit.js).
 
 ```js
 import * as THREE from 'three';
@@ -527,7 +527,7 @@ scene.add(mesh);
 
 <details id="snippet-nyc-street-barrier"><summary><b>Jersey barrier</b> <code>nyc-street-barrier</code></summary>
 
-Jersey barrier from the Night NYC walk's street kit: a Poly Haven scan merged, simplified and UV-packed into one shared atlas by samples/nyc-night/tools/bake-street.mjs (meshes 'barrier', each with a \_lod1 in street.gltf). The demo places them along its streets (streetkit.js).
+Jersey barrier from the Night NYC drive's street kit: a Poly Haven scan merged, simplified and UV-packed into one shared atlas by samples/nyc-night/tools/bake-street.mjs (meshes 'barrier', each with a \_lod1 in street.gltf). The demo places them along its streets (streetkit.js).
 
 ```js
 import * as THREE from 'three';
@@ -546,7 +546,7 @@ scene.add(mesh);
 
 <details id="snippet-nyc-street-manhole"><summary><b>Manhole cover (scan)</b> <code>nyc-street-manhole</code></summary>
 
-Manhole cover (scan) from the Night NYC walk's street kit: a Poly Haven scan merged, simplified and UV-packed into one shared atlas by samples/nyc-night/tools/bake-street.mjs (meshes 'manhole' in street.gltf). The demo places them along its streets (streetkit.js).
+Manhole cover (scan) from the Night NYC drive's street kit: a Poly Haven scan merged, simplified and UV-packed into one shared atlas by samples/nyc-night/tools/bake-street.mjs (meshes 'manhole' in street.gltf). The demo places them along its streets (streetkit.js).
 
 ```js
 import * as THREE from 'three';
@@ -565,7 +565,7 @@ scene.add(mesh);
 
 <details id="snippet-nyc-street-crate"><summary><b>Milk crate</b> <code>nyc-street-crate</code></summary>
 
-Milk crate from the Night NYC walk's street kit: a Poly Haven scan merged, simplified and UV-packed into one shared atlas by samples/nyc-night/tools/bake-street.mjs (meshes 'crate', each with a \_lod1 in street.gltf). The demo places them along its streets (streetkit.js).
+Milk crate from the Night NYC drive's street kit: a Poly Haven scan merged, simplified and UV-packed into one shared atlas by samples/nyc-night/tools/bake-street.mjs (meshes 'crate', each with a \_lod1 in street.gltf). The demo places them along its streets (streetkit.js).
 
 ```js
 import * as THREE from 'three';
@@ -596,7 +596,7 @@ scene.add(gltf.scene);
 
 <details id="snippet-nyc-street-ubox"><summary><b>Signal controller box</b> <code>nyc-street-ubox</code></summary>
 
-Signal controller box from the Night NYC walk's street kit: a Poly Haven scan merged, simplified and UV-packed into one shared atlas by samples/nyc-night/tools/bake-street.mjs (meshes 'ubox', each with a \_lod1 in street.gltf). The demo places them along its streets (streetkit.js).
+Signal controller box from the Night NYC drive's street kit: a Poly Haven scan merged, simplified and UV-packed into one shared atlas by samples/nyc-night/tools/bake-street.mjs (meshes 'ubox', each with a \_lod1 in street.gltf). The demo places them along its streets (streetkit.js).
 
 ```js
 import * as THREE from 'three';
@@ -615,7 +615,7 @@ scene.add(mesh);
 
 <details id="snippet-nyc-street-can"><summary><b>Trash can</b> <code>nyc-street-can</code></summary>
 
-Trash can from the Night NYC walk's street kit: a Poly Haven scan merged, simplified and UV-packed into one shared atlas by samples/nyc-night/tools/bake-street.mjs (meshes 'can', 'can\_rust', each with a \_lod1 in street.gltf). The demo places them along its streets (streetkit.js).
+Trash can from the Night NYC drive's street kit: a Poly Haven scan merged, simplified and UV-packed into one shared atlas by samples/nyc-night/tools/bake-street.mjs (meshes 'can', 'can\_rust', each with a \_lod1 in street.gltf). The demo places them along its streets (streetkit.js).
 
 ```js
 import * as THREE from 'three';
@@ -1436,7 +1436,7 @@ scene.add(ball);
 
 <details id="snippet-nyc-asphalt_02"><summary><b>Asphalt 02</b> <code>nyc-asphalt_02</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'asphalt\_a' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/asphalt\_02/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('asphalt\_02', { base }) reads \<base\>asphalt\_02/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC drive as its 'asphalt\_a' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/asphalt\_02/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC drive loads on the mobile tier. loadTextureSet('asphalt\_02', { base }) reads \<base\>asphalt\_02/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
@@ -1469,7 +1469,7 @@ scene.add(ball);
 
 <details id="snippet-nyc-beige_wall_002"><summary><b>Beige Wall 002</b> <code>nyc-beige_wall_002</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'stucco\_a' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 256) in nyc/textures/beige\_wall\_002/; nyc/textures-512/ holds a 512 x 128 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('beige\_wall\_002', { base }) reads \<base\>beige\_wall\_002/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC drive as its 'stucco\_a' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 256) in nyc/textures/beige\_wall\_002/; nyc/textures-512/ holds a 512 x 128 copy that the Night NYC drive loads on the mobile tier. loadTextureSet('beige\_wall\_002', { base }) reads \<base\>beige\_wall\_002/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
@@ -1502,7 +1502,7 @@ scene.add(ball);
 
 <details id="snippet-nyc-bitumen"><summary><b>Bitumen</b> <code>nyc-bitumen</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'roof\_tar' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/bitumen/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('bitumen', { base }) reads \<base\>bitumen/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC drive as its 'roof\_tar' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/bitumen/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC drive loads on the mobile tier. loadTextureSet('bitumen', { base }) reads \<base\>bitumen/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
@@ -1518,7 +1518,7 @@ scene.add(ball);
 
 <details id="snippet-nyc-brick_wall_006"><summary><b>Brick Wall 006</b> <code>nyc-brick_wall_006</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'brick\_red' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/brick\_wall\_006/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('brick\_wall\_006', { base }) reads \<base\>brick\_wall\_006/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC drive as its 'brick\_red' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/brick\_wall\_006/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC drive loads on the mobile tier. loadTextureSet('brick\_wall\_006', { base }) reads \<base\>brick\_wall\_006/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
@@ -1534,7 +1534,7 @@ scene.add(ball);
 
 <details id="snippet-nyc-brick_wall_10"><summary><b>Brick Wall 10</b> <code>nyc-brick_wall_10</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'brick\_dark' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/brick\_wall\_10/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('brick\_wall\_10', { base }) reads \<base\>brick\_wall\_10/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC drive as its 'brick\_dark' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/brick\_wall\_10/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC drive loads on the mobile tier. loadTextureSet('brick\_wall\_10', { base }) reads \<base\>brick\_wall\_10/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
@@ -1550,7 +1550,7 @@ scene.add(ball);
 
 <details id="snippet-nyc-clean_asphalt"><summary><b>Clean Asphalt</b> <code>nyc-clean_asphalt</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'asphalt\_b' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/clean\_asphalt/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('clean\_asphalt', { base }) reads \<base\>clean\_asphalt/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC drive as its 'asphalt\_b' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/clean\_asphalt/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC drive loads on the mobile tier. loadTextureSet('clean\_asphalt', { base }) reads \<base\>clean\_asphalt/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
@@ -1600,7 +1600,7 @@ scene.add(ball);
 
 <details id="snippet-nyc-concrete_panels"><summary><b>Concrete Panels</b> <code>nyc-concrete_panels</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'concrete\_rough' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/concrete\_panels/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('concrete\_panels', { base }) reads \<base\>concrete\_panels/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC drive as its 'concrete\_rough' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/concrete\_panels/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC drive loads on the mobile tier. loadTextureSet('concrete\_panels', { base }) reads \<base\>concrete\_panels/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
@@ -1633,7 +1633,7 @@ scene.add(ball);
 
 <details id="snippet-nyc-concrete_pavement"><summary><b>Concrete Pavement</b> <code>nyc-concrete_pavement</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'sidewalk' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/concrete\_pavement/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('concrete\_pavement', { base }) reads \<base\>concrete\_pavement/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC drive as its 'sidewalk' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/concrete\_pavement/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC drive loads on the mobile tier. loadTextureSet('concrete\_pavement', { base }) reads \<base\>concrete\_pavement/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
@@ -1681,7 +1681,7 @@ scene.add(ball);
 
 <details id="snippet-nyc-corrugated_iron"><summary><b>Corrugated Iron</b> <code>nyc-corrugated_iron</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'metal\_corrugated' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/corrugated\_iron/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('corrugated\_iron', { base }) reads \<base\>corrugated\_iron/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC drive as its 'metal\_corrugated' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/corrugated\_iron/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC drive loads on the mobile tier. loadTextureSet('corrugated\_iron', { base }) reads \<base\>corrugated\_iron/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
@@ -1714,7 +1714,7 @@ scene.add(ball);
 
 <details id="snippet-nyc-leafy_grass"><summary><b>Leafy Grass</b> <code>nyc-leafy_grass</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'grass' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/leafy\_grass/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('leafy\_grass', { base }) reads \<base\>leafy\_grass/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC drive as its 'grass' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/leafy\_grass/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC drive loads on the mobile tier. loadTextureSet('leafy\_grass', { base }) reads \<base\>leafy\_grass/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
@@ -1730,7 +1730,7 @@ scene.add(ball);
 
 <details id="snippet-nyc-painted_worn_brick"><summary><b>Painted Worn Brick</b> <code>nyc-painted_worn_brick</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'brick\_painted' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/painted\_worn\_brick/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('painted\_worn\_brick', { base }) reads \<base\>painted\_worn\_brick/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC drive as its 'brick\_painted' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/painted\_worn\_brick/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC drive loads on the mobile tier. loadTextureSet('painted\_worn\_brick', { base }) reads \<base\>painted\_worn\_brick/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
@@ -1746,7 +1746,7 @@ scene.add(ball);
 
 <details id="snippet-nyc-sandstone_blocks_08"><summary><b>Sandstone Blocks 08</b> <code>nyc-sandstone_blocks_08</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'concrete\_panel' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/sandstone\_blocks\_08/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('sandstone\_blocks\_08', { base }) reads \<base\>sandstone\_blocks\_08/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC drive as its 'concrete\_panel' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/sandstone\_blocks\_08/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC drive loads on the mobile tier. loadTextureSet('sandstone\_blocks\_08', { base }) reads \<base\>sandstone\_blocks\_08/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
@@ -1762,7 +1762,7 @@ scene.add(ball);
 
 <details id="snippet-nyc-stone_block_wall"><summary><b>Stone Block Wall</b> <code>nyc-stone_block_wall</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'granite' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/stone\_block\_wall/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC walk loads on the mobile tier. loadTextureSet('stone\_block\_wall', { base }) reads \<base\>stone\_block\_wall/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
+Poly Haven PBR scan used by the Night NYC drive as its 'granite' surface. The engine's TextureSets loads it by manifest id. Full size (1024 x 1024) in nyc/textures/stone\_block\_wall/; nyc/textures-512/ holds a 512 x 512 copy that the Night NYC drive loads on the mobile tier. loadTextureSet('stone\_block\_wall', { base }) reads \<base\>stone\_block\_wall/, so base 'nyc/textures/' gives the full size and 'nyc/textures-512/' the small copy.
 
 ```js
 import * as THREE from 'three';
@@ -1795,7 +1795,7 @@ scene.add(ball);
 
 <details id="snippet-nyc-whitewashed_brick"><summary><b>Whitewashed Brick</b> <code>nyc-whitewashed_brick</code></summary>
 
-Poly Haven PBR scan used by the Night NYC walk as its 'stucco\_b' surface. The engine's TextureSets loads it by manifest id.
+Poly Haven PBR scan used by the Night NYC drive as its 'stucco\_b' surface. The engine's TextureSets loads it by manifest id.
 
 ```js
 import * as THREE from 'three';
@@ -2091,7 +2091,7 @@ scene.add(sheet);
 
 <details id="snippet-nyc-sign-atlas"><summary><b>Times Square sign atlas</b> <code>nyc-sign-atlas</code></summary>
 
-The painted atlas behind the Night NYC walk's signs: LED ads, theatre marquees, neon shop fascias and vertical blades (all names invented).
+The painted atlas behind the Night NYC drive's signs: LED ads, theatre marquees, neon shop fascias and vertical blades (all names invented).
 
 ```js
 import * as THREE from 'three';
@@ -2266,7 +2266,7 @@ Snippets (environment):
 
 <details id="snippet-nyc-env-cinema_lobby"><summary><b>Cinema Lobby panorama</b> <code>nyc-env-cinema_lobby</code></summary>
 
-Small interior panorama: the Night NYC walk stacks these into an atlas and shows them as parallax interiors behind its shop windows (signage.js buildInteriorAtlas).
+Small interior panorama: the Night NYC drive stacks these into an atlas and shows them as parallax interiors behind its shop windows (signage.js buildInteriorAtlas).
 
 ```js
 import * as THREE from 'three';
@@ -2282,7 +2282,7 @@ scene.environment = pmrem.fromEquirectangular(tex).texture;
 
 <details id="snippet-nyc-env-comfy_cafe"><summary><b>Comfy Cafe panorama</b> <code>nyc-env-comfy_cafe</code></summary>
 
-Small interior panorama: the Night NYC walk stacks these into an atlas and shows them as parallax interiors behind its shop windows (signage.js buildInteriorAtlas).
+Small interior panorama: the Night NYC drive stacks these into an atlas and shows them as parallax interiors behind its shop windows (signage.js buildInteriorAtlas).
 
 ```js
 import * as THREE from 'three';
@@ -2298,7 +2298,7 @@ scene.environment = pmrem.fromEquirectangular(tex).texture;
 
 <details id="snippet-nyc-env-decor_shop"><summary><b>Decor Shop panorama</b> <code>nyc-env-decor_shop</code></summary>
 
-Small interior panorama: the Night NYC walk stacks these into an atlas and shows them as parallax interiors behind its shop windows (signage.js buildInteriorAtlas).
+Small interior panorama: the Night NYC drive stacks these into an atlas and shows them as parallax interiors behind its shop windows (signage.js buildInteriorAtlas).
 
 ```js
 import * as THREE from 'three';
@@ -2314,7 +2314,7 @@ scene.environment = pmrem.fromEquirectangular(tex).texture;
 
 <details id="snippet-nyc-env-gear_store"><summary><b>Gear Store panorama</b> <code>nyc-env-gear_store</code></summary>
 
-Small interior panorama: the Night NYC walk stacks these into an atlas and shows them as parallax interiors behind its shop windows (signage.js buildInteriorAtlas).
+Small interior panorama: the Night NYC drive stacks these into an atlas and shows them as parallax interiors behind its shop windows (signage.js buildInteriorAtlas).
 
 ```js
 import * as THREE from 'three';
@@ -2330,7 +2330,7 @@ scene.environment = pmrem.fromEquirectangular(tex).texture;
 
 <details id="snippet-nyc-env-modern_buildings_night"><summary><b>Modern Buildings (Night) panorama</b> <code>nyc-env-modern_buildings_night</code></summary>
 
-Night city panorama: the Night NYC walk turns it into the scene environment (PMREM) for glass, cars and the damp street.
+Night city panorama: the Night NYC drive turns it into the scene environment (PMREM) for glass, cars and the damp street.
 
 ```js
 import * as THREE from 'three';
@@ -2346,7 +2346,7 @@ scene.environment = pmrem.fromEquirectangular(tex).texture;
 
 <details id="snippet-nyc-env-warm_bar"><summary><b>Warm Bar panorama</b> <code>nyc-env-warm_bar</code></summary>
 
-Small interior panorama: the Night NYC walk stacks these into an atlas and shows them as parallax interiors behind its shop windows (signage.js buildInteriorAtlas).
+Small interior panorama: the Night NYC drive stacks these into an atlas and shows them as parallax interiors behind its shop windows (signage.js buildInteriorAtlas).
 
 ```js
 import * as THREE from 'three';
@@ -2362,7 +2362,7 @@ scene.environment = pmrem.fromEquirectangular(tex).texture;
 
 <details id="snippet-nyc-env-warm_restaurant_night"><summary><b>Warm Restaurant (Night) panorama</b> <code>nyc-env-warm_restaurant_night</code></summary>
 
-Small interior panorama: the Night NYC walk stacks these into an atlas and shows them as parallax interiors behind its shop windows (signage.js buildInteriorAtlas).
+Small interior panorama: the Night NYC drive stacks these into an atlas and shows them as parallax interiors behind its shop windows (signage.js buildInteriorAtlas).
 
 ```js
 import * as THREE from 'three';
@@ -2483,7 +2483,7 @@ const lut = parseCubeLUT(await (await fetch(import.meta.env.BASE_URL + 'luts/war
 
 <details id="snippet-nyc-night-lut"><summary><b>NYC night grade</b> <code>nyc-night-lut</code></summary>
 
-The Night NYC walk's colour grade as a LUT built in code: a long toe, warm hues kept, cool hues desaturated (look.js also has the matching night sky, looks and PostFX grade keyframes).
+The Night NYC drive's colour grade as a LUT built in code: a long toe, warm hues kept, cool hues desaturated (look.js also has the matching night sky, looks and PostFX grade keyframes).
 
 ```js
 import { nightLut } from '../nyc-night/look.js';
@@ -2504,7 +2504,7 @@ Snippets (map data):
 
 <details id="snippet-nyc-map"><summary><b>Midtown Manhattan map</b> <code>nyc-map</code></summary>
 
-Baked OpenStreetMap data (roads, buildings, parks, water) for the engine's MapWorld: the Night NYC walk builds its city from it.
+Baked OpenStreetMap data (roads, buildings, parks, water) for the engine's MapWorld: the Night NYC drive builds its city from it.
 
 ```js
 import { loadMapData } from '@vibe/engine/world';

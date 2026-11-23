@@ -1,6 +1,6 @@
 // The two test levels (AGENTS.md "Commands"):
 //   npm run check        quick, for every change: the Node suites, the type check, the build, and the quick browser
-//                        scripts (two starters loaded, the sound kit, the game shell, the HOWTO recipes)
+//                        scripts (two starters loaded, the Night NYC drive, the sound kit, the game shell, the HOWTO recipes)
 //   npm run check:full   before `npm run deploy` or a release: the quick level, then smoke, the feature matrix,
 //                        the played frame, phone-start, drive-feel, car-camera, flicker and perf
 // Runs the steps in order with their output as it comes, stops at the first failing step and ends with a table:
@@ -16,6 +16,7 @@ const QUICK = [
   'npm run build',
   'node test/browser/check-page.mjs starter-walk',
   'node test/browser/check-page.mjs starter-drive',
+  'node test/browser/nyc-drive.mjs',
   'node test/browser/sound-check.mjs',
   'node test/browser/shell.mjs --out=test/browser/out/shell',
   'node test/browser/howto.mjs',

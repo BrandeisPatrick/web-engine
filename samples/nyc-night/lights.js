@@ -1,6 +1,7 @@
 // Extra clustered lights on top of MapWorld's street lamps: the signs (every screen / fascia / marquee / ticker within
-// `signRange` of the camera), the headlights (spot lights) and tail lights of the nearest moving cars, and a soft
-// fill that follows the walker. MapWorld's lamp list (NearestLights, mode 'clustered') writes lights 0..n-1 and sets
+// `signRange` of the camera), the headlights (spot lights) and tail lights of the nearest moving cars, and the
+// player's car: its headlights as a spot that lights the street ahead and two tail lamps that flare when it brakes.
+// MapWorld's lamp list (NearestLights, mode 'clustered') writes lights 0..n-1 and sets
 // the count only when the camera moved 4 m; this wraps the ClusteredLights instance's update() so that, every frame,
 // just before the cluster assignment, the extra lights are written from index n (= lightPool.pushed) on and the count
 // raised to cover them; the traffic signals' phase colours too. Allocation-free per frame.
@@ -11,7 +12,8 @@ const _cand = [];
 export class ExtraLights {
   /**
    * @param {{ clustered, world, signs: Array<{x,y,z,range,r,g,b,decay?}>, signRange?: number, cars?: number, headK?: number,
-   *   player?: THREE.Object3D|null }} o
+   *   car?: { visual: { root: THREE.Object3D, lamps: { brake: number } }, spec: { length: number, width: number } } | null }} o
+   *   car: the player's car (read each frame, so it may be swapped; nothing is written while its root is hidden)
    */
   constructor(o) {
     this.cl = o.clustered; this.world = o.world;
@@ -19,10 +21,10 @@ export class ExtraLights {
     this.signals = o.signals || []; // [{ sig (Props signal: .state), group, x, y, z }]
     this.signRange = o.signRange ?? 260;
     this.cars = o.cars ?? 24; this.headK = o.headK ?? 1;
-    this.player = o.player || null;
+    this.car = o.car || null;
     this.enabled = true; this.signsOn = true; this.carsOn = true;
     this.count = 0; this.signCount = 0; this.carCount = 0;
-    this._pose = {}; this._cam = new THREE.Vector3();
+    this._pose = {}; this._cam = new THREE.Vector3(); this._lamp = new THREE.Vector3(); this._aim = new THREE.Vector3();
     this._d = new Float32Array(4096); this._i = new Int32Array(4096);
     const orig = this.cl.update.bind(this.cl);
     this.cl.update = (camera) => { if (camera) this._write(camera); return orig(camera); };
@@ -95,10 +97,21 @@ export class ExtraLights {
       }
     }
     this.carCount = c;
-    // ---- a soft fill above and behind the walker's shoulder (reads against the dark)
-    if (this.player && n < max) {
-      const p = this.player.position;
-      cl.setLight(n++, p.x, p.y + 2.6, p.z, 5.5, 0.35, 0.38, 0.45, 2);
+    // ---- the player's car (docs/HOWTO.md "Headlights", the Miami demo's values): the two lamps as ONE spot from the
+    // middle of the nose at twice the intensity (a spot is shaded on every pixel its bounding sphere covers, about 34 m
+    // across in front of the car: the pair cost 0.5 ms a frame at 1920x1080, one half that, and their beams overlap
+    // from a few metres on), aimed 6 % down, reach 60 m; the tail lamps a small red glow each, brighter on the brake
+    const C = this.car, R = C && C.visual.root;
+    if (R && R.visible && n + 3 < max) {
+      R.updateMatrixWorld();
+      const L = C.spec.length / 2, hw = C.spec.width / 2 - 0.3, lp = this._lamp, aim = this._aim, tk = 0.5 + 2.5 * C.visual.lamps.brake;
+      lp.set(0, 0.65, -L - 0.05).applyMatrix4(R.matrixWorld);
+      aim.set(0, -0.06, -1).transformDirection(R.matrixWorld);
+      cl.setSpot(n++, lp.x, lp.y, lp.z, 60, 180, 170, 154, 2, aim.x, aim.y, aim.z, Math.cos(0.36), Math.cos(0.55));
+      for (const side of [-1, 1]) {
+        lp.set(side * hw, 0.85, L + 0.25).applyMatrix4(R.matrixWorld);
+        cl.setLight(n++, lp.x, lp.y, lp.z, 5, tk, 0.02 * tk, 0.01 * tk, 2);
+      }
     }
     cl.count = n;
     this.count = n - base;

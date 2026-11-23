@@ -98,8 +98,10 @@ const SUITES = [
   { file: 'ragdoll.mjs', shim: true },
   // the Miami drive sample: its road-car spec (samples/miami-drive/spec.js) on the VehicleController
   { file: 'miami-car.mjs' },
-  // the NYC night walk sample's engine options: traffic fleet mix and the spawn area (TrafficSim)
+  // the Night NYC drive sample: its engine options (traffic fleet mix and the spawn area, TrafficSim) and its cars
+  // (samples/nyc-night/cars.js) on the VehicleController
   { file: 'nyc-traffic-mix.mjs' },
+  { file: 'nyc-cars.mjs' },
   // the asset catalogue (tools/catalog-assets.mjs): every samples/public file covered, entries resolvable, credits
   // complete, catalog.json and docs/ASSETS.md current
   { file: 'asset-catalog.mjs' },

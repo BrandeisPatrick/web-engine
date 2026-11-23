@@ -19,7 +19,7 @@ import { VEHICLE_SPECS } from '../src/world/Vehicles.js';
 import { makeFurnitureGeometry } from '../src/world/Furniture.js';
 
 export const DEMOS = {
-  'nyc-night': 'Night NYC walk',
+  'nyc-night': 'Night NYC drive',
   'miami-drive': 'Miami drive',
 };
 
@@ -73,7 +73,7 @@ const streetKit = ([key, name, meshes, pid, author]) => ({
   id: `nyc-street-${key}`, name, category: 'prop', usedBy: ['nyc-night'], files: STREET_FILES, gltfMeshes: meshes,
   credit: { file: 'samples/public/nyc/CREDITS.md', row: `| ${pid} |`, author, licence: 'CC0 1.0', url: `https://polyhaven.com/a/${pid}` },
   tags: ['street kit', 'poly haven', 'scan', 'new york', ...meshes],
-  description: `${name} from the Night NYC walk's street kit: a Poly Haven scan merged, simplified and UV-packed into one shared atlas by samples/nyc-night/tools/bake-street.mjs (meshes ${meshes.map((m) => `'${m}'`).join(', ')}${meshes[0] === 'manhole' ? '' : ', each with a _lod1'} in street.gltf). The demo places them along its streets (streetkit.js).`,
+  description: `${name} from the Night NYC drive's street kit: a Poly Haven scan merged, simplified and UV-packed into one shared atlas by samples/nyc-night/tools/bake-street.mjs (meshes ${meshes.map((m) => `'${m}'`).join(', ')}${meshes[0] === 'manhole' ? '' : ', each with a _lod1'} in street.gltf). The demo places them along its streets (streetkit.js).`,
   snippet: `import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 const dir = ${B} + 'nyc/street/';                    // atlas512/ holds the phone atlas
@@ -102,8 +102,8 @@ const envEntry = ([pid, name, author, use]) => ({
   tags: ['hdri', 'panorama', 'equirectangular', 'poly haven', use],
   facts: { projection: 'equirectangular, tone-mapped to sRGB JPEG (the HDR is not committed)', use },
   description: pid === 'modern_buildings_night'
-    ? 'Night city panorama: the Night NYC walk turns it into the scene environment (PMREM) for glass, cars and the damp street.'
-    : `Small interior panorama: the Night NYC walk stacks these into an atlas and shows them as parallax interiors behind its shop windows (signage.js buildInteriorAtlas).`,
+    ? 'Night city panorama: the Night NYC drive turns it into the scene environment (PMREM) for glass, cars and the damp street.'
+    : `Small interior panorama: the Night NYC drive stacks these into an atlas and shows them as parallax interiors behind its shop windows (signage.js buildInteriorAtlas).`,
   snippet: `import * as THREE from 'three';
 const tex = await new THREE.TextureLoader().loadAsync(${B} + 'nyc/env/${pid}.jpg');
 tex.mapping = THREE.EquirectangularReflectionMapping;
@@ -180,16 +180,16 @@ const gltf = await new GLTFLoader().loadAsync(${B} + 'miami/roadside/shrub_04_mi
 scene.add(gltf.scene);`,
   },
   ...[
-    ['BusinessMan', 'Business Man', 'business', 'JFrLIKqvCH', 'The Night NYC walk\'s player character (suit colour set in code) and one of its pedestrians.', "c.name === 'CharacterArmature|Walk'"],
-    ['ManInSuit', 'Man in Suit', 'suit', 'mQnGoME1ez', 'One of the Night NYC walk\'s pedestrians.', "c.name === 'HumanArmature|Man_Walk'"],
-    ['Woman', 'Animated Woman', 'woman', '9kF7eTDbhO', 'One of the Night NYC walk\'s pedestrians (tinted per person).', "c.name === 'Armature|Walking'"],
+    ['BusinessMan', 'Business Man', 'business', 'JFrLIKqvCH', 'One of the Night NYC drive\'s pedestrians.', "c.name === 'CharacterArmature|Walk'"],
+    ['ManInSuit', 'Man in Suit', 'suit', 'mQnGoME1ez', 'One of the Night NYC drive\'s pedestrians.', "c.name === 'HumanArmature|Man_Walk'"],
+    ['Woman', 'Animated Woman', 'woman', '9kF7eTDbhO', 'One of the Night NYC drive\'s pedestrians (tinted per person).', "c.name === 'Armature|Walking'"],
   ].map(([file, name, key, pp, use, walkRe]) => gltfModel({
     base: 'nyc/', key, url: `models/${file}.glb`, walk: walkRe,
     rest: {
       id: `nyc-${file}`, name, category: 'character', usedBy: ['nyc-night'], files: [`samples/public/nyc/models/${file}.glb`],
       credit: { file: 'samples/public/nyc/models/CREDITS.md', row: `\`${file}.glb\``, source: 'Quaternius via poly.pizza', url: `https://poly.pizza/m/${pp}` },
       tags: ['character', 'person', 'rigged', 'animated', 'glb', 'quaternius', 'low poly'],
-      description: `Rigged, animated low-poly character by Quaternius (CC0). ${use} The demo plays its clips through the engine's AnimationController (player.js) and AnimationMixer (pedestrians.js).`,
+      description: `Rigged, animated low-poly character by Quaternius (CC0). ${use} The demo plays its walk and idle clips through an AnimationMixer per person (pedestrians.js).`,
       preview: { az: 30, el: 10, frames: 20, result: 'gltf' },
     },
   })),
@@ -201,7 +201,7 @@ scene.add(gltf.scene);`,
     credit: { file: 'samples/public/nyc/CREDITS.md', row: '`map/city.json`', author: 'OpenStreetMap contributors', licence: 'ODbL 1.0 (attribution required: "© OpenStreetMap contributors")', source: 'OpenStreetMap (Overpass API), baked by tools/bake-map.mjs', url: 'https://www.openstreetmap.org/copyright' },
     tags: ['openstreetmap', 'osm', 'city', 'roads', 'buildings', 'manhattan', 'times square'],
     facts: { area: '1.5 km square around 40.7565, -73.9865 (Times Square), outer ring 4 km', bakedWith: 'tools/bake-map.mjs --lat 40.7565 --lon -73.9865 --size 1500 --outer 4000' },
-    description: 'Baked OpenStreetMap data (roads, buildings, parks, water) for the engine\'s MapWorld: the Night NYC walk builds its city from it.',
+    description: 'Baked OpenStreetMap data (roads, buildings, parks, water) for the engine\'s MapWorld: the Night NYC drive builds its city from it.',
     snippet: `import { loadMapData } from '@vibe/engine/world';
 const map = await loadMapData(${B} + 'nyc/map/city.json');
 // a whole city: new MapWorld({ scene, renderer, camera, data: { mapUrl: ${B} + 'nyc/map/city.json', farlandUrl: false } })`,
@@ -385,7 +385,7 @@ export const CODE_ENTRIES = [
   ...Object.entries(VEH).map(vehicleEntry),
   {
     id: 'engine-car-visual', name: 'Drivable car (createCarVisual)', category: 'vehicle', module: 'src/world/CarVisual.js', export: 'createCarVisual',
-    usedBy: [], tags: ['car', 'drivable', 'hd', 'wheels', 'lamps', 'procedural', 'player'],
+    usedBy: ['nyc-night'], tags: ['car', 'drivable', 'hd', 'wheels', 'lamps', 'procedural', 'player'],
     facts: { types: "VEHICLE_HD_TYPES (sedan, hatchback, suv, pickup, minivan, police, taxi, police_sedan)", physics: 'visual.spec = ROAD_CAR_SPEC resized to the body' },
     description: 'A drivable HD car in one call: makeVehicleParts body, glass, interior and four wheels that roll, steer and ride the suspension of a VehicleController built from visual.spec (ROAD_CAR_SPEC resized to the body, so the wheels sit where the physics has them), brake / reverse / head lamps and a soft contact shadow. Faces -Z; the origin is on the ground at the middle of the body length, the controller\'s reference point. Call visual.update(dt, car, { darkness }) each frame after placing visual.root on the car\'s pose. The starter-drive page drives one.',
     snippet: `import * as THREE from 'three';
@@ -603,7 +603,7 @@ props.render();
   });
 }
 
-// ------------------------------------------------------------------------------------------------ Night NYC walk
+// ------------------------------------------------------------------------------------------------ Night NYC drive
 const NYC_STUB = `const world = {                      // the bits of a MapWorld this builder reads
   data: { buildings: [{ p: [[-12, -8], [12, -8], [12, 8], [-12, 8]], h: 48 }] },
   raster: { any: () => true }, getGroundHeight: () => 0, colliders: { add() {} },
@@ -634,7 +634,7 @@ scene.add(signs.group);
     id: 'nyc-sign-atlas', name: 'Times Square sign atlas', category: 'sign', module: 'samples/nyc-night/signage.js', export: 'buildSignAtlas', usedBy: ['nyc-night'],
     tags: ['neon', 'led', 'marquee', 'atlas', 'canvas'],
     facts: { size: '2048 x 2048 canvas', content: '12 LED ads, 4 theatre marquees, 16 shop fascias, 16 blade signs' },
-    description: 'The painted atlas behind the Night NYC walk\'s signs: LED ads, theatre marquees, neon shop fascias and vertical blades (all names invented).',
+    description: 'The painted atlas behind the Night NYC drive\'s signs: LED ads, theatre marquees, neon shop fascias and vertical blades (all names invented).',
     snippet: `import * as THREE from 'three';
 import { buildSignAtlas } from '../nyc-night/signage.js';
 const atlas = buildSignAtlas();
@@ -696,7 +696,7 @@ scene.environment = scene.background = makeCityEnv(renderer);`,
   {
     id: 'nyc-night-lut', name: 'NYC night grade', category: 'grade', module: 'samples/nyc-night/look.js', export: 'nightLut', usedBy: ['nyc-night'],
     tags: ['lut', 'night', 'grade', 'post'],
-    description: 'The Night NYC walk\'s colour grade as a LUT built in code: a long toe, warm hues kept, cool hues desaturated (look.js also has the matching night sky, looks and PostFX grade keyframes).',
+    description: 'The Night NYC drive\'s colour grade as a LUT built in code: a long toe, warm hues kept, cool hues desaturated (look.js also has the matching night sky, looks and PostFX grade keyframes).',
     snippet: `import { nightLut } from '../nyc-night/look.js';
 const lut = nightLut();
 // then: new PostFX(renderer, scene, camera, { ..., lut: { texture: lut.texture, size: lut.size, strength: 1 } })`,

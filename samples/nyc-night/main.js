@@ -1,33 +1,42 @@
-// Night NYC walk: the engine's showcase for buildings and light. A walker (third person, V for first person) in
-// Midtown Manhattan baked from OpenStreetMap (samples/public/nyc/map/city.json, tools/bake-map.mjs around 40.7565,
-// -73.9865, 1.5 km), after the rain: wet asphalt (wet.js; screen-space reflections on the desktop tier, a city-light
-// environment fake on mobile), every street lamp + every sign + the nearest cars' headlights + the traffic signals'
-// phase colours as clustered lights (lights.js), invented signage and street frontage (signage.js: framed LED screens,
-// corner wraps, rooftop signs, marquees, neon fascias and blades, a news ticker, parallax shop-front interiors,
-// entrance canopies, wall lights), people on the sidewalks (pedestrians.js), steam (steam.js), a near-black city
-// sky, traffic kept close (MapWorld traffic area / mix: cabs), haze and moonlit volumetrics, TAA, bloom and a night
+// Night NYC drive: the engine's showcase for buildings and light, driven. A car of your choice (cars.js: a yellow cab,
+// a sedan, an interceptor; picked on the start card or in the pause card, saved) on 7th Avenue in Midtown Manhattan
+// baked from OpenStreetMap (samples/public/nyc/map/city.json, tools/bake-map.mjs around 40.7565, -73.9865, 1.5 km),
+// after the rain: wet asphalt (wet.js; screen-space reflections on the desktop tier, a city-light environment fake on
+// mobile), every street lamp + every sign + the nearest cars' headlights + the traffic signals' phase colours + the
+// player's own headlights and tail lamps as clustered lights (lights.js; mobile: one spot light for the headlights),
+// invented signage and street frontage (signage.js: framed LED screens, corner wraps, rooftop signs, marquees, neon
+// fascias and blades, a news ticker, parallax shop-front interiors, entrance canopies, wall lights), people on the
+// sidewalks who step clear of the car (pedestrians.js), steam (steam.js), a near-black city sky, traffic kept close
+// (MapWorld traffic area / mix: cabs; it brakes for the player), haze and moonlit volumetrics, TAA, bloom and a night
 // grade + LUT (look.js); the JS heap trimmed after load (the engine's world.trimMemory, render/Memory.js).
+// Driving: VehicleController on the car's spec with the steering assist, a chase camera with the road feel, skid marks
+// and tyre smoke, each car's engine (EngineAudio on its Gearbox) with road, wind and tyre sounds and the city's hum, a
+// speed readout, R puts the car back on the nearest street; the edge of the
+// baked map is a wall (the city past it is a low context ring). GameShell: loading bar, start card with the car choice,
+// pause (Esc / P) with volume, assist, the car and the quality tiers.
 // Buildings up close: CC0 wall scans with their relief, grime and curtains read in the dusk light (walls.js), shop fronts,
 // lobbies and what is fixed to the wall as real geometry (groundfloors.js), window frames and AC units placed from the
 // engine's real window layout (windowkit.js), setbacks / crowns / screens / turrets on the tall blocks (crowns.js).
-// Quality tiers (core/Quality.js + ui/QualityMenu.js): 'desktop' (G-buffer, TAA, SSR, volumetrics, clustered lights)
-// and 'mobile' (forward, FXAA, 8-lamp pool, smaller textures / radius / traffic); ?quality=desktop|mobile forces one.
-// Query: ?bench=1&size=WxH (window.__sample: poses avenue / square / sidewalk, settings below), ?notraffic,
-// ?nostream=1, ?nofiller, ?nostreet (street.js kit off), ?nowalls (walls.js off), ?keepcpu, ?memlog=1, ?cascades=N, ?touch=1, ?profile=N, ?fps=60,
-// ?look=low (the earlier low-key grade). window.__nyc for the console.
+// Quality tiers (core/Quality.js): 'desktop' (G-buffer, TAA, SSR, volumetrics, clustered lights) and 'mobile'
+// (forward, FXAA, 8-lamp pool, smaller textures / radius / traffic); ?quality=desktop|mobile forces one.
+// Query: ?autostart=1 (no start card), ?bench=1&size=WxH (window.__sample: poses avenue / square / sidewalk, settings
+// below; the car is out of every pose), ?notraffic, ?nostream=1, ?nofiller, ?nostreet (street.js kit off), ?nowalls
+// (walls.js off), ?keepcpu, ?memlog=1, ?cascades=N, ?touch=1, ?profile=N, ?fps=60, ?look=low (the earlier low-key
+// grade). window.__nyc for the console.
 import * as THREE from 'three';
-import { Engine, Assets, createBenchHarness, readBenchParams, resolveQuality } from '@vibe/engine/core';
-import { CharacterController } from '@vibe/engine/physics';
-import { PostFX, registerRenderLoaders, TextureSets, ClusteredLights, installClusteredChunks, applyPatches, weathering } from '@vibe/engine/render';
-import { CharacterInput, PointerLock, CHARACTER_ACTIONS } from '@vibe/engine/input';
-import { ThirdPersonRig, FirstPersonRig } from '@vibe/engine/camera';
-import { LoadingScreen, QualityMenu } from '@vibe/engine/ui';
-import { MapWorld, roadStyle, applyFoliageLightingTo } from '@vibe/engine/world';
+import { Engine, Assets, PoseInterpolator, createBenchHarness, readBenchParams, resolveQuality } from '@vibe/engine/core';
+import { VehicleController, Gearbox } from '@vibe/engine/physics';
+import { PostFX, registerRenderLoaders, TextureSets, ClusteredLights, installClusteredChunks, applyPatches, weathering, TyreFx } from '@vibe/engine/render';
+import { VehicleInput, VEHICLE_ACTIONS, PAD_BUTTONS as B } from '@vibe/engine/input';
+import { ChaseRig } from '@vibe/engine/camera';
+import { GameShell } from '@vibe/engine/ui';
+import { AudioBus, SoundBank, EngineAudio, CityAmbience } from '@vibe/engine/audio';
+import { MapWorld, roadStyle, applyFoliageLightingTo, createCarVisual } from '@vibe/engine/world';
 import { makeStreetsWet, makeCityEnv } from './wet.js';
 import { buildSignage, updateSignage, quietBuildingSigns } from './signage.js';
 import { ExtraLights } from './lights.js';
 import { Steam } from './steam.js';
-import { makeCharacter, Player } from './player.js';
+import { CARS, DEFAULT_CAR, carById, carSpec } from './cars.js';
 import { Pedestrians } from './pedestrians.js';
 import { buildStructures } from './structures.js';
 import { CarShadows } from './carshadows.js';
@@ -40,13 +49,12 @@ import { buildCrowns } from './crowns.js';
 import { AirGlow } from './airglow.js';
 import { buildRooftops } from './rooftops.js';
 import { nightLooks, nightGrade, nightLook, nightLut, cityNightSky, duskLooks, cityDuskSky, OPEN_DUSK_SKY, NYC_SUN, DUSK_HOURS } from './look.js';
-import { HUD, ACCENT } from './hud.js';
+import { HUD, applyTheme } from './hud.js';
 
 const params = new URLSearchParams(location.search);
 const BASE = import.meta.env.BASE_URL;
 const NYC = `${BASE}nyc/`;
 const DEG = Math.PI / 180;
-const HEIGHT = 1.75;
 // map geo frame (tools/bake-map.mjs proj): the bowtie of the square, between 43rd and 47th
 const R_EARTH = 6378137;
 
@@ -104,13 +112,34 @@ function tameNightEnv(im) {
   return c;
 }
 
+// keyboard (W S / arrows, A D, Space or X handbrake, C camera, R back on the street, B look back), gamepad (RT / LT,
+// left stick, B / right-stick click handbrake, Y camera, X reset) and touch (stick, GAS, BRK, HB, CAM, RST): the
+// engine's driving actions without the flight ones (a ground car)
+const { throttle, brake, steer, lookBack, toggleCamera, reset } = VEHICLE_ACTIONS;
+const ACTIONS = { throttle, brake, steer, lookBack, toggleCamera, reset, handbrake: { type: 'button', bindings: ['Space', 'KeyX', { padButton: B.B }, { padButton: B.RS }, { virtual: 'hb' }] } };
+const TOUCH = [
+  { type: 'stick', id: 'stick', side: 'left', x: 112, y: 112, radius: 62, floating: true },
+  { type: 'button', id: 'gas', label: 'GAS', side: 'right', x: 78, y: 112, size: 84 },
+  { type: 'button', id: 'brake', label: 'BRK', side: 'right', x: 178, y: 86, size: 62 },
+  { type: 'button', id: 'hb', label: 'HB', side: 'right', x: 178, y: 168, size: 52 },
+  { type: 'button', id: 'cam', label: 'CAM', side: 'right', x: 36, y: 172, size: 42, top: true, fontSize: 10 },
+  { type: 'button', id: 'reset', label: 'RST', side: 'right', x: 88, y: 172, size: 42, top: true, fontSize: 10 },
+];
+
+applyTheme();
+const shell = new GameShell({
+  title: 'Night NYC', subtitle: 'Midtown after the rain. Pick a car.', quality: Q, storageKey: 'nyc-night', defaults: { assist: true, car: DEFAULT_CAR },
+  controls: [['W S', 'Drive, brake'], ['A D', 'Steer'], ['Space', 'Handbrake'], ['C', 'Camera'], ['R', 'Back on the street']],
+  touchHelp: 'Left thumb steers; GAS, BRK and HB on the right',
+});
+
 const nextFrame = () => new Promise((r) => setTimeout(r, 0));
 // ?memlog=1: JS heap (MB) at each boot stage, after a GC when the page runs with --js-flags=--expose-gc
 const memlog = params.has('memlog') ? (label) => { if (globalThis.gc) globalThis.gc(); if (performance.memory) console.info(`[nyc] heap ${label}: ${Math.round(performance.memory.usedJSHeapSize / 1e6)} MB`); } : () => {};
 
 async function boot() {
   const t0 = performance.now();
-  const loading = new LoadingScreen({ title: 'MIDTOWN · NIGHT WALK', label: 'Baking the city…', accent: ACCENT, background: '#07080b' });
+  shell.setProgress(0, 'Baking the city…');
   memlog('start');
   const engine = new Engine({
     container: document.getElementById('app'), fixedHz: 120, maxSubsteps: 4, far: 3200, fov: 62, renderer: { antialias: false },
@@ -152,11 +181,10 @@ async function boot() {
   });
   engine.addSystem(world.system({ camera, loadWeight: 6 }), 'world');
 
-  // the character model loads with the world
+  // the people's models load with the world
   const assets = new Assets({ base: NYC });
   registerRenderLoaders(assets, renderer, { ktx2: false, meshopt: false });
-  assets.add('character', { type: 'gltf', url: 'models/BusinessMan.glb', weight: 1 });
-  if (NY.pedestrians) { assets.add('suit', { type: 'gltf', url: 'models/ManInSuit.glb', weight: 1 }); assets.add('woman', { type: 'gltf', url: 'models/Woman.glb', weight: 1 }); }
+  if (NY.pedestrians) for (const [k, f] of [['man', 'BusinessMan'], ['suit', 'ManInSuit'], ['woman', 'Woman']]) assets.add(k, { type: 'gltf', url: `models/${f}.glb`, weight: 1 });
   // photographed interiors for the open shops (Poly Haven CC0 indoor HDRIs, tone-mapped to 512 x 256 equirect JPGs) and
   // the night environment for glass, cars and the damp street (a CC0 urban night HDRI, dimmed)
   const loadImage = (url) => new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = url; });
@@ -165,14 +193,14 @@ async function boot() {
   const nightEnvP = loadImage(`${NYC}env/modern_buildings_night.jpg`);
   engine.addSystem(assets.system({ loadWeight: 1 }), 'assets');
   try {
-    await engine.load((p, label) => loading.setProgress(p, label === 'character' ? 'Waking the walker…' : label));
+    await engine.load((p, label) => shell.setProgress(p, label));
   } catch (e) {
     if (!e.key) throw e;
-    console.warn('[nyc] character model failed to load, using a stand-in', e);
+    console.warn('[nyc] a person model failed to load: fewer people on the sidewalks', e);
   }
   const loadWorldMs = Math.round(performance.now() - t0);
   memlog('world loaded');
-  loading.setProgress(0.97, 'Lighting the signs…');
+  shell.setProgress(0.97, 'Lighting the signs…');
   await nextFrame();
 
   // ---------------------------------------------------------------- geo helpers (bake frame -> world)
@@ -290,21 +318,10 @@ async function boot() {
   const steam = new Steam({ scene, renderer, gpu: NY.gpuParticles, vents, lights: signs.lights, lamps: lampPos, budget: NY.steam });
 
   memlog('steam');
-  // ---------------------------------------------------------------- the walker
-  const gltf = assets.peek ? assets.peek('character') : null;
-  // dark street clothes: navy coat, charcoal trousers (the Man's flat materials, baked to vertex colours)
-  // Quaternius Business Man: a dark suit and coat; the suit cloth a touch lighter so the folds read in lamp light
-  const character = makeCharacter(gltf, { height: 1.78, recolour: { Suit: 0x1c1f26 }, rim: { color: [1.0, 0.85, 0.7], k: 0.35 } });
+  // ---------------------------------------------------------------- where things are
   const physics = world.physics;
-  const cc = new CharacterController({ radius: 0.32, height: HEIGHT, walk: 1.8, run: 5.2, jumpSpeed: 4.6, stepHeight: 0.4 });
-  const player = new Player({ scene, cc, physics, character });
-  const SCREEN_WALL = (() => { // the sign light with most screen light around it
-    let best = null, bs = -1;
-    for (const l of signs.lights) { if (!l.anim) continue; let s = 0; for (const m of signs.lights) if (m.anim && Math.hypot(m.x - l.x, m.z - l.z) < 40) s += m.k; if (s > bs) { bs = s; best = l; } }
-    return best || { sx: SQUARE.x, sy: 15, sz: SQUARE.z, nx: 0, nz: 1 };
-  })();
-  // start: on the Broadway plaza nearest the square, facing up the square (north-east along Broadway)
-  const START = (() => {
+  // the Broadway plaza point nearest the square (the people's first scatter and the sidewalk bench pose's shop front)
+  const PLAZA = (() => {
     let best = null, bd = Infinity;
     for (const r of data.roads) {
       if (!r || !/^Broadway$/.test(r.n || '') || !r.p) continue;
@@ -313,18 +330,31 @@ async function boot() {
         for (let t = 0; t <= 1; t += 0.1) {
           const x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t;
           const d = Math.hypot(x - SQUARE.x, z - SQUARE.z);
-          if (d < bd && !physics.queryColliders(x, z, 0.6, []).some((c) => c.maxY > 0.6)) { bd = d; best = { x, z, h: Math.atan2(-(b[0] - a[0]), -(b[1] - a[1])) }; }
+          if (d < bd && !physics.queryColliders(x, z, 0.6, []).some((c) => c.maxY > 0.6)) { bd = d; best = { x, z }; }
         }
       }
     }
-    if (!best) { const sp = world.getSpawn(); best = { x: sp.position.x + 8, z: sp.position.z, h: sp.headingRad }; }
-    // face west, toward the afterglow down the cross streets (at night: the densest wall of screens)
-    const az = (NYC_SUN.azimuthStart + NYC_SUN.azimuthSpan * Math.min(1.15, (DUSK_HOURS - NYC_SUN.rise) / (NYC_SUN.set - NYC_SUN.rise))) * DEG;
-    best.h = NIGHT ? Math.atan2(-(SCREEN_WALL.sx - best.x), -(SCREEN_WALL.sz - best.z)) : Math.atan2(-Math.sin(az), Math.cos(az));
-    best.y = world.getGroundHeight(best.x, best.z);
+    if (!best) { const sp = world.getSpawn(); best = { x: sp.position.x + 8, z: sp.position.z }; }
     return best;
   })();
-  player.teleport(START.x, START.y + 0.05, START.z, START.h);
+  // the car's start: 7th Avenue about 400 m north of the square (one way, southbound: the road's point order), facing
+  // down the avenue into Times Square
+  const CAR_START = (() => {
+    let best = null, bs = Infinity;
+    for (const r of data.roads) {
+      if (!r || r.n !== '7th Avenue' || !r.p) continue;
+      for (let i = 0; i < r.p.length - 1; i++) {
+        const a = r.p[i], b = r.p[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]), dx = (b[0] - a[0]) / L, dz = (b[1] - a[1]) / L;
+        for (let t = 4; t < L - 4; t += 4) {
+          const x = a[0] + dx * t, z = a[1] + dz * t, d = Math.hypot(x - SQUARE.x, z - SQUARE.z);
+          if ((SQUARE.x - x) * dx + (SQUARE.z - z) * dz < 0.9 * d || Math.abs(d - 400) >= bs) continue;
+          bs = Math.abs(d - 400); best = { x, z, h: Math.atan2(-dx, -dz) };
+        }
+      }
+    }
+    if (!best) { const sp = world.getSpawn(); best = { x: sp.position.x, z: sp.position.z, h: sp.headingRad }; }
+    return best;
+  })();
 
   // ---------------------------------------------------------------- post
   let postfx = null;
@@ -337,10 +367,9 @@ async function boot() {
     });
     if (!S.passes.ao) postfx.aoPass.enabled = false;
     postfx.setTimeOfDay(world.atmo.darkness);
-    player.entity.traverse((o) => { if (o.isMesh) postfx.track(o); });
   } catch (e) { console.warn('[nyc] post-processing unavailable', e); world.atmo.setFogMode('scene'); postfx = null; }
-  // the moon's near shadow map re-renders every other frame (the city is static, the walker and the cars move little
-  // in 1/60 s); three refreshes a shadow matrix only when it renders the map, so the pair stays consistent
+  // the moon's near shadow map re-renders every other frame (the city is static, its shadows faint, and the cars move
+  // little in 1/60 s); three refreshes a shadow matrix only when it renders the map, so the pair stays consistent
   const moonNear = world.atmo.sun.shadow;
   moonNear.autoUpdate = false;
   let shadowFrame = 0;
@@ -372,83 +401,90 @@ async function boot() {
       }
     }
   }
-  const extra = clustered ? new ExtraLights({ clustered, world, signs: signs.lights, signals: signalLights, signRange: NY.signRange, cars: NY.cars, player: player.entity }) : null;
+  // ---------------------------------------------------------------- the car (cars.js), swapped from the cards
+  // drive: what the systems, ExtraLights and the bench read; setCar() replaces its parts (a new body, controller and
+  // interpolator at the old car's place, standing still)
+  const drive = { id: '', def: null, visual: null, car: null, spec: null, smooth: null, gearbox: null };
+  const state = { velocity: null, speedKmh: 0, grounded: true, wheelSlip: 0, accel: null }; // what the chase rig reads
+  const placeCar = (x, z, h) => {
+    drive.car.reset(new THREE.Vector3(x, world.getGroundHeight(x, z), z), h, physics);
+    drive.smooth.snap(); drive.smooth.apply(drive.visual.root, 1);
+    state.velocity = drive.car.velocity; state.accel = drive.car.localAccel;
+    if (drive.gearbox) drive.gearbox.reset();
+  };
+  const setCar = (id) => {
+    const def = carById(id);
+    if (def.id === drive.id) return;
+    const old = drive.car, at = old ? { x: old.position.x, z: old.position.z, h: old.heading } : CAR_START;
+    if (drive.visual) { scene.remove(drive.visual.root); if (postfx) postfx.untrack(drive.visual.root); drive.visual.dispose(); }
+    const visual = createCarVisual(def.type, { color: def.color, shadowOpacity: 0.9 });
+    drive.id = def.id; drive.def = def; drive.visual = visual; drive.spec = carSpec(def);
+    drive.car = new VehicleController(drive.spec);
+    drive.smooth = new PoseInterpolator(drive.car);
+    scene.add(visual.root);
+    if (postfx) postfx.track(visual.root);
+    placeCar(at.x, at.z, at.h);
+    if (rig) { rig.setTarget(visual.root, () => state); rig.snap(); }
+    if (tyres) tyres.clear();
+    drive.gearbox = new Gearbox(def.gearbox);
+    if (motor) motor.dispose();
+    motor = new EngineAudio({ bus: audio, ...def.engine, idle: def.gearbox.idle, redline: def.gearbox.redline });
+  };
+  // headlights: the desktop tier writes two clustered spots and the tail lamps (lights.js); mobile has one real spot
+  // light between the lamps (docs/HOWTO.md "Headlights"), always in the scene (a light that comes and goes changes
+  // every lit material's program) and dark while the car is out of view (bench poses)
+  const extra = clustered ? new ExtraLights({ clustered, world, signs: signs.lights, signals: signalLights, signRange: NY.signRange, cars: NY.cars, car: drive }) : null;
+  const headSpot = clustered ? null : new THREE.SpotLight(0xfff0dc, 0, 70, 0.5, 0.45, 1.6);
+  if (headSpot) scene.add(headSpot, headSpot.target);
   // people on the sidewalks
-  const peds = NY.pedestrians && gltf ? new Pedestrians({ scene, world, sources: [gltf && { gltf, height: 1.78 }, assets.peek('suit') && { gltf: assets.peek('suit'), height: 1.76 }, assets.peek('woman') && { gltf: assets.peek('woman'), height: 1.66, textured: true }].filter(Boolean), count: NY.pedestrians, center: SQUARE, radius: 520, seed: 4711, postfx }) : null;
-  if (peds) peds.scatter(START.x, START.z, 4711);
+  const people = [['man', 1.78], ['suit', 1.76], ['woman', 1.66]].map(([k, height]) => assets.peek(k) && { gltf: assets.peek(k), height, textured: k === 'woman' }).filter(Boolean);
+  const peds = NY.pedestrians && people.length ? new Pedestrians({ scene, world, sources: people, count: NY.pedestrians, center: SQUARE, radius: 520, seed: 4711, postfx }) : null;
+  if (peds) peds.scatter(CAR_START.x, CAR_START.z, 4711);
+  // the traffic brakes for the player's car and never drives into it (TrafficSim)
+  if (world.traffic) world.traffic.setPlayer(() => (drive.visual.root.visible ? drive.visual.root : null));
 
-  // ---------------------------------------------------------------- input, camera rigs, HUD
-  const hud = new HUD({ tier: Q.tier === 'desktop' ? 'Mac / desktop' : 'Phone / tablet' });
+  // ---------------------------------------------------------------- input, chase camera, tyres, sound, HUD
+  const hud = new HUD();
   const canvas = renderer.domElement;
-  const TOUCH_LAYOUT = [
-    { type: 'touchpad', id: 'look', side: 'right', width: 0.56, top: 70, bottom: 0, slop: 8, portrait: { width: 0.5, top: 120 } },
-    { type: 'stick', id: 'stick', side: 'left', x: 112, y: 112, radius: 60, floating: true, zone: { width: 0.44, top: 70 },
-      portrait: { x: 96, y: 150, radius: 56, zone: { width: 0.5, top: 170 } } },
-    { type: 'button', id: 'jump', label: 'JUMP', side: 'right', x: 84, y: 92, size: 88, fontSize: 14, hitSlop: 14, portrait: { x: 76, y: 240, size: 76 } },
-    { type: 'button', id: 'sprint', label: 'RUN', side: 'right', x: 196, y: 70, size: 72, fontSize: 13, hitSlop: 12, portrait: { x: 76, y: 136, size: 70 } },
-    { type: 'button', id: 'cam', label: 'CAM', side: 'right', x: 60, y: 210, size: 52, fontSize: 11, hitSlop: 8, portrait: { x: 168, y: 92, size: 52 } },
-  ];
-  const touchForced = params.has('touch') ? params.get('touch') !== '0' : null;
-  const input = new CharacterInput({
-    element: canvas, actions: CHARACTER_ACTIONS, touch: touchForced ?? 'auto', touchLayout: TOUCH_LAYOUT, touchOptions: { safeArea: true },
-    touchSpeed: 0.0055, stickSpeed: 2.4, touchReveal: touchForced === null ? { hideOnKey: true, onChange: (on) => hud.setTouch(on) } : null,
-  });
-  hud.setTouch(input.touchShown);
-  hud.onHelp = (on) => { input.map.enabled = !on; };
-  const third = new ThirdPersonRig(camera, canvas, { active: false, physics, distance: 3.4, height: 1.5, shoulder: 0.42, pitch: [-1.0, 0.95], zoom: [1.6, 7], minDistance: 0.8, damping: 11 });
-  const first = new FirstPersonRig(camera, canvas, { active: false, physics, eyeHeight: 1.62, bob: 0.025 });
-  third.setTarget(player.entity, () => player.state);
-  first.setTarget(player.entity, () => player.state);
-  player.fpRig = first;
-  let rig = null, rigName = '';
-  const setRig = (name) => {
-    const prev = rig;
-    for (const r of [third, first]) r.deactivate();
-    rig = name === 'first' ? first : third; rigName = name;
-    if (prev && prev !== rig) { rig.yaw = prev.yaw; rig.pitch = Math.max(rig.minPitch, Math.min(rig.maxPitch, prev.pitch)); }
-    rig.activate(); rig.snap();
-    player.firstPerson = name === 'first';
-    hud.setCamera(name);
-  };
-  // portrait phones: a wider vertical field of view and the camera further back, so the walker does not fill the screen
-  const fitAspect = () => {
-    const portrait = camera.aspect < 1;
-    const fov = portrait ? 74 : 62;
-    if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
-    third.distance = portrait ? 4.8 : 3.4; third.height = portrait ? 1.7 : 1.5; third.shoulder = portrait ? 0 : 0.42;
-  };
-  fitAspect();
-  const onResize0 = engine.onResize;
-  engine.onResize = (w, h, pr) => { onResize0(w, h, pr); fitAspect(); };
-  third.yaw = START.h; third.pitch = -0.12; first.yaw = START.h; first.pitch = 0.05;
-  setRig('first'); // first person by default (V: third person)
-  let unlockedAt = -1e9;
-  const lock = new PointerLock({
-    element: canvas,
-    onChange(locked) {
-      hud.setLocked(locked);
-      if (!locked) unlockedAt = performance.now();
-      if (locked) hud.showHelp(false);
-      else if (lock.releasedByUser) hud.showHelp(true);
-    },
-  });
-  canvas.addEventListener('click', () => { if (!lock.locked && !input.touchShown) lock.request(); });
-  const respawn = () => { player.teleport(START.x, START.y + 0.05, START.z, START.h); rig.yaw = START.h; rig.snap(); hud.flash.show('TIMES SQUARE'); };
-  window.addEventListener('keydown', (e) => {
-    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.code === 'KeyH') hud.toggleHelp();
-    else if (e.code === 'KeyR') respawn();
-  });
-  const menu = new QualityMenu({ quality: Q, corner: 'tr' });
+  const touchForced = params.has('touch') ? params.get('touch') !== '0' : 'auto';
+  const input = new VehicleInput(canvas, { actions: ACTIONS, touch: touchForced, touchLayout: TOUCH, assist: true });
+  hud.setTouch(!!(input.touch && input.touch.visible));
+  // the road feel: the camera eases back under acceleration, closes in under braking and leans out in corners; poles,
+  // trunks and the traffic only block the view close to the camera
+  const rig = new ChaseRig(camera, canvas, { physics, canopyFromCollider: null, thinKinds: [2, 3, 'vehicle'], flightFraming: false, feel: 'road' });
+  const tyres = new TyreFx({ scene, atmosphere: world.atmo, lift: 0.04 });
+  // the car's engine (EngineAudio: each car's own cylinders, its revs, load and shifts from its Gearbox), road roar, wind
+  // and squeal loops, and the city's hum (CityAmbience, no gulls: no water near Midtown)
+  const audio = new AudioBus({ master: 'safe', volume: 0.7 });
+  audio.setBusVolume('engine', 0.5);
+  let motor = null; // the current car's engine voice (setCar makes it)
+  const city = new CityAmbience(audio, { gulls: false, level: 0.8 });
+  city.setEnvironment({ darkness: world.atmo.darkness });
+  const sfx = new SoundBank(audio, { listener: camera });
+  const roar = sfx.loop('road.roar', { gain: 0 }), wind = sfx.loop('wind.rush', { gain: 0 }), squeal = sfx.loop('tyre.squeal', { gain: 0 });
+  shell.use({ engine, audio, inputs: [input] });
+  shell.addToggle('assist', 'Steering assist');
+  shell.settings.on('assist', (on) => { input.assist.enabled = !!on; });
+  setCar(shell.settings.get('car'));
+  rig.setTarget(drive.visual.root, () => state); rig.activate(); rig.snap();
+  hud.carChoice(shell, CARS);
+  shell.settings.on('car', (id) => { if (drive.id && id !== drive.id) { setCar(id); hud.flash.show(drive.def.name.toUpperCase()); } });
 
-  // ---------------------------------------------------------------- street names (HUD): nearest named street + cross street
-  const SEGS = [];
+  // ---------------------------------------------------------------- the edge of the baked map: a wall just inside it
+  // (beyond it the city is a low context ring with no streets to drive), so the car stays in Midtown
+  const EDGE = 6;
+  { const B = world.bounds, x0 = B.minX + EDGE, x1 = B.maxX - EDGE, z0 = B.minZ + EDGE, z1 = B.maxZ - EDGE;
+    for (const [mn, mx] of [[[x0 - 2, z0], [x0, z1]], [[x1, z0], [x1 + 2, z1]], [[x0, z0 - 2], [x1, z0]], [[x0, z1], [x1, z1 + 2]]]) physics.addStaticBox({ min: [mn[0], -20, mn[1]], max: [mx[0], 40, mx[1]], kind: 'edge' }); }
+
+  // ---------------------------------------------------------------- street names (HUD) and the nearest street (reset)
+  const SEGS = []; // [ax, az, bx, bz, name, one way]
   for (const r of data.roads) {
-    if (!r || !r.n || !r.p || r.p.length < 2) continue;
+    if (!r || !r.n || !r.p || r.p.length < 2 || r.b) continue;
     const st = roadStyle(r); if (st.minor && !/^Broadway$/.test(r.n)) continue;
-    for (let i = 0; i < r.p.length - 1; i++) SEGS.push([r.p[i][0], r.p[i][1], r.p[i + 1][0], r.p[i + 1][1], r.n]);
+    for (let i = 0; i < r.p.length - 1; i++) SEGS.push([r.p[i][0], r.p[i][1], r.p[i + 1][0], r.p[i + 1][1], r.n, !!r.o]);
   }
-  const segD = (s, x, z) => { const dx = s[2] - s[0], dz = s[3] - s[1], L2 = dx * dx + dz * dz || 1; const t = Math.max(0, Math.min(1, ((x - s[0]) * dx + (z - s[1]) * dz) / L2)); return Math.hypot(s[0] + dx * t - x, s[1] + dz * t - z); };
+  const segT = (s, x, z) => { const dx = s[2] - s[0], dz = s[3] - s[1], L2 = dx * dx + dz * dz || 1; return Math.max(0, Math.min(1, ((x - s[0]) * dx + (z - s[1]) * dz) / L2)); };
+  const segD = (s, x, z) => { const t = segT(s, x, z); return Math.hypot(s[0] + (s[2] - s[0]) * t - x, s[1] + (s[3] - s[1]) * t - z); };
   const streetAt = (x, z) => {
     let a = null, ad = 40, b = null, bd = 80;
     for (const s of SEGS) { const d = segD(s, x, z); if (d < ad) { ad = d; a = s[4]; } }
@@ -456,26 +492,79 @@ async function boot() {
     return [a, b];
   };
   let street = ['', ''], streetT = 1;
+  // R: the car back on the nearest street, standing, along it (with the traffic on a one-way street, else the way it
+  // pointed), 8 m along from the nearest point so it is clear of the junction it may have hit
+  const resetCar = () => {
+    const c = drive.car, x = c.position.x, z = c.position.z;
+    let best = null, bd = Infinity;
+    for (const s of SEGS) { const d = segD(s, x, z); if (d < bd && Math.hypot(s[2] - s[0], s[3] - s[1]) > 20) { bd = d; best = s; } }
+    if (!best) { placeCar(CAR_START.x, CAR_START.z, CAR_START.h); return; }
+    const L = Math.hypot(best[2] - best[0], best[3] - best[1]);
+    let dx = (best[2] - best[0]) / L, dz = (best[3] - best[1]) / L;
+    if (!best[5] && dx * -Math.sin(c.heading) + dz * -Math.cos(c.heading) < 0) { dx = -dx; dz = -dz; }
+    const t = Math.max(8, Math.min(L - 8, segT(best, x, z) * L + 8 * Math.sign(dx * (best[2] - best[0]) + dz * (best[3] - best[1]))));
+    placeCar(best[0] + (best[2] - best[0]) * t / L, best[1] + (best[3] - best[1]) * t / L, Math.atan2(-dx, -dz));
+    rig.snap(); tyres.clear();
+  };
 
   // ---------------------------------------------------------------- systems (phase order = registration order)
-  const _f = new THREE.Vector3(), _r = new THREE.Vector3();
+  let hitCool = 0, edgeT = 0;
+  const controls = { throttle: 0, brake: 0, steer: 0, handbrake: false }; // what car.step() reads
+  const carInfo = { x: 0, z: 0, fx: 0, fz: -1, hl: 2.4, hw: 0.95, speed: 0 }; // for the people (pedestrians.js)
+  const _hp = new THREE.Vector3(), _ha = new THREE.Vector3();
   engine.addSystem({
     earlyUpdate(dt) {
-      input.update(dt);
-      const c = input.controls;
-      if (c.toggleCamera) setRig(rigName === 'third' ? 'first' : 'third');
-      if (c.menu && performance.now() - unlockedAt > 300) hud.toggleHelp();
-      if (c.lookX || c.lookY) rig.turn(-c.lookX, -c.lookY);
-      rig.getForward(_f); rig.getRight(_r);
-      let mx = _r.x * c.moveX + _f.x * c.moveY, mz = _r.z * c.moveX + _f.z * c.moveY;
-      const l2 = mx * mx + mz * mz; if (l2 > 1) { const k = 1 / Math.sqrt(l2); mx *= k; mz *= k; }
-      player.intent.moveX = mx; player.intent.moveZ = mz; player.intent.sprint = c.sprint;
-      if (c.jump) player.intent.jump = true;
+      input.update(dt, drive.car); // with the car: steer comes out assisted (the pause card's toggle)
+      if (input.reset) { resetCar(); hud.flash.show('BACK ON THE STREET'); }
+      if (input.toggleCamera) hud.flash.show(`CAMERA · ${rig.cycleMode().toUpperCase()}`);
+      rig.setLookBack(input.lookBack);
     },
-    fixedUpdate: (dt) => player.fixedUpdate(dt),
-    update: (dt, alpha) => player.update(dt, alpha),
-  }, 'player');
-  engine.addSystem({ update: (dt) => rig.update(dt) }, 'camera');
+    fixedUpdate(dt) {
+      const c = drive.car;
+      drive.smooth.save();
+      controls.throttle = input.throttle * (1 - drive.gearbox.cut); controls.brake = input.brake; controls.steer = input.steer; controls.handbrake = input.handbrake;
+      c.step(dt, controls, physics); // the throttle less the gearbox's torque cut at an upshift
+      hitCool -= dt; // a hit (car.impact, m/s into a wall, a pole or a car): a knock, a camera shake and a rumble
+      if (c.impact > 3 && hitCool <= 0) {
+        const k = Math.min(1, c.impact / 14);
+        sfx.play(c.impact > 8 ? 'impact.metal' : 'impact.thud', { at: drive.visual.root, gain: 0.3 + 0.7 * k }); rig.addTrauma(Math.min(0.6, c.impact / 15));
+        input.map.gamepad.rumble(0.3 + 0.7 * k, 140 + 200 * k); hitCool = 0.25;
+      }
+    },
+    update(dt, alpha) {
+      const c = drive.car, v = drive.visual, body = v.root;
+      if (!harness.frozen) body.visible = true; // (the bench poses hide it)
+      drive.smooth.apply(body, alpha);
+      v.update(dt, c, { darkness: world.atmo.darkness }); // wheels roll, steer and ride; brake / reverse / head lamps
+      tyres.update(dt, c, body);
+      state.speedKmh = c.speed * 3.6; state.grounded = c.grounded; state.wheelSlip = c.wheelSlip;
+      rig.update(dt);
+      if (headSpot) { // mobile: the headlights' one spot light, between the lamps, aimed 20 m ahead and a little down
+        const f = -drive.spec.length / 2 - 0.05;
+        body.updateMatrixWorld();
+        headSpot.position.copy(_hp.set(0, 0.62, f).applyMatrix4(body.matrixWorld));
+        headSpot.target.position.copy(_ha.set(0, -0.6, f - 20).applyMatrix4(body.matrixWorld));
+        headSpot.intensity = 520 * Math.min(1, Math.max(0, (world.atmo.darkness - 0.12) / 0.45));
+      }
+      carInfo.x = c.position.x; carInfo.z = c.position.z; carInfo.fx = -Math.sin(c.heading); carInfo.fz = -Math.cos(c.heading);
+      carInfo.hl = drive.spec.length / 2; carInfo.hw = drive.spec.width / 2; carInfo.speed = c.speed;
+    },
+    lateUpdate(dt) {
+      // car sounds from the car's state: motor by speed and throttle, roar and wind by speed, squeal by wheel slip
+      const c = drive.car, v = c.speed, w = Math.min(v / 55, 1), slide = Math.min(Math.max((c.wheelSlip - 0.15) * 1.4, 0), 1) * Math.min(v / 6, 1);
+      drive.gearbox.update(dt, c, input.throttle);
+      if (motor) motor.update(dt, drive.gearbox);
+      city.update(dt, { speedN: Math.min(v / 40, 1) });
+      roar.setGain(c.grounded ? 0.22 * Math.min(v / 30, 1) : 0).setRate(0.8 + 0.6 * Math.min(v / 50, 1));
+      wind.setGain(0.3 * w * w).setRate(0.9 + 0.3 * w);
+      squeal.setGain(c.grounded ? 0.22 * slide : 0).setRate(0.96 + 0.08 * slide);
+      sfx.update(dt);
+      // near the wall at the map's edge: say so (R)
+      const B = world.bounds, m = Math.min(c.position.x - B.minX, B.maxX - c.position.x, c.position.z - B.minZ, B.maxZ - c.position.z);
+      edgeT -= dt;
+      if (m < EDGE + 12 && edgeT <= 0) { hud.flash.show('EDGE OF MIDTOWN · R TO TURN BACK'); edgeT = 4; }
+    },
+  }, 'car');
   engine.addSystem({
     lateUpdate(dt) {
       time += dt;
@@ -489,7 +578,7 @@ async function boot() {
       if (carShadows) carShadows.update(camera.position);
       if (trim) trim.update(dt);
       pinEnv();
-      if (peds) peds.update(dt, player.entity.position.x, player.entity.position.z);
+      if (peds) peds.update(dt, carInfo.x, carInfo.z, carInfo);
       if (heldStill && !harness.frozen) { // a resumed loop after bench poses: TAA / volumetric jitter back on
         heldStill = false;
         if (postfx && postfx.history) postfx.set('jitter', true);
@@ -499,15 +588,17 @@ async function boot() {
   }, 'fx');
   engine.addSystem({
     lateUpdate(dt) {
+      const p = drive.car.position;
       streetT += dt;
-      if (streetT > 0.4) { streetT = 0; street = streetAt(player.entity.position.x, player.entity.position.z); }
-      hud.update(dt, rig.yaw, street[0], street[1], engine.profiler.frame.fps);
+      if (streetT > 0.4) { streetT = 0; street = streetAt(p.x, p.z); }
+      hud.update(dt, drive.car.heading, Math.abs(drive.car.forwardSpeed) * 3.6, street[0], street[1], engine.profiler.frame.fps);
     },
   }, 'hud');
 
   // ---------------------------------------------------------------- bench harness (window.__sample)
   // poses: `avenue` (eye height on 7th Avenue at the square, looking down the avenue), `square` (inside the bowtie
-  // looking at the densest wall of screens), `sidewalk` (third-person behind the walker by the storefronts)
+  // looking at the densest wall of screens), `sidewalk` (by the storefronts, where the walk demo's third-person view
+  // stood behind its walker). The car is out of every pose (hidden, its lights dark): the poses are the city's
   const AV = (() => { // the 7th Avenue segment through the square: its direction
     let best = null, bd = Infinity;
     for (const r of data.roads) {
@@ -584,18 +675,18 @@ async function boot() {
     }
     return best || { x: SQUARE.x, z: SQUARE.z, dx: WEST.x, dz: WEST.z };
   })();
-  const SIDE = (() => { // an open shop front on a crosstown sidewalk near the start: the walker walks west past it
+  const SIDE = (() => { // an open shop front on a crosstown sidewalk near the Broadway plaza, the street running west
     let best = null, bd = Infinity;
     for (const l of signs.lights) {
       if (l.kind !== 'shop' || Math.abs(l.nx * WEST.x + l.nz * WEST.z) > 0.3) continue; // fronts that face across the street
-      const d = Math.hypot(l.x - START.x, l.z - START.z); if (d < bd) { bd = d; best = l; }
+      const d = Math.hypot(l.x - PLAZA.x, l.z - PLAZA.z); if (d < bd) { bd = d; best = l; }
     }
     return best;
   })();
   // bench frames as played (Bench.js `live`): what a play frame renders differently from a held one. Of the play
   // loop's systems, kept: world.update (the atmosphere's cascade schedule, far map on even frames; lamps, signals, the
   // clustered light list and its upload, ExtraLights' writes included), signage, facade grade, air glow, the GPU steam
-  // step, car contact shadows, the city environment. Left out: player / input and the camera rig (the camera stays at
+  // step, car contact shadows, the city environment. Left out: the player's car / input and the camera rig (the camera stays at
   // the pose), traffic, boats and streaming (held: they move vehicles and tiles), pedestrians (a crowd simulation
   // that walks skinned people around), the heap trim (heap tooling on a timer) and the HUD (DOM). end() puts back what
   // the frames moved, as after() left it (after() itself is not idempotent: refreshHD, the steam's spawn accumulators).
@@ -612,6 +703,8 @@ async function boot() {
     if (T) T.update = tu;
     if (B) B.update = bu;
   };
+  let posedAt = null; // the sidewalk pose's spot: the people are placed around it
+  const hideCar = () => { drive.visual.root.visible = false; if (headSpot) headSpot.intensity = 0; posedAt = null; };
   const harness = createBenchHarness(engine, {
     name: 'nyc-night', quality: Q,
     poses: {
@@ -629,24 +722,22 @@ async function boot() {
         const gy = world.getGroundHeight(A.x + ox, A.z + oz);
         cam.position.set(A.x + ox + rx * off, gy + 1.65, A.z + oz + rz * off); cam.up.set(0, 1, 0);
         cam.lookAt(A.x + ox + A.dx * 300 + rx * off * 0.3, gy + 34, A.z + oz + A.dz * 300 + rz * off * 0.3); // tilted up a little: the sky slot and its glow
-        player.entity.visible = false;
+        hideCar();
       },
       square(cam) {
         const V = SQ_VIEW, gy = world.getGroundHeight(V.x, V.z);
         cam.position.set(V.x, gy + 1.7, V.z); cam.up.set(0, 1, 0);
         cam.lookAt(V.x + V.dx * 120, gy + 20, V.z + V.dz * 120);
-        player.entity.visible = false;
+        hideCar();
       },
       sidewalk(cam) {
-        // third person behind the walker on a crosstown sidewalk, the shop fronts on one side, the glow ahead
-        player.entity.visible = true;
-        const l = SIDE || { sx: START.x, sz: START.z, nx: -WEST.z, nz: WEST.x };
+        // on a crosstown sidewalk, the shop fronts on one side, the glow ahead
+        hideCar();
+        const l = SIDE || { sx: PLAZA.x, sz: PLAZA.z, nx: -WEST.z, nz: WEST.x };
         const gy = world.getGroundHeight(l.sx, l.sz);
         const nx = l.nx, nz = l.nz;
         const px = l.sx + nx * 2.4, pz = l.sz + nz * 2.4;
-        const h = Math.atan2(-WEST.x, -WEST.z);
-        player.teleport(px, world.getGroundHeight(px, pz), pz, h);
-        player.pose(1.8);
+        posedAt = { x: px, z: pz };
         const back = cam.aspect < 1 ? 5.6 : 4.2;
         cam.position.set(px - WEST.x * back + nx * 0.9, gy + 1.8, pz - WEST.z * back + nz * 0.9); cam.up.set(0, 1, 0);
         cam.lookAt(px + WEST.x * 40 - nx * 2, gy + 4.5, pz + WEST.z * 40 - nz * 2);
@@ -657,7 +748,7 @@ async function boot() {
           const A = XTOWN, gy = world.getGroundHeight(A.x, A.z);
           cam.position.set(A.x - A.dx * 6, gy + 1.6, A.z - A.dz * 6); cam.up.set(0, 1, 0);
           cam.lookAt(A.x + A.dx * 200, gy + 9, A.z + A.dz * 200);
-          player.entity.visible = false;
+          hideCar();
         },
         kerb(cam) { // standing in the road by a street lamp, looking at the kerb and the pavement under it
           const A = XTOWN;
@@ -668,31 +759,31 @@ async function boot() {
           const gy = world.getGroundHeight(cx, cz);
           cam.position.set(cx + (L[0] - (A.x + A.dx * t)) * 0.3, gy + 1.7, cz + (L[2] - (A.z + A.dz * t)) * 0.3); cam.up.set(0, 1, 0);
           cam.lookAt(L[0] + A.dx * 2, gy + 0.6, L[2] + A.dz * 2);
-          player.entity.visible = false;
+          hideCar();
         },
         shop(cam) { // square on to an open shop front, 6 m out
-          const l = SIDE || { sx: START.x, sz: START.z, nx: -WEST.z, nz: WEST.x };
+          const l = SIDE || { sx: PLAZA.x, sz: PLAZA.z, nx: -WEST.z, nz: WEST.x };
           const gy = world.getGroundHeight(l.sx, l.sz);
           cam.position.set(l.sx + l.nx * 6, gy + 1.65, l.sz + l.nz * 6); cam.up.set(0, 1, 0);
           cam.lookAt(l.sx, gy + 2.6, l.sz);
-          player.entity.visible = false;
+          hideCar();
         },
         shutter(cam) { // square on to the closed roller shutter nearest the sidewalk pose, 5 m out
-          const l = SIDE || { sx: START.x, sz: START.z }, L = (ground && ground.closed) || [];
+          const l = SIDE || { sx: PLAZA.x, sz: PLAZA.z }, L = (ground && ground.closed) || [];
           let b = null, bd = Infinity;
           for (const c of L) { const d = Math.hypot(c.p[0] - l.sx, c.p[2] - l.sz); if (d < bd) { bd = d; b = c; } }
           if (!b) return;
           const x = b.p[0] + b.n[0] * 5, z = b.p[2] + b.n[2] * 5, gy = world.getGroundHeight(x, z);
           cam.position.set(x, gy + 1.65, z); cam.up.set(0, 1, 0);
           cam.lookAt(b.p[0], b.p[1], b.p[2]);
-          player.entity.visible = false;
+          hideCar();
         },
         facade(cam) { // from one sidewalk across the street at the facades opposite (the darkest walls)
           const A = XTOWN, rx = -A.dz, rz = A.dx, off = A.hw + Math.min(1.6, (A.sw || 2) * 0.55);
           const x = A.x + A.dx * 30 + rx * off, z = A.z + A.dz * 30 + rz * off, gy = world.getGroundHeight(x, z);
           cam.position.set(x, gy + 1.65, z); cam.up.set(0, 1, 0);
           cam.lookAt(x - rx * 30 + A.dx * 12, gy + 9, z - rz * 30 + A.dz * 12);
-          player.entity.visible = false;
+          hideCar();
         },
       } : {}),
     },
@@ -714,7 +805,7 @@ async function boot() {
       steamAcc = steam.vents.map((v) => v.acc);
       steam.preroll(4, cam);
       if (peds) peds.scatter(cam.position.x, cam.position.z, 4711);
-      if (player.entity.visible && peds) peds.update(0, player.entity.position.x, player.entity.position.z);
+      if (posedAt && peds) peds.update(0, posedAt.x, posedAt.z);
     },
     // building tiles stream in asynchronously after a camera jump: wait (world updates with the traffic held, so the
     // streamer commits) until nothing is pending or building, then the harness runs after() / quiet() again
@@ -807,31 +898,26 @@ async function boot() {
       'steam': { get: () => steam.mesh ? steam.mesh.visible !== false : false, set: (v) => { if (steam.mesh) steam.mesh.visible = !!v; } },
     },
   });
-  player.frozen = () => harness.frozen;
   const bp = readBenchParams(location.search);
   if (bp.enabled && bp.size) harness.resize(bp.size.w, bp.size.h);
 
-  // the programs, pipelines and uploads of the first frames, drawn under the loading screen (Engine warmUp: dt 0,
-  // nothing moves) and finished on the GPU, so the first live frame does not stall with the city already showing
+  // the programs, pipelines and uploads of the first frames, drawn under the loading bar (shell.ready: Engine warmUp, dt
+  // 0, nothing moves) and finished on the GPU, so the first live frame does not stall with the city already showing;
+  // then the loop starts and the start card shows. Bench: renderFn only, 12 frames (renderFn's every-2nd / 3rd /
+  // 4th-frame counters end in the phase they started in), and the loop held until the poses (the city as loaded: no
+  // live frame moves the traffic or the people first)
   memlog('before warm-up');
-  loading.setProgress(1, 'Compiling shaders…');
-  // bench: renderFn only (the poses' state stays as loaded), 12 frames (renderFn's every-2nd / 3rd / 4th-frame counters
-  // end in the phase they started in, so the poses draw the same passes as without the warm-up)
-  const warm = await engine.warmUp(bp.enabled ? { systems: false, frames: 12 } : {});
-  const loadMs = Math.round(performance.now() - t0);
+  if (bp.enabled) engine.start = () => engine;
+  await shell.ready();
+  if (bp.enabled) { delete engine.start; harness.freeze(); }
+  const loadMs = Math.round(performance.now() - t0), warm = shell.warm || {};
   window.__nyc = {
-    THREE, engine, world, postfx, atmo: world.atmo, clustered, extra, signs, steam, wet, player, cc, input, hud, menu, harness,
-    quality: Q, facadeGrade, walls, ground, kit, crowns, air, roofs, get rig() { return rig; }, setRig, START, SQUARE, loadMs, loadWorldMs, geo, streetAt,
+    THREE, engine, world, postfx, atmo: world.atmo, clustered, extra, signs, steam, wet, drive, input, rig, hud, shell, harness, peds,
+    quality: Q, facadeGrade, walls, ground, kit, crowns, air, roofs, audio, motor: () => motor, setCar, placeCar, resetCar, CAR_START, SQUARE, loadMs, loadWorldMs, geo, streetAt,
   };
-  console.info(`[nyc] ready in ${loadMs} ms (world ${loadWorldMs} ms, warm-up ${warm.ms} ms: compile ${warm.compileMs}, fence ${warm.fence}) · tier ${Q.tier} (${Q.source}${Q.lighter ? ', lighter after a graphics reset' : ''}) · ${signs.lights.length} sign lights · ${world.stats.lamps} lamps · ${world.stats.vehicles} vehicles`);
-  engine.start();
-  loading.hide(400);
-  harness.setReady();
-  if (bp.enabled) harness.freeze();
+  console.info(`[nyc] ready in ${loadMs} ms (world ${loadWorldMs} ms, warm-up ${warm.ms} ms: compile ${warm.compileMs}, fence ${warm.fence}) · tier ${Q.tier} (${Q.source}${Q.lighter ? ', lighter after a graphics reset' : ''}) · ${signs.lights.length} sign lights · ${world.stats.lamps} lamps · ${world.stats.vehicles} vehicles · car ${drive.id}`);
+  // page contract (the browser tests): window.__sample with `ready`; the shell for the start-up checks
+  window.__sample = Object.assign(harness, { shell }).setReady();
 }
 
-boot().catch((err) => {
-  console.error(err);
-  const l = document.querySelector('.ui-loading small');
-  if (l) l.textContent = `Failed to start: ${err.message}`;
-});
+boot().catch((err) => { console.error('[nyc] boot failed', err); shell.error(`Failed to start: ${err.message}`); });
