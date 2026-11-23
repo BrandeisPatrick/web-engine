@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.3.0 — 2026-11-22 — Automatic resolution draws fewer pixels before it shrinks the canvas; no shader compiled in play; every rendering option checked on the GPU; a smaller Miami car
 - Automatic resolution draws fewer pixels before it shrinks the canvas. On the desktop tier (TAA), when frames run
   long the engine now lowers the 3D scene's internal size (PostFX `renderScale`) to 87 % and then 75 % and TAA rebuilds
   a full-size picture; only below 75 % does it lower the pixel ratio, as before. `Engine` options `renderScales`
