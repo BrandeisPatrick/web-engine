@@ -6,7 +6,8 @@
 // Targets (checked by test/miami-car.mjs): 0-100 km/h ~5.5 s, top speed ~250 km/h (drag-limited before the 72 m/s
 // limiter), 100-0 km/h in ~37 m, a 60 m radius bend held at 80 km/h, a progressive rear-biased slide that comes
 // back when the throttle is lifted, handbrake turns, and a soft enough suspension that kerbs, sidewalks and the
-// beach ramp read through the body (dive, squat, roll).
+// beach ramp read through the body (dive, squat, roll); a steer key held through a fast bend (throttle held or lifted)
+// never spins it (rearGrip), and full key at speed asks for about the grip limit (steerBase).
 const DEG = Math.PI / 180;
 
 export const CAR_SPEC = {
@@ -37,15 +38,18 @@ export const CAR_SPEC = {
   antiRoll: 0.42,
   // ---- tyres: street rubber; lower B than the Roadster = a wider, more progressive peak (a slide you can catch)
   mu: 1.04, Bf: 10.5, Br: 11.5, C: 1.42,
+  rearGrip: 1.1,             // the rear holds a little more than the front: at the limit the nose runs wide first (a
+                             // held key no longer spins the car); throttle, a lift or the handbrake still bring the tail out
   tyreLowSpeed: 2.0,
   gripCap: 0.92,
   handbrakeGrip: 0.34,
   handbrakeForce: 0.85,
-  // ---- steering: speed sensitive (full lock when parking, ~4 deg at 200 km/h)
+  // ---- steering: speed sensitive (full lock when parking, ~3.4 deg at 100 km/h, ~2 deg at 200): full key asks for
+  // about the grip limit at speed, not 4x it (a darting turn-in); the slip term adds lock to catch a slide
   maxSteer: 34 * DEG,
-  steerBase: 0.065, steerGain: 1.05, steerSlipGain: 0.85,
+  steerBase: 0.02, steerGain: 1.05, steerSlipGain: 0.3,
   airSteer: 0.1,
-  // ---- powertrain: a 5.0 l V8 tuned well past stock, ~250 kW, rear-wheel drive
+  // ---- powertrain: a 5.0 l V8 tuned well past stock, ~250 kW, rear-wheel drive (its sound: audio.js, EngineAudio)
   motorPeakForce: 8000,      // N at the contact patch in the low gears (traction-limited launch)
   motorPower: 250e3,
   vMax: 72,                  // m/s limiter (259 km/h); drag holds it near 250
@@ -67,8 +71,12 @@ export const CAR_SPEC = {
   roofFriction: 0.7, autoRightDelay: 1.5, autoRightTau: 0.4,
 };
 
-/** Five-speed manual-style gearbox for the HUD and the engine sound: ratios as rpm per m/s of wheel speed. */
+/**
+ * The six-speed automatic (the engine's Gearbox) for the engine sound, the rev counter and the gear readout, and the
+ * short torque cut at each upshift: ratios as rpm per m/s of wheel speed (first tops out at ~70 km/h at the 5800 rpm
+ * shift point; sixth cruises 100 km/h at ~1800 rpm).
+ */
 export const GEARBOX = {
-  ratios: [0, 300, 186, 133, 102, 80, 64],  // 1st tops out ~ 24 m/s at the 7200 rpm shift point
-  idle: 850, redline: 7600, upshift: 7000, downshift: 3400,
+  ratios: [300, 186, 133, 102, 80, 64],
+  idle: 750, redline: 6200, upshift: 5800, cruise: 2000, downshift: 1200, kickdown: 3000, launch: 2800,
 };

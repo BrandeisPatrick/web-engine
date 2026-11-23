@@ -2,11 +2,12 @@
 // renders it offline; the page plays the same scene live with "Play the scene".
 //   0.0 s  dusk bed (amb.dusk + CityAmbience at dusk), a lamp hum two metres away, a UI click
 //   0.4 s  footsteps at a 2 m/s walk on concrete, gravel from 1.5 s; a wooden knock at 2.0 s; a landing at 2.6 s
-//   3.0 s  the car (VehicleAudio, its own wind and tyre layers off) pulls away and sweeps to 150 km/h by 8.5 s, with
-//          road roar and wind from the kit; a metal hit at 5.0 s; a slide (tyre.squeal) from 7.0 to 8.3 s;
+//   3.0 s  the car (EngineAudio, a four-cylinder on a Gearbox: the starter's) pulls away and sweeps to 150 km/h by
+//          8.5 s through the gears, with road roar and wind from the kit; a metal hit at 5.0 s; a slide (tyre.squeal) from 7.0 to 8.3 s;
 //          a thud at 8.0 s; lift off at 8.5 s
 //   9.3 s  a pickup chime
-import { SoundBank, Footsteps, VehicleAudio, CityAmbience } from '@vibe/engine/audio';
+import { SoundBank, Footsteps, EngineAudio, CityAmbience } from '@vibe/engine/audio';
+import { Gearbox } from '@vibe/engine/physics';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
@@ -35,8 +36,8 @@ export function buildScene(bus) {
   sfx.loop('lamp.hum', { at: [2, 1.5, -1], gain: 0.2 });
   const city = new CityAmbience(bus, { gulls: false, level: 0.2 });
   city.setEnvironment({ darkness: 0.75 });
-  const car = new VehicleAudio({ bus, ambience: false, topSpeed: 200 / 3.6, wind: false, tyres: false });
-  bus.setBusVolume('engine', 0.35); // VehicleAudio is mixed hot for a car on its own; under the kit it sits lower
+  const car = new EngineAudio({ bus, cylinders: 4, idle: 850, redline: 6500 }), gearbox = new Gearbox(), wheels = { wheelSpeed: 0 };
+  bus.setBusVolume('engine', 0.5); // as starter-drive
   const loops = { roar: sfx.loop('road.roar', { gain: 0 }), wind: sfx.loop('wind.rush', { gain: 0 }), squeal: sfx.loop('tyre.squeal', { gain: 0 }) };
   const steps = new Footsteps(sfx, { surface: 'concrete' });
   const cues = [[0.3, () => sfx.play('ui.click')], [2.0, () => sfx.play('impact.wood', { at: [-3, 0, -2] })],
@@ -52,7 +53,8 @@ export function buildScene(bus) {
     // the car
     const kmh = 150 * clamp((t - 3) / 5.5, 0, 1), speed = kmh / 3.6;
     const slip = t >= 7 && t < 8.3 ? 0.8 : 0;
-    car.update(dt, { speedKmh: kmh, rpmLike: t >= 3 && t < 8.5 ? 0.8 : 0.15, grounded: true, wheelSlip: slip });
+    wheels.wheelSpeed = speed;
+    car.update(dt, gearbox.update(dt, wheels, t >= 3 && t < 8.5 ? 0.8 : 0));
     driveLoops(loops, speed, slip);
     city.update(dt, { speedN: 0 });
     sfx.update(dt);
