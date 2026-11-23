@@ -1,7 +1,7 @@
 // Feature matrix: every rendering option drawn on the real GPU and checked, so a shader that does not compile on
 // ANGLE / Metal, a pass that renders black or an option that changes nothing cannot pass unnoticed. One page, nyc-night
 // on the desktop tier at 1280x720 (clustered street-lamp spots, shadows, SSR on wet streets, volumetric light, the
-// walker in the `sidewalk` pose; dusk), loaded once per shadow cascade count (?cascades=1..4: the count is fixed when
+// `sidewalk` pose; dusk), loaded once per shadow cascade count (?cascades=1..4: the count is fixed when
 // the Atmosphere is built); the shadow rows use the `square` pose at 11:00, where the sun's cascades show. Each pose is
 // visited once after a load before any row (its first visit still loads and later captures differ a little). Each row
 // applies its settings on the live page, poses through the bench harness (src/core/Bench.js pose / settle / capture /
@@ -14,7 +14,7 @@
 //     motion blur on a still frame, PCSS falling back to PCF at 4 cascades, the canvas back at its first size).
 // Rows: every PostFX option and pass on / off, the anti-aliasing modes with the G-buffer on and off, shadow kernels
 // 'pcf' / 'fast' / 'pcss' x 1-4 cascades, clustered lights on / off, both quality tiers' own defaults
-// (core/Quality.js QUALITY_TIERS), the camera and walker travelling (velocity, TAA history, motion blur in motion),
+// (core/Quality.js QUALITY_TIERS), the camera and the player's car travelling (velocity, TAA history, motion blur in motion),
 // and the canvas resized, its pixel ratio changed and two adaptive-resolution steps forced (the internal scale, then
 // the pixel ratio), then back to the start.
 // Prints one table (row, result, measured difference) and exits 1 on any failing row that is not KNOWN_FAILING.
@@ -100,8 +100,11 @@ async function runRow({ row, pose, scale, ref }) {
   const kernel = N.atmo.shadowKernel, hours = N.atmo.hours, lights = N.world.props.lightPool.mode, maxPR = E.maxPR;
   const shot = () => {
     h.pose(row.pose || pose);
-    if (row.move) { // camera and walker travel together at 9 m/s, TAA jittering and accumulating from a reset history
-      const cam = E.camera, ent = N.player.entity, f = cam.getWorldDirection(new cam.position.constructor()).setY(0).normalize();
+    if (row.move) { // camera and car travel together at 9 m/s, the car 7 m ahead on the ground (the poses hide it), TAA
+      // jittering and accumulating from a reset history
+      const cam = E.camera, ent = N.drive.visual.root, f = cam.getWorldDirection(new cam.position.constructor()).setY(0).normalize();
+      ent.position.copy(cam.position).addScaledVector(f, 7); ent.position.y = N.world.getGroundHeight(ent.position.x, ent.position.z);
+      ent.rotation.set(0, Math.atan2(-f.x, -f.z), 0); ent.visible = true;
       h.converge.begin(h);
       for (let i = 0; i < 25; i++) {
         cam.position.addScaledVector(f, 0.15); ent.position.addScaledVector(f, 0.15);

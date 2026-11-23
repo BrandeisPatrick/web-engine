@@ -37,7 +37,8 @@ Order: core < physics < render < anim / input / camera / audio / ui < world. Low
   value turns left (counter-clockwise seen from above), the same as `Object3D.rotation.y`: `VehicleController`, the
   camera rigs and the rig target's `facing` all use it.
 - **Models face +Z.** The glTF characters under `samples/public/` face +Z while the engine's forward is -Z;
-  `samples/nyc-night/player.js` puts the model in a child group with `rotation.y = Math.PI`.
+  `samples/starter-walk/main.js` and the people of `samples/nyc-night/pedestrians.js` put the model in a child group
+  with `rotation.y = Math.PI`.
 - **Fixed step.** `Engine` runs `fixedUpdate(dt)` at `fixedHz` (default 120) up to `maxSubsteps` (default 4) times per
   frame; `update(dt, alpha)` runs once per frame with the interpolation factor. Simulation goes in `fixedUpdate`;
   anything drawn from simulated state blends the last two steps with `alpha` (`PoseInterpolator`, "Render
@@ -664,16 +665,16 @@ cost are in [the design notes](docs/DESIGN-NOTES.md#textures-pbr-sets-ktx2).
   `env(safe-area-inset-*)`), per-entry `portrait` overrides re-applied on rotation, `floating` sticks (the base follows
   the thumb inside a zone), `TouchControls.setProgress(id, p)` cooldown rings, button `hitSlop` (an invisible hit
   ring around a button), touchpad `slop` (a drag counts from that many px), `touchReveal` (controls on the first
-  touch, hidden on a key press) and `isTouchDevice({ multiTouch: true })` (iPads with a keyboard). `samples/nyc-night/` uses
-  the floating stick, `portrait`, `hitSlop`, `slop` and `touchReveal`; the cooldown rings and `multiTouch` were used
-  only by the retired Halloween game (branch `archive/halloween`).
+  touch, hidden on a key press) and `isTouchDevice({ multiTouch: true })` (iPads with a keyboard). The cooldown rings
+  and `multiTouch` were used only by the retired Halloween game (branch `archive/halloween`); the floating stick is in
+  the driving pages' layouts (`samples/miami-drive/`, `samples/nyc-night/`).
 - `anim` layer: `AnimationController` (states, 1D blend trees, transition table, markers, root motion with the
   hips' horizontal track neutralised) and `TwoBoneIK` / CCD helpers.
 - `AnimationController(model, clips, { states, trees })`: a state's `clip` is the clip's exact name (or an
   `AnimationClip`); a name the GLB does not have throws with the list of its clip names (and a "did you mean" when
   exactly one name ends with the one asked for). Types: `AnimationStateSpec`, `BlendTreeSpec`.
 - A working example of the whole stack in one file: `samples/starter-walk/main.js` (controller, GLB and animation,
-  input, rig, `PoseInterpolator`). The NYC demo's `samples/nyc-night/player.js` is a larger one.
+  input, rig, `PoseInterpolator`).
 - `ChaseRig` (`src/camera/ChaseRig.js`) follows a vehicle: `rig.setTarget(object3d, () => state)` (`CameraRig`), where
   the state getter returns what the rig reads (`velocity`, `speedKmh`, `mode`, `grounded`, ...; the list is in the
   ChaseRig source; type `ChaseTargetState`). `VehicleInput` (`src/input/VehicleInput.js`) reads keyboard, gamepad and touch into

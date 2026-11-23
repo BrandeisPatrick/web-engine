@@ -14,7 +14,7 @@ city-scale worlds come as plain JavaScript modules in one package, `@vibe/engine
 **[Changelog](CHANGELOG.md)** ·
 **[Releases](https://github.com/BrandeisPatrick/web-engine/releases)**
 
-<a href="https://brandeispatrick.github.io/web-engine/nyc-night/"><img src="docs/before-after/nyc-avenue-after.jpg" alt="Night NYC walk: a Midtown cross street at dusk, with lit windows, a taxi at the kerb and the afterglow at the end of the street"></a>
+<a href="https://brandeispatrick.github.io/web-engine/nyc-night/"><img src="docs/before-after/nyc-avenue-after.jpg" alt="Night NYC: a Midtown cross street at dusk, with lit windows, a taxi at the kerb and the afterglow at the end of the street"></a>
 
 ## Demos
 
@@ -22,16 +22,16 @@ Each demo runs in the browser on a computer or a phone, with nothing to install.
 
 <table>
   <tr>
-    <td width="50%"><a href="https://brandeispatrick.github.io/web-engine/nyc-night/"><img src="docs/before-after/nyc-square-after.jpg" alt="Night NYC walk: lit billboards over a Times Square crossing, with taxis and pedestrians"></a></td>
+    <td width="50%"><a href="https://brandeispatrick.github.io/web-engine/nyc-night/"><img src="docs/before-after/nyc-square-after.jpg" alt="Night NYC: lit billboards over a Times Square crossing, with taxis and pedestrians"></a></td>
     <td width="50%"><a href="https://brandeispatrick.github.io/web-engine/miami-drive/"><img src="docs/before-after/miami-chase-after.jpg" alt="Miami drive: a sports car on a dune road at dusk, with palms and hotels ahead"></a></td>
   </tr>
   <tr>
-    <td valign="top"><b><a href="https://brandeispatrick.github.io/web-engine/nyc-night/">Night NYC walk</a></b><br>Midtown Manhattan at dusk, on foot. Buildings baked from OpenStreetMap, street lamps and signs as clustered lights, wet-street reflections, traffic and pedestrians.</td>
+    <td valign="top"><b><a href="https://brandeispatrick.github.io/web-engine/nyc-night/">Night NYC</a></b><br>Midtown Manhattan at dusk, behind the wheel: a yellow cab, a sedan or an interceptor, slow to fast. Buildings baked from OpenStreetMap, street lamps, signs and headlights as clustered lights, wet-street reflections, traffic and pedestrians.</td>
     <td valign="top"><b><a href="https://brandeispatrick.github.io/web-engine/miami-drive/">Miami drive</a></b><br>South Beach at dusk, behind the wheel. Vehicle physics and driving feel, a detailed hero car, palms, hotels and a dune road.</td>
   </tr>
 </table>
 
-Every demo has a graphics setting behind the gear button: **Mac / desktop** (full lighting) or **Phone / tablet**
+Every demo has a graphics setting (Miami: the gear button; Night NYC: the pause card): **Mac / desktop** (full lighting) or **Phone / tablet**
 (lighter, saves battery). The demo recommends one for the device and remembers the choice; `?quality=desktop|mobile`
 in the URL forces one.
 
@@ -226,20 +226,21 @@ heap limits a busy machine could break run one by one afterwards):
 - `test/gpu-particles.mjs`, `clustered`, `shadows`, `skip-unlit`, `postfx-options`, `render-scale`, `gbuffer-chunks`,
   `ssr-ao`, `volumetric`, `blur-dof-lut`, `water`, `tyre-fx`: the render pipeline's shaders, options and defaults, and
   the tyre marks and smoke.
-- `test/miami-car.mjs`, `nyc-traffic-mix`: the demos' rules and engine options.
+- `test/miami-car.mjs`, `nyc-cars`, `nyc-traffic-mix`: the demos' cars (0-100 km/h, top speed, braking, a corner), rules and engine options.
 - `test/agent-usability.mjs`: the APIs the starters rely on (road-car spec, texture ids, clip errors, static boxes).
 - `test/docs.mjs`: the docs name only paths, links and `@vibe/engine` imports that exist, and every recipe in
   docs/HOWTO.md equals its marked source region. `test/howto.mjs` runs the Node recipes (`test/howto/recipes.js`).
 - `test/asset-catalog.mjs`: the asset catalogue is in step with the files (every `samples/public` file covered,
   credits complete, generated `catalog.json` and `docs/ASSETS.md` current).
 
-`test/browser/` (`smoke`, `bench`, `perf`, `played-frame`, `howto`, `check-page`, `phone-start`,
+`test/browser/` (`smoke`, `bench`, `perf`, `played-frame`, `howto`, `check-page`, `nyc-drive`, `phone-start`,
 `shell`, `sound-check`, `drive-feel`, `car-camera`, `flicker`) needs Chrome and runs locally. `smoke` covers the demos and the
 starters, each also as a `-mobile` page (the same page on the mobile tier), and the two demos once more as a `-low`
 page (`?look=low`, one pose); `bench` takes `nyc-night`, `miami-drive`
 and their `-mobile` pages. `howto` runs the browser-only recipes (clustered lights, GPU particles, vehicle sound) on
 the starter-drive page; `check-page <name>` loads one page and
-fails on any error; `played-frame` times the two city demos' frames as played (production build, vsync off: the median
+fails on any error; `nyc-drive` loads Night NYC, holds W and checks the car drives down 7th Avenue and that another car
+can be picked; `played-frame` times the two city demos' frames as played (nyc-night with the throttle held; production build, vsync off: the median
 and p95 interval against a budget, no `getParameter` round trip in the frame); `phone-start` loads every demo and
 starter in play mode and checks the start-up (the loading
 screen stays until a frame is drawn, no long frame after it), a forced context loss (the Reload notice, no further

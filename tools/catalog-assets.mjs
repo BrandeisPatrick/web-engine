@@ -243,7 +243,7 @@ function manifestEntries(problems) {
     e.facts.resolution = t.map((x) => `${x.resolution}${x.ktx2 ? ' (JPG + KTX2)' : ''} in ${x.dir.replace('samples/public/', '')}`).join('; ');
     delete e.facts.tiers;
     const sn = e._snippet; delete e._snippet;
-    const demo = { nyc: 'the Night NYC walk', miami: 'the Miami drive' }[sn.area];
+    const demo = { nyc: 'the Night NYC drive', miami: 'the Miami drive' }[sn.area];
     const full = t.find((x) => `${x.dir.replace('samples/public/', '')}` === sn.base) || t[0], small = t.find((x) => x !== full);
     const tiers = small
       ? ` Full size (${full.resolution}) in ${sn.base}${sn.id}/; ${small.dir.replace('samples/public/', '')} holds a ${small.resolution} copy that ${demo} loads on the mobile tier. loadTextureSet('${sn.id}', { base }) reads <base>${sn.id}/, so base '${sn.base}' gives the full size and '${small.dir.replace('samples/public/', '')}' the small copy.`

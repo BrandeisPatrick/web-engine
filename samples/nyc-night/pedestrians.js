@@ -1,6 +1,9 @@
 // People on the sidewalks: clones of the CC0 Quaternius "Man" / "Animated Woman" (samples/public/nyc/models), each with
 // its own AnimationMixer (walk, a few idle), walking the sidewalk lines of the named streets around the walker and
-// respawning ahead of / around the walker when they fall more than `keep` metres behind. The Man's six flat materials
+// respawning ahead of / around the player when they fall more than `keep` metres behind. They keep to the sidewalks (a
+// block's end turns them round; they never cross a road), and they step clear of the player's car when it comes onto
+// the sidewalk at them: aside, away from its path, within the sidewalk; one it would still reach steps out of the
+// scene (respawned out of the way). Nobody is ever shown being hit, and nothing reacts to an impact. The Man's six flat materials
 // are baked into one vertex-coloured material per clone (one draw instead of six, and per-person coat / trouser
 // colours); the Woman is textured and keeps her material (tinted per clone). Seeded, so bench poses reproduce.
 import * as THREE from 'three';
@@ -118,7 +121,9 @@ export class Pedestrians {
         for (const side of [-1, 1]) {
           const ox = -tz * off * side, oz = tx * off * side;
           // trim the ends so people turn before the crosswalks rather than walking into the junction
-          segs.push({ ax: a[0] + ox + tx * 4, az: a[1] + oz + tz * 4, tx, tz, len: L - 8 });
+          // n: away from the road; lo / hi: how far a person may step off the line toward the kerb / the wall
+          segs.push({ ax: a[0] + ox + tx * 4, az: a[1] + oz + tz * 4, tx, tz, len: L - 8, nx: -tz * side, nz: tx * side,
+            lo: -Math.max(0, st.sidewalk * 0.55 - 0.45), hi: Math.max(0, st.sidewalk * 0.45 - 0.35) });
         }
       }
     }
@@ -141,7 +146,7 @@ export class Pedestrians {
       act.play(); act.time = R() * 2;
       const speed = standing ? 0 : 1.15 + R() * 0.45;
       act.timeScale = standing ? 1 : speed / (woman ? 1.25 : 1.4);
-      const p = { holder, mixer, speed, seg: 0, s: 0, dir: 1 };
+      const p = { holder, mixer, speed, seg: 0, s: 0, dir: 1, off: 0 };
       this.people.push(p);
       if (o.postfx) holder.traverse((m) => { if (m.isMesh) o.postfx.track(m); });
     }
@@ -155,7 +160,7 @@ export class Pedestrians {
       const i = (R() * S.length) | 0, g = S[i], s = R() * g.len;
       const px = g.ax + g.tx * s, pz = g.az + g.tz * s, d = Math.hypot(px - x, pz - z);
       if (k < 39 && (d < dMin || d > dMax)) continue;
-      p.seg = i; p.s = s; p.dir = R() < 0.5 ? 1 : -1;
+      p.seg = i; p.s = s; p.dir = R() < 0.5 ? 1 : -1; p.off = 0;
       return;
     }
   }
@@ -167,22 +172,42 @@ export class Pedestrians {
     this.update(0, x, z);
   }
 
-  update(dt, x, z) {
+  /**
+   * Walk everyone on, around (x, z). car: the player's car or null, { x, z, fx, fz (forward), hl, hw (half length /
+   * width), speed (m/s) }: who stands in its path steps aside (see the header).
+   */
+  update(dt, x, z, car = null) {
     const S = this.segs;
     if (!S.length) return;
     for (const p of this.people) {
       let g = S[p.seg];
+      if (car && dt > 0) { this._clear(p, g, car, dt); g = S[p.seg]; }
       p.s += p.speed * p.dir * dt;
       if (p.s < 0 || p.s > g.len) { // end of the block: turn round (a crossing is not modelled)
         p.dir = -p.dir; p.s = Math.max(0, Math.min(g.len, p.s));
       }
       const px = g.ax + g.tx * p.s, pz = g.az + g.tz * p.s;
       if ((px - x) ** 2 + (pz - z) ** 2 > this.keep * this.keep) { this._place(p, x, z, 30, 70); g = S[p.seg]; }
-      const qx = g.ax + g.tx * p.s, qz = g.az + g.tz * p.s;
+      const qx = g.ax + g.tx * p.s + g.nx * p.off, qz = g.az + g.tz * p.s + g.nz * p.off;
       const h = p.holder;
       h.position.set(qx, this.world.getGroundHeight(qx, qz), qz);
       h.rotation.y = Math.atan2(-g.tx * p.dir, -g.tz * p.dir);
       if (dt > 0) p.mixer.update(dt);
     }
+  }
+
+  /** Step person p (on segment g) out of the car's path: aside within the sidewalk, or out of the scene if it would still reach them. */
+  _clear(p, g, car, dt) {
+    const px = g.ax + g.tx * p.s + g.nx * p.off, pz = g.az + g.tz * p.s + g.nz * p.off;
+    const rx = px - car.x, rz = pz - car.z, along = rx * car.fx + rz * car.fz, lat = rx * -car.fz + rz * car.fx;
+    const ahead = car.hl + 1.5 + car.speed * 1.2;
+    let goal = 0;
+    if (car.speed > 0.5 && along > -car.hl - 1 && along < ahead && Math.abs(lat) < car.hw + 1.4) {
+      // away from the car's centre line: the sidewalk direction (n) that grows |lat|
+      const away = (lat >= 0 ? 1 : -1) * (g.nx * -car.fz + g.nz * car.fx);
+      goal = away >= 0 ? g.hi : g.lo;
+    }
+    p.off += Math.max(-3.5 * dt, Math.min(3.5 * dt, goal - p.off)) * (goal ? 1 : 0.25); // quick aside, slowly back
+    if (Math.abs(along) < car.hl + 0.5 && Math.abs(lat) < car.hw + 0.45) this._place(p, car.x, car.z, 40, 70); // it would reach them
   }
 }
