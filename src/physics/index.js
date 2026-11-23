@@ -6,6 +6,7 @@ export { VehicleController, ROADSTER_SPEC, ROAD_CAR_SPEC, resolveVehicleSpec, G,
 export { obbVsAabb, obbFromPose, sweepToContact, bounceVelocity, rayAabb, sphereCastAabb, closestPointOnAabb, aabbOverlap } from './collision.js';
 export { ColliderGrid, polygonToBoxes, SegmentHash, Raster, MinHeap } from './spatial.js';
 export { CharacterController } from './CharacterController.js';
+export { Gearbox, GEARBOX_DEFAULTS } from './Gearbox.js';
 // ---- dynamics (0.6.0): unified XPBD rigid bodies, joints, queries, worker ----------------------------------------
 export { DynamicsWorld, describeShape, shapeFromDescriptor } from './dynamics/DynamicsWorld.js';
 export { DynamicsClient, dynamicsWorkerAvailable, POSE_STRIDE as DYNAMICS_POSE_STRIDE, CONTACT_STRIDE as DYNAMICS_CONTACT_STRIDE } from './DynamicsClient.js';

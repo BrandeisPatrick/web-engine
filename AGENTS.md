@@ -101,7 +101,7 @@ expose state that changes through a function (`{ game: () => ({ mode, score }) }
 | Loading, start screen, pause, saved settings | `GameShell` (ui) | `new GameShell({ title, controls, quality, storageKey })`, `shell.use({ engine, audio, inputs })`, `await shell.ready()` | starters |
 | A sound | `AudioBus`, `SoundBank` (audio) | `new AudioBus({ master: 'safe' })` started by `GameShell`'s start click (or `bus.unlockOnGesture()`); `new SoundBank(bus, { listener: camera }).play('impact.wood', { at })`; hear and check them on `samples/sound-check/` | `samples/starter-walk/main.js` |
 | Footsteps, ambience | `Footsteps`, `SoundBank` (audio) | `steps.update(dt, { speed, grounded, landed, landingSpeed })`; `sfx.loop('amb.dusk', { gain: 0.14 })` | `samples/starter-walk/main.js` |
-| Car sounds | `VehicleAudio`, `SoundBank` (audio) | `motor.update(dt, { speedKmh, rpmLike, grounded })`; loops `road.roar`, `wind.rush`, `tyre.squeal` with `setGain` | `samples/starter-drive/main.js` |
+| Car sounds | `EngineAudio`, `SoundBank` (audio), `Gearbox` (physics) | `motor = new EngineAudio({ bus, cylinders: 4 })`; per frame `motor.update(dt, gearbox.update(dt, car, throttle))` and `controls.throttle = throttle * (1 - gearbox.cut)`; loops `road.roar`, `wind.rush`, `tyre.squeal` with `setGain`. `VehicleAudio` is the electric car with thrusters | `samples/starter-drive/main.js` |
 | Particles | `GpuParticleSystem` (render) | `dust.emit(params)`; per frame `dust.update(dt, camera)` | `test/howto/recipes.js` |
 | Walls and crates | `PhysicsWorld`, `DynamicsWorld`, `attachToPhysicsWorld`, `boxShape` (physics) | `physics.addStaticBox({ center, size })`; `dyn.addBody({ shape, position, mass })` | `test/howto/recipes.js` |
 | Hills, a small track | `PhysicsWorld` (physics) | `new PhysicsWorld({ heightfield: (x, z) => y })`, `setSurfaceProvider(fn)` | `test/howto/recipes.js` |
@@ -184,10 +184,12 @@ there:
 
 - Touch controls (`touch: 'auto'`) are wired in both starters but have not been tested on a touch device.
 - Audio is measured, not listened to: every preset's peak, DC, loop seam and spectral band, and a ten-second mix
-  (`samples/sound-check/`: no clipping, peak <= 0.85, no silent or over-loud half-second) are checked by machine, and
+  (`samples/sound-check/`: no clipping, peak <= 0.85, no silent or over-loud half-second) are checked by machine, the
+  car engine (`EngineAudio` on a `Gearbox`) is checked for its firing harmonics and a pitch drop at each upshift, and
   the starters' sound was measured flowing in headless Chrome. No person has listened to any of it.
-- The steering assist, the chase camera's road feel and the gamepad rumble were checked by scripted drives and numbers;
-  nobody has driven them by hand.
+- The steering assist, the chase camera's road feel, the gamepad rumble and the Miami car's handling (a held steer key
+  no longer spins it, the Gearbox's torque cut) were checked by scripted drives and numbers; nobody has driven them by
+  hand.
 - Night NYC's three cars, its pedestrians stepping clear and its map-edge wall were checked by scripted drives in the
   page and Node runs of the car specs; nobody has driven them by hand, and the page has not run on a real phone.
 - Neither starter has been run on a real phone; the mobile tier was checked only through `?quality=mobile`.

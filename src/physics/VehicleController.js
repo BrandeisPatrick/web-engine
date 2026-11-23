@@ -86,6 +86,7 @@ export const ROADSTER_SPEC = deepFreeze({
   antiRoll: 0.6,             // anti-roll bar stiffness per axle as a fraction of the spring rate
   // ---- tyres (simplified Pacejka: F = mu Fz sin(C atan(B alpha))) --------------------------------
   mu: 1.35, Bf: 14, Br: 16, C: 1.45,
+  rearGrip: 1,               // rear grip multiplier: above 1 the front lets go first at the limit (understeer, no spin)
   tyreLowSpeed: 2.0,         // slip-angle denominator floor (m/s)
   gripCap: 0.95,             // traction control / ABS: longitudinal force limit as a fraction of grip
   handbrakeGrip: 0.38,       // rear grip multiplier with the handbrake on
@@ -717,7 +718,7 @@ export class VehicleController {
     // grip per axle from the per-wheel surface multipliers (all 1 without a surface provider)
     const mu = S.mu * (Wh[0].mu + Wh[1].mu + Wh[2].mu + Wh[3].mu) * 0.25; // speed-sensitive steering limit
     const muF = S.mu * (Wh[0].mu + Wh[1].mu) * 0.5;
-    const muRs = S.mu * (Wh[2].mu + Wh[3].mu) * 0.5;
+    const muRs = S.mu * S.rearGrip * (Wh[2].mu + Wh[3].mu) * 0.5;
     const muR = handbrake ? muRs * S.handbrakeGrip : muRs;
 
     // sideslip & speed-sensitive steering

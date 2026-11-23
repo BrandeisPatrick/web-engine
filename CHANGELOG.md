@@ -1,6 +1,37 @@
 # Changelog
 
 ## Unreleased
+- The Miami car no longer spins when a steer key is held through a fast bend. At the limit the tyre model was neutral
+  (the force is linear in the load), so holding A or D at 60 km/h or faster, throttle held or lifted, swung the tail
+  round within 2 s (84 degrees of sideslip at 100 km/h). A new spec field `rearGrip` (VehicleController, default 1, so
+  every other car is unchanged) scales the rear's grip; the Miami car's 1.1 lets the nose run wide first (3 degrees of
+  slide at 100 km/h, 0.95 g), and full throttle, a lift or the handbrake still bring the tail out and it comes back
+  (a power slide at 50 km/h: 22 degrees, was a spin). Its high-speed lock floor `steerBase` went from 0.065 to 0.02
+  rad and `steerSlipGain` from 0.85 to 0.3: full key at 100 km/h turns the wheels 3.4 degrees (was 5.9, about four
+  times what the grip can use), so the turn-in no longer darts. `test/miami-car.mjs` holds these (a held key at 60,
+  100 and 140 km/h never slides past 15 degrees, the turn-in at 140 km/h peaks under 1.7x the settled yaw rate, the
+  lock at 100 km/h is 2.5 to 4.5 degrees); its earlier targets all still pass.
+- Cars sound like combustion engines. New `EngineAudio` (audio): a four-stroke cycle per oscillator (frequency rpm /
+  120) holding one exhaust pulse per cylinder, the pulses a little uneven (a crossplane V8's bank pattern for eight
+  cylinders), so the firing harmonics carry an engine's half orders; a sharp wave on load and a soft one off it, a
+  random cycle-to-cycle pitch wobble (a lumpy idle), exhaust rasp (noise in bursts at each firing), intake roar, a soft
+  clip and a low-pass that open with revs and load, pipe resonances, pops on a lift at high revs; no sample files. New
+  `Gearbox` (physics): revs, gear and shifts for a VehicleController (which has no gearbox): an automatic that shifts up
+  early at part throttle and late at full, down when braking (with a blip), never hunts, slips first gear at a launch,
+  and cuts the torque for 0.12 s at an upshift under load (`gb.cut`, taken off the throttle: the shift is felt).
+  `test/gearbox.mjs`; `test/browser/sound-check.mjs` now also checks the engine: the strongest tone on the firing
+  frequency or a low harmonic of it, the firing harmonics carrying most of the sound, the pitch dropping at each
+  upshift, an audible idle, no clicks. `dsp.fft` is exported.
+- The Miami car's sound is that engine as a V8 (it was a buzzy straight-six recipe: locked oscillators through a
+  resonant sweeping filter, plus a turbo whistle and blow-off, which went with it): the pitch sits on the firing
+  frequency, drops 20 to 31 % at each upshift, and the six-speed now cruises 100 km/h in sixth at 1800 rpm (it ran in
+  third at about 4500 rpm, and a launch held one flat note at 4250 rpm for 2 s). Its gearbox is the engine's `Gearbox`
+  (`spec.js` `GEARBOX`: ratios without the old leading 0, idle 750, redline 6200), with the torque cut on the page
+  (0-100 km/h 5.5 s, was 5.4).
+- starter-drive's car has an engine: `VehicleAudio` (an electric whine, silent at a standstill) is replaced by
+  `EngineAudio` as a four-cylinder on the default `Gearbox` (five speeds), engine bus 0.5; the sound-check scene uses
+  the same. `VehicleAudio` itself is unchanged (the electric car with thrusters). AGENTS.md, ENGINE.md and HOWTO
+  "Car sounds" describe the new pair.
 - Night NYC is a driving game now; walking is gone from it. The page starts with your car on 7th Avenue, about 400 m
   north of Times Square, facing down the avenue, in the same city and the same dusk look. You pick the car on the
   start card, or change it in the pause card, and the choice is saved. There are three cars, slow to fast, each an

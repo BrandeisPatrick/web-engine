@@ -1,10 +1,13 @@
 // Headless checks for the Miami drive hero car (samples/miami-drive/spec.js) on the engine's VehicleController:
-// 0-100 km/h, top speed, braking distance from 100 km/h, a steady-state bend that stays on the road, a handbrake
-// turn, a slide that is caught, a ramp jump without NaN, kerb compliance and determinism. Deterministic: fixed
-// 120 Hz steps on synthetic worlds, no randomness. Run: node test/miami-car.mjs
+// 0-100 km/h (with its Gearbox's torque cut, as on the page), top speed, braking distance from 100 km/h, a steady-state
+// bend that stays on the road, a handbrake turn, a slide that is caught, a ramp jump without NaN, kerb compliance,
+// determinism, and the keyboard driver's corner: a steer key held for 4 s at 60, 100 and 140 km/h (the page's 0.2 s
+// key ramp, the throttle held or lifted) never spins the car, turns in without a dart, and the lock at speed is about
+// the grip limit; a 100 km/h cruise runs in top gear at low revs. Deterministic: fixed 120 Hz steps on synthetic
+// worlds, no randomness. Run: node test/miami-car.mjs
 import { Vector3 } from 'three';
-import { VehicleController } from '@vibe/engine/physics';
-import { CAR_SPEC } from '../samples/miami-drive/spec.js';
+import { VehicleController, Gearbox } from '@vibe/engine/physics';
+import { CAR_SPEC, GEARBOX } from '../samples/miami-drive/spec.js';
 
 const DT = 1 / 120;
 let failures = 0;
@@ -13,7 +16,7 @@ const fmt = (x) => (Number.isFinite(x) ? x.toFixed(2).padStart(8) : String(x).pa
 function check(name, v, lo, hi, unit = '') {
   const ok = Number.isFinite(v) && v >= lo && v <= hi;
   if (!ok) failures++;
-  lines.push(`${ok ? 'PASS' : 'FAIL'}  ${name.padEnd(48)} ${fmt(v)} ${unit.padEnd(5)} [${lo} .. ${hi}]`);
+  lines.push(`${ok ? 'PASS' : 'FAIL'}  ${name.padEnd(70)} ${fmt(v)} ${unit.padEnd(5)} [${lo} .. ${hi}]`);
   return v;
 }
 const flat = (boxes = [], ground = () => 0) => ({
@@ -28,10 +31,13 @@ const kmh = (ms) => ms * 3.6;
 // 1. 0-100 km/h
 const world = flat();
 {
-  const c = newCar(world);
+  const c = newCar(world), gb = new Gearbox(GEARBOX);
   let t = NaN;
-  for (let i = 0; i < 20 * 120; i++) { c.step(DT, ctl({ throttle: 1 }), world); if (c.forwardSpeed >= 100 / 3.6) { t = (i + 1) * DT; break; } }
-  check('0-100 km/h', t, 4.6, 6.6, 's');
+  for (let i = 0; i < 20 * 120; i++) {
+    c.step(DT, ctl({ throttle: 1 - gb.cut }), world); gb.update(DT, c, 1);
+    if (c.forwardSpeed >= 100 / 3.6) { t = (i + 1) * DT; break; }
+  }
+  check('0-100 km/h (torque cut at the upshifts)', t, 4.6, 6.6, 's');
 }
 // 2. top speed (60 s flat out)
 {
@@ -128,6 +134,41 @@ const world = flat();
 {
   const run = () => { const c = newCar(world); for (let i = 0; i < 1200; i++) c.step(DT, ctl({ throttle: 1, steer: Math.sin(i * 0.01) }), world); return [c.position.x, c.position.z, c.velocity.x, c.heading].join(','); };
   check('determinism (two runs equal)', run() === run() ? 1 : 0, 1, 1);
+}
+
+// 10. a steer key held through a corner (the page's 0.2 s key ramp): no spin with the throttle held or lifted, a turn-in
+//     without a dart (peak yaw rate over the settled one), the lock at speed about the grip limit
+for (const kmh of [60, 100, 140]) {
+  for (const hold of [true, false]) {
+    const c = newCar(world);
+    for (let i = 0; i < 30 * 120 && c.forwardSpeed < kmh / 3.6; i++) c.step(DT, ctl({ throttle: 1 }), world);
+    let s = 0, beta = 0, peak = 0; const yaw = [];
+    for (let i = 0; i < 4 * 120; i++) {
+      s = Math.min(1, s + DT / 0.2);
+      c.step(DT, ctl({ steer: -s, throttle: hold ? Math.max(0, Math.min(1, (kmh / 3.6 - c.forwardSpeed) * 0.4)) : 0 }), world);
+      const q = c.quaternion, rx = 1 - 2 * (q.y * q.y + q.z * q.z), rz = 2 * (q.x * q.z - q.w * q.y);
+      beta = Math.max(beta, Math.abs(Math.atan2(c.velocity.x * rx + c.velocity.z * rz, Math.max(1, Math.abs(c.forwardSpeed)))));
+      peak = Math.max(peak, c.angularVelocity.y); yaw.push(c.angularVelocity.y);
+    }
+    check(`key held 4 s at ${kmh} km/h, throttle ${hold ? 'held' : 'lifted'}: max sideslip (no spin)`, beta * 180 / Math.PI, 0, 15, 'deg');
+    if (hold && kmh === 140) check('turn-in at 140 km/h: peak / settled yaw rate (no dart)', peak / (yaw.slice(-120).reduce((a, b) => a + b, 0) / 120), 1, 1.7);
+  }
+}
+{
+  const c = newCar(world);
+  for (let i = 0; i < 30 * 120 && c.forwardSpeed < 100 / 3.6; i++) c.step(DT, ctl({ throttle: 1 }), world);
+  c.step(DT, ctl({ steer: 1 }), world);
+  check('full lock at 100 km/h', c.steerLimit * 180 / Math.PI, 2.5, 4.5, 'deg');
+}
+// 11. the gearbox: a 100 km/h cruise in top gear at low revs
+{
+  const c = newCar(world), gb = new Gearbox(GEARBOX);
+  for (let i = 0; i < 40 * 120; i++) {
+    const thr = i < 8 * 120 ? 1 : Math.max(0, Math.min(1, 0.2 + (100 / 3.6 - c.forwardSpeed) * 0.3));
+    c.step(DT, ctl({ throttle: thr * (1 - gb.cut) }), world); gb.update(DT, c, thr);
+  }
+  check('cruise 100 km/h: top gear', gb.gear, GEARBOX.ratios.length, GEARBOX.ratios.length);
+  check('cruise 100 km/h: revs', gb.rpm, 1500, 2200, 'rpm');
 }
 
 console.log('Miami drive hero car (samples/miami-drive/spec.js)');

@@ -267,7 +267,8 @@ export function loopify(x, sr, fade = 0.25) {
 
 // ------------------------------------------------------------------------------------------------- measurement
 
-function fft(re, im) { // in place, radix 2
+/** In-place radix-2 FFT of re / im (length a power of two). @param {Float64Array} re @param {Float64Array} im */
+export function fft(re, im) { // in place, radix 2
   const n = re.length;
   for (let i = 1, j = 0; i < n; i++) {
     let bit = n >> 1;

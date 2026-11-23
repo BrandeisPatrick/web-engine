@@ -257,14 +257,15 @@ rig.setTarget(body, () => state);
 ```
 
 The loop (`smooth = new PoseInterpolator(car)`; `reset()` puts the car back on the line, snaps `smooth` and the rig
-and clears the tyre marks; `sfx` is the SoundBank in "Car sounds"). `rig.addTrauma(x)` shakes any rig; place the body
+and clears the tyre marks; `sfx` is the SoundBank and `gearbox` the Gearbox in "Car sounds", whose `cut` is the short
+torque cut at an upshift). `rig.addTrauma(x)` shakes any rig; place the body
 before `visual.update`:
 
 <!-- from: samples/starter-drive/main.js#drive-input -->
 ```js
 earlyUpdate(dt) {
   input.update(dt, car); // with the car: steer comes out assisted (input.assist.enabled toggles it)
-  controls.throttle = input.throttle; controls.brake = input.brake; controls.steer = input.steer; controls.handbrake = input.handbrake;
+  controls.throttle = input.throttle * (1 - gearbox.cut); controls.brake = input.brake; controls.steer = input.steer; controls.handbrake = input.handbrake;
   if (input.reset) reset(); // back to the start, marks cleared
   if (input.toggleCamera) rig.cycleMode();
 },
@@ -642,19 +643,25 @@ engine.addSystem({
 }, 'car-sound');
 ```
 
-The Miami demo's straight-six is its own synth (`samples/miami-drive/audio.js`), not the engine's.
+That is the electric car (the Roadster's voice). For a combustion car use `EngineAudio` (below).
 
 ## Car sounds
 
-The starter's car: `VehicleAudio` for the motor (with `wind: false, tyres: false`, since the kit's loops do those) and
-three `SoundBank` loops whose gain and rate follow the car. The impact thud is in "Drive a car" (`drive-step`).
+The starter's car: a `Gearbox` (physics) turns the car's wheel speed and the throttle into revs, a gear and shifts (an
+automatic: early upshifts at part throttle, a torque cut at each upshift that `controls.throttle` takes off, so the
+driver feels the shift), and `EngineAudio` (audio) plays a four-cylinder from it: a pulse train at the firing
+frequency with a little irregularity, exhaust rasp and intake noise by load, the revs dropping at each upshift, pops on
+a lift at high revs. Three `SoundBank` loops follow the car for road roar, wind and squeal. The impact thud is in
+"Drive a car" (`drive-step`). The Miami demo drives the same `EngineAudio` as a V8 (`cylinders: 8`, its own gear set:
+`samples/miami-drive/spec.js` `GEARBOX`).
 
 <!-- from: samples/starter-drive/main.js#drive-sound -->
 ```js
-// ---- sound: the safe mixer (compressor + soft clipper), the motor (VehicleAudio), road roar, wind and squeal loops
+// ---- sound: the safe mixer (compressor + soft clipper), the engine (a four-cylinder whose revs, gear and shifts come
+// from a Gearbox: a five-speed automatic for this car), road roar, wind and squeal loops
 const audio = new AudioBus({ master: 'safe', volume: 0.7 });
-audio.setBusVolume('engine', 0.35);
-const motor = new VehicleAudio({ bus: audio, ambience: false, topSpeed: 200 / 3.6, wind: false, tyres: false });
+audio.setBusVolume('engine', 0.5);
+const gearbox = new Gearbox(), motor = new EngineAudio({ bus: audio, cylinders: 4, idle: 850, redline: 6500 });
 const sfx = new SoundBank(audio, { listener: camera }); // the named sounds (SOUND_PRESETS); loops start with the bus
 const roar = sfx.loop('road.roar', { gain: 0 }), wind = sfx.loop('wind.rush', { gain: 0 }), squeal = sfx.loop('tyre.squeal', { gain: 0 });
 ```
@@ -663,14 +670,18 @@ Per frame:
 
 <!-- from: samples/starter-drive/main.js#drive-sound-update -->
 ```js
-// car sounds from the car's state: motor by speed and throttle, roar and wind by speed, squeal by wheel slip
+// car sounds from the car's state: the engine by the gearbox's revs and load, roar and wind by speed, squeal by slip
 const v = car.speed, w = Math.min(v / 55, 1), slide = Math.min(Math.max((car.wheelSlip - 0.15) * 1.4, 0), 1) * Math.min(v / 6, 1);
-motor.update(dt, { speedKmh: v * 3.6, rpmLike: controls.throttle, grounded: car.grounded });
+motor.update(dt, gearbox.update(dt, car, input.throttle));
 roar.setGain(car.grounded ? 0.22 * Math.min(v / 30, 1) : 0).setRate(0.8 + 0.6 * Math.min(v / 50, 1));
 wind.setGain(0.3 * w * w).setRate(0.9 + 0.3 * w);
 squeal.setGain(car.grounded ? 0.22 * slide : 0).setRate(0.96 + 0.08 * slide);
 sfx.update(dt);
 ```
+
+A different car: `new Gearbox({ ratios, idle, redline, upshift })` (ratios in rpm per m/s of wheel speed, first gear
+first) and `new EngineAudio({ cylinders, idle, redline })`; `engine.pop(x)` adds an exhaust pop (a shift, a backfire).
+`gearbox.rpm`, `gearbox.gear` (-1 reverse) feed a rev counter and a gear readout.
 
 These gains are the ones `samples/sound-check/`'s measured ten-second scene uses, so the measured mix is this mix.
 

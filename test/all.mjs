@@ -54,6 +54,8 @@ const SUITES = [
   { file: 'character-input.mjs' },
   // drive feel: steering assist with and without on ROAD_CAR_SPEC (lock, handbrake catch, slalom, turning circle), rumble values
   { file: 'steering-assist.mjs' },
+  // the Gearbox: shifts through the gears with a torque cut and a rev drop, cruise in top gear, braking down to first
+  { file: 'gearbox.mjs' },
   { file: 'anim.mjs' },
   { file: 'character-sim.mjs' },
   // dynamics (0.6.0): shapes -> broadphase -> narrowphase -> xpbd/joints -> world -> queries/bridge -> worker protocol
