@@ -79,6 +79,7 @@ export class EngineAudio {
   }
 
   _build(ctx) {
+    if (this._disposed) return; // disposed before the bus started: build nothing
     const n = this._n = {}, C = this.cylinders, r = rng(this.seed);
     const amp = [], lag = [];
     for (let k = 0; k < C; k++) { amp.push(C === 8 ? V8_BANKS[k] : 1 - 0.22 * r()); lag.push((r() - 0.5) * 0.06); }
@@ -155,8 +156,9 @@ export class EngineAudio {
     playNoiseBurst(ctx, out, this._white, { peak: 0.9 * s, attack: 0.002, decay: 0.035 + 0.05 * s, filter: { type: 'lowpass', frequency: 1300 + 900 * s }, rate: 0.8 });
   }
 
-  /** Stop (and close the bus if the engine made it). */
+  /** Stop (and close the bus if the engine made it). Before the bus starts: the engine is never built. */
   dispose() {
+    this._disposed = true;
     if (this._ownBus) this.bus.dispose();
     else if (this._n) { for (const k of ['on', 'off', 'am', 'jit', 'raspSrc', 'intake']) this._n[k].stop(); this._n.out.disconnect(); }
     this._n = null;

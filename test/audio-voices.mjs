@@ -8,6 +8,7 @@ import { VoicePool } from '../src/audio/VoicePool.js';
 import { SoundBank, INERT_VOICE } from '../src/audio/SoundBank.js';
 import { AudioBus, SAFE_MASTER } from '../src/audio/AudioBus.js';
 import { Footsteps } from '../src/audio/Footsteps.js';
+import { EngineAudio } from '../src/audio/EngineAudio.js';
 
 let failures = 0;
 const results = [];
@@ -265,6 +266,10 @@ const reaches = (from, to) => { const seen = new Set(), st = [from]; while (st.l
     check('injected context: prepare() creates no other', made.length === n0);
     const bus6 = new AudioBus(); bus6.prepare(); bus6.dispose();
     check('dispose before start closes the prepared context', made.length === n0 + 1 && made[n0].state === 'closed' && bus6.ctx === null);
+    // EngineAudio disposed before the bus starts: the start builds no engine voice (no orphan left sounding)
+    const bus7 = new AudioBus({ context: new FakeContext({ offline: true }) }), eng = new EngineAudio({ bus: bus7 });
+    eng.dispose(); await bus7.start();
+    check('EngineAudio: dispose before start leaves nothing to build', eng._n === null && !bus7._onStart.length);
   } finally {
     if (prevWin === undefined) delete globalThis.window; else globalThis.window = prevWin;
   }
