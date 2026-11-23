@@ -10,7 +10,8 @@
 // (MapWorld traffic area / mix: cabs; it brakes for the player), haze and moonlit volumetrics, TAA, bloom and a night
 // grade + LUT (look.js); the JS heap trimmed after load (the engine's world.trimMemory, render/Memory.js).
 // Driving: VehicleController on the car's spec with the steering assist, a chase camera with the road feel, skid marks
-// and tyre smoke, the engine's car sounds, a speed readout, R puts the car back on the nearest street; the edge of the
+// and tyre smoke, each car's engine (EngineAudio on its Gearbox) with road, wind and tyre sounds and the city's hum, a
+// speed readout, R puts the car back on the nearest street; the edge of the
 // baked map is a wall (the city past it is a low context ring). GameShell: loading bar, start card with the car choice,
 // pause (Esc / P) with volume, assist, the car and the quality tiers.
 // Buildings up close: CC0 wall scans with their relief, grime and curtains read in the dusk light (walls.js), shop fronts,
@@ -24,12 +25,12 @@
 // grade). window.__nyc for the console.
 import * as THREE from 'three';
 import { Engine, Assets, PoseInterpolator, createBenchHarness, readBenchParams, resolveQuality } from '@vibe/engine/core';
-import { VehicleController } from '@vibe/engine/physics';
+import { VehicleController, Gearbox } from '@vibe/engine/physics';
 import { PostFX, registerRenderLoaders, TextureSets, ClusteredLights, installClusteredChunks, applyPatches, weathering, TyreFx } from '@vibe/engine/render';
 import { VehicleInput, VEHICLE_ACTIONS, PAD_BUTTONS as B } from '@vibe/engine/input';
 import { ChaseRig } from '@vibe/engine/camera';
 import { GameShell } from '@vibe/engine/ui';
-import { AudioBus, SoundBank, VehicleAudio } from '@vibe/engine/audio';
+import { AudioBus, SoundBank, EngineAudio, CityAmbience } from '@vibe/engine/audio';
 import { MapWorld, roadStyle, applyFoliageLightingTo, createCarVisual } from '@vibe/engine/world';
 import { makeStreetsWet, makeCityEnv } from './wet.js';
 import { buildSignage, updateSignage, quietBuildingSigns } from './signage.js';
@@ -403,12 +404,13 @@ async function boot() {
   // ---------------------------------------------------------------- the car (cars.js), swapped from the cards
   // drive: what the systems, ExtraLights and the bench read; setCar() replaces its parts (a new body, controller and
   // interpolator at the old car's place, standing still)
-  const drive = { id: '', def: null, visual: null, car: null, spec: null, smooth: null };
+  const drive = { id: '', def: null, visual: null, car: null, spec: null, smooth: null, gearbox: null };
   const state = { velocity: null, speedKmh: 0, grounded: true, wheelSlip: 0, accel: null }; // what the chase rig reads
   const placeCar = (x, z, h) => {
     drive.car.reset(new THREE.Vector3(x, world.getGroundHeight(x, z), z), h, physics);
     drive.smooth.snap(); drive.smooth.apply(drive.visual.root, 1);
     state.velocity = drive.car.velocity; state.accel = drive.car.localAccel;
+    if (drive.gearbox) drive.gearbox.reset();
   };
   const setCar = (id) => {
     const def = carById(id);
@@ -424,7 +426,8 @@ async function boot() {
     placeCar(at.x, at.z, at.h);
     if (rig) { rig.setTarget(visual.root, () => state); rig.snap(); }
     if (tyres) tyres.clear();
-    if (motor) motor.topSpeed = def.tune.vMax || drive.spec.vMax;
+    drive.gearbox = new Gearbox(def.gearbox);
+    if (audio && audio.ctx) makeMotor(); // (before the start click the bus builds it: audio.onStart below)
   };
   // headlights: the desktop tier writes two clustered spots and the tail lamps (lights.js); mobile has one real spot
   // light between the lamps (docs/HOWTO.md "Headlights"), always in the scene (a light that comes and goes changes
@@ -449,9 +452,15 @@ async function boot() {
   // trunks and the traffic only block the view close to the camera
   const rig = new ChaseRig(camera, canvas, { physics, canopyFromCollider: null, thinKinds: [2, 3, 'vehicle'], flightFraming: false, feel: 'road' });
   const tyres = new TyreFx({ scene, atmosphere: world.atmo, lift: 0.04 });
+  // the car's engine (EngineAudio: each car's own cylinders, its revs, load and shifts from its Gearbox), road roar, wind
+  // and squeal loops, and the city's hum (CityAmbience, no gulls: no water near Midtown)
   const audio = new AudioBus({ master: 'safe', volume: 0.7 });
-  audio.setBusVolume('engine', 0.35);
-  const motor = new VehicleAudio({ bus: audio, ambience: true, topSpeed: 200 / 3.6, wind: false, tyres: false }); // ambience: the city's hum
+  audio.setBusVolume('engine', 0.5);
+  let motor = null; // made once the bus has started (an engine made before would play on after a car change)
+  const makeMotor = () => { if (motor) motor.dispose(); const d = drive.def; motor = new EngineAudio({ bus: audio, ...d.engine, idle: d.gearbox.idle, redline: d.gearbox.redline }); };
+  audio.onStart(makeMotor);
+  const city = new CityAmbience(audio, { gulls: false, level: 0.8 });
+  city.setEnvironment({ darkness: world.atmo.darkness });
   const sfx = new SoundBank(audio, { listener: camera });
   const roar = sfx.loop('road.roar', { gain: 0 }), wind = sfx.loop('wind.rush', { gain: 0 }), squeal = sfx.loop('tyre.squeal', { gain: 0 });
   shell.use({ engine, audio, inputs: [input] });
@@ -501,6 +510,7 @@ async function boot() {
 
   // ---------------------------------------------------------------- systems (phase order = registration order)
   let hitCool = 0, edgeT = 0;
+  const controls = { throttle: 0, brake: 0, steer: 0, handbrake: false }; // what car.step() reads
   const carInfo = { x: 0, z: 0, fx: 0, fz: -1, hl: 2.4, hw: 0.95, speed: 0 }; // for the people (pedestrians.js)
   const _hp = new THREE.Vector3(), _ha = new THREE.Vector3();
   engine.addSystem({
@@ -513,7 +523,8 @@ async function boot() {
     fixedUpdate(dt) {
       const c = drive.car;
       drive.smooth.save();
-      c.step(dt, input, physics); // reads throttle, brake, steer, handbrake
+      controls.throttle = input.throttle * (1 - drive.gearbox.cut); controls.brake = input.brake; controls.steer = input.steer; controls.handbrake = input.handbrake;
+      c.step(dt, controls, physics); // the throttle less the gearbox's torque cut at an upshift
       hitCool -= dt; // a hit (car.impact, m/s into a wall, a pole or a car): a knock, a camera shake and a rumble
       if (c.impact > 3 && hitCool <= 0) {
         const k = Math.min(1, c.impact / 14);
@@ -542,7 +553,9 @@ async function boot() {
     lateUpdate(dt) {
       // car sounds from the car's state: motor by speed and throttle, roar and wind by speed, squeal by wheel slip
       const c = drive.car, v = c.speed, w = Math.min(v / 55, 1), slide = Math.min(Math.max((c.wheelSlip - 0.15) * 1.4, 0), 1) * Math.min(v / 6, 1);
-      motor.update(dt, { speedKmh: v * 3.6, rpmLike: input.throttle, grounded: c.grounded });
+      drive.gearbox.update(dt, c, input.throttle);
+      if (motor) motor.update(dt, drive.gearbox);
+      city.update(dt, { speedN: Math.min(v / 40, 1) });
       roar.setGain(c.grounded ? 0.22 * Math.min(v / 30, 1) : 0).setRate(0.8 + 0.6 * Math.min(v / 50, 1));
       wind.setGain(0.3 * w * w).setRate(0.9 + 0.3 * w);
       squeal.setGain(c.grounded ? 0.22 * slide : 0).setRate(0.96 + 0.08 * slide);

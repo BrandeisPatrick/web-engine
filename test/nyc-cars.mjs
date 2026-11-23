@@ -1,9 +1,9 @@
 // Headless checks for the Night NYC drive's cars (samples/nyc-night/cars.js) on the engine's VehicleController: per car
 // 0-100 km/h and top speed in its class, braking from 100 km/h, a city corner (a 25 m radius at 45 km/h, a junction
-// turn) held on the line, and the order slow to fast (the interceptor clearly quicker than the cab). Fixed 120 Hz
+// turn) held on the line, a steer key held at 60, 100 and 140 km/h without a spin, the gearbox (every gear used, a cruise in top gear), and the order slow to fast (the interceptor clearly quicker than the cab). Fixed 120 Hz
 // steps on a flat synthetic world, no randomness. Run: node test/nyc-cars.mjs
 import { Vector3 } from 'three';
-import { VehicleController } from '@vibe/engine/physics';
+import { VehicleController, Gearbox } from '@vibe/engine/physics';
 import { CARS, carSpec } from '../samples/nyc-night/cars.js';
 
 const DT = 1 / 120;
@@ -64,6 +64,29 @@ for (const car of CARS) {
     }
     check(`${car.id}: 25 m corner at 45 km/h, max off the line`, maxErr, 0, 1, 'm');
     check(`${car.id}: 25 m corner at 45 km/h, slowest speed`, vMin, 40, 50, 'km/h');
+  }
+  { // the gearbox: a flat-out run uses every gear, a 100 km/h cruise sits in top gear at low revs
+    const c = newCar(spec), gb = new Gearbox(car.gearbox), n = car.gearbox.ratios.length;
+    let top = 0;
+    for (let i = 0; i < 40 * 120; i++) { c.step(DT, ctl({ throttle: 1 - gb.cut }), world); gb.update(DT, c, 1); top = Math.max(top, gb.gear); }
+    check(`${car.id}: gears used flat out (of ${n})`, top, n, n);
+    const d = newCar(spec), gd = new Gearbox(car.gearbox);
+    for (let i = 0; i < 30 * 120; i++) { const t = Math.max(0, Math.min(1, (100 / 3.6 - d.forwardSpeed) * 0.3)); d.step(DT, ctl({ throttle: t }), world); gd.update(DT, d, t); }
+    check(`${car.id}: 100 km/h cruise: gear / revs`, gd.gear === n ? gd.rpm : NaN, 1500, 3600, 'rpm');
+  }
+  // a steer key held for 4 s at 60, 100 and 140 km/h (the 0.2 s key ramp; the throttle held to the speed or lifted):
+  // the car turns and never spins (the slide angle stays small)
+  for (const kmh of [60, 100, 140]) for (const hold of [true, false]) {
+    const c = newCar(spec);
+    for (let i = 0; i < 30 * 120 && c.forwardSpeed < kmh / 3.6; i++) c.step(DT, ctl({ throttle: 1 }), world);
+    let s = 0, beta = 0;
+    for (let i = 0; i < 4 * 120; i++) {
+      s = Math.min(1, s + DT / 0.2);
+      c.step(DT, ctl({ steer: -s, throttle: hold ? Math.max(0, Math.min(1, (kmh / 3.6 - c.forwardSpeed) * 0.4)) : 0 }), world);
+      const q = c.quaternion, rx = 1 - 2 * (q.y * q.y + q.z * q.z), rz = 2 * (q.x * q.z - q.w * q.y);
+      beta = Math.max(beta, Math.abs(Math.atan2(c.velocity.x * rx + c.velocity.z * rz, Math.max(1, Math.abs(c.forwardSpeed)))));
+    }
+    check(`${car.id}: key held 4 s at ${kmh} km/h, throttle ${hold ? 'held' : 'lifted'}: max slide`, beta * 180 / Math.PI, 0, 15, 'deg');
   }
 }
 // slow to fast
