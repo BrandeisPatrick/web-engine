@@ -422,13 +422,13 @@ async function boot() {
       }
     },
   }, 'camera');
-  const aState = { rpm: 900, throttle: 0, speed: 0, slip: 0, grounded: true, surface: 'asphalt', beach: 0, gear: 1 };
+  const aState = { rpm: 750, load: 0, speed: 0, slip: 0, grounded: true, surface: 'asphalt', beach: 0 };
   let haptT = 0;
   engine.addSystem({
     lateUpdate(dt) {
       const vc = car.vc;
-      aState.rpm = car.rpm; aState.throttle = car.controls.throttle; aState.speed = vc.speed; aState.slip = vc.wheelSlip;
-      aState.grounded = vc.grounded; aState.surface = vc.wheels[2].tag || 'asphalt'; aState.gear = car.gear;
+      aState.rpm = car.rpm; aState.load = car.gearbox.load; aState.speed = vc.speed; aState.slip = vc.wheelSlip;
+      aState.grounded = vc.grounded; aState.surface = vc.wheels[2].tag || 'asphalt';
       aState.beach = plugin.beachRows ? beachProximity(plugin, car.object3d.position) : 0;
       audio.update(dt, aState);
       // slip rumble on the pad (light, continuous while sliding)

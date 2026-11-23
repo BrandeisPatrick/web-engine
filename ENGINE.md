@@ -22,12 +22,12 @@ Order: core < physics < render < anim / input / camera / audio / ui < world. Low
 | Layer | Import | Main exports |
 |---|---|---|
 | core | `@vibe/engine/core` | `Engine` (renderer, scene, camera, fixed-step loop, systems, resize, adaptive resolution: internal scale, then pixel ratio), `shadowPixelStore`, `Profiler`, `ProfilerOverlay`, `Events`, `Clock`, `Entity` / `EntitySystem`, `Assets`, `MathDet` and the `det*` functions, `PoseInterpolator` (render interpolation), quality tiers (`resolveQuality`, `QUALITY_TIERS`, `defineTier`), the bench harness (`createBenchHarness`, `readBenchParams`) |
-| physics | `@vibe/engine/physics` | `PhysicsWorld` (query hub), `VehicleController` + `ROAD_CAR_SPEC` / `ROADSTER_SPEC`, `CharacterController`, `DynamicsWorld` (XPBD rigid bodies, joints, particles), `Cloth`, `Rope`, `SoftBody`, `Buoyancy`, `FracturedBody`, `DynamicsClient` (worker), the shape builders (`boxShape`, `sphereShape`, `capsuleShape`, ...) |
+| physics | `@vibe/engine/physics` | `PhysicsWorld` (query hub), `VehicleController` + `ROAD_CAR_SPEC` / `ROADSTER_SPEC`, `Gearbox` (revs, gear, shifts, torque cut), `CharacterController`, `DynamicsWorld` (XPBD rigid bodies, joints, particles), `Cloth`, `Rope`, `SoftBody`, `Buoyancy`, `FracturedBody`, `DynamicsClient` (worker), the shape builders (`boxShape`, `sphereShape`, `capsuleShape`, ...) |
 | render | `@vibe/engine/render` | `Atmosphere`, `PostFX` and its passes, `GBuffer`, `ClusteredLights`, `NearestLights`, `GpuParticleSystem`, `ParticleSystem`, `TextureSets` / `loadTextureSet`, `registerRenderLoaders`, `InstancedPool`, `LODGroup`, impostors (`bakeImpostors`, `ImpostorBatch`), `DecalTrail`, `TyreFx`, `ChunkCuller`, `PhysicsDebug`, `ClothMesh` / `RopeMesh` / `SoftBodyMesh`, `FractureMesh`, LUT helpers |
 | anim | `@vibe/engine/anim` | `AnimationController`, `TwoBoneIK`, `CCDIK`, `Ragdoll` |
 | input | `@vibe/engine/input` | `InputMap`, `CharacterInput`, `VehicleInput`, `SteeringAssist`, `VehicleHaptics`, `TouchControls`, `PointerLock`, `GamepadState`, the action presets (`CHARACTER_ACTIONS`, `VEHICLE_ACTIONS`) |
 | camera | `@vibe/engine/camera` | `CameraRig`, `CameraCollision`, `ChaseRig`, `OrbitRig`, `FreeFlyRig`, `ThirdPersonRig`, `FirstPersonRig`, `ROAD_FEEL`, `LandingSpring`, `SprintFov` |
-| audio | `@vibe/engine/audio` | `AudioBus`, the synth voices (`playTone`, `playNoiseBurst`, `OscStack`, `NoiseVoice`, ...), `PositionalAudio`, `SamplePlayer`, `registerAudioLoader`, `VehicleAudio`, `CityAmbience`, the sound kit: `SoundBank` (named sounds, voice policy), `SOUND_PRESETS` (18), `Footsteps`, `VoicePool`, `audioSelfTest` / `analyseMix` / `MIX_LIMITS`, `encodeWav`, the `dsp` namespace; `AudioBus({ master: 'safe' })`, `SAFE_MASTER` |
+| audio | `@vibe/engine/audio` | `AudioBus`, the synth voices (`playTone`, `playNoiseBurst`, `OscStack`, `NoiseVoice`, ...), `PositionalAudio`, `SamplePlayer`, `registerAudioLoader`, `EngineAudio` (a combustion engine), `VehicleAudio` (an electric car with thrusters), `CityAmbience`, the sound kit: `SoundBank` (named sounds, voice policy), `SOUND_PRESETS` (18), `Footsteps`, `VoicePool`, `audioSelfTest` / `analyseMix` / `MIX_LIMITS`, `encodeWav`, the `dsp` namespace; `AudioBus({ master: 'safe' })`, `SAFE_MASTER` |
 | ui | `@vibe/engine/ui` | `UILayer`, `Panel`, `Readout`, `Gauge`, `Bar`, `Badge`, `Segments`, `Minimap`, `Flash`, `GMeter`, `AttitudeIndicator`, `HelpOverlay`, `LoadingScreen`, `QualityMenu`, `GameShell`, `createSettings`, the theme (`setTheme`, `theme`) |
 | world | `@vibe/engine/world` | `MapWorld` and its systems (terrain, roads, buildings, props, vegetation, water, traffic), `TileStreamer`, `createCarVisual` / `carSpecFor`, `countryRoad` / `parkCorner` / `groundCover` (Scenery); `NearestLights` is re-exported from render |
 
@@ -379,6 +379,11 @@ checked by `test/miami-car.mjs`. Per fixed step: `vc.step(dt, controls, world)` 
 values as fields and the game copies them in once per frame (`samples/starter-drive/main.js`); `vc.reset(position, heading,
 world)` places it; `vc.hold = true` freezes it on the ground (countdowns) and `reset()` leaves it set.
 `PhysicsWorld.setSurfaceProvider(fn)` / `surfaceAt(x, z, out)` give per-wheel `{ mu, crr, tag }` multipliers.
+Balance at the limit: the tyre force is linear in the load, so with equal grip front and rear a car is neutral at the
+limit and a held steer key can spin it; `rearGrip` (default 1) scales the rear's grip, and 1.1 makes the nose run wide
+first while throttle, a lift or the handbrake still bring the tail out (the Miami car). Steering lock at speed is
+`steerBase + steerGain * atan(L mu g / u^2) + steerSlipGain * |sideslip|`: `steerBase` is the floor at high speed (the
+Miami car 0.02 rad: about the grip limit, so full key does not dart), the slip term adds lock while sliding.
 Tyre outputs, written by each grounded step and 0 in the air (they change nothing in the simulation): `steerLimit`
 (rad, the speed-sensitive lock the step allowed: `|steerAngle|` at full input), `slipFront` / `slipRear` (rad, the
 axle's signed slip angle), `slipPeakFront` / `slipPeakRear` (rad, the slip angle of peak grip, `tan(pi / 2C) / B`,
@@ -723,9 +728,23 @@ cost are in [the design notes](docs/DESIGN-NOTES.md#textures-pbr-sets-ktx2).
 - Synth voices (`src/audio/Synth.js`): `playTone(bus.ctx, bus.bus('ui'), { pitch, peak, decay, ... })` for one-shot
   blips, `playNoiseBurst`, `OscStack`, `NoiseVoice`, `LFO`. `PositionalAudio` attaches emitters to Object3Ds;
   `SamplePlayer` plays decoded files (`registerAudioLoader` adds an `audio` loader to `Assets`).
-- `VehicleAudio` (`src/audio/VehicleAudio.js`) is an electric motor plus thruster synth: `audio.start()` in a gesture,
-  then `audio.update(dt, state)` per frame with `{ speedKmh, rpmLike, thrust, grounded, mode, wheelSlip, ... }`.
-  `CityAmbience` is a wind / city / gulls bed. The Miami V8 sound is the demo's own (`samples/miami-drive/audio.js`).
+- `EngineAudio` (`src/audio/EngineAudio.js`) is a combustion engine: `new EngineAudio({ bus, cylinders, idle, redline })`,
+  per frame `engine.update(dt, { rpm, load })` (a `Gearbox` has both), `engine.pop(x)` for an exhaust pop. One
+  PeriodicWave per voice holds a whole four-stroke cycle (frequency rpm / 120) with one exhaust pulse per cylinder, the
+  pulses a little uneven (a crossplane V8's bank pattern for `cylinders: 8`, a seeded scatter otherwise), so the firing
+  harmonics carry the half orders of a real engine; a sharp wave on load and a soft one off it cross-fade; a slow
+  random pitch wobble (larger at idle); noise multiplied by the pulse wave for the exhaust rasp; intake noise on load; a
+  soft clip, a low-pass that opens with revs and load, two fixed pipe resonances; pops off the throttle at high revs.
+  The revs, the gear and the shifts come from `Gearbox` (`src/physics/Gearbox.js`): `new Gearbox({ ratios, idle,
+  redline, upshift, cruise, downshift, kickdown, launch })` (ratios in rpm per m/s of wheel speed; the defaults are a
+  five-speed hatchback), per frame `gb.update(dt, car, throttle)`; an automatic that shifts up early at part throttle,
+  down on braking, never hunts, slips first gear at a launch, and cuts the torque for 0.12 s at an upshift under load
+  (`gb.cut`: take it off the throttle the car steps with). Both starters' car and the Miami V8 use them
+  (`test/gearbox.mjs`; `test/browser/sound-check.mjs` checks the firing harmonics and the pitch drop at each upshift).
+- `VehicleAudio` (`src/audio/VehicleAudio.js`) is an electric motor plus thruster synth (the Roadster's): `audio.start()`
+  in a gesture, then `audio.update(dt, state)` per frame with `{ speedKmh, rpmLike, thrust, grounded, mode, wheelSlip,
+  ... }`. Its pitch follows the speed, with no gears and no idle (silent at a standstill). `CityAmbience` is a wind /
+  city / gulls bed.
 - The sound kit: `new AudioBus({ master: 'safe' })` puts a compressor, a soft clipper (linear to 0.6, then
   0.6 + 0.4 tanh) and the volume after the buses (`SAFE_MASTER`), and suspends the context while the tab is hidden;
   the default chain is unchanged. Any bus: `setPaused(on, fade)` fades every bus but `ui`, `setMuffle(0..1)` low-passes

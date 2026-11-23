@@ -8,12 +8,12 @@
 // The `// #region howto:` markers are for docs/HOWTO.md, which copies those blocks (test/docs.mjs checks the copies).
 import * as THREE from 'three';
 import { Engine, PoseInterpolator, resolveQuality, createBenchHarness } from '@vibe/engine/core';
-import { PhysicsWorld, VehicleController } from '@vibe/engine/physics';
+import { PhysicsWorld, VehicleController, Gearbox } from '@vibe/engine/physics';
 import { Atmosphere, PostFX, TyreFx, loadTextureManifest, loadTextureSet, applyPatches, weathering } from '@vibe/engine/render';
 import { VehicleInput } from '@vibe/engine/input';
 import { ChaseRig } from '@vibe/engine/camera';
 import { createCarVisual, countryRoad, groundCover } from '@vibe/engine/world';
-import { AudioBus, SoundBank, VehicleAudio } from '@vibe/engine/audio';
+import { AudioBus, SoundBank, EngineAudio } from '@vibe/engine/audio';
 import { UILayer, Panel, Readout, GameShell } from '@vibe/engine/ui';
 
 const BASE = import.meta.env.BASE_URL; // asset URLs go through it, so the page also works under a sub-path
@@ -118,10 +118,11 @@ async function boot() {
   // #endregion howto:drive-controls
 
   // #region howto:drive-sound
-  // ---- sound: the safe mixer (compressor + soft clipper), the motor (VehicleAudio), road roar, wind and squeal loops
+  // ---- sound: the safe mixer (compressor + soft clipper), the engine (a four-cylinder whose revs, gear and shifts come
+  // from a Gearbox: a five-speed automatic for this car), road roar, wind and squeal loops
   const audio = new AudioBus({ master: 'safe', volume: 0.7 });
-  audio.setBusVolume('engine', 0.35);
-  const motor = new VehicleAudio({ bus: audio, ambience: false, topSpeed: 200 / 3.6, wind: false, tyres: false });
+  audio.setBusVolume('engine', 0.5);
+  const gearbox = new Gearbox(), motor = new EngineAudio({ bus: audio, cylinders: 4, idle: 850, redline: 6500 });
   const sfx = new SoundBank(audio, { listener: camera }); // the named sounds (SOUND_PRESETS); loops start with the bus
   const roar = sfx.loop('road.roar', { gain: 0 }), wind = sfx.loop('wind.rush', { gain: 0 }), squeal = sfx.loop('tyre.squeal', { gain: 0 });
   // #endregion howto:drive-sound
@@ -137,12 +138,12 @@ async function boot() {
 
   // ---- the game loop: input per frame, simulation per fixed step, drawing per frame
   let hitCool = 0;
-  const reset = () => { car.reset(START, 0, physics); smooth.snap(); rig.snap(); tyres.clear(); };
+  const reset = () => { car.reset(START, 0, physics); smooth.snap(); rig.snap(); tyres.clear(); gearbox.reset(); };
   engine.addSystem({
     // #region howto:drive-input
     earlyUpdate(dt) {
       input.update(dt, car); // with the car: steer comes out assisted (input.assist.enabled toggles it)
-      controls.throttle = input.throttle; controls.brake = input.brake; controls.steer = input.steer; controls.handbrake = input.handbrake;
+      controls.throttle = input.throttle * (1 - gearbox.cut); controls.brake = input.brake; controls.steer = input.steer; controls.handbrake = input.handbrake;
       if (input.reset) reset(); // back to the start, marks cleared
       if (input.toggleCamera) rig.cycleMode();
     },
@@ -168,9 +169,9 @@ async function boot() {
     // #endregion howto:drive-draw
     lateUpdate(dt) {
       // #region howto:drive-sound-update
-      // car sounds from the car's state: motor by speed and throttle, roar and wind by speed, squeal by wheel slip
+      // car sounds from the car's state: the engine by the gearbox's revs and load, roar and wind by speed, squeal by slip
       const v = car.speed, w = Math.min(v / 55, 1), slide = Math.min(Math.max((car.wheelSlip - 0.15) * 1.4, 0), 1) * Math.min(v / 6, 1);
-      motor.update(dt, { speedKmh: v * 3.6, rpmLike: controls.throttle, grounded: car.grounded });
+      motor.update(dt, gearbox.update(dt, car, input.throttle));
       roar.setGain(car.grounded ? 0.22 * Math.min(v / 30, 1) : 0).setRate(0.8 + 0.6 * Math.min(v / 50, 1));
       wind.setGain(0.3 * w * w).setRate(0.9 + 0.3 * w);
       squeal.setGain(car.grounded ? 0.22 * slide : 0).setRate(0.96 + 0.08 * slide);

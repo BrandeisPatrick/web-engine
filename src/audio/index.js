@@ -5,8 +5,10 @@ export { noiseBuffer, loopSource, makeFilter, makeGain, makeShaper, softClipCurv
 export { PositionalAudio, AudioListener3D, Emitter as AudioEmitter } from './Positional.js';
 export { CityAmbience } from './Ambience.js';
 export { VehicleAudio } from './VehicleAudio.js';
+export { EngineAudio, engineCycle } from './EngineAudio.js';
 export { registerAudioLoader, SamplePlayer } from './Samples.js';
 /** @typedef {import('./VehicleAudio.js').VehicleAudioState} VehicleAudioState  what VehicleAudio.update reads */
+/** @typedef {import('./EngineAudio.js').EngineAudioState} EngineAudioState  what EngineAudio.update reads */
 export { SoundBank, INERT_VOICE } from './SoundBank.js';
 export { SOUND_PRESETS, PRESET_SAMPLE_RATE, renderSound, renderPreset } from './presets.js';
 export { VoicePool } from './VoicePool.js';

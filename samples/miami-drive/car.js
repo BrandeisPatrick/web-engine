@@ -3,13 +3,14 @@
 // the controller's sprung body), lamps (head / tail / brake / reverse / indicators on handbrake), real light on the
 // road (desktop: clustered spot + point lights through the world's ExtraLights; phones: one SpotLight and additive
 // light pools on the asphalt), a contact shadow, skid marks and tyre smoke from slip, sparks and a camera kick on hard
-// impacts, exhaust puffs and backfire pops on upshifts, and a six-speed gearbox for the HUD and the engine sound.
+// impacts, exhaust puffs and backfire pops on upshifts, and the engine's Gearbox (spec.js GEARBOX) for the HUD, the
+// engine sound and a short torque cut at each upshift.
 // Allocation-free per frame and per step.
 //
 //   const car = new HeroCar({ scene, physics, model, lights, lod, effects });
 //   fixedUpdate: car.fixedUpdate(dt) · update: car.update(dt, alpha, darkness) · car.reset(x, z, heading)
 import * as THREE from 'three';
-import { VehicleController, DecalTrail, ParticleSystem, clusteredUniforms } from '@vibe/engine';
+import { VehicleController, Gearbox, DecalTrail, ParticleSystem, clusteredUniforms } from '@vibe/engine';
 import { CAR_SPEC, GEARBOX } from './spec.js';
 import { makeCarEnvironment } from './car-model.js';
 
@@ -39,6 +40,7 @@ export class HeroCar {
     this.model = o.model;
     this.lights = o.lights || null;
     this.controls = { throttle: 0, brake: 0, steer: 0, handbrake: false, thrust: 0, pitch: 0, yaw: 0, boost: false };
+    this._stepCtl = { ...this.controls }; // what the step gets: the controls less the gearbox's torque cut
     this.prevPos = new THREE.Vector3(); this.prevQuat = new THREE.Quaternion();
     const root = this.object3d = new THREE.Group(); root.name = 'heroCar';
     root.add(this.model.root);
@@ -105,7 +107,8 @@ export class HeroCar {
     this._smokeAcc = new Float32Array(4); this._exAcc = 0;
     if (o.postfx) { root.traverse((m) => { if (m.isMesh) o.postfx.track(m); }); }
     // outputs for the HUD / audio / camera
-    this.gear = 1; this.rpm = GEARBOX.idle; this._shiftT = 0; this.shifted = 0;
+    this.gearbox = new Gearbox(GEARBOX);
+    this.gear = 1; this.rpm = GEARBOX.idle; this.shifted = 0;
     this.impact = 0; this.landing = 0; this.events = { impact: 0, landing: 0, scrape: 0 };
     this.state = { velocity: this.vc.velocity, speedKmh: 0, mode: 'ground', thrust: 0, gForce: 1, grounded: true, wheelSlip: 0 };
     this.headingDeg = 0; this.lightsOn = 1; this.brakeLight = 0; this.reverse = 0; this.hazard = 0; this._t = 0;
@@ -119,6 +122,7 @@ export class HeroCar {
     this.prevPos.copy(vc.position); this.prevQuat.copy(vc.quaternion);
     this.object3d.position.copy(vc.position); this.object3d.quaternion.copy(vc.quaternion);
     for (let i = 0; i < 4; i++) { this.skids.end(i); this.droop[i] = 0; }
+    this.gearbox.reset();
     this.object3d.updateMatrixWorld(true);
   }
 
@@ -133,7 +137,9 @@ export class HeroCar {
   fixedUpdate(dt) {
     const vc = this.vc;
     this.prevPos.copy(vc.position); this.prevQuat.copy(vc.quaternion);
-    vc.step(dt, this.controls, this.physics);
+    const c = Object.assign(this._stepCtl, this.controls);
+    c.throttle *= 1 - this.gearbox.cut;
+    vc.step(dt, c, this.physics);
     if (vc.impact > 0) this.events.impact = Math.max(this.events.impact, vc.impact);
     if (vc.landedThisStep) this.events.landing = Math.max(this.events.landing, vc.landingImpact);
     if (vc.bottomed) this.events.scrape = Math.max(this.events.scrape, vc.speed);
@@ -372,24 +378,9 @@ export class HeroCar {
   }
 
   _gearbox(dt) {
-    const G = GEARBOX, v = Math.abs(this.vc.wheelSpeed), thr = this.controls.throttle;
-    this._shiftT = Math.max(0, this._shiftT - dt);
-    if (this.vc.reversing) this.gear = -1;
-    else if (this.gear < 1) this.gear = 1;
-    if (this.gear >= 1) {
-      const raw = G.idle + v * G.ratios[this.gear];
-      if (raw > G.upshift && this.gear < G.ratios.length - 1 && thr > 0.2) { this.gear++; this._shiftT = 0.16; this.shifted = 1; }
-      else if (raw > G.redline && this.gear < G.ratios.length - 1) { this.gear++; this._shiftT = 0.16; }
-      else if (raw < G.downshift && this.gear > 1) { this.gear--; this._shiftT = 0.1; }
-    }
-    const ratio = this.gear < 0 ? G.ratios[1] : G.ratios[this.gear];
-    let rpm = G.idle + v * ratio;
-    // clutch slip at launch / wheelspin, free revving in the air
-    if (this.gear === 1 && thr > 0.1) rpm = Math.max(rpm, G.idle + thr * 3400);
-    if (!this.vc.grounded) rpm += thr * 2000;
-    rpm = Math.min(G.redline, Math.max(G.idle, rpm));
-    if (this._shiftT > 0) rpm *= 0.84;
-    this.rpm += (rpm - this.rpm) * Math.min(1, dt * 14);
+    const gb = this.gearbox.update(dt, this.vc, this.controls.throttle);
+    this.gear = gb.gear; this.rpm = gb.rpm;
+    if (gb.shifted > 0 && this.controls.throttle > 0.2) this.shifted = 1;
   }
 }
 
