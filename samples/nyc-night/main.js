@@ -427,7 +427,8 @@ async function boot() {
     if (rig) { rig.setTarget(visual.root, () => state); rig.snap(); }
     if (tyres) tyres.clear();
     drive.gearbox = new Gearbox(def.gearbox);
-    if (audio && audio.ctx) makeMotor(); // (before the start click the bus builds it: audio.onStart below)
+    if (motor) motor.dispose();
+    motor = new EngineAudio({ bus: audio, ...def.engine, idle: def.gearbox.idle, redline: def.gearbox.redline });
   };
   // headlights: the desktop tier writes two clustered spots and the tail lamps (lights.js); mobile has one real spot
   // light between the lamps (docs/HOWTO.md "Headlights"), always in the scene (a light that comes and goes changes
@@ -456,9 +457,7 @@ async function boot() {
   // and squeal loops, and the city's hum (CityAmbience, no gulls: no water near Midtown)
   const audio = new AudioBus({ master: 'safe', volume: 0.7 });
   audio.setBusVolume('engine', 0.5);
-  let motor = null; // made once the bus has started (an engine made before would play on after a car change)
-  const makeMotor = () => { if (motor) motor.dispose(); const d = drive.def; motor = new EngineAudio({ bus: audio, ...d.engine, idle: d.gearbox.idle, redline: d.gearbox.redline }); };
-  audio.onStart(makeMotor);
+  let motor = null; // the current car's engine voice (setCar makes it)
   const city = new CityAmbience(audio, { gulls: false, level: 0.8 });
   city.setEnvironment({ darkness: world.atmo.darkness });
   const sfx = new SoundBank(audio, { listener: camera });
@@ -914,7 +913,7 @@ async function boot() {
   const loadMs = Math.round(performance.now() - t0), warm = shell.warm || {};
   window.__nyc = {
     THREE, engine, world, postfx, atmo: world.atmo, clustered, extra, signs, steam, wet, drive, input, rig, hud, shell, harness, peds,
-    quality: Q, facadeGrade, walls, ground, kit, crowns, air, roofs, setCar, placeCar, resetCar, CAR_START, SQUARE, loadMs, loadWorldMs, geo, streetAt,
+    quality: Q, facadeGrade, walls, ground, kit, crowns, air, roofs, audio, motor: () => motor, setCar, placeCar, resetCar, CAR_START, SQUARE, loadMs, loadWorldMs, geo, streetAt,
   };
   console.info(`[nyc] ready in ${loadMs} ms (world ${loadWorldMs} ms, warm-up ${warm.ms} ms: compile ${warm.compileMs}, fence ${warm.fence}) · tier ${Q.tier} (${Q.source}${Q.lighter ? ', lighter after a graphics reset' : ''}) · ${signs.lights.length} sign lights · ${world.stats.lamps} lamps · ${world.stats.vehicles} vehicles · car ${drive.id}`);
   // page contract (the browser tests): window.__sample with `ready`; the shell for the start-up checks

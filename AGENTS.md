@@ -34,7 +34,7 @@ before `npm run deploy` or a release** (about 9 minutes). Both need Chrome and t
 | `npm run build` | Build every page into `dist/` |
 | `npm run smoke` | Every demo and starter on both quality tiers in headless Chrome (needs Chrome and a GPU) |
 | `node test/browser/check-page.mjs <name>` | Load one page headlessly (`?autostart=1`), hold W for 2 s, fail on any console or page error |
-| `node test/browser/nyc-drive.mjs` | Night NYC is a driving game: it loads clean, holding W drives the car down 7th Avenue, another car can be picked |
+| `node test/browser/nyc-drive.mjs` | Night NYC is a driving game: it loads clean, holding W drives the car down 7th Avenue, another car can be picked, each car's engine is heard (one voice, louder under throttle) |
 | `node test/browser/sound-check.mjs --wav=mix.wav` | Render the sound kit's ten-second self-test scene in headless Chrome, print its measurements and save the mix |
 | `node test/browser/feature-matrix.mjs [--only=text]` | Every rendering option drawn on the GPU on nyc-night (one page load per shadow cascade count, 1 to 4): each PostFX pass and option on and off, the anti-aliasing modes with and without the G-buffer, shadow kernels x cascades, clustered lights, both tiers' defaults, a moving camera and car, resizes and an adaptive step. Per row: no console or GL error, a sane picture, two captures agree, and the picture changes against its reference by a plausible amount (an unchanged picture is a dead option); known engine bugs are listed at the top of the script |
 | `node test/browser/flicker.mjs [--out=dir]` | Flicker of nyc-night's bench views standing still (TAA jittering as in play) at render scale 1, 0.87 and 0.75, each held to a budget; `--out` saves heat maps of where it flickers |

@@ -73,8 +73,9 @@
   140 km/h (throttle held or lifted) with the slide under 15 degrees, every gear used flat out and a 100 km/h cruise in
   top gear under 3600 rpm, and the interceptor at most half the
   cab's 0-100 time and 60 to 120 km/h faster. `test/browser/nyc-drive.mjs` (in `npm run check`) loads the page with
-  `?autostart=1`, checks the player is a car, holds W and checks it drives down the avenue, picks another car and
-  fails on any console error. The played-frame check holds W on nyc-night, so its budget is now met while driving.
+  `?autostart=1`, checks the player is a car, holds W and checks it drives down the avenue, picks another car, then
+  for each car checks its engine voice is the only one on the engine bus, audible at idle and louder or higher under
+  full throttle (an analyser on the bus), and fails on any console error. The played-frame check holds W on nyc-night, so its budget is now met while driving.
   The feature matrix's moving row moves the camera and the car (it moved the walker). The page's title, README,
   AGENTS.md, ENGINE.md, the samples index and the asset catalogue call it a drive.
 
