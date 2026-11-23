@@ -1,6 +1,6 @@
 # Before and after
 
-What changed on screen in 1.1.0-beta.1, in 1.1.0 (the second and third sections) and in 1.2.0 (the first). Every image is a capture of the samples in this repository, taken in Chrome on
+What changed on screen in 1.1.0-beta.1, in 1.1.0 (the third and fourth sections), in 1.2.0 (the second) and in 1.3.0 (the first). Every image is a capture of the samples in this repository, taken in Chrome on
 an Apple M4 (the desktop quality tier unless noted). "Before" is the first working pass of each demo or the engine's
 earlier output; "after" is this release. The city demos' camera poses moved between the two, so the pairs show the
 same place and subject rather than the same pixel.
@@ -9,6 +9,17 @@ The work was held to a reference standard for tone (a low-key dusk frame: dark, 
 which became a gate in `npm run smoke`, and then to asset detail: materials, construction and objects that hold up
 close. On 2026-11-17 the brighter open look became the demos' default (next section) and the gate now holds that
 look. `CHANGELOG.md` has the full list.
+
+## 1.3.0: a smaller internal picture stops shimmering
+
+When frames run long, the desktop tier now draws the 3D scene at 87 % and then 75 % of its size and rebuilds a
+full-size picture over a few frames. Before this release a still view drawn that way shimmered more than at full size:
+tree and building edges, thin lines and the wet road's reflections flashed from frame to frame. The upscaling step now
+weighs each smaller frame by how many samples it really carries, so a still view at 75 % flickers no more than at full
+size. The sheet below shows where nyc-night's three bench views flicker while standing still at 75 % size, before
+(left) and after (right); bright means flicker. At full size nothing changed.
+
+<img src="before-after/flicker-at-75-percent.jpg" alt="Flicker maps of three Night NYC views at 75 % internal size: bright flickering edges on trees, towers and wet road before (left), much less after (right)" width="960">
 
 ## 1.2.0: far glass towers stop flickering
 
