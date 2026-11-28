@@ -13,12 +13,12 @@
 //   // per frame, after the mixers: shadows.update((x, z) => world.getGroundHeight(x, z));
 //
 // finishPerson(model, opts) does, in this order:
-//   merge     flat-coloured, untextured parts that share one skeleton (a low-poly character exported with one
-//             material per colour) become ONE vertex-coloured SkinnedMesh: one draw call. `recolour` maps a material
-//             name to a colour first ({ Shirt: 0x334455 }). Off for textured models (nothing to merge)
 //   smooth    faceted meshes get smooth normals: faces round a point are averaged unless they meet at more than
 //             `crease` radians, so a low-poly body shades as a body while a shoe sole keeps its edge. Skin weights and
 //             topology are not touched. 'auto' (default) leaves a mesh alone when its normals are smooth already
+//   merge     flat-coloured, untextured parts that share one skeleton (a low-poly character exported with one
+//             material per colour) become ONE vertex-coloured SkinnedMesh: one draw call. `recolour` maps a material
+//             name to a colour first ({ Shirt: 0x334455 }). Textured models are left as they are
 //   light     personLight on every material (below)
 //   clothes   { top, legs }: each { hue (radians), sat, tint (colour) } recolours the cloth of a baked person (the
 //             `_people` vertex attribute of tools/bake-people.mjs: r = cloth on the upper body, g = on the legs,
@@ -27,6 +27,8 @@
 //             `build` (default 1) widens or narrows it (x and z) without changing the height
 //   bounds    a bounding sphere round the skinned pose (radius * 1.3) so three can frustum-cull the person: skinned
 //             meshes are otherwise drawn (and skinned) off screen too. `cull: false` keeps frustumCulled off
+//   shadows   every mesh casts and receives (castShadow / receiveShadow: false to change), except alpha-tested hair
+//             cards, which do not cast: their shadow is not worth a second draw and a depth program of its own
 // It returns { model, height, materials, meshes }. Call it before the model goes into the scene (materials are
 // replaced: the engine's clustered-light and G-buffer hooks classify a material when its object is added).
 //
@@ -268,8 +270,8 @@ export function personVariety(rand = Math.random) {
   const height = 0.95 + rand() * 0.1, build = 0.94 + rand() * 0.13;
   // tops: mostly as photographed or a shade of it, some turned to another hue; legs: darker or lighter, hue kept
   const top = pick([
-    {}, {}, { tint: 0xb9bcc4 }, { tint: 0x8d8f96 }, { hue: 0.5, sat: 0.8 }, { hue: -0.6, sat: 0.85 }, { hue: 2.1, sat: 0.55, tint: 0xd8d8d8 },
-    { hue: -2.0, sat: 0.6, tint: 0xcfcfcf }, { sat: 0.25, tint: 0xa0a0a6 }, { hue: 1.1, sat: 0.7 }, { hue: 3.1, sat: 0.5, tint: 0xc8c4c0 },
+    {}, {}, {}, { tint: 0xc4c6cc }, { tint: 0x8d8f96 }, { hue: 0.5, sat: 0.8 }, { hue: -0.6, sat: 0.85 }, { hue: 2.1, sat: 0.5, tint: 0xd8d8d8 },
+    { hue: -2.0, sat: 0.55, tint: 0xcfcfcf }, { sat: 0.25, tint: 0xa0a0a6 }, { hue: 1.1, sat: 0.7 },
   ]);
   const legs = pick([{}, {}, { tint: 0xa9acb4 }, { tint: 0x80838a }, { sat: 0.3, tint: 0x9a9a9a }, { hue: 0.25, sat: 0.7, tint: 0xc4c0b8 }, { sat: 0.5, tint: 0xd6d2cc }]);
   return { height, build, clothes: { top, legs } };
@@ -303,18 +305,22 @@ const _box = new THREE.Box3(), _v = new THREE.Vector3(), _m = new THREE.Matrix4(
  */
 export function finishPerson(model, o = {}) {
   const { merge = true, smooth = 'auto', crease = 1.15, light = true, castShadow = true, receiveShadow = true, cull = true } = o;
-  if (merge) mergePersonParts(model, o.recolour || {});
+  // normals first, on the file's geometries: clones share them, so a geometry is measured and smoothed once however
+  // many people are made from it (the merge below copies the result)
+  if (smooth) model.traverse((m) => {
+    const g = m.isMesh && m.geometry;
+    if (!g || g.attributes._people || g.userData.personSmooth) return;
+    g.userData.personSmooth = true;
+    if (smooth === true || smoothNormals(g, crease, false) > 0.1) smoothNormals(g, crease);
+  });
+  if (merge) for (const m of mergePersonParts(model, o.recolour || {})) m.geometry.userData.personSmooth = true;
   const meshes = [], materials = [], owned = new Map();
   model.traverse((m) => { if (m.isMesh) meshes.push(m); });
   for (const mesh of meshes) {
-    const g = mesh.geometry, masked = !!g.attributes._people;
-    mesh.castShadow = castShadow; mesh.receiveShadow = receiveShadow;
-    // normals: a geometry is smoothed once, whoever shares it (clones share geometries)
-    if (smooth && !masked && !g.userData.personSmooth) {
-      g.userData.personSmooth = true;
-      if (smooth === true || smoothNormals(g, crease, false) > 0.1) smoothNormals(g, crease);
-    }
+    const masked = !!mesh.geometry.attributes._people;
     const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    // hair cards (alpha-tested) cast nothing worth a second shadow draw and its own depth program
+    mesh.castShadow = castShadow && !list.some((m) => m.alphaTest > 0); mesh.receiveShadow = receiveShadow;
     const out = list.map((src) => {
       // this person's own copy when its colours differ from the file's; otherwise the shared material, patched once
       const own = !!(o.clothes && masked) || (o.tint !== undefined && !masked && !!src.map);

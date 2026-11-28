@@ -45,8 +45,9 @@ export function clonePerson(src, height, look, R) {
 
 export class Pedestrians {
   /**
-   * o: { scene, world, man, woman (loaded glTFs, either may be null), count, center (Vector3-like), radius (m of
-   * sidewalk lines kept), keep (m behind before a respawn), seed, postfx (track velocity) }
+   * o: { scene, world, sources ([{ gltf, height, textured }]: loaded glTFs; a baked person needs only `gltf`), count,
+   * center (Vector3-like), radius (m of sidewalk lines kept), keep (m behind before a respawn), seed, postfx (track
+   * velocity), shadowOpacity (the contact shadows, 0.8) }
    */
   constructor(o) {
     this.R = rng(o.seed ?? 4711);

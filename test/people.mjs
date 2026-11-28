@@ -118,6 +118,9 @@ function figure({ h = 2, parts = 1, masked = false, textured = false, scale = 1 
   const U = dressed.materials[0].userData.personLight;
   check('finish: clothes clone the material', dressed.materials[0] !== shared && dressed.materials[0].defines.PEOPLE_MASK === '' && dressed.materials[0].map === shared.map);
   check('finish: and set this person\'s cloth matrices only', !!U && U !== shared.userData.personLight && near(U.uPeopleTop.value.elements[0], new THREE.Color(0x808080).r, 1e-4) && shared.userData.personLight.uPeopleTop.value.elements[0] === 1);
+  const hairy = figure({ parts: 2, textured: true }); hairy.meshes[1].material.alphaTest = 0.4;
+  const hr = finishPerson(hairy.root, {});
+  check('finish: alpha-tested hair cards do not cast shadows, the body does', hr.meshes[0].castShadow === true && hr.meshes[1].castShadow === false && hr.meshes[1].receiveShadow === true);
   const tinted = figure({ textured: true }), tsrc = tinted.meshes[0].material, tr = finishPerson(tinted.root, { tint: 0x808080 });
   check('finish: tint clones a textured material', tr.materials[0] !== tsrc && near(tr.materials[0].color.r, tsrc.color.r * new THREE.Color(0x808080).r, 1e-4));
 }
