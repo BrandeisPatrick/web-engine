@@ -2,7 +2,8 @@
 //
 // A city ships a sidecar `landmarks.json` next to its `city.json`:
 //   { "v": 1, "city": "atlanta", "buildings": [ {
-//     "match": { "name": "Bank of America Plaza", "osm": "way/123", "at": [lon, lat], "xz": [x, z] },  // any of
+//     "match": { "name": "Bank of America Plaza", "names": ["BoA Plaza"], "osm": "way/123", "at": [lon, lat],
+//                "xz": [x, z], "pieces": 1 },                                          // any of name / names / osm / at / xz
 //     "name": "...", "year": 1992, "floors": 55, "height": 312, "roofHeight": 264,   // metres; height = architectural top
 //     "archetype": "glass-tower",                                                      // ARCHETYPES: the defaults below
 //     "massing": { "plan": "footprint", "width": 50, "depth": 50, "podium": { "floors": 3, "height": 14, "inset": 0.15 },
@@ -15,6 +16,30 @@
 //     "notes": "...", "confidence": "high" } ] }
 // Every field but `match` is optional: an archetype fills what the descriptor leaves out. Unknown field names and
 // unknown enum values throw and list the valid ones (validateLandmarks).
+//   heights     metres. `height` = the architectural top (spire included; an antenna crown stands ABOVE it),
+//               `roofHeight` = the roof of the main mass, where the crown starts (height = roofHeight + crown.height);
+//               without roofHeight: height less crown.height; with neither, `floors` x floor height, else OSM's height.
+//               A floor count beats the archetype's floor height; the descriptor's own `facade.floorHeight` beats both.
+//   massing     plan: footprint | square | rect | cylinder | octagon (width / depth in metres, default: the outline's
+//               area; under a podium the override is the tower's and the OSM outline the podium's); podium: floors or
+//               height, inset 0..0.6 (the tower's setback, default 0.18); setbacks: at = share of the height (on a
+//               floor line), inset = the share of its width the plan loses there (half on each side); taper: the
+//               shaft's narrowing at the roof (0.2 = 80 % of its foot; negative: an overhanging top).
+//   facade      system: curtain-wall | punched | ribbon | piers; material: FACADE_MATERIALS (the wall's PBR set; glass /
+//               metal: spandrel glass / metal panels); color = the wall as it looks by day, glass likewise (a dark
+//               glass reflects less), glassReflect 0..1, vertical 0..1 (0 bands, 1 piers proud), bay (m), floorHeight (m).
+//   crown       type: CROWN_TYPES; height (m, default: height - roofHeight, else by type); material: CROWN_MATERIALS
+//               (copper = verdigris); color overrides the material's; lit = its floodlight at night.
+//   ground      use: lobby (tall glazing, an entrance canopy) | retail (shop fronts) | arcade (columns) | plaza (a
+//               lobby without the canopy); height (m).
+//   night       crownLight (as crown.lit, and a light band along the roof edge), sign { text (capitals, digits, & - . ',
+//               32 characters), color }, litFraction 0..1 (the share of lit windows; default: the scene's).
+//   A 0 for bay, floorHeight, crown.height or ground.height means "not given".
+//   Accepted and not built from (provenance, for people and tools): name, year, notes, confidence, tier, sources,
+//   architect, match.pieces (but see matching), and on the file city, about, frame, generated, source, notes.
+//   The church, stadium, arena, parking-deck, warehouse and ferris-wheel archetypes are forms of their own: they read
+//   heights, facade material / color / bay, crown material / height and the night fields, not massing. `house` = the
+//   generic builder with a pitched roof. `ferris-wheel`: a wheel in the plane of the outline's long axis.
 //
 // API
 //   validateLandmarks(file) -> file                 throws on a schema error
@@ -22,10 +47,13 @@
 //   applyBuildingDescriptors(data, file, { offset }) -> { matched, suppressed, unmatched: [name] }
 //       matches every descriptor to a city.json building and sets `building.d` (the resolved descriptor), which
 //       BuildingBuilder honours. Matching, first hit wins: `osm` against the building's `id` (when the bake keeps
-//       it), `at` [lon, lat] / `xz` [x, z] (bake frame, metres) inside a footprint, `name` (case and punctuation
-//       ignored). Of several candidates (OSM building parts) the largest footprint at least half as tall as the
-//       tallest candidate takes the descriptor; parts that stand inside it are dropped (`_dsup`), a wider podium
-//       footprint around it stays a generic building.
+//       it: tools/bake-map.mjs --ids), `xz` [x, z] (bake frame, metres) or `at` [lon, lat] inside a footprint, `name`
+//       or any of `names` (case, punctuation and "the" ignored). Of several candidates (OSM building parts) the
+//       largest footprint at least half as tall as the tallest candidate takes the descriptor; parts that stand
+//       inside it are dropped (`_dsup`), a wider podium footprint around it stays a generic building. One case more:
+//       with `pieces` >= 8, when the matched piece is under a tenth of what its 8 or more same-named tall pieces
+//       cover, OSM has cut the building into pieces side by side: the descriptor stands on their convex hull
+//       (`building.ds = { p, area }`) and replaces the pieces inside it.
 //   inferDescriptor(b, fp) -> resolved | null       opt-in (BuildingBuilder `infer`): a descriptor deduced from the
 //       OSM tags (type, name keywords, height, footprint): parking decks, churches, hotels, hospitals, civic
 //       buildings, stadiums / arenas, warehouses, tall slim towers, houses. Deterministic (a hash of the footprint).
@@ -33,7 +61,7 @@
 //   signRuns(text) -> { w, runs: [[col0, col1, row]] }   a sign's lettering as runs of lit 5 x 7 pixels (row 0 on top)
 import { signedArea, centroid, pointInRing, ringBounds, hashStr } from './geom.js';
 
-export const ARCHETYPES = ['glass-tower', 'stone-tower', 'precast-grid', 'brick-loft', 'artdeco-setback', 'brutalist', 'hotel-slab', 'cylinder-tower', 'civic-classical', 'stadium', 'arena', 'parking-deck', 'church', 'warehouse', 'house'];
+export const ARCHETYPES = ['glass-tower', 'stone-tower', 'precast-grid', 'brick-loft', 'artdeco-setback', 'brutalist', 'hotel-slab', 'cylinder-tower', 'civic-classical', 'stadium', 'arena', 'parking-deck', 'church', 'warehouse', 'house', 'ferris-wheel'];
 export const PLANS = ['footprint', 'square', 'rect', 'cylinder', 'octagon'];
 export const FACADE_SYSTEMS = ['curtain-wall', 'punched', 'ribbon', 'piers'];
 export const FACADE_MATERIALS = ['granite', 'glass', 'brick', 'precast', 'limestone', 'marble', 'metal', 'concrete', 'stucco'];
@@ -43,10 +71,12 @@ export const GROUND_USES = ['lobby', 'retail', 'arcade', 'plaza'];
 const CONFIDENCE = ['high', 'medium', 'low'];
 
 // ------------------------------------------------------------------ schema
+// (provenance fields are accepted and not read: about / frame / generated / source / notes on the file, tier / sources /
+// architect / year / notes / confidence on a building, match.pieces)
 const KEYS = {
-  file: ['v', 'city', 'buildings', 'source', 'notes'],
-  building: ['match', 'name', 'year', 'floors', 'height', 'roofHeight', 'archetype', 'massing', 'facade', 'crown', 'ground', 'night', 'notes', 'confidence'],
-  match: ['name', 'osm', 'at', 'xz'],
+  file: ['v', 'city', 'buildings', 'source', 'notes', 'about', 'frame', 'generated'],
+  building: ['match', 'name', 'year', 'floors', 'height', 'roofHeight', 'archetype', 'massing', 'facade', 'crown', 'ground', 'night', 'notes', 'confidence', 'tier', 'sources', 'architect'],
+  match: ['name', 'names', 'osm', 'at', 'xz', 'pieces'],
   massing: ['plan', 'width', 'depth', 'podium', 'setbacks', 'taper'],
   podium: ['floors', 'height', 'inset'],
   setback: ['at', 'inset'],
@@ -62,8 +92,8 @@ function keys(o, kind, where) {
   for (const k in o) if (!KEYS[kind].includes(k)) throw new Error(`[landmarks] ${where}: unknown field '${k}' (${KEYS[kind].join(', ')})`);
 }
 function oneOf(v, list, where) { if (v != null && !list.includes(v)) throw new Error(`[landmarks] ${where}: unknown value '${v}' (${list.join(', ')})`); }
-function num(v, where, lo = -Infinity, hi = Infinity) {
-  if (v == null) return;
+function num(v, where, lo = -Infinity, hi = Infinity, zero = false) { // zero: 0 is allowed and means "not given"
+  if (v == null || (zero && v === 0)) return;
   if (typeof v !== 'number' || !Number.isFinite(v) || v < lo || v > hi) throw new Error(`[landmarks] ${where}: expected a number${Number.isFinite(lo) ? ` in ${lo} .. ${hi}` : ''}, got ${JSON.stringify(v)}`);
 }
 /** '#rgb' / '#rrggbb' -> [r, g, b] sRGB 0..1; null when absent; throws on anything else. */
@@ -81,7 +111,10 @@ function point(v, where) { if (v != null && !(Array.isArray(v) && v.length === 2
 export function validateDescriptor(d, where = 'descriptor') {
   keys(d, 'building', where);
   keys(d.match, 'match', `${where}.match`);
-  if (d.match) { point(d.match.at, `${where}.match.at`); point(d.match.xz, `${where}.match.xz`); }
+  if (d.match) {
+    point(d.match.at, `${where}.match.at`); point(d.match.xz, `${where}.match.xz`); num(d.match.pieces, `${where}.match.pieces`, 0, 1e5);
+    if (d.match.names != null && !(Array.isArray(d.match.names) && d.match.names.every((s) => typeof s === 'string'))) throw new Error(`[landmarks] ${where}.match.names: expected an array of strings`);
+  }
   oneOf(d.archetype, ARCHETYPES, `${where}.archetype`);
   oneOf(d.confidence, CONFIDENCE, `${where}.confidence`);
   num(d.floors, `${where}.floors`, 1, 250); num(d.height, `${where}.height`, 2, 1000); num(d.roofHeight, `${where}.roofHeight`, 2, 1000);
@@ -103,13 +136,13 @@ export function validateDescriptor(d, where = 'descriptor') {
     oneOf(f.system, FACADE_SYSTEMS, `${where}.facade.system`); oneOf(f.material, FACADE_MATERIALS, `${where}.facade.material`);
     parseHex(f.color, `${where}.facade.color`); parseHex(f.glass, `${where}.facade.glass`);
     num(f.glassReflect, `${where}.facade.glassReflect`, 0, 1); num(f.vertical, `${where}.facade.vertical`, 0, 1);
-    num(f.bay, `${where}.facade.bay`, 0.6, 20); num(f.floorHeight, `${where}.facade.floorHeight`, 2.4, 40);
+    num(f.bay, `${where}.facade.bay`, 0.6, 20, true); num(f.floorHeight, `${where}.facade.floorHeight`, 2.4, 40, true);
   }
   const c = d.crown;
   keys(c, 'crown', `${where}.crown`);
   if (c) { oneOf(c.type, CROWN_TYPES, `${where}.crown.type`); oneOf(c.material, CROWN_MATERIALS, `${where}.crown.material`); num(c.height, `${where}.crown.height`, 0, 300); parseHex(c.color, `${where}.crown.color`); parseHex(c.lit, `${where}.crown.lit`); }
   keys(d.ground, 'ground', `${where}.ground`);
-  if (d.ground) { oneOf(d.ground.use, GROUND_USES, `${where}.ground.use`); num(d.ground.height, `${where}.ground.height`, 2.5, 30); }
+  if (d.ground) { oneOf(d.ground.use, GROUND_USES, `${where}.ground.use`); num(d.ground.height, `${where}.ground.height`, 2.5, 40, true); }
   const n = d.night;
   keys(n, 'night', `${where}.night`);
   if (n) {
@@ -129,7 +162,7 @@ export function validateLandmarks(file) {
     const where = `buildings[${i}]${d && (d.name || (d.match && d.match.name)) ? ` (${d.name || d.match.name})` : ''}`;
     validateDescriptor(d, where);
     const m = d.match;
-    if (!m || (m.name == null && m.osm == null && m.at == null && m.xz == null)) throw new Error(`[landmarks] ${where}: match needs one of ${KEYS.match.join(', ')}`);
+    if (!m || (m.name == null && !(m.names && m.names.length) && m.osm == null && m.at == null && m.xz == null)) throw new Error(`[landmarks] ${where}: match needs one of name, names, osm, at, xz`);
   });
   return file;
 }
@@ -152,6 +185,8 @@ const A = {
   church: { form: 'church', facade: { system: 'piers', material: 'limestone', color: '#b9ab95', glass: '#2a2630', glassReflect: 0.2, vertical: 1, bay: 4.2 }, crown: { type: 'pyramid-spire', material: 'copper' } },
   warehouse: { form: 'warehouse', facade: { system: 'ribbon', material: 'metal', color: '#a9aaa6', glass: '#2c3438', glassReflect: 0.2, vertical: 0.2, bay: 6 }, crown: { type: 'flat' } },
   house: { form: 'house' },
+  // not a building: a wheel on an A-frame in the plane of the outline's long axis (rim, spokes, gondolas)
+  'ferris-wheel': { form: 'wheel', facade: { system: 'curtain-wall', material: 'metal', color: '#f2f2f2', glass: '#9fb6c4' }, crown: { type: 'flat' } },
 };
 const DEFAULT_ARCHETYPE = 'precast-grid';
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
@@ -161,9 +196,9 @@ const clamp01 = (v) => Math.min(1, Math.max(0, v));
  * resolved descriptor is returned as it is. Validates the raw descriptor first.
  * @param {object} d  raw descriptor (see the header)
  * @returns {object} resolved: { name, archetype, form, height, roofHeight, floors, plan, planW, planD, podium, setbacks,
- *   taper, system, material, color, glass, glassReflect, vertical, bay, floorHeight, crown: { type, height, material,
- *   color, lit }, ground: { use, height }, night: { crownLight, sign: { text, color }, litFraction } }; colours are
- *   [r, g, b] sRGB 0..1 or null
+ *   taper, system, material, color, glass, glassReflect, vertical, bay, floorHeight, floorHeightSet (the descriptor's
+ *   own floor height, not its archetype's), crown: { type, height, material, color, lit }, ground: { use, height },
+ *   night: { crownLight, sign: { text, color }, litFraction } }; colours are [r, g, b] sRGB 0..1 or null
  */
 export function resolveDescriptor(d) {
   if (!d) return null;
@@ -172,7 +207,7 @@ export function resolveDescriptor(d) {
   const arch = d.archetype || DEFAULT_ARCHETYPE, P = A[arch];
   const m = { ...(P.massing || {}), ...(d.massing || {}) }, f = { ...(P.facade || {}), ...(d.facade || {}) };
   const c = { ...(P.crown || {}), ...(d.crown || {}) }, g = { ...(P.ground || {}), ...(d.ground || {}) }, n = { ...(P.night || {}), ...(d.night || {}) };
-  const system = f.system || 'punched';
+  const system = f.system || 'punched', F0 = P.facade || {};
   // an all-glass material on a masonry system (or the reverse) follows the system: the wall between the windows is glass
   const material = f.material || (system === 'curtain-wall' ? 'glass' : 'precast');
   return {
@@ -183,19 +218,23 @@ export function resolveDescriptor(d) {
     setbacks: (m.setbacks || []).map((s) => ({ at: s.at ?? 0.8, inset: s.inset ?? 0.15 })).sort((a, b) => a.at - b.at),
     taper: m.taper || 0,
     system, material, color: parseHex(f.color), glass: parseHex(f.glass) || [0.17, 0.21, 0.25], glassReflect: clamp01(f.glassReflect ?? 0.4),
-    vertical: clamp01(f.vertical ?? 0.5), bay: f.bay ?? null, floorHeight: f.floorHeight ?? null,
-    crown: { type: c.type || 'flat', height: c.height ?? null, material: c.material || null, color: parseHex(c.color), lit: parseHex(c.lit) },
-    ground: { use: g.use || null, height: g.height ?? null },
-    night: { crownLight: parseHex(n.crownLight), sign: n.sign ? { text: String(n.sign.text).toUpperCase().trim().slice(0, 24), color: parseHex(n.sign.color) || [1, 1, 1] } : null, litFraction: n.litFraction ?? null },
+    // a 0 for a length means "not given" (the archetype's value, where it has one)
+    vertical: clamp01(f.vertical ?? 0.5), bay: f.bay || F0.bay || null, floorHeight: f.floorHeight || F0.floorHeight || null, floorHeightSet: !!(d.facade && d.facade.floorHeight),
+    crown: { type: c.type || 'flat', height: c.height || (P.crown && P.crown.height) || null, material: c.material || null, color: parseHex(c.color), lit: parseHex(c.lit) },
+    ground: { use: g.use || null, height: g.height || (P.ground && P.ground.height) || null },
+    night: { crownLight: parseHex(n.crownLight), sign: n.sign ? { text: String(n.sign.text).toUpperCase().trim().slice(0, 32), color: parseHex(n.sign.color) || [1, 1, 1] } : null, litFraction: n.litFraction ?? null },
   };
 }
 
-/** Roof height (top of the main mass, m) a resolved descriptor asks for, given the OSM height; the crown stands on it. */
+/**
+ * Roof height (top of the main mass, m) a resolved descriptor asks for, given the OSM height: `roofHeight`; else
+ * `height` less the crown (its own height, else none for a flat top and 14 % for the others; an antenna stands ABOVE
+ * `height`); else `floors` x the floor height; else the OSM height. The crown stands on it.
+ */
 export function describedRoofHeight(d, osmH) {
   if (d.roofHeight != null) return d.roofHeight;
-  const flat = d.crown.type === 'flat' || d.crown.type === 'antenna';
-  if (d.height != null) return flat ? d.height : Math.max(d.height * 0.5, d.height - (d.crown.height ?? d.height * 0.14));
-  if (d.floors != null && d.floorHeight != null) return d.floors * d.floorHeight;
+  if (d.height != null) return d.crown.type === 'antenna' ? d.height : Math.max(d.height * 0.5, d.height - (d.crown.height ?? (d.crown.type === 'flat' ? 0 : d.height * 0.14)));
+  if (d.floors != null) return d.floors * (d.floorHeight ?? 3.8);
   return osmH;
 }
 
@@ -246,31 +285,55 @@ export function applyBuildingDescriptors(data, file, o = {}) {
   };
   const res = { matched: 0, suppressed: 0, unmatched: [] };
   for (const raw of file.buildings) {
-    const m = raw.match, label = raw.name || m.name || JSON.stringify(m);
+    const m = raw.match, label = raw.name || m.name || (m.names && m.names[0]) || JSON.stringify(m);
+    // match.name and every match.names entry are names the building may carry in the map
+    const names = [...new Set([m.name, ...(m.names || [])].filter(Boolean).map(normName))];
     let ids = [];
     if (m.osm != null && byId.has(normOsm(m.osm))) ids = [byId.get(normOsm(m.osm))];
     if (!ids.length && (m.xz || (m.at && C))) {
       const x = m.xz ? m.xz[0] - off.x : (m.at[0] - C.lon) * DEG * R_EARTH * cos0 - off.x;
       const z = m.xz ? m.xz[1] - off.z : -(m.at[1] - C.lat) * DEG * R_EARTH - off.z;
       ids = containing(x, z);
-      if (ids.length > 1 && m.name) { const k = normName(m.name), named = ids.filter((i) => normName(list[i].n) === k); if (named.length) ids = named; }
+      if (ids.length > 1 && names.length) { const named = ids.filter((i) => names.includes(normName(list[i].n))); if (named.length) ids = named; }
     }
-    if (!ids.length && m.name) ids = (byName.get(normName(m.name)) || []).filter((i) => inf(i));
+    if (!ids.length) for (const k of names) for (const i of byName.get(k) || []) if (inf(i) && !ids.includes(i)) ids.push(i);
     ids = ids.filter((i) => inf(i) && !list[i].d);
     if (!ids.length) { res.unmatched.push(label); continue; }
-    const pi = primary(ids), P = list[pi], Q = inf(pi), key = P.n ? normName(P.n) : null;
+    const pi = primary(ids), P = list[pi], key = P.n ? normName(P.n) : null;
+    let Q = inf(pi), site = P.p;
     P.d = resolveDescriptor(raw);
     res.matched++;
+    // A building OSM cuts into many small pieces side by side (match.pieces >= 8, the matched piece under a tenth of
+    // what its same-named pieces cover): no piece is its outline, so the descriptor stands on the hull of the taller
+    // pieces (`ds`: { p: ring, area: what the pieces cover }) and replaces every piece inside it.
+    if (m.pieces >= 8 && P.part && key) {
+      const group = (byName.get(key) || []).filter((i) => inf(i) && list[i].part && (i === pi || (!list[i].d && !list[i]._dsup)));
+      let maxH = 0; for (const i of group) maxH = Math.max(maxH, inf(i).h);
+      const main = group.filter((i) => inf(i).h >= 0.5 * maxH), hull = convexHull(main.flatMap((i) => list[i].p)), hullArea = Math.abs(signedArea(hull));
+      if (main.length >= 8 && Q.area < 0.1 * hullArea) {
+        let sum = 0; for (const i of main) sum += inf(i).area;
+        P.ds = { p: hull, area: Math.min(sum, hullArea) };
+        site = hull; Q = { bb: ringBounds(hull), area: hullArea };
+      }
+    }
     // the parts that stand inside the described footprint are its massing in OSM's words: the descriptor replaces them
     for (let i = 0; i < list.length; i++) {
       if (i === pi) continue;
       const q = inf(i), b = list[i];
-      if (!q || b.d || b._dsup || !(b.part || (key && b.n && normName(b.n) === key))) continue;
+      if (!q || b.d || b._dsup || !(b.part || (b.n && (normName(b.n) === key || names.includes(normName(b.n)))))) continue;
       if (q.c[0] < Q.bb.minX || q.c[0] > Q.bb.maxX || q.c[1] < Q.bb.minZ || q.c[1] > Q.bb.maxZ) continue;
-      if (q.area <= 1.2 * Q.area && pointInRing(q.c[0], q.c[1], P.p)) { b._dsup = 1; res.suppressed++; }
+      if (q.area <= 1.2 * Q.area && pointInRing(q.c[0], q.c[1], site)) { b._dsup = 1; res.suppressed++; }
     }
   }
   return res;
+}
+/** Convex hull of points [[x, z], ...] (monotone chain), as a ring. */
+function convexHull(pts) {
+  const P = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]), cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [], up = [];
+  for (const p of P) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for (let i = P.length - 1; i >= 0; i--) { const p = P[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+  return lo.slice(0, -1).concat(up.slice(0, -1)).map((p) => [p[0], p[1]]);
 }
 
 // ------------------------------------------------------------------ inference

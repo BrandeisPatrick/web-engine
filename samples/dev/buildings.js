@@ -8,9 +8,13 @@
 //   pair     one footprint twice: as the generic builder makes it from the OSM tags, and from its descriptor
 //   city     a small grid city, built twice on the same footprints: the generic builder, and `infer: true` with six
 //            landmarks matched by a point; the `city` setting switches between the two
+//   map      ?map=<folder URL>: a bake's city.json with the landmarks.json beside it, built at the origin (no terrain,
+//            roads or streaming; texture windows only), again twice: generic, and landmarks + infer. Poses mapS / mapW /
+//            mapN / mapE (the skyline from 1.5 km), mapTop, and `look` (the `look` setting names a described building)
 // Query: ?time=noon|golden|dusk|night, ?pose=<id>, ?city=described|generic, ?shot=1 (no UI), ?bench=1&size=WxH.
 // window.__sample (the bench harness): poses rowA, crowns, lattice, street, lobby, rowB, rowB1, rowB2, venues, pair,
-// skyline, skylineLow, block; settings `time`, `city`; counts() -> the builders' triangle counts per group.
+// skyline, skylineLow, block; settings `time`, `city`, `look`; counts() -> the builders' triangle counts per group;
+// matched() -> what applyBuildingDescriptors returned per group.
 import * as THREE from 'three';
 import { Engine, createBenchHarness, readBenchParams, resolveQuality } from '@vibe/engine/core';
 import { Atmosphere, PostFX, TextureSets, mulberry32 } from '@vibe/engine/render';
@@ -105,8 +109,26 @@ async function boot() {
     list.forEach((b, i) => bb.add(b, mulberry32(i * 7919 + 13)));
     return bb;
   };
-  add('cityDescribed', city(true), [3000, 0]);
-  add('cityGeneric', city(false), [3000, 0]).visible = false;
+  // ---- map: a bake and its landmarks.json (?map=<folder URL>), in place of the grid city
+  const mapUrl = q.get('map'), named = new Map(), masses = []; // described buildings by name, every building: { x, z, h, r } (the `look` pose)
+  const mapCity = async (described) => {
+    const data = await (await fetch(`${mapUrl}city.json`)).json();
+    if (described) {
+      matched.map = applyBuildingDescriptors(data, await (await fetch(`${mapUrl}landmarks.json`)).json());
+      for (const b of data.buildings) {
+        const xs = b.p.map((p) => p[0]), zs = b.p.map((p) => p[1]);
+        const m = { x: (Math.min(...xs) + Math.max(...xs)) / 2, z: (Math.min(...zs) + Math.max(...zs)) / 2, h: b.d ? b.d.height || b.d.roofHeight || b.h : b.h, r: Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)) };
+        masses.push(m); if (b.d) named.set(b.d.name, m);
+      }
+    }
+    const half = (data.size || 3000) / 2;
+    const bb = new BuildingBuilder({ minX: -half, maxX: half, minZ: -half, maxZ: half }, { baseGrid: [4, 4], detailGrid: [8, 8], lodDist: 300, nearDetail: false, infer: described });
+    data.buildings.forEach((b, i) => { try { bb.add(b, mulberry32((i * 2654435761) >>> 0)); } catch (e) { console.warn('[dev] building failed', b.n, e); } });
+    return bb;
+  };
+  const at = mapUrl ? [0, 0] : [3000, 0];
+  add('cityDescribed', mapUrl ? await mapCity(true) : city(true), at);
+  add('cityGeneric', mapUrl ? await mapCity(false) : city(false), at).visible = false;
 
   // ---- post-processing, time of day
   const { width, height } = engine.size;
@@ -115,7 +137,7 @@ async function boot() {
   if (postfx.bloomPass) postfx.bloomPass.enabled = S.passes.bloom;
   engine.renderFn = (sc, cam, dt) => postfx.render(dt);
   engine.onResize = (w, h, pr) => postfx.setSize(w, h, pr);
-  const state = { time: q.get('time') || 'noon', city: q.get('city') || 'described', pose: q.get('pose') || 'rowA' };
+  const state = { time: q.get('time') || 'noon', city: q.get('city') || 'described', pose: q.get('pose') || (mapUrl ? 'mapS' : 'rowA'), look: q.get('look') || '' };
   const setTime = (t) => {
     state.time = t;
     atmosphere.setTimeOfDay(isNaN(+t) ? t : +t);
@@ -142,11 +164,36 @@ async function boot() {
     skylineLow: look([3000 - 420, 2.2, 520], [3000, 90, 0]),
     block: look([3000 + 150, 150, 330], [3000, 60, 0]),
   };
+  if (mapUrl) {
+    Object.assign(poses, {
+      mapS: look([0, 70, 1750], [0, 110, 0]), mapW: look([-1750, 70, 0], [0, 110, 0]), mapN: look([0, 70, -1750], [0, 110, 0]), mapE: look([1750, 70, 0], [0, 110, 0]),
+      mapTop: look([500, 900, 1300], [0, 0, -100]),
+      // the building the `look` setting names (the first described one by default), from the side with the fewest
+      // buildings in the line of sight
+      look: (cam) => {
+        const t = named.get(state.look) || [...named.values()][0]; if (!t) return;
+        const d = Math.max(90, t.h * 1.25, t.r * 1.5), y = t.h * 0.5 + d * 0.32;
+        let best = null;
+        for (let k = 0; k < 16; k++) {
+          const a = (k / 16) * Math.PI * 2, cx = t.x + Math.cos(a) * d, cz = t.z + Math.sin(a) * d;
+          let block = 0;
+          for (const m of masses) {
+            if (m === t) continue;
+            const u = ((m.x - cx) * (t.x - cx) + (m.z - cz) * (t.z - cz)) / (d * d);
+            if (u < -0.1 || u > 0.9) continue;
+            if (Math.hypot(m.x - (cx + (t.x - cx) * u), m.z - (cz + (t.z - cz) * u)) < m.r * 0.6 + 6 && m.h > t.h * 0.25) block += Math.min(m.h, y) * m.r;
+          }
+          if (!best || block < best[0]) best = [block, cx, cz];
+        }
+        cam.position.set(best[1], y, best[2]); cam.lookAt(t.x, t.h * 0.5, t.z);
+      },
+    });
+  }
   const harness = createBenchHarness(engine, {
     name: 'dev-buildings', poses,
     after: (cam) => atmosphere.update(cam.position, 0),
     quiet: () => { postfx.autoExposure = false; postfx.setTimeOfDay(atmosphere.darkness); },
-    settings: { time: { get: () => state.time, set: setTime }, city: { get: () => state.city, set: setCity } },
+    settings: { time: { get: () => state.time, set: setTime }, city: { get: () => state.city, set: setCity }, look: { get: () => state.look, set: (v) => { state.look = String(v); } } },
   });
   const bp = readBenchParams(location.search);
   if (bp.enabled && bp.size) harness.resize(bp.size.w, bp.size.h);

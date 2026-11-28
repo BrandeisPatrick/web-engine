@@ -9,7 +9,7 @@ exports an async function with the same options in camelCase, for a game's own s
 
 | Tool | Output | Main flags (defaults) | Function |
 |---|---|---|---|
-| `bake-map.mjs` | city.json from OpenStreetMap (Overpass, OSM API fallback) | `--lat 37.792 --lon -122.3965 --size 2200 --outer 9000 --bridge-ext 3200,2200 --ua ...` | `bakeMap(opts)` |
+| `bake-map.mjs` | city.json from OpenStreetMap (Overpass, OSM API fallback) | `--lat 37.792 --lon -122.3965 --size 2200 --outer 9000 --bridge-ext 3200,2200 --ua ... [--ids]` (`--ids`: buildings keep their OSM id, for `landmarks.json` `match.osm`) | `bakeMap(opts)` |
 | `bake-terrain.mjs` | terrain.json from AWS Terrarium tiles (OpenTopoData fallback) | `--city public/map/city.json [--lat --lon --outer] --fine -2600,-2900,3500,2500 --fine-cell 10 --fine-zoom 15 --outer-cell 40 --outer-zoom 13 --bay-min -2 --checks file.json` | `bakeTerrain(opts)` |
 | `bake-farland.mjs` | farland.json (distant relief ring) | `--city ... [--lat --lon] --half 24000 --cell 250 --zoom 11 --sea -5` | `bakeFarland(opts)` |
 | `fetch-textures.mjs` | PBR texture sets + manifest.json + CREDITS.md | `--sets textures.default.json --out public/textures --res 1k [--ktx2]` | `fetchTextures(opts)` |
