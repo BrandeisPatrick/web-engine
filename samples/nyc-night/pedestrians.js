@@ -35,7 +35,7 @@ export function clonePerson(src, height, look, R) {
   if (baked) fit = finishPerson(model, { height: (height || baked.height) * look.height, build: look.build, clothes: look.clothes });
   else {
     const coat = COATS[(R() * COATS.length) | 0], trousers = TROUSERS[(R() * TROUSERS.length) | 0];
-    const tint = src.textured ? new THREE.Color().setHSL(0.05 + R() * 0.08, 0.14, 0.42 + R() * 0.25) : undefined;
+    const tint = src.textured ? new THREE.Color().setHSL(0.05 + R() * 0.08, 0.12, 0.3 + R() * 0.2) : undefined;
     fit = finishPerson(model, { height: height * look.height, recolour: { Shirt: coat, Suit: coat, Pants: trousers, Socks: 0x1a1a1a }, tint });
   }
   const holder = new THREE.Group(), view = new THREE.Group();
