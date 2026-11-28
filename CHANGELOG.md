@@ -41,6 +41,13 @@
   the rest are inferred. Street trees, traffic, the new people on the sidewalks, pollen in the low sun, a bounce fill
   in the shade; no screen-space reflections (a dry city has nothing for them). Poses `peachtree`, `park`, `skyline`,
   `capitol`, `drive`. In `npm run smoke`.
+- MapWorld: a baked map without coastline rings (an inland city) is all land (`world.inland`). Its open ground is
+  built-up paving with the context ring's block pattern beyond the baked square (it was bare earth: the land classes
+  the ground material reads were only baked for a coast), and it gets the low context ring of buildings around the
+  square as a coastal map does. Maps with land rings are unchanged.
+- Pedestrians (`samples/nyc-night/pedestrians.js`, also used by atlanta-drive): a person is placed among the sidewalk
+  lines near the player. Forty random picks over a district-wide set of lines almost never landed near, so on a large
+  map everyone was put somewhere else in the city every frame.
 - Starters: the ground planes are segmented (a 6 km quad of two triangles lost depth precision under a software
   rasteriser and drew over the road); starter-drive heads toward the low sun (`sun: { azimuthStart: 180 }`), with a
   lighter road, matt grass, less haze and light shafts at 0.4; starter-walk has less haze.

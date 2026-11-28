@@ -574,7 +574,7 @@ diffuseColor.rgb *= (0.85 + 0.3 * texture2D(map, vMapUv * 0.071 + 0.13).g) * mix
     this.pierPolys = [];
     for (const L of d.piers) { const r = sanitizeRing(L && L.p); if (r) this.pierPolys.push(poly(r)); }
     /** True for a baked map without coastline rings (an inland city: Atlanta): the whole map is land. */
-    this.inland = this.source !== 'procedural' && !this.landPolys.length && !(d.water || []).some((w) => w && w.sea);
+    this.inland = this.source !== 'procedural' && !this.landPolys.length;
     if (this.landPolys.length) {
       this.raster.data.fill(RBIT.WATER);
       for (const L of this.landPolys) this.raster.fillPolygon([L.ring], RBIT.WATER, 'clear');

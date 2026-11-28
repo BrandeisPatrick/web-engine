@@ -187,6 +187,15 @@ there:
 
 ## What nobody has verified
 
+- The balance pass (Night NYC, Miami and the starters' new light, bloom, haze, wet gloss and air particles) and
+  `samples/atlanta-drive/` were tuned and checked from software-rendered stills (headless Chrome on SwiftShader,
+  1280x720, both tiers' look numbers measured). No frame time was measured for any of it, `npm run perf`'s golden
+  images are stale on purpose until they are re-recorded on the Mac, `npm run smoke` has not run on a GPU since, and
+  nobody has driven Atlanta or watched the drizzle, the pollen or the new people in motion.
+- Atlanta's landmark descriptors: 30 carry facts read from public pages, 99 are mostly deduced (each entry says which,
+  with a confidence). Colours are estimates. Described buildings have no real window openings (a parallax shader), and
+  nobody has compared them with photographs.
+
 - Touch controls (`touch: 'auto'`) are wired in both starters but have not been tested on a touch device.
 - Audio is measured, not listened to: every preset's peak, DC, loop seam and spectral band, and a ten-second mix
   (`samples/sound-check/`: no clipping, peak <= 0.85, no silent or over-loud half-second) are checked by machine, the

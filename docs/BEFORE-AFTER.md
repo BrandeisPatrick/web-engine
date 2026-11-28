@@ -1,6 +1,7 @@
 # Before and after
 
-What changed on screen in 1.1.0-beta.1, in 1.1.0 (the third and fourth sections), in 1.2.0 (the second) and in 1.3.0 (the first). Every image is a capture of the samples in this repository, taken in Chrome on
+What changed on screen in 1.1.0-beta.1, in 1.1.0, in 1.2.0, in 1.3.0 and since (the first section, which says how its
+pictures were taken). Every other image is a capture of the samples in this repository, taken in Chrome on
 an Apple M4 (the desktop quality tier unless noted). "Before" is the first working pass of each demo or the engine's
 earlier output; "after" is this release. The city demos' camera poses moved between the two, so the pairs show the
 same place and subject rather than the same pixel.
@@ -9,6 +10,57 @@ The work was held to a reference standard for tone (a low-key dusk frame: dark, 
 which became a gate in `npm run smoke`, and then to asset detail: materials, construction and objects that hold up
 close. On 2026-11-17 the brighter open look became the demos' default (next section) and the gate now holds that
 look. `CHANGELOG.md` has the full list.
+
+## Unreleased: the balance pass, new people, and Atlanta from data
+
+These pictures were not taken on the Apple M4: they are software-rendered (headless Chrome on SwiftShader, 1280 x
+720, desktop tier), each pair the same bench pose from the code before and after. The pixels are what a GPU draws; no
+frame time was measured for them.
+
+The method was to measure what each effect adds to the frame before moving anything (`docs/DESIGN-NOTES.md`,
+"Graphics balance"): in the night city, reflections changed the frame by under half a level of 255 and bloom by a
+tenth, because nothing on the street was bright enough to reflect or to glow, and a haze lay over everything past 50 m.
+
+### Night NYC: the lights carry the picture
+
+Signs, lit windows and lamp pools brighter, bloom that reaches them, half the haze, a firmer curve, a wet film whose
+gloss varies, a drizzle that shows in lamp light, and no volumetric pass.
+
+<table><tr><th>Before</th><th>After</th></tr><tr><td><img src="before-after/balance-nyc-drive-before.jpg" alt="Night NYC behind the car, before: a grey, evenly damp road and dim signs"></td><td><img src="before-after/balance-nyc-drive-after.jpg" alt="Night NYC behind the car, after: glowing signs, lamp light and brake lights in a patchy wet road"></td></tr></table>
+
+<table><tr><th>Before</th><th>After</th></tr><tr><td><img src="before-after/balance-nyc-square-before.jpg" alt="The square, before"></td><td><img src="before-after/balance-nyc-square-after.jpg" alt="The square, after: screens light the trees and show in the road"></td></tr></table>
+
+### Miami drive: colour and depth
+
+<table><tr><th>Before</th><th>After</th></tr><tr><td><img src="before-after/balance-miami-chase-before.jpg" alt="Miami dune road, before: one mauve band"></td><td><img src="before-after/balance-miami-chase-after.jpg" alt="Miami dune road, after: green palms against an orange sky, deeper darks"></td></tr></table>
+
+### The driving starter: natural daylight, aimed at the sun
+
+The engine's default daylight now has a clear sky's ratio of sun to sky (a shadow on level ground measures 23 % of the
+sunlit ground at noon, was 35 %; 41 % at golden hour, was 62 %), and the starter's road heads toward its low sun.
+
+<table><tr><th>Before</th><th>After</th></tr><tr><td><img src="before-after/balance-starter-drive-before.jpg" alt="Driving starter, before: flat light, a black road, a hazy horizon"></td><td><img src="before-after/balance-starter-drive-after.jpg" alt="Driving starter, after: the low sun ahead, glare on the asphalt, long shadows, backlit trees"></td></tr></table>
+
+### People
+
+Eight clothed, textured adults (Microsoft Rocketbox, MIT) replace the low-poly figures; each picture is before (left)
+and after (right).
+
+<img src="before-after/people-group-before-after.jpg" alt="A group under a park lamp: low-poly figures on the left, clothed adults on the right" width="960">
+
+<img src="before-after/people-nyc-before-after.jpg" alt="Pedestrians at a Night NYC crossing, before and after" width="960">
+
+### Atlanta, built from data
+
+The same baked footprints as extruded boxes, and with the 129 descriptors of `landmarks.json` (test page, flat ground):
+
+<table><tr><th>Footprints only</th><th>Described</th></tr><tr><td><img src="before-after/atlanta-footprints.jpg" alt="Atlanta skyline from footprints only: plain boxes"></td><td><img src="before-after/atlanta-described.jpg" alt="Atlanta skyline described: granite towers with pyramid crowns, a glass tower with a sign, the stadium"></td></tr></table>
+
+The demo (`samples/atlanta-drive/`):
+
+<img src="before-after/atlanta-skyline.jpg" alt="Atlanta from the air: Bank of America Plaza on the left, downtown on the right, tree-lined streets" width="960">
+
+<table><tr><td><img src="before-after/atlanta-drive.jpg" alt="Driving south on Peachtree Street toward the low sun"></td><td><img src="before-after/atlanta-westin.jpg" alt="The Westin's cylinder from Centennial Olympic Park Drive"></td></tr><tr><td colspan="2"><img src="before-after/atlanta-capitol.jpg" alt="The Georgia State Capitol's gold dome above the trees" width="640"></td></tr></table>
 
 ## 1.3.0: a smaller internal picture stops shimmering
 
