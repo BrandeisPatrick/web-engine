@@ -9,7 +9,7 @@
 //   - inference from OSM tags (opt-in): which tags give which archetype, never for OSM parts, deterministic;
 //   - MapWorld: `buildings: { landmarks, infer }` on the procedural city.
 // Run: node --import ./test/helpers/dom-shim.mjs test/building-descriptors.mjs
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import * as THREE from 'three';
 import {
   BuildingBuilder, TileBuildingBuilder, MapWorld, generateProceduralCity,
@@ -36,7 +36,15 @@ const group = (bb) => { const g = new THREE.Group(); for (const m of bb.build(NO
   throws(() => validateLandmarks({ v: 1, buildings: [{ match: { name: 'A' }, archetype: 'skyscraper' }] }), /unknown value 'skyscraper' \(glass-tower, stone-tower/, 'unknown archetype throws with the valid ones');
   throws(() => validateLandmarks({ v: 1, buildings: [{ match: { name: 'A' }, crown: { type: 'spire' } }] }), /crown.type: unknown value 'spire' \(pyramid-spire/, 'unknown crown type throws with the valid ones');
   throws(() => validateLandmarks({ v: 1, buildings: [{ match: { name: 'A' }, facade: { color: 'brown' } }] }), /expected a colour '#rrggbb'/, 'a colour that is not hex throws');
-  throws(() => validateLandmarks({ v: 1, buildings: [{ name: 'A' }] }), /match needs one of name, osm, at, xz/, 'a descriptor without a match throws');
+  throws(() => validateLandmarks({ v: 1, buildings: [{ name: 'A' }] }), /match needs one of name, names, osm, at, xz/, 'a descriptor without a match throws');
+  // provenance fields are accepted and not read; a 0 for a length means "not given" (the archetype's value)
+  const prov = { v: 1, city: 't', about: 'what this is', frame: { center: { lat: 1, lon: 2 }, note: 'metres' }, generated: '2026-11-28', buildings: [
+    { tier: 'A', sources: ['https://example.org'], architect: 'Someone', year: 1990, notes: 'n', confidence: 'low', match: { name: 'A', names: ['A', 'B'], pieces: 3 },
+      archetype: 'stone-tower', facade: { bay: 0, floorHeight: 0 }, crown: { type: 'flat', height: 0 }, ground: { use: 'lobby', height: 31 }, night: { sign: { text: 'College Football Hall of Fame' } } }] };
+  const pr = resolveDescriptor(validateLandmarks(prov).buildings[0]);
+  ok(pr.bay === 3 && pr.floorHeight === 3.9 && pr.floorHeightSet === false && pr.crown.height === null && pr.ground.height === 31 && pr.night.sign.text === 'COLLEGE FOOTBALL HALL OF FAME', 'provenance fields accepted; 0 = not given; a long sign text kept');
+  throws(() => validateLandmarks({ v: 1, buildings: [{ match: { names: 'A' } }] }), /match.names: expected an array of strings/, 'match.names that is not an array throws');
+  ok(describedRoofHeight(resolveDescriptor({ height: 78, crown: { type: 'antenna', height: 38 } }), 50) === 78 && describedRoofHeight(resolveDescriptor({ height: 140, crown: { type: 'flat', height: 4 } }), 50) === 136, 'an antenna stands above the height; a flat crown\'s own height is part of it');
   throws(() => validateLandmarks({ v: 2, buildings: [] }), /unknown version 2/, 'an unknown version throws');
   throws(() => validateLandmarks({ v: 1, building: [] }), /unknown field 'building' \(v, city, buildings/, 'unknown top-level field throws');
   throws(() => resolveDescriptor({ massing: { setbacks: [{ at: 1.5 }] } }), /setbacks\[0\]\.at: expected a number in 0\.02 \.\. 0\.98/, 'a setback outside the building throws');
@@ -46,6 +54,8 @@ const group = (bb) => { const g = new THREE.Group(); for (const m of bb.build(NO
   ok(resolveDescriptor(d) === d, 'resolveDescriptor is idempotent');
   ok(describedRoofHeight(resolveDescriptor({ height: 312, roofHeight: 264 }), 100) === 264 && describedRoofHeight(resolveDescriptor({ height: 150 }), 100) === 150 && describedRoofHeight(resolveDescriptor({}), 100) === 100, 'roof height: the descriptor\'s, else the architectural height of a flat top, else OSM\'s');
   ok(describedRoofHeight(resolveDescriptor({ height: 200, crown: { type: 'pyramid-spire', height: 40 } }), 100) === 160, 'roof height under a crown: height - crown height');
+  ok(Math.abs(describedRoofHeight(resolveDescriptor({ archetype: 'parking-deck', floors: 7 }), 100) - 22.4) < 1e-9, 'roof height from floors alone: floors x the archetype\'s floor height');
+  ok(resolveDescriptor({ floors: 50, height: 200 }).floorHeightSet === false && resolveDescriptor({ floors: 50, height: 200, facade: { floorHeight: 3 } }).floorHeightSet === true, 'a floor count beats the archetype\'s floor height, the descriptor\'s own floor height beats the count');
   for (const a of ARCHETYPES) ok(resolveDescriptor({ archetype: a }).archetype === a, `archetype ${a} resolves`);
   const r = signRuns('I-1');
   ok(r.w === 17 && r.runs.length === 7 + 1 + 7 && r.runs.every(([a, b, row]) => a <= b && b < 17 && row >= 0 && row < 7), 'signRuns: runs of lit pixels in a 5 x 7 font, one column between letters');
@@ -92,6 +102,27 @@ const group = (bb) => { const g = new THREE.Group(); for (const m of bb.build(NO
   ok(res.matched === 1 && data.buildings[3].d, 'the same point after the map was shifted (offset)');
   const bb = new BuildingBuilder(REGION, {});
   ok(bb.footprint(data.buildings[3]) && bb.footprint({ ...mk().buildings[2], _dsup: 1 }) === null, 'a dropped part has no footprint (no geometry, no collider)');
+  // match.names: any of the names the building may carry in the map
+  data = mk();
+  res = applyBuildingDescriptors(data, { v: 1, buildings: [{ match: { name: 'Peachtree Plaza Hotel', names: ['Westin', 'The Westin Peachtree Plaza, Atlanta'] }, archetype: 'cylinder-tower' }] });
+  ok(res.matched === 1 && data.buildings[3].d, 'match.names: an alternative name matches as match.name does');
+  // a tower OSM cuts into many small pieces side by side (match.pieces >= 8): the descriptor stands on their hull
+  const pieces = () => { const list = []; for (let i = 0; i < 6; i++) for (let k = 0; k < 6; k++) list.push({ p: rect(i * 9, k * 9, 9, 9), h: 190, n: 'Cut Tower', part: 1 }); list.push({ p: rect(200, 0, 20, 20), h: 30, n: 'Other' }); return { buildings: list }; };
+  data = pieces();
+  res = applyBuildingDescriptors(data, { v: 1, buildings: [{ match: { xz: [22, 22], pieces: 36 }, name: 'Cut Tower', archetype: 'glass-tower', height: 260, massing: { plan: 'square' } }] });
+  const cut = data.buildings.find((b) => b.d), fpc = bb.footprint(cut);
+  ok(res.matched === 1 && res.suppressed === 35 && cut.ds && Math.abs(cut.ds.area - 36 * 81) < 1e-6 && Math.abs(Math.abs(fpc.outer[0][0] - fpc.outer[2][0]) - 54) < 0.01 && fpc.h === 260,
+    'a building in 36 pieces: one described building on the pieces\' hull, sized by what they cover; the pieces dropped', JSON.stringify({ ...res, area: cut.ds && cut.ds.area }));
+  data = pieces();
+  res = applyBuildingDescriptors(data, { v: 1, buildings: [{ match: { xz: [22, 22] }, name: 'Cut Tower', archetype: 'glass-tower' }] });
+  ok(res.matched === 1 && res.suppressed === 0 && !data.buildings.find((b) => b.d).ds, 'without match.pieces the matched piece alone takes the descriptor (the rule as it was)');
+  // the Atlanta landmarks next to its bake, where the repository has them: every descriptor valid and matched
+  const atl = new URL('../samples/public/atlanta/map/', import.meta.url);
+  if (existsSync(new URL('landmarks.json', atl)) && existsSync(new URL('city.json', atl))) {
+    const lm = JSON.parse(readFileSync(new URL('landmarks.json', atl), 'utf8')), city = JSON.parse(readFileSync(new URL('city.json', atl), 'utf8'));
+    res = applyBuildingDescriptors(city, lm);
+    ok(res.matched === lm.buildings.length && res.unmatched.length === 0, `atlanta: all ${lm.buildings.length} descriptors match the bake`, JSON.stringify(res.unmatched));
+  }
 }
 
 // ---------------------------------------------------------------- the gate: undescribed buildings are unchanged

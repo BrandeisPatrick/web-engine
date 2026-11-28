@@ -29,15 +29,16 @@ export const SPEC = {
   cache: { type: 'string', def: '.osm-cache', help: 'raw response cache dir' },
   ua: { type: 'string', def: 'roadster-flying-car-map-baker/1.0 (one-off offline bake for a three.js game)', help: 'HTTP User-Agent' },
   refresh: { type: 'bool', def: false, help: 'ignore the cache' },
+  ids: { type: 'bool', def: false, help: 'keep each building\'s OSM id (id: "w123" / "r123"): a landmarks.json can match by it (match.osm)' },
   'dry-run': { type: 'bool', def: false, help: 'print the plan only (no network, no files)' },
 };
 
 // configuration (set by configure() from the options; read by the functions below at call time)
-let ROOT, OUT, CACHE, REFRESH, CENTER, SIZE, OUTER, BRIDGE_EXT, UA, COS0, H, CITY, CITY_BB, OH, OUTER_BB, BRIDGE_BB;
+let ROOT, OUT, CACHE, REFRESH, KEEP_IDS, CENTER, SIZE, OUTER, BRIDGE_EXT, UA, COS0, H, CITY, CITY_BB, OH, OUTER_BB, BRIDGE_BB;
 function configure(o = {}) {
   const d = (k) => (o[k] !== undefined ? o[k] : SPEC[k.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())].def);
   ROOT = process.cwd();
-  OUT = path.resolve(d('out')); CACHE = path.resolve(d('cache')); REFRESH = !!d('refresh');
+  OUT = path.resolve(d('out')); CACHE = path.resolve(d('cache')); REFRESH = !!d('refresh'); KEEP_IDS = !!d('ids');
   CENTER = { lat: d('lat'), lon: d('lon') };
   SIZE = d('size'); OUTER = d('outer');
   const be = d('bridgeExt'); BRIDGE_EXT = { east: be[0] || 0, north: be[1] || 0 };
@@ -596,6 +597,7 @@ export async function bakeMap(opts = {}) {
     const mat = t['building:material'] || (parent && parent.t['building:material']); if (mat) o.m = mat;
     const rc = t['roof:colour']; if (rc) o.rc = rc;
     if (parent) o.part = 1;
+    if (KEEP_IDS && b.e && b.e.id != null) o.id = String(b.e.type || 'way')[0] + b.e.id; // opt-in (--ids): landmarks.json match.osm
     out.buildings.push(o);
   };
   bOutlines.forEach((b, idx) => { if (!hasParts.has(idx)) pushB(b, null); });

@@ -1091,13 +1091,13 @@ export class BuildingBuilder {
    */
   footprint(b) {
     if (b._lm || b._dsup) return null; // _dsup: an OSM part inside a described building (applyBuildingDescriptors)
-    const outer0 = sanitizeRing(b.p);
+    const outer0 = sanitizeRing(b.d && b.ds ? b.ds.p : b.p); // ds: the site of a described building OSM cut into pieces
     if (!outer0) return null;
     let h = Number(b.h); if (!isFinite(h) || h <= 0) h = 10;
     h = clamp(h, 2.5, 600);
     let mh = Number(b.mh) || 0; mh = clamp(mh, 0, h - 1);
     let outer = signedArea(outer0) > 0 ? outer0 : outer0.slice().reverse();
-    let holes = (b.hl || []).map((hr) => sanitizeRing(hr)).filter((hr) => hr && Math.abs(signedArea(hr)) > 2)
+    let holes = (b.d && b.ds ? [] : b.hl || []).map((hr) => sanitizeRing(hr)).filter((hr) => hr && Math.abs(signedArea(hr)) > 2)
       .map((hr) => (signedArea(hr) < 0 ? hr : hr.slice().reverse()));
     let area = Math.abs(signedArea(outer)) - holes.reduce((a, hr) => a + Math.abs(signedArea(hr)), 0);
     if (area < 3) return null;
@@ -1108,7 +1108,7 @@ export class BuildingBuilder {
       const D = b.d._r ? b.d : (b.d = resolveDescriptor(b.d));
       h = clamp(describedRoofHeight(D, h), 2.5, 600); mh = clamp(mh, 0, h - 1);
       if (D.plan !== 'footprint' && D.form === 'tiers') {
-        const pr = planRing(outer, D, area);
+        const pr = planRing(outer, D, b.ds ? b.ds.area : area);
         if (D.podium) site = pr; else { outer = pr; holes = []; area = Math.abs(signedArea(outer)); c = centroid(outer); }
       }
     }

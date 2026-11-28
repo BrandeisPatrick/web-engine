@@ -11,7 +11,8 @@
 //             concrete (MODE.SURF), floodlit at night in the descriptor's colour;
 //   night     a roof-edge light band, a sign in real letters (5 x 7 pixels, one quad per run) on the two widest faces;
 //   forms     church (nave with a ridge roof, a tower with a spire), stadium (a raked bowl round a field), arena (a
-//             shallow dome), parking deck (open trays, a stair core), warehouse (blank walls, a clerestory, dock doors).
+//             shallow dome), parking deck (open trays, a stair core), warehouse (blank walls, a clerestory, dock doors),
+//             ferris wheel (rims, spokes, gondolas, an A-frame; in the plane of the outline's long axis).
 // buildDescribed(builder, buf, b, D, F, rnd): b = the city.json building, D = resolved descriptor, F = the builder's
 // footprint(b) (F.tower: the plan override over a podium), rnd = the building's seeded RNG. Heights are local (0 = the
 // footprint's base); the builder lifts the vertices afterwards. Deterministic.
@@ -80,6 +81,14 @@ function circleRing(cx, cz, r, n, rot = 0) {
   const out = [];
   for (let i = 0; i < n; i++) { const a = rot - (i / n) * Math.PI * 2; out.push([cx + Math.cos(a) * r, cz + Math.sin(a) * r]); }
   return signedArea(out) > 0 ? out : out.reverse();
+}
+/** A round shaft: 12 corners or more, all within 4 % of one distance from the centroid (its walls get radial normals). */
+function isRound(ring) {
+  if (ring.length < 12) return false;
+  const c = centroid(ring);
+  let lo = Infinity, hi = 0;
+  for (const p of ring) { const d = Math.hypot(p[0] - c[0], p[1] - c[1]); lo = Math.min(lo, d); hi = Math.max(hi, d); }
+  return hi - lo < 0.04 * (hi + lo);
 }
 /** Extents of a ring in the frame of its longest edge: { ux, uz, vx, vz, cx, cz (the box centre), W, Dp }. */
 function obb(ring) {
@@ -297,10 +306,11 @@ function tiers(ctx) {
   const { bld, buf, D, F, rnd, H, y0 } = ctx;
   const site = F.outer, foundation = y0 === 0 ? bld.foundation : 0;
   // ---- floors: a ground floor of its own height, then equal floors up to the roof
-  const fhWant = D.floorHeight || (D.floors ? clamp((H - y0) / D.floors, 2.7, 6.5) : 3.8);
+  // floors: the descriptor's own floor height, else its floor count over the height, else the archetype's floor height
+  const fhWant = D.floorHeightSet ? D.floorHeight : D.floors ? clamp((H - y0) / D.floors, 2.7, 6.5) : D.floorHeight || 3.8;
   const parking = D.form === 'parking';
   let gH = 0;
-  if (y0 === 0 && D.ground.use && !parking) { gH = clamp(D.ground.height ?? (H > 60 ? 2 * fhWant : H > 22 ? 1.5 * fhWant : fhWant + 0.6), 3, Math.min(16, H * 0.3)); if (gH < 2.8 || H - gH < 2.6) gH = 0; }
+  if (y0 === 0 && D.ground.use && !parking) { gH = clamp(D.ground.height ?? (H > 60 ? 2 * fhWant : H > 22 ? 1.5 * fhWant : fhWant + 0.6), 3, Math.min(D.ground.height ? 40 : 16, H * 0.3)); if (gH < 2.8 || H - gH < 2.6) gH = 0; }
   const nU = Math.max(1, Math.round((H - y0 - gH) / fhWant)), fh = (H - y0 - gH) / nU, yG = y0 + gH;
   const snap = (y) => yG + clamp(Math.round((y - yG) / fh), 1, nU - 1) * fh;
   const vOf = (y) => (y - yG) / fh;
@@ -313,14 +323,15 @@ function tiers(ctx) {
     if (!F.tower) shaft = shrinkRing(site, D.podium.inset);
     segs.push({ ring: site, ya: y0, yb: yS, podium: true });
   }
+  // setbacks: `at` is a share of the height (the architectural top when the descriptor gives it), on a floor line
   const cuts = [];
-  for (const s of D.setbacks) { const y = snap(s.at * H); if (y > yS + fh * 0.5 && y < H - fh * 0.5 && !cuts.some((q) => Math.abs(q.y - y) < fh * 0.5)) cuts.push({ y, inset: s.inset }); }
+  for (const s of D.setbacks) { const y = snap(s.at * (D.height ?? H)); if (y > yS + fh * 0.5 && y < H - fh * 0.5 && !cuts.some((q) => Math.abs(q.y - y) < fh * 0.5)) cuts.push({ y, inset: s.inset }); }
   let ring = shaft, ya = yS;
   for (const cu of cuts) { segs.push({ ring, ya, yb: cu.y }); ring = shrinkRing(ring, cu.inset); ya = cu.y; }
   segs.push({ ring, ya, yb: H });
   // a taper narrows the shaft linearly from its foot to the roof
   const cS = centroid(shaft), tap = (r, y) => (D.taper && y > yS ? scaleRing(r, cS, 1 - (D.taper * (y - yS)) / Math.max(1, H - yS)) : r);
-  const smooth = (r) => r.length >= 16;
+  const smooth = isRound;
   const up = facade(ctx), lobby = facade(ctx, true);
   if (parking) up.info = [packGrid({ pier: 0.05, span: 0.35, emph: 0, kind: 3 }), 0, packGridSeed(ctx.seed, 0, 1), enc(ctx.wall.pbr, MODE.GRID)];
   // courtyards stay open where the outline runs straight up (no plan override, setback or taper)
@@ -440,7 +451,7 @@ function crown(ctx, ringTop, H, o) {
     if (scr === ringTop) scr = null;
     if (scr) {
       const sh = type === 'flat' ? (D.crown.height || dflt) : dflt * 0.6, L = surface(ctx, 'steel', { pat: 2, rough: 0.5, metal: 0.6, color: [0.5, 0.51, 0.52], lit: null });
-      emitWalls(ctx, scr, H, scr, H + sh, { info: L.info, tint: L.tint, metres: true, wallU: false, smooth: scr.length >= 16 });
+      emitWalls(ctx, scr, H, scr, H + sh, { info: L.info, tint: L.tint, metres: true, wallU: false, smooth: isRound(scr) });
       bld.flatPolygon(buf, scr, [], H + sh - 0.4, ctx.roof, tintFor([0.3, 0.3, 0.31]), true);
     }
     const nH = Math.min(6, Math.floor(area / 600) + (area > 200 ? 1 : 0)), bbx = boundsOf(ringTop), mi = [-1, -1, ctx.seed, enc(PBR.METAL, MODE.PLAIN)];
@@ -484,8 +495,8 @@ function crown(ctx, ringTop, H, o) {
       const src = k === 0 ? base : r, nr = shrinkRing(src, 0.22), hk = ch * hs[k];
       if (nr === src || Math.abs(signedArea(nr)) < 20) break;
       bld.flatPolygon(buf, r, [], y, ctx.roof, ctx.roofTint, true);
-      if (k < 2) emitWalls(ctx, nr, y, nr, y + hk, { info: o.up.info, tint: o.up.tint, bay: o.up.bay, v0: 0, v1: Math.max(1, Math.round(hk / o.fh)), smooth: nr.length >= 16 });
-      else emitWalls(ctx, nr, y, nr, y + hk, { info: S.info, tint: S.tint, metres: true, wallU: false, smooth: nr.length >= 16 });
+      if (k < 2) emitWalls(ctx, nr, y, nr, y + hk, { info: o.up.info, tint: o.up.tint, bay: o.up.bay, v0: 0, v1: Math.max(1, Math.round(hk / o.fh)), smooth: isRound(nr) });
+      else emitWalls(ctx, nr, y, nr, y + hk, { info: S.info, tint: S.tint, metres: true, wallU: false, smooth: isRound(nr) });
       bld.ledge(buf, nr, y + hk - 0.4, 0.5, 0.16, ctx.trim, ctx.trimTint);
       r = nr; y += hk;
     }
@@ -538,7 +549,7 @@ const boundsOf = (r) => { let a = Infinity, b = Infinity, c = -Infinity, d = -In
 function sign(ctx, ring, H, sg) {
   const { buf } = ctx, T = signRuns(sg.text);
   if (!T.runs.length) return;
-  const n = ring.length, round = n >= 16;
+  const n = ring.length, round = isRound(ring);
   // arc length round the ring
   const cum = [0];
   for (let i = 0; i < n; i++) cum.push(cum[i] + Math.hypot(ring[(i + 1) % n][0] - ring[i][0], ring[(i + 1) % n][1] - ring[i][1]));
@@ -636,13 +647,15 @@ function church(ctx) {
   }
   // the tower at one end of the long axis, inside the outline
   const end = seed < 0.5 ? -1 : 1, tu = end * (o.W / 2 - tw / 2 - 0.3), tx = o.cx + o.ux * tu, tz = o.cz + o.uz * tu;
-  const tower = rectRing({ ...o, cx: tx, cz: tz }, tw, tw), tH = Math.max(wallH + roofH + tw * 0.6, H * 0.74), tc = [tx, tz];
+  // the spire ends at the descriptor's height (else a little over the OSM height), the tower under it
+  const top = D.height != null ? D.height : H * 1.08, sh = D.crown.height || clamp(tw * 2.2, 0.18 * top, 0.4 * top);
+  const tower = rectRing({ ...o, cx: tx, cz: tz }, tw, tw), tH = Math.max(wallH + roofH + tw * 0.5, top - sh), tc = [tx, tz];
   emitWalls(ctx, tower, wallH * 0.5, tower, tH - tw * 0.9, { info: ctx.plainWall, tint: ctx.plainTint, metres: true });
   // the belfry: one tall opening a face
   emitWalls(ctx, tower, tH - tw * 0.9, tower, tH, { info: [packGrid({ pier: 0.55, span: 0.25, emph: 2, kind: 3 }), 0, packGridSeed(seed, 0, 1), enc(wall.pbr, MODE.GRID)], tint: wall.tint, bay: tw, v0: 0, v1: 1 });
   bld.ledge(buf, tower, tH - 0.3, 0.45, 0.22, ctx.trim, ctx.trimTint);
-  const S = surface(ctx, D.crown.material || 'copper', {}), sh = D.crown.height || Math.max(tw * 1.6, H * 1.08 - tH);
-  emitCone(ctx, scaleRing(tower, tc, 1.04), tH, [tx, tH + sh, tz], S.info, S.tint);
+  const S = surface(ctx, D.crown.material || 'copper', D.crown.color ? { color: D.crown.color } : {});
+  emitCone(ctx, scaleRing(tower, tc, 1.04), tH, [tx, Math.max(top, tH + tw), tz], S.info, S.tint);
 }
 
 /** Stadium: an outer wall leaning out, a roof band over the upper stand, raked seats down to the field. */
@@ -674,8 +687,8 @@ function arena(ctx) {
   if (!starShaped(ring, c) || F.holes.length) return tiers(ctx);
   const wallH = H * 0.62, up = facade(ctx), lobby = facade(ctx, true), gH = Math.min(6, wallH * 0.45);
   if (bld.foundation) emitWalls(ctx, ring, -bld.foundation, ring, 0, { info: ctx.plainWall, tint: ctx.plainTint, metres: true });
-  emitWalls(ctx, ring, 0, ring, gH, { info: lobby.info, tint: lobby.tint, bay: lobby.bay, v0: 0, v1: 1, smooth: ring.length >= 16, street: true });
-  emitWalls(ctx, ring, gH, ring, wallH, { info: up.info, tint: up.tint, bay: up.bay, v0: 0, v1: Math.max(1, Math.round((wallH - gH) / (D.floorHeight || 5))), smooth: ring.length >= 16 });
+  emitWalls(ctx, ring, 0, ring, gH, { info: lobby.info, tint: lobby.tint, bay: lobby.bay, v0: 0, v1: 1, smooth: isRound(ring), street: true });
+  emitWalls(ctx, ring, gH, ring, wallH, { info: up.info, tint: up.tint, bay: up.bay, v0: 0, v1: Math.max(1, Math.round((wallH - gH) / (D.floorHeight || 5))), smooth: isRound(ring) });
   const out = offsetRing(ring, 0.9), S = surface(ctx, D.crown.material || 'steel', { pat: 3 });
   emitBand(ctx, out, wallH, ring, wallH, ctx.trim, ctx.trimTint, false);
   emitWalls(ctx, out, wallH, out, wallH + 0.8, { info: ctx.trim, tint: ctx.trimTint, metres: true, wallU: false });
@@ -715,6 +728,38 @@ function warehouse(ctx) {
   void rnd;
 }
 
+/**
+ * Ferris wheel: not a building. A wheel in the vertical plane through the outline's long axis, as wide as the outline
+ * is long and with its top at the roof height: two rims with a tread that is lit at night, spokes to a hub, a gondola
+ * under every rim node, an A-frame of four legs, a boarding deck.
+ */
+function wheel(ctx) {
+  const { bld, buf, D, F, H } = ctx, o = obb(F.outer), ang = Math.atan2(o.uz, o.ux);
+  const R = Math.max(4, Math.min(o.W / 2, (H - 2.5) / 2)), hubY = H - R, half = clamp(R * 0.05, 0.9, 1.7), w = clamp(R * 0.022, 0.35, 0.7);
+  const N = 2 * clamp(Math.round((Math.PI * R) / 3.8), 8, 24), white = D.color || [0.95, 0.95, 0.95];
+  const steel = surface(ctx, 'steel', { color: white, metal: 0.3, rough: 0.45, lit: null }), rim = surface(ctx, 'steel', { color: white, metal: 0.3, rough: 0.45, glow: 2.2 });
+  const cab = surface(ctx, 'steel', { color: [0.9, 0.92, 0.95], metal: 0.2, rough: 0.35, lit: ctx.lit ? [1, 0.95, 0.85] : null, glow: 1.2 });
+  const P = (u, y, v) => [o.cx + o.ux * u + o.vx * v, y, o.cz + o.uz * u + o.vz * v], nrm = [o.vx, 0, o.vz];
+  const both = (pts, n, S) => { buf.q(pts, n, S.info, S.tint); buf.q(pts, [-n[0], -n[1], -n[2]], S.info, S.tint); };
+  for (let i = 0; i < N; i++) {
+    const a0 = (i / N) * Math.PI * 2, a1 = ((i + 1) / N) * Math.PI * 2, am = (a0 + a1) / 2, c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+    for (const v of [-half, half]) {
+      // a rim: its face (a band in the wheel's plane) and its tread; every second node a spoke, a flat bar from the hub
+      both([P(c0 * (R - w), hubY + s0 * (R - w), v), P(c1 * (R - w), hubY + s1 * (R - w), v), P(c1 * R, hubY + s1 * R, v), P(c0 * R, hubY + s0 * R, v)], nrm, steel);
+      both([P(c0 * R, hubY + s0 * R, v - 0.15), P(c1 * R, hubY + s1 * R, v - 0.15), P(c1 * R, hubY + s1 * R, v + 0.15), P(c0 * R, hubY + s0 * R, v + 0.15)], [o.ux * Math.cos(am), Math.sin(am), o.uz * Math.cos(am)], rim);
+      if (i % 2 === 0) { const px = -s0 * 0.12, py = c0 * 0.12; both([P(px, hubY + py, v), P(-px, hubY - py, v), P(c0 * (R - w) - px, hubY + s0 * (R - w) - py, v), P(c0 * (R - w) + px, hubY + s0 * (R - w) + py, v)], nrm, steel); }
+    }
+    // a gondola hangs under each rim node, between the rims
+    const G = P(c0 * R, 0, 0);
+    bld.box(buf, G[0], G[2], hubY + s0 * R - 2.5, 1.7, 2 * half - 0.3, 2.1, ang, cab.info, cab.tint);
+  }
+  // the hub, the A-frame (two legs a side, splayed along the wheel's plane and outward), the boarding deck
+  const C = P(0, 0, 0), sq = (u, v, s) => { const c = P(u, 0, v); return circleRing(c[0], c[2], s, 4, ang + Math.PI / 4); };
+  bld.box(buf, C[0], C[2], hubY - 0.8, 1.6, 2 * half + 1.6, 1.6, ang, steel.info, steel.tint);
+  for (const v of [-(half + 0.8), half + 0.8]) for (const u of [-R * 0.5, R * 0.5]) emitWalls(ctx, sq(u, v * 2.4, 0.75), 0, sq(0, v, 0.4), hubY, { info: steel.info, tint: steel.tint, metres: true, wallU: false });
+  bld.box(buf, C[0], C[2], 0, R * 1.2, 2 * half + 7, 1.1, ang, ctx.plainWall, ctx.plainTint, ctx.roof, ctx.roofTint);
+}
+
 /** Build a described building into `buf` (see the header). */
 export function buildDescribed(bld, buf, b, D, F, rnd) {
   const ctx = context(bld, buf, b, D, F, rnd);
@@ -722,5 +767,6 @@ export function buildDescribed(bld, buf, b, D, F, rnd) {
   if (D.form === 'stadium') return stadium(ctx);
   if (D.form === 'arena') return arena(ctx);
   if (D.form === 'warehouse') return warehouse(ctx);
+  if (D.form === 'wheel') return wheel(ctx);
   return tiers(ctx);
 }

@@ -3,7 +3,8 @@
 //
 // city.json (all coordinates metres in the BAKE frame: x = east, z = SOUTH, around `center`; rings are [[x, z], ...]):
 //   { v, source, center: {lat, lon}, size, outer (land square edge, m), bounds: {minX, maxX, minZ, maxZ},
-//     buildings: [{ p: ring, hl?: holes, h, mh?, lv?, t?, r?, rh?, c?, m?, rc?, n? }],
+//     buildings: [{ p: ring, hl?: holes, h, mh?, lv?, t?, r?, rh?, c?, m?, rc?, n?, part?, id? (OSM id, bake-map --ids),
+//                   d? (a building descriptor: BuildingDescriptors.js, set from a landmarks.json) }],
 //     roads: [{ p: polyline, c: class, l?: lanes, o?: oneway, w?: width, n?: name, b?: bridge, ly?: layer,
 //               x?: junction vertex indices, g?: [grounded start, grounded end], sv?: service kind }],
 //     water / land / piers / parks (k: kind) / parking / plazas: [{ p: ring, hl?: holes }],
