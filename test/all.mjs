@@ -22,6 +22,9 @@ const SUITES = [
   { file: 'car-sim.mjs' },
   { file: 'world-build.mjs', shim: true },
   { file: 'world-lights.mjs', shim: true },
+  // world: per-building descriptors (landmarks.json): schema, matching, every archetype / crown / plan builds, inference
+  // from OSM tags, MapWorld; buildings without a descriptor pinned to what the generic builder made before
+  { file: 'building-descriptors.mjs', shim: true },
   // alone: 1e6 event emits in 21 ms idle, limit 150 (44 under load)
   { file: 'core.mjs', alone: true },
   // the Engine's start-up and failure paths: warmUp (dt 0, no fixed step, GPU fence polled), lost context, frame errors

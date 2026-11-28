@@ -21,12 +21,21 @@
 // style.storeDressing: false (opt-in) leaves the shop-front signs / awnings to the game.
 // buildingStyle(b, h, area, rnd, ctx, style) (additive, read-only): the style add() picks for a building with the same
 // seeded rnd (game code that dresses the facades, e.g. samples/nyc-night, reproduces the window layout from it).
+// Described buildings (additive): a building that carries a descriptor (`b.d`, BuildingDescriptors.js: what the building
+// is - massing, facade system and material, crown, ground floor, night treatment) is built from it by
+// BuildingForms.js into the same merged buffers, with two more shader modes: MODE.GRID (an analytic facade grid:
+// piers, spandrels and glass set back, per-building glass colour and lit share) and MODE.SURF (a surface with
+// metalness, roughness, a night light colour and a pattern: lattice, louvres, ribs). opts.infer (opt-in) deduces a
+// descriptor from the OSM tags for buildings without one. A building without a descriptor (and without `infer`) is
+// built exactly as before: same vertices, same draws from its seeded rnd.
 import * as THREE from 'three';
 import { FACADE, WIN_RECTS, PBR, PBR_SETS } from './FacadeTextures.js';
 import { signedArea, sanitizeRing, pointInPoly, ringBounds, centroid, clamp, hashStr, mulberry32 } from './geom.js';
 import { GBUFFER_CHUNK_TAILS } from '../render/GBuffer.js'; // G-buffer captures for the chunks this material replaces
+import { resolveDescriptor, describedRoofHeight, inferDescriptor } from './BuildingDescriptors.js';
+import { buildDescribed, planRing } from './BuildingForms.js'; // imports MODE / enc back from here (used in calls only)
 
-export const MODE = { WALL: 0, WALLONLY: 1, PANE: 2, PLAIN: 3, GRATE: 4, SIGN: 5, CLOCK: 6, CURTAIN: 7, LED: 8 };
+export const MODE = { WALL: 0, WALLONLY: 1, PANE: 2, PLAIN: 3, GRATE: 4, SIGN: 5, CLOCK: 6, CURTAIN: 7, LED: 8, GRID: 9, SURF: 10 };
 /** 4th component of aInfo: PBR layer + 64 * mode */
 export const enc = (pbr, mode) => pbr + 64 * mode;
 
@@ -53,6 +62,8 @@ varying vec3 vTint;
 varying vec3 vWPos;
 varying vec3 vWall; // street height, overhang (AO) height, 1 = wall vertex
 float fHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+// a colour packed into one info component (5 bits a channel, sRGB): MODE.GRID's glass, MODE.SURF's night light
+vec3 fRgb555(float v) { v += 0.5; return pow(vec3(mod(floor(v / 1024.0), 32.0), mod(floor(v / 32.0), 32.0), mod(floor(v), 32.0)) / 31.0, vec3(2.2)); }
 // interior mapping: room box behind the glass. id = room cell, f = entry point (0..1), rt = tangent-space ray
 // (x along the wall, y up, z out of the wall; rt.z < 0 looking in). Returns lit colour (pre-exposure).
 #ifdef FACADE_DETAIL
@@ -386,6 +397,131 @@ if (fMode == 0 || fMode == 2) {
     fCol = vec3(0.6, 0.05, 0.03); fEmis = vec3(1.0, 0.08, 0.04) * (0.3 + 2.5 * blink) * (0.3 + uNight);
   }
   fNStr = 0.0; fRough = 0.3;
+} else if (fMode == 9) {
+  // ---- facade grid (described buildings, BuildingForms.js): bays x floors of glass set back between piers and
+  // spandrels, all analytic. vInfo.x = pier | spandrel | emphasis | kind | lit share (packGrid), vInfo.y = the glass
+  // colour (RGB555), vInfo.z = seed + 1024 * (glass reflectance | panes per bay). kind: 0 wall material (the PBR set,
+  // tinted), 1 curtain wall (spandrel glass, metal mullions), 2 metal panels, 3 open decks (a car park: no glass)
+  float gp = vInfo.x + 0.5, gz = vInfo.z * 1000.0 + 0.5;
+  float pierK = mod(floor(gp), 16.0) * 0.05, spanK = mod(floor(gp / 16.0), 16.0) * 0.05;
+  float emph = mod(floor(gp / 256.0), 4.0), kind = mod(floor(gp / 1024.0), 4.0), litB = mod(floor(gp / 4096.0), 8.0);
+  float zr = floor(gz / 1024.0), seed = (floor(gz) - zr * 1024.0) * 0.001;
+  float refl = mod(zr, 8.0) / 7.0, sub = 1.0 + floor(zr / 8.0);
+  vec3 gc = fRgb555(vInfo.y);
+  vec2 g = vFuv;
+  vec2 fw = fwidth(g) + 1e-4;
+  // bays or floors under about two pixels become their average, each on its own: a far tower keeps its piers as
+  // stripes after its floors have merged (and a ribbon facade its bands after its bays have)
+  float farU = smoothstep(0.3, 0.8, fw.x), farV = smoothstep(0.3, 0.8, fw.y), farK = max(farU, farV);
+  float u0 = pierK * 0.5, v0 = spanK * 0.68, v1 = 1.0 - spanK * 0.32;
+  vec2 c0 = fract(g);
+  float pu = min(c0.x, 1.0 - c0.x), pvl = min(c0.y, 1.0 - c0.y);
+  float openU = mix(smoothstep(u0 - fw.x, u0 + fw.x, pu), 1.0 - pierK, farU);
+  float openV = mix(smoothstep(v0 - fw.y, v0 + fw.y, c0.y) * (1.0 - smoothstep(v1 - fw.y, v1 + fw.y, c0.y)), 1.0 - spanK, farV);
+  // the glass sits behind the wall plane: what shows through an opening is shifted along the view ray, and where the
+  // shifted point is wall the opening's side (the reveal) shows
+  bool curtain = kind > 0.5 && kind < 1.5, deck = kind > 2.5;
+  vec2 sh = fRt.xy / max(0.3, -fRt.z) * vec2(0.07, 0.035) * (curtain ? 0.3 : (emph > 1.5 ? 1.5 : 1.0)) * (1.0 - farK);
+  vec2 c1 = c0 + sh;
+  float in1 = mix(step(u0, min(c1.x, 1.0 - c1.x)) * step(v0, c1.y) * step(c1.y, v1), 1.0, farK);
+  float wGl = openU * openV * in1;
+  float wRev = openU * openV * (1.0 - in1);
+  float wOp = 1.0 - wGl - wRev;
+  // ---- the opaque part
+  float isPier = 1.0 - openU, isSpan = 1.0 - openV;
+  float rec = emph > 1.5 ? isSpan * openU : (emph < 0.5 ? isPier * openV : 0.0); // the part that sits back
+  float pnl = fHash(floor(g) + seed * 37.0);
+  vec3 oCol; float oRough, oMetal = 0.0, oGlass = 0.0;
+  if (curtain) {
+    vec3 mc = fract(seed * 3.3) > 0.5 ? vec3(0.62, 0.64, 0.66) : vec3(0.16, 0.16, 0.17);
+    oCol = mix(gc * (0.05 + 0.05 * pnl), mc, isPier); oRough = mix(0.08, 0.32, isPier); oMetal = 0.85 * isPier; oGlass = 1.0 - step(0.5, isPier);
+  } else {
+    // panel by panel a slightly different tone; a dark joint on the bay and floor lines; the set-back part in shade
+    float jn = max(1.0 - smoothstep(0.0, 1.5 * fw.x, pu), 1.0 - smoothstep(0.0, 1.5 * fw.y, pvl)) * (1.0 - farK) * step(0.5, emph + pierK + spanK);
+    oCol = fCol * (0.92 + 0.16 * pnl) * (1.0 - 0.4 * rec) * (1.0 - 0.32 * jn);
+    oRough = fRough;
+    if (kind > 1.5 && !deck) { oMetal = 0.7; oRough = 0.36; }
+  }
+  // ---- what the opening shows
+  vec2 cell = floor(g);
+  vec2 id = cell + vec2(seed * 113.0, seed * 71.0);
+  vec2 f = clamp(vec2((c1.x - u0) / max(1e-3, 1.0 - 2.0 * u0), (c1.y - v0) / max(1e-3, v1 - v0)), 0.0, 1.0);
+  vec3 gCol, gEmis, gSpec = vec3(0.05); float gRough, gEnv = 1.0; vec2 gN = vec2(0.0);
+  if (deck) {
+    // an open parking tray: a dark soffit, the far side's daylight low down, tube lights under the slab at night
+    float tube = smoothstep(0.76, 0.82, f.y) * (1.0 - smoothstep(0.9, 0.96, f.y)) * step(fract(g.x * 1.5 + seed * 7.0), 0.55);
+    gCol = vec3(0.012) + vec3(0.05, 0.052, 0.055) * (1.0 - f.y) * fDay; gRough = 0.95;
+    gEmis = vec3(0.78, 0.9, 1.0) * uNight * (0.05 + 1.5 * tube) * (0.6 + 0.4 * fHash(id + 5.3));
+  } else {
+    float fl = fHash(vec2(seed * 17.0, cell.y));
+    float hp = mix(fHash(id + 3.7), fl, curtain ? 0.7 : 0.4);
+    float litP = litB > 0.5 ? (litB - 1.0) / 6.0 * clamp(uLitFrac / 0.3, 0.0, 1.3) : uLitFrac * (0.6 + 0.9 * fract(seed * 5.7));
+    float lit = mix(step(1.0 - litP, hp), litP, farK);
+    vec3 lc = (curtain ? mix(vec3(1.0, 0.86, 0.66), vec3(0.85, 0.92, 1.0), step(0.5, fHash(vec2(seed, cell.y)))) : mix(vec3(1.0, 0.7, 0.42), vec3(0.86, 0.9, 1.0), step(0.7, fHash(id + 9.1))))
+      * uWinGain * (0.6 + 0.6 * fHash(id + 5.3)) * uNight;
+    float glow = 0.0;
+    vec3 room = fRoom(id, f, fRt, seed, lit, lc, fDayR * 1.1, 0.0, glow) + lc * glow * 1.2;
+    room = mix(room, vec3(0.55) * (0.04 * fDayR + lc * lit * 0.55), smoothstep(0.12, 0.45, max(fw.x, fw.y)));
+    // panes: mullions inside the opening; the head of the glass in the slab's shade
+    float ms = fract(f.x * sub), mfw = fw.x * sub / max(0.05, 1.0 - 2.0 * u0);
+    float mull = sub > 1.5 ? (1.0 - smoothstep(0.02 * sub, 0.02 * sub + mfw, min(ms, 1.0 - ms))) * (1.0 - farK) : 0.0;
+    float slabSh = smoothstep(0.8, 0.985, f.y);
+    // the glass colour is how the glass looks by day: its hue tints what it reflects, and a dark glass reflects less
+    float bright = max(gc.r, max(gc.g, gc.b));
+    vec3 hue = mix(vec3(1.0), gc / max(0.02, bright), 0.6);
+    gCol = gc * 0.3; gRough = 0.035;
+    gSpec = hue * mix(0.05, 0.75, refl) * mix(0.25, 1.0, sqrt(bright));
+    gEnv = mix(0.9, 1.35, refl) * mix(0.6, 1.0, smoothstep(2.0, 25.0, g.y)) * (1.0 - 0.3 * slabSh);
+    gEmis = room * hue * (1.0 - 0.5 * refl * fDay) * (1.0 - 0.5 * slabSh);
+    gN = (vec2(fHash(id + 0.31 + floor(f.x * sub)), fHash(id + 0.77 + floor(f.x * sub))) - 0.5) * 0.02;
+#ifdef FACADE_DETAIL
+    { float fdP = fHash(id + 23.1 + floor(f.x * sub)); gEnv *= mix(1.0, 0.65 + 0.7 * fdP, uFd.z); }
+#endif
+    gCol = mix(gCol, vec3(0.12), mull); gEmis *= 1.0 - mull; gRough = mix(gRough, 0.35, mull);
+  }
+  bool glassPx = (!deck && wGl > 0.5) || (oGlass * wOp > 0.5);
+  fCol = oCol * (wOp + 0.42 * wRev) + gCol * wGl;
+  fRough = mix(oRough, gRough, wGl);
+  fMetal = oMetal * (wOp + wRev);
+  fEmis = gEmis * wGl;
+  fNxy = mix(fNxy * (curtain ? 0.0 : 1.0), gN, wGl);
+  fNStr = 1.0 - 0.6 * wRev;
+  fAO = mix(fAO, 1.0, wGl);
+  if (glassPx) {
+    fGlass = 1.0;
+    fSpec = wGl > 0.5 ? gSpec : mix(vec3(0.04), gc / max(0.05, max(gc.r, max(gc.g, gc.b))) * 0.12, 0.6);
+    fEnv = wGl > 0.5 ? gEnv : 0.6 * mix(0.6, 1.0, smoothstep(2.0, 25.0, g.y));
+  }
+} else if (fMode == 10) {
+  // ---- a surface with parameters (crowns, screens, sign letters; BuildingForms.js): vInfo.x = metalness | roughness |
+  // night glow | pattern (packSurf), vInfo.y = the night light's colour (RGB555). Patterns: 1 an open lattice (the
+  // gaps are cut out; closes to a solid, dimmer surface as the bars get under a pixel), 2 louvres, 3 ribs / seams
+  float sp = vInfo.x + 0.5;
+  float sMetal = mod(floor(sp), 16.0) / 15.0, sRough = mod(floor(sp / 16.0), 16.0) / 15.0;
+  float sGlow = mod(floor(sp / 256.0), 16.0) * (4.0 / 15.0), pat = mod(floor(sp / 4096.0), 8.0);
+  vec2 g = vFuv;
+  float shade = 1.0;
+  fNStr = 0.5;
+  if (pat > 0.5 && pat < 1.5) {
+    vec2 q = vec2(g.x + g.y, g.x - g.y) * 0.5;
+    float dens = max(fwidth(q.x), fwidth(q.y)) + 1e-4;
+    float bar = min(abs(fract(q.x) - 0.5), abs(fract(q.y) - 0.5)), ring = abs(fract(g.y * 0.25) - 0.5) * 4.0;
+    if (min(bar, ring) > 0.07 + dens * 0.8) discard;
+    shade = mix(1.0, 0.5, smoothstep(0.1, 0.5, dens));
+    fNStr = 0.0;
+  } else if (pat > 1.5 && pat < 2.5) {
+    float k = smoothstep(0.3, 1.2, fwidth(g.y) / 0.3), s = fract(g.y / 0.3);
+    shade = mix(mix(0.28, 1.0, smoothstep(0.22, 0.5, s)), 0.7, k);
+    fNxy = vec2(0.0, mix(-0.35, 0.0, k)); fNStr = 1.0;
+  } else if (pat > 2.5 && pat < 3.5) {
+    float k = smoothstep(0.3, 1.2, fwidth(g.x) / 0.9), s = fract(g.x / 0.9);
+    shade = mix(mix(0.5, 1.0, smoothstep(0.0, 0.1, min(s, 1.0 - s))), 0.9, k);
+  }
+  fCol *= shade * (1.0 + 0.72 * sMetal); // a metal's colour is its reflectance: not held to the tintable sets' 0.58 albedo
+  fMetal = sMetal; fRough = max(0.05, sRough);
+  // floodlit at night: the lamps stand to one side, so the faces of a crown differ and it keeps its shape
+  vec3 sWn = normalize(fNg * mat3(viewMatrix));
+  fEmis = fRgb555(vInfo.y) * fCol * sGlow * uNight * (0.66 + 0.34 * dot(sWn, vec3(0.5, 0.33, 0.8)));
 }
 if (vWall.z > 0.5) {
   float hs = vWPos.y - vWall.x;                                   // height above the street
@@ -872,11 +1008,15 @@ export class BuildingBuilder {
    *   baseGrid [nx,nz]=[2,2], detailGrid [nx,nz]=[4,4], lodDist=700, maxWindows (instances) = 70000,
    *   style: overrides of DEFAULT_BUILDING_STYLE (era / Victorian district rules, historic-name hints),
    *   nearDetail (true): false = skip the near-LOD outputs (real openings, window units, fire escapes, balconies) - the
-   *   base and far-LOD geometry is identical either way; grid: false = no global base / detail buffers (tile builders)
+   *   base and far-LOD geometry is identical either way; grid: false = no global base / detail buffers (tile builders);
+   *   infer (false, opt-in): true = buildings without a descriptor (`b.d`) get one deduced from their OSM tags where
+   *   that beats the seeded style pick (BuildingDescriptors.js inferDescriptor)
    */
   constructor(region, opts = {}) {
     this.region = region;
     this.style = { ...DEFAULT_BUILDING_STYLE, ...(opts.style || {}) };
+    this.infer = !!opts.infer;
+    this.described = 0; // buildings built from a descriptor (given or inferred)
     this.groundAt = opts.groundAt || null;
     this.streetAt = opts.streetAt || null;
     this.offset = opts.offset || { x: 0, z: 0 };
@@ -950,18 +1090,28 @@ export class BuildingBuilder {
    * when buildings are streamed per tile).
    */
   footprint(b) {
-    if (b._lm) return null;
+    if (b._lm || b._dsup) return null; // _dsup: an OSM part inside a described building (applyBuildingDescriptors)
     const outer0 = sanitizeRing(b.p);
     if (!outer0) return null;
     let h = Number(b.h); if (!isFinite(h) || h <= 0) h = 10;
     h = clamp(h, 2.5, 600);
     let mh = Number(b.mh) || 0; mh = clamp(mh, 0, h - 1);
-    const outer = signedArea(outer0) > 0 ? outer0 : outer0.slice().reverse();
-    const holes = (b.hl || []).map((hr) => sanitizeRing(hr)).filter((hr) => hr && Math.abs(signedArea(hr)) > 2)
+    let outer = signedArea(outer0) > 0 ? outer0 : outer0.slice().reverse();
+    let holes = (b.hl || []).map((hr) => sanitizeRing(hr)).filter((hr) => hr && Math.abs(signedArea(hr)) > 2)
       .map((hr) => (signedArea(hr) < 0 ? hr : hr.slice().reverse()));
-    const area = Math.abs(signedArea(outer)) - holes.reduce((a, hr) => a + Math.abs(signedArea(hr)), 0);
+    let area = Math.abs(signedArea(outer)) - holes.reduce((a, hr) => a + Math.abs(signedArea(hr)), 0);
     if (area < 3) return null;
-    const c = centroid(outer);
+    let c = centroid(outer), site = null;
+    if (b.d) {
+      // a described building: h is its roof height (the crown stands on it); a plan override replaces the outline
+      // (under a podium the OSM outline stays, as `site`, and the override is the tower's)
+      const D = b.d._r ? b.d : (b.d = resolveDescriptor(b.d));
+      h = clamp(describedRoofHeight(D, h), 2.5, 600); mh = clamp(mh, 0, h - 1);
+      if (D.plan !== 'footprint' && D.form === 'tiers') {
+        const pr = planRing(outer, D, area);
+        if (D.podium) site = pr; else { outer = pr; holes = []; area = Math.abs(signedArea(outer)); c = centroid(outer); }
+      }
+    }
     let base = 0;
     if (this.groundAt) {
       base = Infinity;
@@ -972,7 +1122,18 @@ export class BuildingBuilder {
       }
       if (!Number.isFinite(base)) base = 0;
     }
-    return { outer, holes, h, mh, area, c, base };
+    return site ? { outer, holes, h, mh, area, c, base, tower: site } : { outer, holes, h, mh, area, c, base };
+  }
+
+  /** A described building (b.d, or one inferred from its tags): BuildingForms.js builds it into the base buffer. */
+  _addDescribed(b, D, rnd, F) {
+    const B = this.baseFor(F.c[0], F.c[1]), start = B.n;
+    buildDescribed(this, B, b, D, F, rnd);
+    if (F.base) B.lift(start, F.base);
+    this.colliders.push([F.outer, F.holes, F.mh, F.h, F.base]);
+    if (!b.lod && this.samples.length < 6000) this.samples.push({ x: +F.c[0].toFixed(1), z: +F.c[1].toFixed(1), y: +F.base.toFixed(1), h: F.h, cat: D.archetype, described: true, detailed: false, fire: false, store: false, n: b.n || D.name || '' });
+    this.count++; this.described++;
+    return true;
   }
 
   /** b: {p, hl?, h, mh?, lv?, t?, r?, rh?, c?, m?, rc?, n?, lod?}; rnd: seeded RNG; fp: footprint(b) if already known */
@@ -981,6 +1142,9 @@ export class BuildingBuilder {
     if (b._lm) return false; // claimed by a hand-modelled landmark (a MapWorld plugin's beforeBuildings hook)
     const F = fp || this.footprint(b);
     if (!F) { this.skipped++; return false; }
+    // a descriptor (given, or with opts.infer deduced from the tags) says what the building is: built from it
+    const D = b.d ? (b.d._r ? b.d : (b.d = resolveDescriptor(b.d))) : this.infer ? (b._di !== undefined ? b._di : (b._di = inferDescriptor(b, F))) : null;
+    if (D && D.form !== 'house') return this._addDescribed(b, D, rnd, F);
     const { outer, holes, h, mh, area, c, base } = F;
     const st = pickStyle(b, h, area, rnd, { xb: c[0] + this.offset.x, zb: c[1] + this.offset.z }, this.style);
     const seed = rnd();
@@ -989,8 +1153,8 @@ export class BuildingBuilder {
     const fh = h / floors;
     const u0 = Math.floor(seed * 4);
 
-    // ---- roof shape
-    let rs = (b.r || '').toLowerCase();
+    // ---- roof shape (a house inferred from the tags gets a pitched roof where OSM gives none)
+    let rs = (b.r || (D ? (seed < 0.7 ? 'gabled' : 'hipped') : '')).toLowerCase();
     let roofH = 0;
     const convex = isConvex(outer);
     const minW = minWidth(outer);
@@ -1876,7 +2040,7 @@ function solidRects(L, y0, y1, holes, emit) {
   }
   flush(Y[Y.length - 1]);
 }
-function isConvex(r) {
+export function isConvex(r) {
   let sign = 0;
   for (let i = 0; i < r.length; i++) {
     const a = r[i], b = r[(i + 1) % r.length], c = r[(i + 2) % r.length];
@@ -1888,7 +2052,7 @@ function isConvex(r) {
   }
   return true;
 }
-function starShaped(r, c) {
+export function starShaped(r, c) {
   for (let i = 0; i < r.length; i++) {
     const a = r[i], b = r[(i + 1) % r.length];
     if ((a[0] - c[0]) * (b[1] - c[1]) - (a[1] - c[1]) * (b[0] - c[0]) <= 0) return false;
@@ -1904,7 +2068,7 @@ export function longAxis(r) {
   }
   return ax;
 }
-function minWidth(r) {
+export function minWidth(r) {
   const ax = longAxis(r);
   let d0 = Infinity, d1 = -Infinity;
   for (const p of r) { const d = -p[0] * ax[1] + p[1] * ax[0]; d0 = Math.min(d0, d); d1 = Math.max(d1, d); }
@@ -1942,7 +2106,7 @@ export function offsetRing(r, d) {
   }
   return out;
 }
-function insertRidgePoints(r, c, nx, nz) {
+export function insertRidgePoints(r, c, nx, nz) {
   const out = [];
   for (let i = 0; i < r.length; i++) {
     const a = r[i], b = r[(i + 1) % r.length];
@@ -1955,7 +2119,7 @@ function insertRidgePoints(r, c, nx, nz) {
   }
   return out;
 }
-function splitByRidge(ring, c, ax) {
+export function splitByRidge(ring, c, ax) {
   const nx = -ax[1], nz = ax[0];
   const side = (p) => (p[0] - c[0]) * nx + (p[1] - c[1]) * nz;
   const A = ring.filter((p) => side(p) >= -1e-6), B = ring.filter((p) => side(p) <= 1e-6);

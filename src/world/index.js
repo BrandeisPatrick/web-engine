@@ -8,6 +8,12 @@ export { RoadNetwork, RBIT, roadStyle, createRoadMaterial, createTactileMaterial
 export {
   BuildingBuilder, TileBuildingBuilder, NullBuf, GeoBuf, createFacadeMaterials, enableFacadeDetail, MODE, enc, tintBytes, tintOf, insetRing, offsetRing, longAxis, UNIT_WINDOW_TRIS, DEFAULT_BUILDING_STYLE, buildingStyle,
 } from './Buildings.js';
+// per-building descriptors (a city's landmarks.json): what a building is, matched to its OSM footprint, or inferred
+export {
+  ARCHETYPES, PLANS, FACADE_SYSTEMS, FACADE_MATERIALS, CROWN_TYPES, CROWN_MATERIALS, GROUND_USES,
+  validateLandmarks, validateDescriptor, resolveDescriptor, applyBuildingDescriptors, inferDescriptor, describedRoofHeight, signRuns,
+} from './BuildingDescriptors.js';
+export { buildDescribed, planRing, packGrid, packGridSeed, packSurf, rgb555, tintFor } from './BuildingForms.js';
 export { FACADE, WIN_RECTS, makeFacadeTextures, PBR, PBR_SETS, GROUND_SETS, loadPbrTextures } from './FacadeTextures.js';
 export { Props } from './Props.js';
 export {
