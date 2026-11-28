@@ -301,3 +301,22 @@ const runW: number = signRuns('WESTIN').w + planRing(cityData.buildings[0].p, { 
 const packed: number = packGrid({ pier: 0.3, span: 0.4, emph: 2, kind: 0, lit: 0.3 }) + packSurf({ metal: 1, rough: 0.3, glow: 2, pat: 1 }) + rgb555([1, 0.7, 0.2]) + tintFor([0.6, 0.4, 0.3])[0]; void packed;
 const archetypeNames: string[] = [...ARCHETYPES, ...CROWN_TYPES]; void archetypeNames;
 const worldWithLandmarks = new MapWorld({ scene: engine.scene, renderer: engine.renderer, buildings: { landmarks, infer: true } }); void worldWithLandmarks;
+// people: finish a rigged character, per-person variety, contact shadows under a crowd
+import { finishPerson, personLight, personVariety, clothMatrix, smoothNormals, mergePersonParts, ContactShadows, DEFAULT_PERSON_LIGHT, type FinishPersonOptions } from '@vibe/engine/world';
+const personModel = new THREE.Group();
+const personLook = personVariety(Math.random);
+const personOpts: FinishPersonOptions = { height: 1.76 * personLook.height, build: personLook.build, clothes: personLook.clothes, light: { rim: 1.2 }, smooth: 'auto', cull: true };
+const person = finishPerson(personModel, personOpts);
+const personHeight: number = person.height + person.materials.length + person.meshes.length; void personHeight;
+const personU = personLight(new THREE.MeshStandardMaterial(), { wrap: DEFAULT_PERSON_LIGHT.wrap }, { mask: false });
+if (personU) personU.uPeople.value.x = 0.5;
+const clothM: THREE.Matrix3 = clothMatrix({ hue: 0.4, sat: 0.8, tint: 0xb9bcc4 }); void clothM;
+const smoothed: number = smoothNormals(new THREE.BoxGeometry(1, 1, 1), 1.15, false); void smoothed;
+const mergedParts: THREE.SkinnedMesh[] = mergePersonParts(personModel, { Shirt: 0x334455 }); void mergedParts;
+const personShadows = new ContactShadows({ parent: engine.scene, max: 16, opacity: 0.8 });
+const personSlot: number = personShadows.add(personModel, person.model, { radius: 0.6 });
+personShadows.update((x, z) => x * 0 + z * 0);
+personShadows.update(0);
+personShadows.opacity = 0.5;
+personShadows.remove(personSlot);
+personShadows.dispose();

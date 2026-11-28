@@ -34,6 +34,7 @@ export const IGNORE = [
   { path: 'samples/public/catalog/', reason: 'the catalogue itself (catalog.json and the thumbnails)' },
   { path: 'samples/public/miami/basis/', reason: 'Basis Universal transcoder (from three/examples/jsm/libs/basis, Apache-2.0): a runtime library for the KTX2 textures, not an asset' },
   { path: 'samples/public/miami/textures-lite/manifest.json', reason: 'phone-tier texture manifest of the Miami drive: it lists no sets (procedural layers)' },
+  { path: 'samples/public/people/LICENSE-Rocketbox.md', reason: 'the MIT licence text of the Microsoft Rocketbox Avatar Library, which must ship with the people files baked from it: not an asset' },
 ];
 
 // ------------------------------------------------------------------------------------------------ file assets
@@ -190,6 +191,27 @@ scene.add(gltf.scene);`,
       credit: { file: 'samples/public/nyc/models/CREDITS.md', row: `\`${file}.glb\``, source: 'Quaternius via poly.pizza', url: `https://poly.pizza/m/${pp}` },
       tags: ['character', 'person', 'rigged', 'animated', 'glb', 'quaternius', 'low poly'],
       description: `Rigged, animated low-poly character by Quaternius (CC0). ${use} The demo plays its walk and idle clips through an AnimationMixer per person (pedestrians.js).`,
+      preview: { az: 30, el: 10, frames: 20, result: 'gltf' },
+    },
+  })),
+  // the people (tools/bake-people.mjs: Microsoft Rocketbox avatars, MIT), shared by the walking starter and the demos
+  ...[
+    ['man-grey-jacket', 'Man in a grey jacket', 'Male_Adult_07', 'grey jacket and jeans', 'The walker of the walking starter and one of the Night NYC drive\'s pedestrians.'],
+    ['man-blazer', 'Older man in a blazer', 'Male_Adult_03', 'grey checked blazer and dark trousers', 'One of the Night NYC drive\'s pedestrians.'],
+    ['man-hooded-jacket', 'Man in a hooded jacket', 'Male_Adult_04', 'dark hooded jacket and khaki trousers', 'One of the Night NYC drive\'s pedestrians.'],
+    ['man-denim-jacket', 'Man in a denim jacket', 'Male_Adult_12', 'denim jacket and light jeans', 'One of the Night NYC drive\'s pedestrians.'],
+    ['woman-leather-jacket', 'Woman in a leather jacket', 'Female_Adult_04', 'brown leather jacket, khaki trousers and boots', 'One of the Night NYC drive\'s pedestrians.'],
+    ['woman-dark-jacket', 'Woman in a dark jacket', 'Female_Adult_07', 'dark jacket, jeans and boots', 'One of the Night NYC drive\'s pedestrians.'],
+    ['woman-blazer', 'Woman in a blazer', 'Female_Adult_09', 'beige blazer and black trousers', 'One of the Night NYC drive\'s pedestrians.'],
+    ['woman-beige-jacket', 'Woman in a beige jacket', 'Female_Adult_14', 'beige jacket, dark jeans and boots', 'One of the Night NYC drive\'s pedestrians.'],
+  ].map(([id, name, avatar, wears, use]) => gltfModel({
+    base: 'people/', key: 'person', url: `${id}.glb`, walk: "c.name === 'Walk'",
+    rest: {
+      id: `people-${id}`, name, category: 'character', usedBy: ['nyc-night'], files: [`samples/public/people/${id}.glb`],
+      credit: { file: 'samples/public/people/CREDITS.md', row: `\`${id}.glb\``, author: 'Microsoft (Rocketbox Avatar Library)', licence: 'MIT (Copyright (c) 2020 Microsoft; keep LICENSE-Rocketbox.md with the file)', source: 'Microsoft Rocketbox Avatar Library', url: 'https://github.com/microsoft/Microsoft-Rocketbox' },
+      tags: ['character', 'person', 'pedestrian', 'rigged', 'animated', 'textured', 'glb', 'rocketbox', id.startsWith('man') ? 'man' : 'woman'],
+      facts: { avatar, clips: 'Idle, Walk (1.3 m/s), Run (5.4 to 5.8 m/s)', bakedWith: 'tools/bake-people.mjs' },
+      description: `Rigged, textured adult in ${wears}, baked from the Microsoft Rocketbox avatar ${avatar} (MIT) by tools/bake-people.mjs: metres, one atlas, one or two draw calls, Idle / Walk / Run. ${use} Finish a clone with finishPerson (world/People.js) for the height, the light and per-person cloth colours.`,
       preview: { az: 30, el: 10, frames: 20, result: 'gltf' },
     },
   })),

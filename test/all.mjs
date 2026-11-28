@@ -46,6 +46,9 @@ const SUITES = [
   { file: 'car-visual.mjs', alone: true },
   // the starters' scenery (world/Scenery.js): country road, park corner, ground cover, road paint; colliders, determinism
   { file: 'scenery.mjs' },
+  // people (world/People.js): smooth normals, one-mesh merge, finishPerson, the light patch's anchors, contact shadows;
+  // the people baker's image code and the baked GLBs' budget (triangles, joints, draws, bytes, clips, licence notice)
+  { file: 'people.mjs' },
   // quality tiers (desktop / mobile): device recommendation, ?quality= / stored precedence, preset merge
   { file: 'quality.mjs' },
   // ui: the game shell's state machine and saved settings (the DOM half is test/browser/shell.mjs)

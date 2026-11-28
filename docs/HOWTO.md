@@ -166,24 +166,25 @@ update(dt, alpha) {
 
 ## Load a GLB and play its clips
 
-Imports: `Assets` (core), `registerRenderLoaders` (render), `AnimationController` (anim). `assets.get()` returns
-`{ scene, animations, instantiate() }`; `instantiate()` returns an Object3D (a skinning-safe clone).
+Imports: `Assets` (core), `registerRenderLoaders` (render), `AnimationController` (anim), `finishPerson` (world).
+`assets.get()` returns `{ scene, animations, instantiate() }`; `instantiate()` returns an Object3D (a skinning-safe
+clone). `finishPerson(model, { height })` (world/People.js) fits the model to a height with its feet at y = 0 and
+lights it as a clothed figure; without it, fit a skinned model yourself with `model.updateMatrixWorld(true)` before
+`new THREE.Box3().setFromObject(model)` (the bones first, or the bounds are wrong).
 
 <!-- from: samples/starter-walk/main.js#glb-load -->
 ```js
-const assets = new Assets({ base: `${BASE}nyc/models/` });
+const assets = new Assets({ base: `${BASE}people/` });
 registerRenderLoaders(assets, renderer);
-assets.add('hero', { type: 'gltf', url: 'ManInSuit.glb' });
+assets.add('hero', { type: 'gltf', url: 'man-grey-jacket.glb' });
 engine.addSystem(assets.system(), 'assets');
 await engine.load((p, label) => shell.setProgress(0.3 + 0.6 * p, label));
 /** @type {import('@vibe/engine/render').GltfAsset} */
 const gltf = assets.get('hero');
 const model = gltf.instantiate(); // an Object3D (a skinning-safe clone)
-// this GLB (converted from FBX) has metalness 0.4 on cloth, skin and hair: the hair mirrored the sky as a grey patch
-model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; Object.assign(o.material, { metalness: 0, roughness: 0.75 }); } });
-model.updateMatrixWorld(true); // bones too: the skinned bounds below read them
-const box = new THREE.Box3().setFromObject(model), k = 1.8 / (box.max.y - box.min.y); // fit to 1.8 m, feet at y = 0
-model.scale.multiplyScalar(k); model.position.y = -box.min.y * k;
+// world/People.js: fit to 1.8 m with the feet at y = 0, cast shadows, and light the figure as cloth and skin (light
+// wraps past the terminator, a soft rim against the dusk); a low-poly model also gets smooth normals here
+finishPerson(model, { height: 1.8 });
 model.rotation.y = Math.PI; // this GLB faces +Z; the engine's forward is -Z
 const player = new THREE.Group().add(model); // the game moves and turns this group
 scene.add(player);
@@ -193,20 +194,29 @@ scene.add(blob);
 ```
 
 `BASE` is `import.meta.env.BASE_URL`. Clip names are the GLB's own and must match exactly; a wrong name throws and lists
-the names the file has. The Quaternius characters in `samples/public/nyc/models/` use `HumanArmature|Man_Idle`,
-`HumanArmature|Man_Walk`, `HumanArmature|Man_Run`.
+the names the file has. The people in `samples/public/people/` (eight clothed adults, MIT: see its CREDITS.md) all
+have `Idle`, `Walk` and `Run`; the low-poly Quaternius characters in `samples/public/nyc/models/` prefix the armature:
+`HumanArmature|Man_Idle`, `HumanArmature|Man_Walk`, `HumanArmature|Man_Run`.
 
 <!-- from: samples/starter-walk/main.js#glb-anim -->
 ```js
-// states name clips by string (the GLB's names; a wrong name throws and lists the right ones); the tree blends by speed
+// states name clips by string (the GLB's names; a wrong name throws and lists the right ones); the tree blends by speed.
+// The points are the ground speeds the cycles were made for (this walk covers 1.35 m/s), so the feet do not slide
 const anim = new AnimationController(model, gltf.animations, {
-  states: { idle: { clip: 'HumanArmature|Man_Idle' }, walk: { clip: 'HumanArmature|Man_Walk' }, run: { clip: 'HumanArmature|Man_Run' } },
-  trees: { move: { type: '1d', param: 'speed', points: [{ at: 0, state: 'idle' }, { at: 2, state: 'walk' }, { at: 5.5, state: 'run' }] } },
+  states: { idle: { clip: 'Idle' }, walk: { clip: 'Walk' }, run: { clip: 'Run' } },
+  trees: { move: { type: '1d', param: 'speed', sync: true, points: [{ at: 0, state: 'idle' }, { at: 1.35, state: 'walk' }, { at: 5.5, state: 'run' }] } },
 });
 anim.play('move');
 ```
 
-Per frame: `anim.setParam('speed', cc.speed).update(dt)`.
+Per frame: `anim.setParam('speed', cc.speed).update(dt)`. `sync: true` keeps the walk and the run in step while they
+blend. Put each point at the ground speed its cycle was made for and the feet do not slide: a baked person carries
+those speeds (`gltf.scene.userData.person.speed`, m/s per clip at the file's height).
+
+For a crowd, give every clone its own look and one shared set of contact shadows (world/People.js; the working
+example is `samples/nyc-night/pedestrians.js`): `finishPerson(model, { height, build, clothes })` with
+`personVariety(rand)` for the three values, then `new ContactShadows({ parent: scene, max })`, `shadows.add(holder,
+model)` per person and `shadows.update((x, z) => groundHeight)` every frame after the mixers.
 
 ## Drive a car
 
