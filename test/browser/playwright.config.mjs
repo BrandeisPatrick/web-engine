@@ -319,11 +319,16 @@ export async function evalStep(page, errors, session, fn, arg, { ms = readyTimeo
 // shade), `off` = the largest share of the frame (%) saturated in any other hue (green, cyan, magenta, ...), `hue` = the
 // largest share (%) any one hue may cover (a cast). A `-mobile` page uses its base page's limits. The `-low` pages
 // load ?look=low on one pose and check only for a black or blown-out frame.
+// 2026-11-28, the balance pass (the owner asked for it: light sources that carry the picture, less haze, a firmer curve;
+// software GL, 1280x720, desktop tier): nyc-night mean 49..57, under40 34..48 %, over160 <= 1.9 %, over240 <= 0.21 %
+// (sign and lamp cores now bloom to white), saturation 0.21..0.27, orange <= 18 %; miami-drive mean 59..76, under40
+// 7..31 %, over160 <= 1.6 %, saturation 0.27..0.37, red <= 33 %. The limits below were widened to hold those frames
+// with the margins the earlier ones had; the floors against the low-key look are unchanged in kind.
 const TWO_TEMP = ['red', 'orange', 'yellow', 'rose', 'azure', 'blue', 'violet'];
 const SANE = { lumMean: [15, 110], over240: [0, 1] };
 export const PAGE_LOOK = {
-  'nyc-night': { default: { lumMean: [44, 75], under40: [10, 51], over160: [0, 3], over240: [0, 0.2], satMean: [0.12, 0.32], palette: TWO_TEMP, off: 4, hue: 20 } },
-  'miami-drive': { default: { lumMean: [54, 100], under40: [0, 36], over160: [0, 4], over240: [0, 0.2], satMean: [0.12, 0.38], palette: TWO_TEMP, off: 4, hue: 35 } },
+  'nyc-night': { default: { lumMean: [42, 75], under40: [10, 56], over160: [0, 4], over240: [0, 0.8], satMean: [0.12, 0.34], palette: TWO_TEMP, off: 4, hue: 24 } },
+  'miami-drive': { default: { lumMean: [50, 100], under40: [0, 40], over160: [0, 4], over240: [0, 0.5], satMean: [0.12, 0.44], palette: TWO_TEMP, off: 4, hue: 40 } },
   'nyc-night-low': { default: SANE }, 'miami-drive-low': { default: SANE },
 };
 export function lookFailure(look, lim) {

@@ -66,7 +66,7 @@ async function boot() {
     Object.assign(mesh.material, { map: maps[0], normalMap: maps[1], roughnessMap: maps[2] || null, color: new THREE.Color(set === asphalt ? 0xe6e6e6 : 0xffffff) });
   }
   // distance haze (PostFX's fog): the far road and the field fade into the sky instead of meeting it at a hard line
-  atmosphere.fogParams.haze = 0.0012;
+  atmosphere.fogParams.haze = 0.0007;
   // #region howto:air
   const air = new AirParticles({ preset: 'pollen', atmosphere, budget: S.effects.particles }); scene.add(air.mesh); // seeds and dust in the low sun
   // #endregion howto:air
@@ -101,8 +101,8 @@ async function boot() {
 
   // ---- post-processing with the tier's settings (desktop: G-buffer + TAA + SSR; mobile: FXAA), resize hook
   const { width, height } = engine.size;
-  // look.aoLit: AO darkens only the ambient light (sunlit faces keep their light); aoTint: a cool tint in what AO leaves
-  const postfx = new PostFX(renderer, scene, camera, { atmosphere, width, height, pixelRatio: engine.pixelRatio, ...S.postfx, look: { aoLit: 0.8, aoTint: [0, 0.03, 0.07] } });
+  // look.aoLit: AO darkens only the ambient light; aoTint: a cool tint in what AO leaves; shafts at 0.4 (toward the sun, 1 whites out the sky)
+  const postfx = new PostFX(renderer, scene, camera, { atmosphere, width, height, pixelRatio: engine.pixelRatio, ...S.postfx, look: { aoLit: 0.8, aoTint: [0, 0.03, 0.07] }, volumetric: S.postfx.volumetric && { intensity: 0.4 } });
   if (postfx.aoPass) postfx.aoPass.enabled = S.passes.ao;          // `passes` is the game's to apply
   if (postfx.bloomPass) postfx.bloomPass.enabled = S.passes.bloom;
   postfx.track(body); // per-object velocity for TAA / motion blur

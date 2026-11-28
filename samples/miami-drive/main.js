@@ -112,9 +112,9 @@ const DUSK_GRADE = DEFAULT_GRADE.map((g) => {
     aeS: OPEN ? 0.7 : 0,
     exp: dusk ? g.exp * DUSK_EXPOSURE : g.exp,
     // open: full colour and a firmer curve (the frame sat in one mauve band: mean 74 / 255 with nothing under 20)
-    sat: dusk ? (OPEN ? 1.08 : 0.85) : g.sat, con: dusk ? g.con + (OPEN ? 0.12 : 0.04) : g.con,
+    sat: dusk ? (OPEN ? 1.04 : 0.85) : g.sat, con: dusk ? g.con + (OPEN ? 0.12 : 0.04) : g.con,
     wb: dusk ? (OPEN ? [1.015, 1.0, 0.975] : [1.04, 1.0, 0.94]) : g.wb, // (open: less pink-orange over the whole frame)
-    sh: dusk ? (OPEN ? [-0.004, 0.0, 0.008] : [0.004, 0.001, -0.004]) : g.sh, hi: dusk ? [0.01, 0.004, -0.01] : g.hi, split: dusk ? 0.6 : g.split,
+    sh: dusk ? (OPEN ? [-0.006, 0.0, 0.012] : [0.004, 0.001, -0.004]) : g.sh, hi: dusk ? [0.01, 0.004, -0.01] : g.hi, split: dusk ? 0.6 : g.split,
     // open: bloom that the lamps, tail lights and lit windows reach (at threshold 4.5 the pass ran and added under 0.1 / 255)
     bT: dusk ? (OPEN ? 1.4 : 4.5) : g.bT, bS: dusk ? (OPEN ? 0.45 : 0.2) : g.bS, bR: dusk ? (OPEN ? 0.45 : 0.28) : g.bR,
     vig: dusk ? (OPEN ? 0.34 : 0.5) : g.vig, grain: dusk ? (OPEN ? 0.02 : 0.03) : g.grain,
