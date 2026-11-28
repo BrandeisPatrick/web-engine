@@ -31,8 +31,10 @@ export function nightLooks({ haze = 0.0011, mist = 0.0009 } = {}) {
  */
 export function nightGrade({ look = 'low', exposure, bloomThreshold, bloomStrength, bloomRadius, grain = 0.025 } = {}) {
   const n = look === 'open' ? {
-    wb: [0.97, 0.995, 1.04], aeK: 0.06, aeS: 0.3, aeMax: 1.35, exp: exposure ?? 1.8, bT: bloomThreshold ?? 1.8, bS: bloomStrength ?? 0.34, bR: bloomRadius ?? 0.42,
-    sat: 1.0, con: 0.24, split: 1.0, sh: [-0.002, 0.001, 0.008], hi: [0.016, 0.006, -0.008], vig: 0.36, grain, ao: 0.7,
+    // bloom that the signs, lamps and lit windows reach (at threshold 1.8 / strength 0.34 the pass ran and changed the
+    // frame by under 0.1 / 255), and a firmer curve: light sources carry the picture, the darks stay dark
+    wb: [0.97, 0.995, 1.04], aeK: 0.06, aeS: 0.3, aeMax: 1.35, exp: exposure ?? 1.8, bT: bloomThreshold ?? 1.0, bS: bloomStrength ?? 0.6, bR: bloomRadius ?? 0.5,
+    sat: 1.0, con: 0.34, split: 1.0, sh: [-0.002, 0.001, 0.008], hi: [0.016, 0.006, -0.008], vig: 0.36, grain, ao: 0.7,
   } : {
     // the low-key grade: fixed exposure (no adaptation), a lower bloom threshold with a wider, weak radius (halation
     // around lamps and windows, not glare), warm near-neutral, saturation and contrast as the reference
@@ -49,7 +51,7 @@ export function nightGrade({ look = 'low', exposure, bloomThreshold, bloomStreng
  */
 export function nightLook(look = 'low') {
   return look === 'open'
-    ? { aoLit: 0.8, aoTint: [0.0, 0.03, 0.07], lift: [0.006, 0.0085, 0.014] }
+    ? { aoLit: 0.8, aoTint: [0.0, 0.03, 0.07], lift: [0.0024, 0.0034, 0.0056] } // (a lower floor than before: with half the haze the darks no longer sit in a veil)
     : { aoLit: 0.8, aoTint: [0.0, 0.02, 0.05], lift: [0.0022, 0.0028, 0.0045] };
 }
 
@@ -103,12 +105,15 @@ export const DUSK_HOURS = 19.25; // sun ~8.5 deg below the horizon: afterglow on
 /** Atmosphere `looks` for late dusk: night keyframes below -12 deg (as nightLooks) and a dusk keyframe at -6 deg with
  *  urban haze thickening toward the glow and scattered dark cumulus lit warm from below. */
 export function duskLooks(look = 'low') {
-  const base = nightLooks({ haze: 0.0016, mist: 0.0011 });
+  // 'open': half the haze and mist. At the earlier densities everything past 50 m carried a fifth of the sky's mauve
+  // (a veil over the whole street); at half, the far blocks still step back but the near ones keep their darks
+  const air = look === 'open' ? 0.5 : 1;
+  const base = nightLooks({ haze: 0.0016 * air, mist: 0.0011 * air });
   // clouds (both looks): lit warm from below by the afterglow (they were darker than the glow behind them, a hard dark
   // smudge down the avenue), fewer of them
   const dusk = {
     turb: 2.6, ray: 1.6, mie: 0.003, g: 0.8, tw: 1, night: 0.05, glowA: 1.0, sun: 1, env: 0.5, hemi: look === 'open' ? 0.34 : 0.2,
-    haze: 0.0026, mist: 0.0014, cover: 0.24, cirrus: 0.18, cop: 0.92, cs: [0.42, 0.19, 0.09], ca: [0.05, 0.055, 0.085], aur: 0,
+    haze: 0.0026 * air, mist: 0.0014 * air, cover: 0.24, cirrus: 0.18, cop: 0.92, cs: [0.42, 0.19, 0.09], ca: [0.05, 0.055, 0.085], aur: 0,
   };
   return base.map((k) => (k.el > -12 && k.el <= -3 ? { ...k, ...dusk, el: k.el } : k));
 }

@@ -26,7 +26,7 @@
 import * as THREE from 'three';
 import { Engine, Assets, PoseInterpolator, createBenchHarness, readBenchParams, resolveQuality } from '@vibe/engine/core';
 import { VehicleController, Gearbox } from '@vibe/engine/physics';
-import { PostFX, registerRenderLoaders, TextureSets, ClusteredLights, installClusteredChunks, applyPatches, weathering, TyreFx } from '@vibe/engine/render';
+import { PostFX, registerRenderLoaders, TextureSets, ClusteredLights, installClusteredChunks, applyPatches, weathering, TyreFx, AirParticles } from '@vibe/engine/render';
 import { VehicleInput, VEHICLE_ACTIONS, PAD_BUTTONS as B } from '@vibe/engine/input';
 import { ChaseRig } from '@vibe/engine/camera';
 import { GameShell } from '@vibe/engine/ui';
@@ -65,7 +65,10 @@ const Q = resolveQuality({
     desktop: {
       engine: { maxPixelRatio: 1.5, adaptiveResolution: true }, // 2268x1473 on a 14" Retina, as miami-drive: native 3024x1964 is 16.5-18 ms, this 10.7-11.6
       shadows: { cascades: 2, kernel: 'fast', nearMapSize: 2048, farInterval: 8 }, // far map every 8th frame
-      postfx: { ssr: { scale: 0.4, steps: 22, refine: 4, maxDistance: 120, thickness: 0.6, maxRoughness: 0.45, edgeFade: 0.2, jitter: false, denoise: 5, interval: 2 }, volumetric: { scale: 0.25, steps: 12, maxDistance: 220, intensity: 1, density: 1 } },
+      // no volumetric pass: at dusk it marched the weak moon for a change of 0.16 (avenue) to 1.6 (square) of 255, a faint
+      // veil, for about 0.4 ms a frame; the post fog's own glow toward the light stands in (as on the mobile tier), and the
+      // time goes to bloom, which now has bright signs and lamps to work on (?volumetric=1 puts the pass back for an A/B)
+      postfx: { ssr: { scale: 0.4, steps: 22, refine: 4, maxDistance: 120, thickness: 0.6, maxRoughness: 0.45, edgeFade: 0.2, jitter: false, denoise: 5, interval: 2 }, volumetric: params.has('volumetric') ? { scale: 0.25, steps: 12, maxDistance: 220, intensity: 1, density: 1 } : false },
       // cutoff: each point light ends, faded, where it stops showing (ClusteredLights): 0.45 ms a frame on square and
       // sidewalk for <= 0.012 / 255 mean (0.01 would save 0.1 ms more and take a soft far highlight off the pavement)
       lights: { clustered: true, clusteredRange: 200, cutoff: 0.0025 },
@@ -226,9 +229,12 @@ async function boot() {
   const wet = makeStreetsWet(world, { wet: 1, cover: 0.16, env: cityEnv }); // damp, puddles in the gutters and low spots
   quietBuildingSigns(world);
   // mobile (no TAA, no SSR to darken the glossy street): the signs a little dimmer, so highlights keep their colour
-  const signGain = DESK ? 1 : 0.8;
+  // open look: the screens and signs are the brightest things on the street (2.2x: they bloom, light the trees and
+  // show in the wet road), and lit rooms are bright enough to read from the car
+  const LIT = LOOK === 'open' ? { sign: 2.2, win: 1.8, signLight: 2, shop: 1.5, lamp: 1.5 } : { sign: 1, win: 1, signLight: 1, shop: 1, lamp: 1 };
+  const signGain = (DESK ? 1 : 0.8) * LIT.sign;
   // lit windows dimmer than the engine's dusk tuning: rooms read as rooms (with the wet street and the signs brighter)
-  if (world.mat.facade.userData.uniforms) world.mat.facade.userData.uniforms.uWinGain.value = DESK ? 0.5 : 0.42;
+  if (world.mat.facade.userData.uniforms) world.mat.facade.userData.uniforms.uWinGain.value = (DESK ? 0.5 : 0.42) * LIT.win;
   const signs = buildSignage({ world, square: SQUARE, squareRadius: 210, shopRadius: DESK ? 560 : 380, maxScreens: NY.maxScreens, lightScale: 0.6, interiors });
   scene.add(signs.group);
   signs.uniforms.uSignGain.value = signGain;
@@ -240,9 +246,9 @@ async function boot() {
   // is a broad source, not a bulb) at 0.475x the level, which keeps its light on the pavement below and on the awning
   // a metre or two away as it was, without a hot spot at the nearest stripe.
   for (const l of signs.lights) if (l.kind === 'shop') {
-    const k = (LOOK === 'open' ? 6.5 : 3) / Math.max(0.3, l.r) * 0.475; l.r *= k; l.g *= k * 0.95; l.b *= k * 0.85; l.range = 10;
+    const k = (LOOK === 'open' ? 6.5 : 3) / Math.max(0.3, l.r) * 0.475 * LIT.shop; l.r *= k; l.g *= k * 0.95; l.b *= k * 0.85; l.range = 10;
     l.x = l.sx + l.nx * 1.75; l.z = l.sz + l.nz * 1.75; l.y += 0.1; l.decay = 1;
-  }
+  } else { l.r *= LIT.signLight; l.g *= LIT.signLight; l.b *= LIT.signLight; } // what a screen or a fascia throws on the street
   // cars: contact shadows, and glossy paint that picks up the sky glow and the lamps
   const carShadows = world.traffic ? new CarShadows({ scene, world, max: DESK ? 48 : 24 }) : null;
   if (world.traffic && world.traffic.material) world.traffic.material.envMapIntensity = 2.2;
@@ -277,7 +283,7 @@ async function boot() {
   // pedestrian signal lenses (Props: a flat 8-sided disc, unlit colour): the engine's WALK white (1.7) and hand orange
   // (3.0) are daytime levels; under this grade's exposure the WALK disc clipped flat white. Night levels: lit, not blown.
   { const PC = world.props && world.props._colors; if (PC && PC.walk) { PC.walk.setRGB(0.3, 0.34, 0.33); PC.dont.setRGB(1.0, 0.34, 0.03); } }
-  { const LP = world.props && world.props.lightPool; if (LP) { LP.color.setRGB(1.0, 0.62, 0.3).multiplyScalar(DESK ? (LOOK === 'open' ? 4.5 : 6.0) : 1.8); LP.reach = 15; LP.spot = { cosInner: 0.97, cosOuter: 0.8, near: 5 }; if (DESK) LP.yOffset = 0.15; LP._fresh = true; for (const l of LP.lights || []) { l.color.copy(LP.color); l.distance = 15; } } }
+  { const LP = world.props && world.props.lightPool; if (LP) { LP.color.setRGB(1.0, 0.62, 0.3).multiplyScalar((DESK ? (LOOK === 'open' ? 4.5 : 6.0) : 1.8) * LIT.lamp); LP.reach = 15; LP.spot = { cosInner: 0.97, cosOuter: 0.8, near: 5 }; if (DESK) LP.yOffset = 0.15; LP._fresh = true; for (const l of LP.lights || []) { l.color.copy(LP.color); l.distance = 15; } } }
   // facade light (facades.js), roof lines and wall clutter (rooftops.js), light in the air (airglow.js)
   const westAz = (NYC_SUN.azimuthStart + NYC_SUN.azimuthSpan * Math.min(1.15, (DUSK_HOURS - NYC_SUN.rise) / (NYC_SUN.set - NYC_SUN.rise))) * DEG;
   const facadeGrade = gradeFacades({ world, west: { x: Math.sin(westAz), z: -Math.cos(westAz) }, lamps: 4, skyGain: NIGHT ? 0.3 : 1, canyon: LOOK === 'open' ? (DESK ? [0.62, 1.25] : [0.72, 1.25]) : (DESK ? [0.45, 1.25] : [0.58, 1.25]) }); // the canyon floor dark, never black
@@ -289,6 +295,26 @@ async function boot() {
   memlog('signs');
   console.info('[nyc] signage', signs.counts, `${signs.lights.length} sign lights`);
   const lampPos = (world.props && world.props.lampHeads) || [];
+  // a last drizzle in the air after the rain (the engine's AirParticles: one draw call, no CPU per drop). The drops only
+  // show where light reaches them: the five street lamps nearest the camera and the car's own headlights
+  const rain = new AirParticles({ preset: 'drizzle', lights: 6, budget: NY.steam, atmosphere: world.atmo });
+  scene.add(rain.mesh);
+  const rainLights = [], rainNear = [];
+  let rainT = 0;
+  const HEAD_AT = new THREE.Vector3();
+  function rainLamps(cam, withCar) {
+    const cx = cam.position.x, cz = cam.position.z;
+    rainNear.length = 0;
+    for (const hd of lampPos) { const d = (hd[0] - cx) * (hd[0] - cx) + (hd[2] - cz) * (hd[2] - cz); if (d < 60 * 60) rainNear.push([d, hd]); }
+    rainNear.sort((p, q) => p[0] - q[0]);
+    rainLights.length = 0;
+    for (let i = 0; i < Math.min(5, rainNear.length); i++) rainLights.push({ position: rainNear[i][1], color: [1.0, 0.66, 0.36], intensity: 26, range: 14 });
+    if (withCar && drive.visual && drive.visual.root.visible) { // the pool of the headlights, a few metres ahead of the bonnet
+      HEAD_AT.set(0, 0.9, -5.5).applyMatrix4(drive.visual.root.matrixWorld);
+      rainLights.push({ position: HEAD_AT, color: [0.9, 0.95, 1.0], intensity: 22, range: 11 });
+    }
+    rain.setLights(rainLights);
+  }
   // vents: on the carriageway of named streets around the square (seeded), two of them under a striped stack
   const vents = [];
   {
@@ -575,6 +601,8 @@ async function boot() {
       updateSignage(signs, time);
       facadeGrade.update(camera); air.update(camera);
       steam.update(dt, camera);
+      rainT -= dt; if (rainT <= 0) { rainT = 0.25; rainLamps(camera, true); }
+      rain.update(dt, camera);
       if (carShadows) carShadows.update(camera.position);
       if (trim) trim.update(dt);
       pinEnv();
@@ -744,6 +772,13 @@ async function boot() {
       },
       // ?lookposes=1 only (picture review, not the perf bench): the close views where exposure and lamp pools show
       ...(params.has('lookposes') ? {
+        drive(cam) { // the played frame: behind the player's car where it starts on 7th Avenue, its lamps on
+          const r = drive.visual.root; r.visible = true; r.updateMatrixWorld(true); posedAt = null;
+          drive.visual.update(0, drive.car, { darkness: world.atmo.darkness });
+          const f = new THREE.Vector3(0, 0, -1).applyQuaternion(r.quaternion);
+          cam.position.copy(r.position).addScaledVector(f, -6.4); cam.position.y += 2.3; cam.up.set(0, 1, 0);
+          cam.lookAt(r.position.x + f.x * 16, r.position.y + 1.1, r.position.z + f.z * 16);
+        },
         road(cam) { // the middle of the crosstown carriageway, looking west down the street
           const A = XTOWN, gy = world.getGroundHeight(A.x, A.z);
           cam.position.set(A.x - A.dx * 6, gy + 1.6, A.z - A.dz * 6); cam.up.set(0, 1, 0);
@@ -804,6 +839,7 @@ async function boot() {
       world.time = 0;
       steamAcc = steam.vents.map((v) => v.acc);
       steam.preroll(4, cam);
+      rainLamps(cam, true); rain.time = 4; rain.update(0, cam); // the drizzle held at a fixed moment (captures repeat)
       if (peds) peds.scatter(cam.position.x, cam.position.z, 4711);
       if (posedAt && peds) peds.update(0, posedAt.x, posedAt.z);
     },
@@ -854,6 +890,7 @@ async function boot() {
         updateSignage(signs, liveT);
         facadeGrade.update(cam); air.update(cam);
         steam.update(dt, cam);
+        rain.update(dt, cam);
         if (carShadows) carShadows.update(cam.position);
         pinEnv();
       },
@@ -869,6 +906,7 @@ async function boot() {
         if (carShadows) carShadows.update(cam.position);
         if (steamAcc) steam.vents.forEach((v, i) => { v.acc = steamAcc[i]; });
         steam.preroll(4, cam); // the same pre-roll as after()'s (seeded, from the same accumulators)
+        rain.time = 4; rain.update(0, cam);
         shadowFrame = shadowF;
       },
     },
@@ -896,6 +934,7 @@ async function boot() {
       'wet': { get: () => wet.uniforms.uWet.value, set: (v) => { wet.uniforms.uWet.value = +v; } },
       'postfx.ssr.denoise': { get: () => (postfx && postfx.ssr ? postfx.get('ssr.denoise') : 0), set: (v) => { if (postfx && postfx.ssr) postfx.set('ssr.denoise', +v); } },
       'steam': { get: () => steam.mesh ? steam.mesh.visible !== false : false, set: (v) => { if (steam.mesh) steam.mesh.visible = !!v; } },
+      'rain': { get: () => rain.mesh.visible, set: (v) => { rain.mesh.visible = !!v; } },
     },
   });
   const bp = readBenchParams(location.search);
@@ -912,7 +951,7 @@ async function boot() {
   if (bp.enabled) { delete engine.start; harness.freeze(); }
   const loadMs = Math.round(performance.now() - t0), warm = shell.warm || {};
   window.__nyc = {
-    THREE, engine, world, postfx, atmo: world.atmo, clustered, extra, signs, steam, wet, drive, input, rig, hud, shell, harness, peds,
+    THREE, engine, world, postfx, atmo: world.atmo, clustered, extra, signs, steam, rain, wet, drive, input, rig, hud, shell, harness, peds,
     quality: Q, facadeGrade, walls, ground, kit, crowns, air, roofs, audio, motor: () => motor, setCar, placeCar, resetCar, CAR_START, SQUARE, loadMs, loadWorldMs, geo, streetAt,
   };
   console.info(`[nyc] ready in ${loadMs} ms (world ${loadWorldMs} ms, warm-up ${warm.ms} ms: compile ${warm.compileMs}, fence ${warm.fence}) · tier ${Q.tier} (${Q.source}${Q.lighter ? ', lighter after a graphics reset' : ''}) · ${signs.lights.length} sign lights · ${world.stats.lamps} lamps · ${world.stats.vehicles} vehicles · car ${drive.id}`);

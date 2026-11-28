@@ -71,6 +71,9 @@ export { TyreFx } from './TyreFx.js';
 /** @typedef {import('./TyreFx.js').TyreFxOptions} TyreFxOptions */
 /** @typedef {import('./TyreFx.js').TyreFxBudget} TyreFxBudget */
 export { ParticleSystem, ParticleEmitter, softDotTexture, atmosphereSunFactor } from './Particles.js';
+// what floats in the air around the camera (motes, pollen, leaves, drizzle, snow, fireflies): one draw call, no CPU per particle
+export { AirParticles, AIR_PRESETS, AIR_MAX_LIGHTS } from './AirParticles.js';
+/** @typedef {import('./AirParticles.js').AirParticlesOptions} AirParticlesOptions */
 // procedural noise: seeded simplex 2D / 3D, RNG, hash, tileable value noise; the whole module (incl. the
 // clamp / lerp / smoothstep easing helpers) is also available namespaced as Noise
 export { Simplex, simplex2, simplex3, mulberry32, hash2, pnoise, pfbm } from './noise.js';

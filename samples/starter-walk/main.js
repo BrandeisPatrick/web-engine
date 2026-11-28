@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { Engine, Assets, PoseInterpolator, resolveQuality, createBenchHarness } from '@vibe/engine/core';
 import { PhysicsWorld, CharacterController } from '@vibe/engine/physics';
-import { Atmosphere, PostFX, NearestLights, registerRenderLoaders, loadTextureManifest, loadTextureSet, softDotTexture, applyPatches, weathering } from '@vibe/engine/render';
+import { Atmosphere, PostFX, NearestLights, AirParticles, registerRenderLoaders, loadTextureManifest, loadTextureSet, softDotTexture, applyPatches, weathering } from '@vibe/engine/render';
 import { parkCorner, groundCover } from '@vibe/engine/world';
 import { AnimationController } from '@vibe/engine/anim';
 import { CharacterInput } from '@vibe/engine/input';
@@ -37,10 +37,10 @@ async function boot() {
   // ---- sky, sun, fog, shadows (timeOfDay: hours or 'dawn'..'night'); opt-in: soft clouds lit from the afterglow
   const atmosphere = new Atmosphere({ scene, renderer, camera, timeOfDay: 'dusk', shadows: S.shadows, cloudStyle: 'lit' });
   // #endregion howto:walk-engine
-  atmosphere.fogParams.haze = 0.004; // distance haze (PostFX's fog): the ground's far edge fades into the sky
+  atmosphere.fogParams.haze = 0.0022; // distance haze (PostFX's fog): the ground's far edge fades into the sky
 
   // ---- ground with a PBR texture set. `base` is the folder holding manifest.json and one folder per set id
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x6f7a5a }));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000, 96, 96).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x6f7a5a })); // segments: depth precision
   ground.receiveShadow = true; scene.add(ground);
   shell.setProgress(0.1, 'Textures');
   // #region howto:ground-texture
@@ -70,6 +70,7 @@ async function boot() {
   // ---- the place around the lamp (world/Scenery.js): a gravel path, a bench, a fence, boulders, trees (colliders too)
   const place = parkCorner({ physics, lamp: [lampAt.x, lampAt.z] }); scene.add(place.group);
   applyPatches(ground.material, [groundCover({ paths: place.paths })]); // broad lush / dry / bare patches, the path
+  const air = new AirParticles({ preset: 'fireflies', budget: S.effects.particles }); scene.add(air.mesh); // fireflies over the grass (render)
 
   // ---- the character: a GLB with clips. Change the file, the height and the clip names for your own model
   // #region howto:glb-load
@@ -141,7 +142,6 @@ async function boot() {
   sfx.loop('lamp.hum', { at: lampAt, gain: 0.2 });               // the lamp hums when you are near it
   shell.use({ engine, audio, inputs: [input] }); // the start click calls audio.start(); pause mutes, Esc / P pause
   // #endregion howto:sound
-
   // ---- the game loop: input per frame, simulation per fixed step, drawing per frame
   const move = { x: 0, z: 0 }, fwd = new THREE.Vector3(), right = new THREE.Vector3(); let walked = 0;
   engine.addSystem({
@@ -178,7 +178,7 @@ async function boot() {
     },
     // #endregion howto:walk-draw
     lateUpdate(dt) {
-      atmosphere.update(camera.position, dt);
+      atmosphere.update(camera.position, dt); air.update(dt, camera);
       // #region howto:lamp-update
       lamps.update(dt, { position: camera.position }, 12); // PointLight intensity: 8-12 for a garden lamp at 12 m reach
       // #endregion howto:lamp-update
@@ -193,7 +193,7 @@ async function boot() {
   // #endregion howto:start
   // ---- page contract for the browser tests (npm run smoke): window.__sample with `ready`
   // #region howto:page-contract
-  window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-walk', quality: Q }), { cc, anim, shell, audio }).setReady();
+  window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-walk', quality: Q }), { cc, anim, shell, audio, atmosphere, postfx, air }).setReady();
   // #endregion howto:page-contract
 }
 boot().catch((e) => { console.error('[starter-walk] boot failed', e); shell.error(`Failed to start: ${e.message}`); });

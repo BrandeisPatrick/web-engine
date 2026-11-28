@@ -71,6 +71,7 @@ const SUITES = [
   { file: 'gpu-particles.mjs', shim: true },
   // skid marks and tyre smoke from wheels[i].slideHeat (TyreFx): clean corner leaves nothing, a slide marks and smokes
   { file: 'tyre-fx.mjs', shim: true },
+  { file: 'air-particles.mjs', shim: true },
   { file: 'clustered.mjs' },
   { file: 'shadows.mjs' },
   // directional lights black at the pixel skip their BRDF (shadows.skipUnlit)

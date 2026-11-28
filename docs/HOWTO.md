@@ -24,6 +24,7 @@ Contents: [Engine and quality tiers](#engine-and-quality-tiers) · [Start withou
 [A textured mesh from a texture set](#a-textured-mesh-from-a-texture-set) · [HUD text](#hud-text) ·
 [Loading, a start screen and pause](#loading-a-start-screen-and-pause) ·
 [Play a sound](#play-a-sound) · [Vehicle sound](#vehicle-sound) · [Car sounds](#car-sounds) · [GPU particles](#gpu-particles) ·
+[Things in the air](#things-in-the-air) ·
 [Static and loose physics bodies](#static-and-loose-physics-bodies) ·
 [A small track without the world layer](#a-small-track-without-the-world-layer) ·
 [Add a sample page](#add-a-sample-page) · [Test a page headlessly](#test-a-page-headlessly)
@@ -707,6 +708,22 @@ engine.addSystem({
 }, 'dust');
 ```
 
+## Things in the air
+
+`AirParticles` (render): dust motes, pollen, leaves, drizzle, rain, snow, embers or fireflies around the camera, in one
+draw call with no work per particle on the CPU (a box of particles wraps around the camera). They are lit, not
+textured: the sun's colour with a lobe toward the sun, the sky's ambient, and up to six point lights you pass, so rain
+shows in a lamp's light. `budget` takes the tier's `effects.particles`.
+
+<!-- from: samples/starter-drive/main.js#air -->
+```js
+const air = new AirParticles({ preset: 'pollen', atmosphere, budget: S.effects.particles }); scene.add(air.mesh); // seeds and dust in the low sun
+```
+
+Per frame, after the camera moved: `air.update(dt, camera)`. Lamps: `new AirParticles({ preset: 'drizzle', lights: 6 })`
+and `air.setLights([{ position: [x, y, z], color: 0xffb070, intensity: 26, range: 14 }])` with the lamps nearest the
+camera (`samples/nyc-night/main.js`). The presets are `AIR_PRESETS`; every value in one can be overridden.
+
 ## Static and loose physics bodies
 
 `PhysicsWorld`, `DynamicsWorld`, `attachToPhysicsWorld`, `boxShape`, `sphereShape` (physics). Static boxes take a
@@ -784,7 +801,7 @@ browser tests can tell when it is ready:
 
 <!-- from: samples/starter-walk/main.js#page-contract -->
 ```js
-window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-walk', quality: Q }), { cc, anim, shell, audio }).setReady();
+window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-walk', quality: Q }), { cc, anim, shell, audio, atmosphere, postfx, air }).setReady();
 ```
 
 `quality: Q` (optional) puts the resolved tier on the harness (`window.__sample.quality`) for the tests.

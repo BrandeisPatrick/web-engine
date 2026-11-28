@@ -553,6 +553,12 @@ Two paths, chosen per `PostFX` instance; the forward path is the default and ren
 - **GPU particles** (`render/GpuParticles.js`): the `ParticleSystem` API (same `spawn` / `emit` / `update`) over
   `GPUComputationRenderer` ping-pong textures, 65k particles, deterministic slot assignment, optional depth-buffer
   collision.
+- **Air particles** (`render/AirParticles.js`): what floats around the camera (`AIR_PRESETS`: motes, pollen, leaves,
+  drizzle, rain, snow, embers, fireflies) as one instanced draw with no per-particle CPU work: fixed random points in
+  a box that the vertex shader moves (wind, fall, wobble) and wraps around the camera. Lit by the sun's colour with a
+  forward lobe, the sky's ambient and up to `AIR_MAX_LIGHTS` (6) point lights from `setLights()`; a particle under
+  `minPixels` on screen is drawn at that size and dimmed (no sub-pixel flicker). `new AirParticles({ preset,
+  atmosphere, budget })`, `air.update(dt, camera)`, `air.time` (settable: a bench holds it). `test/air-particles.mjs`.
 - **Temporal upscaling** (`renderScale` < 1, TAA only, default 1): the scene and the passes before TAA run at the
   drawing buffer x s and the TAA resolve upscales; `postfx.set('renderScale', s)` changes it live and keeps the TAA
   history (no pop). The demos start at 1; adaptive resolution (`Engine`, `renderScales` + `onRenderScale`) steps

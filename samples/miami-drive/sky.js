@@ -130,8 +130,8 @@ function bakeHash(renderer) {
 }
 
 export class DuskSky {
-  constructor({ scene, renderer, atmo, glowAzimuth = 0, exposure = 1, cloudLit = true }) {
-    this.cloudLit = cloudLit;
+  constructor({ scene, renderer, atmo, glowAzimuth = 0, exposure = 1, cloudLit = true, haze = 0.0022 }) {
+    this.cloudLit = cloudLit; this.haze = haze; // haze: the least post-fog density (1 / m) while this sky is up
     this.scene = scene; this.renderer = renderer; this.atmo = atmo;
     this.glowAzimuth = glowAzimuth; this.exposure = exposure; this.active = false; this._ver = -1; this.envRT = null;
   }
@@ -173,7 +173,7 @@ export class DuskSky {
     const h = this.atmo.hemi;
     if (h) { h.color.setRGB(0.52, 0.5, 0.7); h.groundColor.setRGB(0.2, 0.15, 0.12); h.intensity = 1.05; } // (the dusk ground light: the dome's overhead is dark, the low sky lights the ground)
     // distance haze: the hotel row and the far shore fade toward this sky (post fog, Atmosphere.fogParams)
-    if (this.atmo.fogParams) this.atmo.fogParams.haze = Math.max(this.atmo.fogParams.haze, 0.0022);
+    if (this.atmo.fogParams) this.atmo.fogParams.haze = Math.max(this.atmo.fogParams.haze, this.haze);
   }
 
   update(camera) {

@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { Engine, PoseInterpolator, resolveQuality, createBenchHarness } from '@vibe/engine/core';
 import { PhysicsWorld, VehicleController, Gearbox } from '@vibe/engine/physics';
-import { Atmosphere, PostFX, TyreFx, loadTextureManifest, loadTextureSet, applyPatches, weathering } from '@vibe/engine/render';
+import { Atmosphere, PostFX, TyreFx, AirParticles, loadTextureManifest, loadTextureSet, applyPatches, weathering } from '@vibe/engine/render';
 import { VehicleInput } from '@vibe/engine/input';
 import { ChaseRig } from '@vibe/engine/camera';
 import { createCarVisual, countryRoad, groundCover } from '@vibe/engine/world';
@@ -41,12 +41,13 @@ async function boot() {
   const { scene, camera, renderer } = engine;
 
   // ---- sky, sun, fog and shadows. timeOfDay: hours 0..24 or 'dawn' | 'noon' | 'golden' | 'dusk' | 'night'
-  // cloudStyle 'lit': soft clouds lit by the low sun; lowSunEnv: a warmer, brighter fill while the sun is low (opt-in)
-  const atmosphere = new Atmosphere({ scene, renderer, camera, timeOfDay: 'golden', shadows: S.shadows, cloudStyle: 'lit', lowSunEnv: true });
+  // cloudStyle 'lit': soft clouds lit by the low sun. sun.azimuthStart turns the day so the golden-hour sun stands ahead
+  // and to the left of the road: shadows fall toward the car, the asphalt glints, the trees are lit from behind
+  const atmosphere = new Atmosphere({ scene, renderer, camera, timeOfDay: 'golden', sun: { azimuthStart: 180 }, shadows: S.shadows, cloudStyle: 'lit' });
 
   // ---- the place: a field, and a quiet country road through it (z from +100 to -900) with a lay-by beside the start,
   // lane and edge lines, gravel verges, fences, utility poles, a side track with a sign and trees (world/Scenery.js)
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x4d5a3a, roughness: 1 }));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000, 96, 96).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x4d5a3a, roughness: 1 })); // segments: a 6 km quad of two triangles loses depth precision on some rasterisers
   ground.receiveShadow = true;
   const ROAD_W = 10; // asphalt width: two 3.5 m lanes and hard shoulders
   const place = countryRoad({ physics, width: ROAD_W, from: 100, to: -900 });
@@ -60,12 +61,15 @@ async function boot() {
   const surfaces = [...place.surfaces, { mesh: ground, w: 6000, l: 6000, set: grass }]; // place.surfaces: the road and lay-by
   for (const { mesh, w, l, set = asphalt } of surfaces) {
     if (!set) continue; // a set that did not load leaves the plain colour
-    const maps = [set.map, set.normalMap, set.roughnessMap].map((t) => t && t.clone());
+    const maps = [set.map, set.normalMap, set === asphalt && set.roughnessMap].map((t) => t && t.clone()); // grass stays matt: no sheen toward the sun
     for (const t of maps) if (t) t.repeat.set(w / set.size, l / set.size);
-    Object.assign(mesh.material, { map: maps[0], normalMap: maps[1], roughnessMap: maps[2], color: new THREE.Color(set === asphalt ? 0x9a9a9a : 0xffffff) });
+    Object.assign(mesh.material, { map: maps[0], normalMap: maps[1], roughnessMap: maps[2] || null, color: new THREE.Color(set === asphalt ? 0xe6e6e6 : 0xffffff) });
   }
   // distance haze (PostFX's fog): the far road and the field fade into the sky instead of meeting it at a hard line
-  atmosphere.fogParams.haze = 0.002;
+  atmosphere.fogParams.haze = 0.0012;
+  // #region howto:air
+  const air = new AirParticles({ preset: 'pollen', atmosphere, budget: S.effects.particles }); scene.add(air.mesh); // seeds and dust in the low sun
+  // #endregion howto:air
   // a row of marker posts beside the road (two InstancedMeshes: post and band), as static colliders the car bounces off
   // #region howto:static-posts
   const postGeo = new THREE.CylinderGeometry(0.09, 0.11, 1.1, 12), bandGeo = new THREE.CylinderGeometry(0.115, 0.115, 0.14, 12);
@@ -177,7 +181,7 @@ async function boot() {
       squeal.setGain(car.grounded ? 0.22 * slide : 0).setRate(0.96 + 0.08 * slide);
       sfx.update(dt);
       // #endregion howto:drive-sound-update
-      atmosphere.update(camera.position, dt);
+      atmosphere.update(camera.position, dt); air.update(dt, camera);
       place.update(dt, camera.position, atmosphere.darkness); // tree wind and the near / far tree split
       speed.set(Math.round(Math.abs(car.forwardSpeed) * 3.6));
     },
@@ -189,7 +193,7 @@ async function boot() {
   shell.onStart(reset); // the run starts from the line
 
   // ---- page contract for the browser tests (npm run smoke): window.__sample with `ready`
-  window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-drive', quality: Q }), { car, body, visual, input, tyres, shell }).setReady();
+  window.__sample = Object.assign(createBenchHarness(engine, { name: 'starter-drive', quality: Q }), { car, body, visual, input, tyres, shell, atmosphere, postfx, air }).setReady();
 }
 
 boot().catch((e) => { console.error('[starter-drive] boot failed', e); shell.error(`Failed to start: ${e.message}`); });

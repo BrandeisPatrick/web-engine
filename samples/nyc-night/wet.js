@@ -41,7 +41,7 @@ function patch(mat, kind, U, env) {
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>\nvarying vec3 vWetP;\nuniform float uWet; uniform float uWetCover;\n${NOISE}`)
       .replace('#include <map_fragment>', `#include <map_fragment>
-float wetK = uWet, wetP = 0.0, wetUp = 1.0;
+float wetK = uWet, wetP = 0.0, wetUp = 1.0, wetG = 0.0;
 {
 ${road ? `  float wAd = abs(vRoad.x), wHw = vRoad.z;
   // water runs to the kerbs (not across a junction box, where there is no kerb: the road shader's own box mask)
@@ -51,6 +51,9 @@ ${road ? `  float wAd = abs(vRoad.x), wHw = vRoad.z;
   float lanePos = fract(wAd / 3.3);
   float track = (1.0 - smoothstep(0.08, 0.3, abs(abs(lanePos - 0.5) - 0.24))) * 0.12; // ruts hold water
   wetP = wPuddle(vWetP.xz, gutter * 0.5 + track, uWetCover) * wetK; // standing water mostly in the gutters
+  // how wet the film is varies: glossier where tyres polish the lanes and in broad patches that drain last, duller
+  // between them (a street that is evenly shiny reads as plastic; the gloss is where lamps and tail lights streak)
+  wetG = clamp(wNoise(vWetP.xz * 0.07 + 3.0) * 1.5 - 0.35 + track * 3.0, 0.0, 1.0);
   diffuseColor.rgb *= mix(1.0, 0.58, wetK);   // damp asphalt
   diffuseColor.rgb *= 0.7 + 0.55 * wNoise(vWetP.xz * 0.05 + 11.0);   // large tonal patches (resurfacing, old oil)
   diffuseColor.rgb *= 1.0 - 0.35 * wetP;      // standing water` : `  wetUp = smoothstep(0.75, 0.95, abs(dot(normalize(vNormal), normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz))));
@@ -64,7 +67,7 @@ ${road ? `  float wAd = abs(vRoad.x), wHw = vRoad.z;
 }`)
       // after the road's own roughness tail (paint, tracks), which follows its roughnessmap_fragment include
       .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
-roughnessFactor = mix(roughnessFactor, ${road ? '0.42 * roughnessFactor + 0.08' : 'mix(roughnessFactor, 0.42 * roughnessFactor + 0.07, wetUp)'}, wetK);
+roughnessFactor = mix(roughnessFactor, ${road ? '(0.46 - 0.2 * wetG) * roughnessFactor + 0.08' : 'mix(roughnessFactor, 0.42 * roughnessFactor + 0.07, wetUp)'}, wetK);
 roughnessFactor = mix(roughnessFactor, 0.06, wetP); // puddles: glossy, not a mirror (rain-dimpled)
 #ifdef ENGINE_GBUFFER
 engineGbRoughness = roughnessFactor;

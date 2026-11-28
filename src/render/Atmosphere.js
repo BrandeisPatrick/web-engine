@@ -80,20 +80,24 @@ function acesFilmic(c, exposure) { // mirror of three's ACESFilmicToneMapping (l
 // glowA: afterglow band at the sunset point. sun: sun-light gain. env/hemi: ambient. haze/mist: post fog
 // densities (1/m at sea level; haze falls off over ~700 m, mist over ~40 m). cover/cirrus/cop: clouds.
 // cs/ca: cloud sun / ambient colours (linear HDR). aur: sun aureole gain.
+// Sun against sky (the keys from 3 deg up): measured on open level ground, a shadow was 35 % as bright as sunlit ground
+// at noon and 68 % at golden hour (ambient twice what a clear sky gives: flat light, weak shadows). With `sun` raised
+// and `env` lowered by day the same ground reads 24 % at noon, 27 % mid-afternoon and about 45 % at golden hour, the
+// lit side as bright as before. The keys at and below the horizon (dusk, night) are unchanged.
 export const DEFAULT_LOOKS = [
   { el: -40, turb: 2.4, ray: 1.4, mie: 0.0030, g: 0.78, tw: 1, night: 1, glowA: 0, sun: 1, env: 0.85, hemi: 0.2, haze: 0.00018, mist: 0.00008, cover: 0.36, cirrus: 0.22, cop: 0.8, cs: [0.012, 0.014, 0.020], ca: [0.032, 0.023, 0.019], aur: 0 },
   { el: -12, turb: 2.4, ray: 1.4, mie: 0.0030, g: 0.78, tw: 1, night: 1, glowA: 0.05, sun: 1, env: 0.85, hemi: 0.2, haze: 0.00018, mist: 0.00008, cover: 0.36, cirrus: 0.22, cop: 0.8, cs: [0.014, 0.015, 0.022], ca: [0.032, 0.024, 0.021], aur: 0 },
   { el: -6, turb: 2.6, ray: 1.6, mie: 0.0030, g: 0.78, tw: 1, night: 0.3, glowA: 0.55, sun: 1, env: 1.1, hemi: 0.26, haze: 0.00017, mist: 0.00010, cover: 0.34, cirrus: 0.26, cop: 0.8, cs: [0.09, 0.045, 0.055], ca: [0.026, 0.026, 0.038], aur: 0 },
   { el: -3, turb: 3.0, ray: 2.0, mie: 0.0035, g: 0.80, tw: 1, night: 0, glowA: 1.0, sun: 1, env: 1.2, hemi: 0.28, haze: 0.00017, mist: 0.00012, cover: 0.33, cirrus: 0.3, cop: 0.85, cs: [0.36, 0.13, 0.10], ca: [0.04, 0.036, 0.052], aur: 0 },
   { el: 0, turb: 3.2, ray: 2.3, mie: 0.0040, g: 0.80, tw: 0.55, night: 0, glowA: 0.9, sun: 1, env: 1.05, hemi: 0.26, haze: 0.00012, mist: 0.00013, cover: 0.32, cirrus: 0.32, cop: 0.85, cs: [0.65, 0.26, 0.13], ca: [0.065, 0.055, 0.065], aur: 0.5 },
-  { el: 3, turb: 3.0, ray: 2.2, mie: 0.0038, g: 0.80, tw: 0.12, night: 0, glowA: 0.4, sun: 1, env: 0.95, hemi: 0.24, haze: 0.00012, mist: 0.00011, cover: 0.32, cirrus: 0.32, cop: 0.85, cs: [0.9, 0.45, 0.24], ca: [0.10, 0.095, 0.11], aur: 0.55 },
-  { el: 9, turb: 2.3, ray: 1.75, mie: 0.0033, g: 0.80, tw: 0, night: 0, glowA: 0, sun: 1, env: 0.9, hemi: 0.22, haze: 0.00011, mist: 0.00008, cover: 0.30, cirrus: 0.3, cop: 0.85, cs: [1.05, 0.75, 0.5], ca: [0.15, 0.16, 0.19], aur: 0.5 },
-  { el: 18, turb: 2.2, ray: 1.6, mie: 0.0031, g: 0.79, tw: 0, night: 0, glowA: 0, sun: 1, env: 0.88, hemi: 0.2, haze: 0.00010, mist: 0.00005, cover: 0.28, cirrus: 0.3, cop: 0.85, cs: [1.2, 1.08, 0.95], ca: [0.21, 0.23, 0.28], aur: 0.4 },
-  { el: 32, turb: 2.1, ray: 1.5, mie: 0.0029, g: 0.78, tw: 0, night: 0, glowA: 0, sun: 1, env: 0.86, hemi: 0.18, haze: 0.00008, mist: 0.00004, cover: 0.26, cirrus: 0.28, cop: 0.85, cs: [1.3, 1.25, 1.18], ca: [0.25, 0.28, 0.33], aur: 0.3 },
-  { el: 50, turb: 2.0, ray: 1.4, mie: 0.0027, g: 0.78, tw: 0, night: 0, glowA: 0, sun: 1, env: 0.85, hemi: 0.18, haze: 0.00008, mist: 0.00003, cover: 0.25, cirrus: 0.25, cop: 0.85, cs: [1.35, 1.32, 1.28], ca: [0.27, 0.3, 0.36], aur: 0.3 },
+  { el: 3, turb: 3.0, ray: 2.2, mie: 0.0038, g: 0.80, tw: 0.12, night: 0, glowA: 0.4, sun: 1.2, env: 0.8, hemi: 0.24, haze: 0.00012, mist: 0.00011, cover: 0.32, cirrus: 0.32, cop: 0.85, cs: [0.9, 0.45, 0.24], ca: [0.10, 0.095, 0.11], aur: 0.55 },
+  { el: 9, turb: 2.3, ray: 1.75, mie: 0.0033, g: 0.80, tw: 0, night: 0, glowA: 0, sun: 1.5, env: 0.6, hemi: 0.22, haze: 0.00011, mist: 0.00008, cover: 0.30, cirrus: 0.3, cop: 0.85, cs: [1.05, 0.75, 0.5], ca: [0.15, 0.16, 0.19], aur: 0.5 },
+  { el: 18, turb: 2.2, ray: 1.6, mie: 0.0031, g: 0.79, tw: 0, night: 0, glowA: 0, sun: 1.4, env: 0.58, hemi: 0.2, haze: 0.00010, mist: 0.00005, cover: 0.28, cirrus: 0.3, cop: 0.85, cs: [1.2, 1.08, 0.95], ca: [0.21, 0.23, 0.28], aur: 0.4 },
+  { el: 32, turb: 2.1, ray: 1.5, mie: 0.0029, g: 0.78, tw: 0, night: 0, glowA: 0, sun: 1.2, env: 0.57, hemi: 0.18, haze: 0.00008, mist: 0.00004, cover: 0.26, cirrus: 0.28, cop: 0.85, cs: [1.3, 1.25, 1.18], ca: [0.25, 0.28, 0.33], aur: 0.3 },
+  { el: 50, turb: 2.0, ray: 1.4, mie: 0.0027, g: 0.78, tw: 0, night: 0, glowA: 0, sun: 1.17, env: 0.56, hemi: 0.18, haze: 0.00008, mist: 0.00003, cover: 0.25, cirrus: 0.25, cop: 0.85, cs: [1.35, 1.32, 1.28], ca: [0.27, 0.3, 0.36], aur: 0.3 },
   // high sun (tropics / desert noon, up to the zenith): the 50 deg look held, with slightly clearer air (less haze
   // and mist, a touch less ambient) and brighter cloud tops; elevations below 50 deg are unaffected
-  { el: 90, turb: 1.95, ray: 1.35, mie: 0.0026, g: 0.78, tw: 0, night: 0, glowA: 0, sun: 1, env: 0.83, hemi: 0.17, haze: 0.00007, mist: 0.000025, cover: 0.25, cirrus: 0.24, cop: 0.85, cs: [1.4, 1.37, 1.33], ca: [0.28, 0.31, 0.37], aur: 0.25 },
+  { el: 90, turb: 1.95, ray: 1.35, mie: 0.0026, g: 0.78, tw: 0, night: 0, glowA: 0, sun: 1.17, env: 0.55, hemi: 0.17, haze: 0.00007, mist: 0.000025, cover: 0.25, cirrus: 0.24, cop: 0.85, cs: [1.4, 1.37, 1.33], ca: [0.28, 0.31, 0.37], aur: 0.25 },
 ];
 
 function lookAt(keys, elDeg) {
