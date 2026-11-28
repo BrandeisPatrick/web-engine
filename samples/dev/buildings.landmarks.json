@@ -1,0 +1,99 @@
+{
+  "v": 1,
+  "city": "dev",
+  "notes": "The dev page's descriptors (samples/dev/buildings.js): a landmarks.json as a city ships it. Atlanta's skyline as the examples, from memory, not surveyed; the page's footprints are placeholders matched by name.",
+  "buildings": [
+    {
+      "match": { "name": "Bank of America Plaza" },
+      "name": "Bank of America Plaza", "year": 1992, "floors": 55, "height": 312, "roofHeight": 264,
+      "archetype": "stone-tower",
+      "massing": { "setbacks": [{ "at": 0.93, "inset": 0.1 }] },
+      "facade": { "system": "piers", "material": "granite", "color": "#9a6a58", "glass": "#2b3a45", "glassReflect": 0.45, "vertical": 0.9, "bay": 3 },
+      "crown": { "type": "open-lattice", "height": 48, "material": "gold", "lit": "#ffb030" },
+      "ground": { "use": "lobby", "height": 9 },
+      "night": { "crownLight": "#ffa040", "litFraction": 0.3 },
+      "notes": "Red granite piers, a gilded open-lattice pyramid with a spire, lit orange at night.", "confidence": "high"
+    },
+    {
+      "match": { "name": "Westin Peachtree Plaza" },
+      "name": "Westin Peachtree Plaza", "year": 1976, "floors": 73, "height": 220, "roofHeight": 204,
+      "archetype": "cylinder-tower",
+      "massing": { "plan": "cylinder", "width": 36, "podium": { "floors": 5 } },
+      "facade": { "glass": "#27323c", "glassReflect": 0.85, "bay": 1.6, "floorHeight": 2.9 },
+      "crown": { "type": "cylinder", "height": 16, "material": "steel" },
+      "night": { "sign": { "text": "WESTIN", "color": "#ffffff" }, "litFraction": 0.35 },
+      "notes": "A dark reflective glass cylinder on a podium, a revolving restaurant on top.", "confidence": "high"
+    },
+    {
+      "match": { "name": "191 Peachtree Tower" },
+      "name": "191 Peachtree Tower", "year": 1990, "floors": 50, "height": 235, "roofHeight": 205,
+      "archetype": "stone-tower",
+      "massing": { "setbacks": [{ "at": 0.86, "inset": 0.1 }] },
+      "facade": { "system": "punched", "material": "granite", "color": "#b08a78", "glass": "#2a333b", "vertical": 0.7, "bay": 3 },
+      "crown": { "type": "stepped", "height": 30, "material": "stone", "lit": "#fff0d0" },
+      "night": { "crownLight": "#fff0d0" },
+      "notes": "Rose granite, punched windows, a lit stepped top (the real one is two temples side by side).", "confidence": "medium"
+    },
+    {
+      "match": { "name": "One Atlantic Center" },
+      "name": "One Atlantic Center", "year": 1987, "floors": 50, "height": 250, "roofHeight": 200,
+      "archetype": "stone-tower",
+      "massing": { "setbacks": [{ "at": 0.8, "inset": 0.14 }] },
+      "facade": { "system": "piers", "material": "granite", "color": "#c09a8a", "vertical": 1, "bay": 2.8 },
+      "crown": { "type": "pyramid-spire", "height": 50, "material": "copper", "lit": "#ffe0b0" },
+      "notes": "Pink granite, Gothic verticals, a copper pyramid.", "confidence": "high"
+    },
+    {
+      "match": { "name": "Georgia-Pacific Tower" },
+      "name": "Georgia-Pacific Tower", "year": 1982, "floors": 52, "height": 212,
+      "archetype": "stone-tower",
+      "massing": { "setbacks": [{ "at": 0.55, "inset": 0.18 }, { "at": 0.76, "inset": 0.2 }] },
+      "facade": { "system": "punched", "material": "granite", "color": "#b98a80", "vertical": 0.3, "bay": 3.2 },
+      "crown": { "type": "flat" },
+      "notes": "Pink granite; the real tower steps down one side only.", "confidence": "medium"
+    },
+    {
+      "match": { "name": "Equitable Building" },
+      "name": "Equitable Building", "year": 1968, "floors": 32, "height": 138,
+      "archetype": "glass-tower",
+      "facade": { "system": "curtain-wall", "material": "metal", "color": "#1c1d1f", "glass": "#15181b", "glassReflect": 0.5, "vertical": 0.8, "bay": 1.5 },
+      "crown": { "type": "flat" },
+      "night": { "sign": { "text": "EQUITABLE", "color": "#ffffff" } },
+      "notes": "A black International Style slab.", "confidence": "high"
+    },
+    {
+      "match": { "name": "Blue glass tower" },
+      "name": "Blue glass tower", "floors": 44, "height": 205, "roofHeight": 170,
+      "archetype": "glass-tower",
+      "massing": { "taper": 0.18, "podium": { "floors": 4 } },
+      "facade": { "glass": "#3f6a8c", "glassReflect": 0.7, "vertical": 0.2 },
+      "crown": { "type": "antenna", "height": 35 },
+      "night": { "crownLight": "#60a0ff" },
+      "notes": "Not a real building: a taper, a podium and a mast.", "confidence": "low"
+    },
+    {
+      "match": { "name": "Georgia State Capitol" },
+      "name": "Georgia State Capitol", "year": 1889, "height": 83, "roofHeight": 26,
+      "archetype": "civic-classical",
+      "facade": { "color": "#d9d2c0" },
+      "crown": { "type": "dome", "height": 57, "material": "gold", "lit": "#ffd070" },
+      "confidence": "high"
+    },
+    {
+      "match": { "name": "Hyatt Regency" },
+      "name": "Hyatt Regency", "year": 1967, "floors": 22, "height": 74, "roofHeight": 66,
+      "archetype": "hotel-slab",
+      "facade": { "material": "concrete", "color": "#cdc7ba" },
+      "crown": { "type": "dome", "height": 8, "material": "glass", "color": "#2a60c0", "lit": "#3070ff" },
+      "night": { "sign": { "text": "HYATT REGENCY", "color": "#ffffff" } },
+      "notes": "The blue saucer on the roof.", "confidence": "medium"
+    },
+    { "match": { "name": "First Church" }, "name": "First Church", "archetype": "church", "facade": { "material": "brick", "color": "#8a4d3c" } },
+    { "match": { "name": "Parking deck" }, "name": "Parking deck", "archetype": "parking-deck", "floors": 7 },
+    { "match": { "name": "Brick loft" }, "name": "Brick loft", "archetype": "brick-loft", "floors": 9, "ground": { "use": "retail", "height": 5 } },
+    { "match": { "name": "Central Library" }, "name": "Central Library", "archetype": "brutalist", "floors": 8, "facade": { "system": "ribbon", "color": "#aaa49a" } },
+    { "match": { "name": "Warehouse" }, "name": "Warehouse", "archetype": "warehouse" },
+    { "match": { "name": "Stadium" }, "name": "Stadium", "archetype": "stadium", "night": { "litFraction": 0.5 } },
+    { "match": { "name": "Arena" }, "name": "Arena", "archetype": "arena", "night": { "sign": { "text": "ARENA", "color": "#ffd9a0" } } }
+  ]
+}

@@ -1,71 +1,35 @@
 // Dev-only page for described buildings (not in the build; the dev server serves it as /dev/buildings.html):
-// world/BuildingDescriptors.js + BuildingForms.js on bare footprints, without a map.
-//   row A    seven towers, each from one descriptor (Atlanta's skyline as the examples)
-//   row B    the lower forms: a capitol with a gold dome, a hotel slab, a church, a stadium, an arena, a parking deck,
-//            a brick loft, a concrete library, a warehouse
+// world/BuildingDescriptors.js + BuildingForms.js on bare footprints, without a map. The descriptors are a real
+// landmarks.json (samples/dev/buildings.landmarks.json), matched to the page's footprints by name.
+//   rowA     seven towers (Atlanta's skyline as the examples)
+//   rowB     the lower forms: a capitol with a gold dome, a hotel slab, a church, a parking deck, a brick loft, a
+//            concrete library, a warehouse
+//   venues   a stadium and an arena
 //   pair     one footprint twice: as the generic builder makes it from the OSM tags, and from its descriptor
 //   city     a small grid city, built twice on the same footprints: the generic builder, and `infer: true` with six
-//            landmarks matched through a landmarks.json (applyBuildingDescriptors, by point); the `city` setting
-//            switches between the two
+//            landmarks matched by a point; the `city` setting switches between the two
 // Query: ?time=noon|golden|dusk|night, ?pose=<id>, ?city=described|generic, ?shot=1 (no UI), ?bench=1&size=WxH.
-// window.__sample (the bench harness): poses rowA, rowB, crowns, street, pair, skyline, skylineLow, block; settings
-// `time`, `city`; counts() -> triangles and meshes per group.
+// window.__sample (the bench harness): poses rowA, crowns, lattice, street, lobby, rowB, rowB1, rowB2, venues, pair,
+// skyline, skylineLow, block; settings `time`, `city`; counts() -> the builders' triangle counts per group.
 import * as THREE from 'three';
 import { Engine, createBenchHarness, readBenchParams, resolveQuality } from '@vibe/engine/core';
 import { Atmosphere, PostFX, TextureSets, mulberry32 } from '@vibe/engine/render';
 import { BuildingBuilder, createFacadeMaterials, enableFacadeDetail, makeFacadeTextures, loadPbrTextures, applyBuildingDescriptors } from '@vibe/engine/world';
+import LANDMARKS from './buildings.landmarks.json';
 
 const q = new URLSearchParams(location.search);
 if (q.get('shot') || q.get('bench')) document.body.classList.add('shot');
 const BASE = import.meta.env.BASE_URL;
 const S = resolveQuality().settings;
 
-// ------------------------------------------------------------------ descriptors (what a landmarks.json holds)
-const TOWERS = [
-  { name: 'Bank of America Plaza', year: 1992, floors: 55, height: 312, roofHeight: 264, archetype: 'stone-tower',
-    massing: { setbacks: [{ at: 0.93, inset: 0.1 }] },
-    facade: { system: 'piers', material: 'granite', color: '#9a6a58', glass: '#2b3a45', glassReflect: 0.45, vertical: 0.9, bay: 3 },
-    crown: { type: 'open-lattice', height: 48, material: 'gold', lit: '#ffb030' }, ground: { use: 'lobby', height: 9 },
-    night: { crownLight: '#ffa040', litFraction: 0.3 }, confidence: 'high' },
-  { name: 'Westin Peachtree Plaza', year: 1976, floors: 73, height: 220, roofHeight: 204, archetype: 'cylinder-tower',
-    massing: { plan: 'cylinder', width: 36, podium: { floors: 5 } },
-    facade: { glass: '#27323c', glassReflect: 0.85, bay: 1.6, floorHeight: 2.9 },
-    crown: { type: 'cylinder', height: 16, material: 'steel' }, night: { sign: { text: 'WESTIN', color: '#ffffff' }, litFraction: 0.35 } },
-  { name: '191 Peachtree Tower', year: 1990, floors: 50, height: 235, roofHeight: 205, archetype: 'stone-tower',
-    massing: { setbacks: [{ at: 0.86, inset: 0.1 }] },
-    facade: { system: 'punched', material: 'granite', color: '#b08a78', glass: '#2a333b', vertical: 0.7, bay: 3 },
-    crown: { type: 'stepped', height: 30, material: 'stone', lit: '#fff0d0' }, night: { crownLight: '#fff0d0' } },
-  { name: 'One Atlantic Center', year: 1987, floors: 50, height: 250, roofHeight: 200, archetype: 'stone-tower',
-    massing: { setbacks: [{ at: 0.8, inset: 0.14 }] },
-    facade: { system: 'piers', material: 'granite', color: '#c09a8a', vertical: 1, bay: 2.8 },
-    crown: { type: 'pyramid-spire', height: 50, material: 'copper', lit: '#ffe0b0' } },
-  { name: 'Georgia-Pacific Tower', year: 1982, floors: 52, height: 212, archetype: 'stone-tower',
-    massing: { setbacks: [{ at: 0.55, inset: 0.18 }, { at: 0.76, inset: 0.2 }] },
-    facade: { system: 'punched', material: 'granite', color: '#b98a80', vertical: 0.3, bay: 3.2 }, crown: { type: 'flat' } },
-  { name: 'Equitable Building', year: 1968, floors: 32, height: 138, archetype: 'glass-tower',
-    facade: { system: 'curtain-wall', material: 'metal', color: '#1c1d1f', glass: '#15181b', glassReflect: 0.5, vertical: 0.8, bay: 1.5 },
-    crown: { type: 'flat' }, night: { sign: { text: 'EQUITABLE', color: '#ffffff' } } },
-  { name: 'Blue glass tower', floors: 44, height: 205, roofHeight: 170, archetype: 'glass-tower',
-    massing: { taper: 0.18, podium: { floors: 4 } }, facade: { glass: '#3f6a8c', glassReflect: 0.7, vertical: 0.2 },
-    crown: { type: 'antenna', height: 35 }, night: { crownLight: '#60a0ff' } },
-];
-const ellipse = (cx, cz, rx, rz, n = 40) => Array.from({ length: n }, (_, i) => [cx + Math.cos((i / n) * Math.PI * 2) * rx, cz + Math.sin((i / n) * Math.PI * 2) * rz]);
-const rect = (cx, cz, w, d) => [[cx - w / 2, cz - d / 2], [cx + w / 2, cz - d / 2], [cx + w / 2, cz + d / 2], [cx - w / 2, cz + d / 2]];
-const LOWER = [
-  [{ name: 'Georgia State Capitol', year: 1889, height: 83, roofHeight: 26, archetype: 'civic-classical', facade: { color: '#d9d2c0' },
-    crown: { type: 'dome', height: 57, material: 'gold', lit: '#ffd070' } }, (x, z) => rect(x, z, 90, 46), 26],
-  [{ name: 'Hyatt Regency', year: 1967, floors: 22, height: 74, roofHeight: 66, archetype: 'hotel-slab', facade: { material: 'concrete', color: '#cdc7ba' },
-    crown: { type: 'dome', height: 8, material: 'glass', color: '#2a60c0', lit: '#3070ff' }, night: { sign: { text: 'HYATT REGENCY', color: '#ffffff' } } }, (x, z) => rect(x, z, 70, 24), 66],
-  [{ name: 'First Church', archetype: 'church', facade: { material: 'brick', color: '#8a4d3c' } }, (x, z) => rect(x, z, 22, 46), 36],
-  [{ name: 'Parking deck', archetype: 'parking-deck', floors: 7 }, (x, z) => rect(x, z, 64, 36), 22],
-  [{ name: 'Brick loft', archetype: 'brick-loft', floors: 9, ground: { use: 'retail', height: 5 } }, (x, z) => rect(x, z, 60, 30), 40],
-  [{ name: 'Central Library', archetype: 'brutalist', floors: 8, facade: { system: 'ribbon', color: '#aaa49a' } }, (x, z) => rect(x, z, 56, 40), 34],
-  [{ name: 'Warehouse', archetype: 'warehouse' }, (x, z) => rect(x, z, 70, 40), 11],
-];
-const VENUES = [
-  [{ name: 'Stadium', archetype: 'stadium', night: { litFraction: 0.5 } }, (x, z) => ellipse(x, z, 120, 100), 58],
-  [{ name: 'Arena', archetype: 'arena', night: { sign: { text: 'ARENA', color: '#ffd9a0' } } }, (x, z) => ellipse(x, z, 60, 48, 28), 36],
-];
+// ------------------------------------------------------------------ footprints (what a city.json holds: p, h, t, n)
+const ellipse = (rx, rz, n = 40) => (x, z) => Array.from({ length: n }, (_, i) => [x + Math.cos((i / n) * Math.PI * 2) * rx, z + Math.sin((i / n) * Math.PI * 2) * rz]);
+const rect = (w, d) => (x, z) => [[x - w / 2, z - d / 2], [x + w / 2, z - d / 2], [x + w / 2, z + d / 2], [x - w / 2, z + d / 2]];
+const TOWERS = [['Bank of America Plaza', rect(50, 50), 312], ['Westin Peachtree Plaza', rect(50, 50), 220], ['191 Peachtree Tower', rect(50, 50), 235], ['One Atlantic Center', rect(50, 50), 250],
+  ['Georgia-Pacific Tower', rect(50, 50), 212], ['Equitable Building', rect(54, 34), 138], ['Blue glass tower', rect(50, 50), 190]];
+const LOWER = [['Georgia State Capitol', rect(90, 46), 26, 'government'], ['Hyatt Regency', rect(70, 24), 66, 'hotel'], ['First Church', rect(22, 46), 36, 'church'], ['Parking deck', rect(64, 36), 22, 'parking'],
+  ['Brick loft', rect(60, 30), 40], ['Central Library', rect(56, 40), 34, 'public'], ['Warehouse', rect(70, 40), 11, 'warehouse']];
+const VENUES = [['Stadium', ellipse(120, 100), 58, 'stadium'], ['Arena', ellipse(60, 48, 28), 36]];
 
 // ------------------------------------------------------------------ the page
 async function boot() {
@@ -81,7 +45,7 @@ async function boot() {
   const mats = createFacadeMaterials(makeFacadeTextures(renderer), await loadPbrTextures(renderer, { size: 512 }));
   enableFacadeDetail(mats, { dimRooms: 0.22 });
   const U = mats.uniforms;
-  const groups = {}, counts = {};
+  const groups = {}, counts = {}, matched = {};
   const add = (name, builder, at = [0, 0]) => {
     const g = new THREE.Group(); g.name = name; g.position.set(at[0], 0, at[1]);
     for (const m of builder.build(mats)) g.add(m);
@@ -89,32 +53,32 @@ async function boot() {
     counts[name] = { ...builder.stats, buildings: builder.count, described: builder.described };
     return g;
   };
-  // the rows stand on a street along their +z side (the camera's): entrances and shop fronts face it
+  // the rows stand on a street along their +z side (the camera's): entrances, shop fronts and signs face it
   const builder = (o = {}) => new BuildingBuilder({ minX: -1200, maxX: 1200, minZ: -1200, maxZ: 1200 }, { baseGrid: [1, 1], detailGrid: [2, 2], lodDist: 400, streetAt: (x, z) => z > 12, ...o });
+  /** A row of footprints along x, their descriptors matched by name from the landmarks.json. */
   const row = (name, items, at, gap, seed) => {
-    const bb = builder(), ws = items.map(([, fp]) => { const r = fp(0, 0); return Math.max(...r.map((p) => p[0])) - Math.min(...r.map((p) => p[0])); });
+    const ws = items.map(([, fp]) => { const r = fp(0, 0); return Math.max(...r.map((p) => p[0])) - Math.min(...r.map((p) => p[0])); });
     let x = -(ws.reduce((a, w) => a + w, 0) + gap * (items.length - 1)) / 2;
-    items.forEach(([d, fp, h], i) => { x += ws[i] / 2; bb.add({ p: fp(x, 0), h, d }, mulberry32(seed + i)); x += ws[i] / 2 + gap; });
+    const data = { buildings: items.map(([n, fp, h, t], i) => { x += ws[i] / 2; const b = { p: fp(x, 0), h, n, t: t || 'office' }; x += ws[i] / 2 + gap; return b; }) };
+    matched[name] = applyBuildingDescriptors(data, LANDMARKS);
+    const bb = builder();
+    data.buildings.forEach((b, i) => bb.add(b, mulberry32(seed + i)));
     add(name, bb, at);
   };
-
-  // ---- row A: the towers (facing +z, the camera's side)
-  {
-    const bb = builder();
-    TOWERS.forEach((d, i) => { const x = (i - (TOWERS.length - 1) / 2) * 84; bb.add({ p: d.name === 'Equitable Building' ? rect(x, 0, 54, 34) : rect(x, 0, 50, 50), h: d.height, d }, mulberry32(101 + i)); });
-    add('rowA', bb);
-  }
-  // ---- row B: the lower forms; the venues
+  row('rowA', TOWERS, [0, 0], 34, 101);
   row('rowB', LOWER, [0, 900], 26, 303);
   row('venues', VENUES, [-1400, 900], 60, 505);
   // ---- pair: what OSM gives for the tallest tower, through the generic builder and through its descriptor
   {
-    const bb = builder(), osm = { h: 312, lv: 55, t: 'office', n: 'Bank of America Plaza' };
-    bb.add({ ...osm, p: rect(-60, 0, 50, 50) }, mulberry32(11));
-    bb.add({ ...osm, p: rect(60, 0, 50, 50), d: TOWERS[0] }, mulberry32(11));
+    const osm = { h: 312, lv: 55, t: 'office', n: 'Bank of America Plaza' };
+    const data = { buildings: [{ ...osm, p: rect(50, 50)(60, 0) }] };
+    applyBuildingDescriptors(data, LANDMARKS);
+    const bb = builder();
+    bb.add({ ...osm, p: rect(50, 50)(-60, 0) }, mulberry32(11));
+    bb.add(data.buildings[0], mulberry32(11));
     add('pair', bb, [0, 1800]);
   }
-  // ---- city: the same footprints through the generic builder and through infer + six landmarks from a landmarks.json
+  // ---- city: the same footprints through the generic builder and through infer + six landmarks matched by a point
   const city = (described) => {
     const R = mulberry32(2024), list = [];
     const names = { hotel: ['Hilton Garden Inn', 'Marriott Marquis', 'Omni Hotel', 'Sheraton Hotel'], church: ["St Luke's Church", 'First Baptist Church'], parking: ['Parking Deck', 'City Garage'], hospital: ['Grady Memorial Hospital'], office: ['Peachtree Center', 'First National Bank Building', 'Trust Company Tower', 'Plaza Tower', ''] };
@@ -126,17 +90,16 @@ async function boot() {
         const kind = r < 0.1 ? 'hotel' : r < 0.14 ? 'church' : r < 0.22 ? 'parking' : r < 0.25 ? 'hospital' : r < 0.36 ? 'apartments' : r < 0.42 ? 'warehouse' : 'office';
         let h = 10 + R() * 18 + dt * (30 + 190 * R() ** 1.6);
         if (kind === 'church') h = 22 + R() * 14; if (kind === 'parking') h = 14 + R() * 12; if (kind === 'warehouse') h = 8 + R() * 5;
-        const b = { p: rect(x, cz, w - R() * 6, dz), h: Math.round(h * 10) / 10, t: kind === 'office' && R() < 0.4 ? 'yes' : kind };
+        const b = { p: rect(w - R() * 6, dz)(x, cz), h: Math.round(h * 10) / 10, t: kind === 'office' && R() < 0.4 ? 'yes' : kind };
         const nm = names[kind]; if (nm) { const n = nm[Math.floor(R() * nm.length)]; if (n) b.n = n; }
         list.push(b);
       }
     }
     const data = { buildings: list };
     if (described) {
-      // six landmarks on the lots nearest the centre, matched by a point inside the footprint (bake-frame metres)
-      const lots = list.map((b, i) => [Math.hypot((b.p[0][0] + b.p[2][0]) / 2, (b.p[0][1] + b.p[2][1]) / 2), i]).sort((a, b) => a[0] - b[0]).slice(0, 6);
-      const file = { v: 1, city: 'dev', buildings: lots.map(([, i], k) => ({ ...TOWERS[k], match: { xz: [(list[i].p[0][0] + list[i].p[2][0]) / 2, (list[i].p[0][1] + list[i].p[2][1]) / 2] } })) };
-      window.__landmarks = applyBuildingDescriptors(data, file);
+      const mid = (b) => [(b.p[0][0] + b.p[2][0]) / 2, (b.p[0][1] + b.p[2][1]) / 2];
+      const lots = list.map((b, i) => [Math.hypot(...mid(b)), i]).sort((a, b) => a[0] - b[0]).slice(0, 6);
+      matched.city = applyBuildingDescriptors(data, { v: 1, city: 'dev', buildings: lots.map(([, i], k) => ({ ...LANDMARKS.buildings[k], match: { xz: mid(list[i]) } })) });
     }
     const bb = builder({ baseGrid: [2, 2], detailGrid: [4, 4], lodDist: 300, detailFloors: 4, streetAt: null, infer: described, style: { storeProb: { prewar: 0.8, other: 0.5, curtain: 0.4 } } });
     list.forEach((b, i) => bb.add(b, mulberry32(i * 7919 + 13)));
@@ -167,6 +130,7 @@ async function boot() {
   const poses = {
     rowA: look([40, 70, 470], [0, 150, 0]),
     crowns: look([-40, 250, 330], [-60, 255, 0]),
+    lattice: look([-212, 262, 78], [-252, 286, 0]),
     street: look([-222, 1.7, 62], [-252, 16, 25]),
     lobby: look([-240, 1.7, 52], [-252, 4.5, 25]),
     rowB: look([-20, 60, 1300], [0, 30, 900]),
@@ -200,6 +164,6 @@ async function boot() {
 
   await engine.warmUp();
   engine.start();
-  window.__sample = Object.assign(harness, { counts: () => counts, groups: () => Object.keys(groups), atmosphere, postfx }).setReady();
+  window.__sample = Object.assign(harness, { counts: () => counts, matched: () => matched, groups: () => Object.keys(groups), atmosphere, postfx }).setReady();
 }
 boot().catch((e) => { console.error(e); document.body.insertAdjacentHTML('beforeend', `<pre style="position:fixed;top:60px;left:10px;color:#f66">${String(e && e.stack || e)}</pre>`); });

@@ -9,9 +9,10 @@
 //   - inference from OSM tags (opt-in): which tags give which archetype, never for OSM parts, deterministic;
 //   - MapWorld: `buildings: { landmarks, infer }` on the procedural city.
 // Run: node --import ./test/helpers/dom-shim.mjs test/building-descriptors.mjs
+import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import {
-  BuildingBuilder, MapWorld, generateProceduralCity,
+  BuildingBuilder, TileBuildingBuilder, MapWorld, generateProceduralCity,
   ARCHETYPES, PLANS, FACADE_SYSTEMS, FACADE_MATERIALS, CROWN_TYPES, GROUND_USES,
   validateLandmarks, resolveDescriptor, applyBuildingDescriptors, inferDescriptor, describedRoofHeight, signRuns, planRing, packGrid, packSurf, rgb555,
 } from '@vibe/engine/world';
@@ -48,6 +49,8 @@ const group = (bb) => { const g = new THREE.Group(); for (const m of bb.build(NO
   for (const a of ARCHETYPES) ok(resolveDescriptor({ archetype: a }).archetype === a, `archetype ${a} resolves`);
   const r = signRuns('I-1');
   ok(r.w === 17 && r.runs.length === 7 + 1 + 7 && r.runs.every(([a, b, row]) => a <= b && b < 17 && row >= 0 && row < 7), 'signRuns: runs of lit pixels in a 5 x 7 font, one column between letters');
+  const example = JSON.parse(readFileSync(new URL('../samples/dev/buildings.landmarks.json', import.meta.url), 'utf8'));
+  ok(validateLandmarks(example).buildings.length >= 12 && example.buildings.every((e) => resolveDescriptor(e)._r), 'the dev page\'s landmarks.json (the example file) is valid');
   ok(packGrid({ pier: 0.75, span: 0.75, emph: 3, kind: 3, lit: 1 }) === 32767 && packSurf({ metal: 1, rough: 1, glow: 4, pat: 7 }) === 32767 && rgb555([1, 1, 1]) === 32767, 'packed vertex info fits a signed 16-bit component');
 }
 
@@ -171,6 +174,18 @@ function buildOne(d, o = {}) {
   ok(Math.abs(t.top - 312) < 0.6 && t.collider[3] === 264 && t.bottom === 0, 'a spire ends at the architectural height; the collider at the roof height', JSON.stringify({ top: t.top, collider: t.collider[3], bottom: t.bottom }));
   const g = buildOne({ archetype: 'glass-tower' }, { groundAt: (x, z) => 5 + 0.05 * x });
   ok(Math.abs(g.bottom - (5 - 0.05 * 23 - 1)) < 1e-3, 'on a slope the building stands on its lowest outline point, the walls 1 m below it', String(g.bottom));
+  // ... and no glass under the sidewalk: where the street climbs along a wall the facade grid starts above it
+  for (const d of [{ archetype: 'glass-tower' }, { archetype: 'brick-loft' }, { archetype: 'church' }, { archetype: 'warehouse' }]) {
+    const slope = (x, z) => 5 + 0.08 * x + 0.03 * z, s = buildOne(d, { groundAt: slope, h: 40 }), buf = s.bb.base[0];
+    let buried = 0, grid = 0;
+    for (let k = 0; k < buf.n; k++) {
+      const mode = buf.info[k * 4 + 3] >> 6;
+      if (mode !== 9 && mode !== 0) continue;
+      grid++;
+      if (buf.pos[k * 3 + 1] < slope(buf.pos[k * 3], buf.pos[k * 3 + 2]) - 0.13) buried++;
+    }
+    ok(grid > 8 && buried === 0, `on a slope no window of a ${d.archetype} starts under the street`, `${buried} of ${grid} window-wall vertices`);
+  }
   // plan override: the outline becomes the plan (colliders too); under a podium the OSM outline stays
   const cyl = buildOne({ archetype: 'cylinder-tower', massing: { plan: 'cylinder', width: 30 } });
   ok(cyl.collider[0].length >= 16 && Math.abs(Math.hypot(cyl.collider[0][0][0], cyl.collider[0][0][1]) - 15) < 0.01, 'a cylinder plan replaces the outline: a 16+-gon of the given width');
@@ -181,6 +196,13 @@ function buildOne(d, o = {}) {
   const raised = buildOne({ archetype: 'glass-tower' }, { b: { mh: 30 } });
   ok(Math.abs(raised.bottom - 30) < 1e-6, 'a raised part starts at its min height', String(raised.bottom));
   ok(buildOne({ archetype: 'hotel-slab', night: { sign: { text: 'HYATT' } } }).tris > buildOne({ archetype: 'hotel-slab' }).tris + 80, 'a sign is real letters: one quad per run of lit pixels, on two faces');
+  // a streaming tile (MapWorld builds buildings per tile): the described building is in the tile's one base mesh, the
+  // same triangles as in a full build, and never asks for a near-detail pass
+  const d = { archetype: 'stone-tower', height: 200, roofHeight: 170, crown: { type: 'stepped' } }, full = buildOne(d);
+  const tile = new TileBuildingBuilder(REGION, { baseGrid: [1, 1], detailGrid: [1, 1] }, 'low');
+  const added = tile.add({ p: rect(-23, -19, 46, 38), h: 120, d }, mulberry32(77));
+  const gen = tile.meshes(NOMATS); let step = gen.next(); while (!step.done) step = gen.next();
+  ok(added && !tile.lastDetailed && step.value.base && step.value.tris === full.tris && step.value.cells.length === 0, 'a streaming tile builds the described building into its base mesh', JSON.stringify({ tris: step.value.tris, full: full.tris }));
 }
 
 // ---------------------------------------------------------------- inference
@@ -221,8 +243,8 @@ function buildOne(d, o = {}) {
   ] };
   const load = async (buildings) => { const w = new MapWorld({ scene: new THREE.Scene(), renderer: null, forceProcedural: true, traffic: false, streaming: false, buildings }); await w.load(() => {}); return w; };
   const plain = await load(undefined), world = await load({ landmarks, infer: true });
-  ok(plain.landmarks === null && hashBuildingMeshes(plain.group).hash === '1903c59857cecbd3e45a4ba48aef5d02674592a5', 'MapWorld without landmarks: the procedural city\'s buildings, bytes as before descriptors', hashBuildingMeshes(plain.group).hash);
-  ok(world.landmarks.matched === 1 && world.landmarks.unmatched.length === 1 && world.landmarks.unmatched[0] === 'Not In This City', 'MapWorld: landmarks matched in the shifted map, the missing one reported', JSON.stringify(world.landmarks));
+  ok(plain.described === null && hashBuildingMeshes(plain.group).hash === '1903c59857cecbd3e45a4ba48aef5d02674592a5', 'MapWorld without landmarks: the procedural city\'s buildings, bytes as before descriptors', hashBuildingMeshes(plain.group).hash);
+  ok(world.described.matched === 1 && world.described.unmatched.length === 1 && world.described.unmatched[0] === 'Not In This City', 'MapWorld: landmarks matched in the shifted map, the missing one reported', JSON.stringify(world.described));
   ok(world.stats.buildings === plain.stats.buildings && world.buildingSamples.filter((s) => s.described).length > 10, 'MapWorld: the same buildings, a share of them described (the landmark and inferred ones)');
   let top = 0;
   world.group.traverse((m) => { if (m.isMesh && /^buildings/.test(m.name)) { m.geometry.computeBoundingBox(); top = Math.max(top, m.geometry.boundingBox.max.y + m.position.y); } });

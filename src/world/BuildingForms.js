@@ -160,12 +160,28 @@ function emitWalls(ctx, ra, ya, rb, yb, o) {
     buf.wall = o.wallU === false ? null : { u0: cum, sg: 1, k: kU, ax: a[0], az: a[1], dx: ux, dz: uz, gy: bld.groundAt, ao: -1e4 };
     cum += L;
     // a wall that narrows upward is a trapezoid: one quad would bend the bays along its diagonal, so it goes bay by bay
-    const lean = !o.metres && Math.abs(Math.hypot(tb[0] - ta[0], tb[1] - ta[1]) - L) > 0.02, ns = lean ? Math.min(nb, 64) : 1;
+    const lean = !o.metres && Math.abs(Math.hypot(tb[0] - ta[0], tb[1] - ta[1]) - L) > 0.02, mx = (p, r, t) => p + (r - p) * t;
+    // where the street climbs along the wall (o.street: a wall that stands on the ground) the part below street level
+    // + 0.4 m is a plain plinth, in slices of about 5 m: no glass under the sidewalk
+    let ns = lean ? Math.min(nb, 64) : 1, plinth = null;
+    if (o.street && ctx.gl && !lean) {
+      const m = Math.max(1, Math.ceil(L / 5)), g = [];
+      for (let q = 0; q < m; q++) { const p0 = q / m, p1 = (q + 1) / m, pm = (p0 + p1) / 2; g.push(Math.max(ctx.gl(mx(a[0], b[0], p0), mx(a[1], b[1], p0)), ctx.gl(mx(a[0], b[0], p1), mx(a[1], b[1], p1)), ctx.gl(mx(a[0], b[0], pm), mx(a[1], b[1], pm)))); }
+      if (g.some((v) => v > ya + 0.12)) { ns = m; plinth = g; }
+    }
     for (const s of o.both ? [1, -1] : [1]) {
       for (let q = 0; q < ns; q++) {
-        const t0 = q / ns, t1 = (q + 1) / ns, mx = (p, r, t) => p + (r - p) * t;
+        const t0 = q / ns, t1 = (q + 1) / ns;
         const n0 = ns === 1 ? nA : [mx(nA[0], nB[0], t0), mx(nA[1], nB[1], t0), mx(nA[2], nB[2], t0)], n1 = ns === 1 ? nB : [mx(nA[0], nB[0], t1), mx(nA[1], nB[1], t1), mx(nA[2], nB[2], t1)];
-        const k0 = buf.v(mx(a[0], b[0], t0), ya, mx(a[1], b[1], t0), n0[0] * s, n0[1] * s, n0[2] * s, mx(uA, uB, t0), vA, info, o.tint), k1 = buf.v(mx(a[0], b[0], t1), ya, mx(a[1], b[1], t1), n1[0] * s, n1[1] * s, n1[2] * s, mx(uA, uB, t1), vA, info, o.tint);
+        let yLo = ya, vLo = vA;
+        if (plinth && plinth[q] > ya + 0.12) {
+          yLo = Math.min(yb, plinth[q] + 0.4); vLo = vA + ((vB - vA) * (yLo - ya)) / (yb - ya);
+          const p0 = buf.v(mx(a[0], b[0], t0), ya, mx(a[1], b[1], t0), n0[0], n0[1], n0[2], 0, 0, ctx.plainWall, ctx.plainTint), p1 = buf.v(mx(a[0], b[0], t1), ya, mx(a[1], b[1], t1), n1[0], n1[1], n1[2], 0, 0, ctx.plainWall, ctx.plainTint);
+          const p2 = buf.v(mx(a[0], b[0], t1), yLo, mx(a[1], b[1], t1), n1[0], n1[1], n1[2], 0, 0, ctx.plainWall, ctx.plainTint), p3 = buf.v(mx(a[0], b[0], t0), yLo, mx(a[1], b[1], t0), n0[0], n0[1], n0[2], 0, 0, ctx.plainWall, ctx.plainTint);
+          buf.quad(p0, p1, p2, p3);
+          if (yb - yLo < 0.02) continue;
+        }
+        const k0 = buf.v(mx(a[0], b[0], t0), yLo, mx(a[1], b[1], t0), n0[0] * s, n0[1] * s, n0[2] * s, mx(uA, uB, t0), vLo, info, o.tint), k1 = buf.v(mx(a[0], b[0], t1), yLo, mx(a[1], b[1], t1), n1[0] * s, n1[1] * s, n1[2] * s, mx(uA, uB, t1), vLo, info, o.tint);
         const k2 = buf.v(mx(ta[0], tb[0], t1), yb, mx(ta[1], tb[1], t1), n1[0] * s, n1[1] * s, n1[2] * s, mx(uA, uB, t1), vB, info, o.tint), k3 = buf.v(mx(ta[0], tb[0], t0), yb, mx(ta[1], tb[1], t0), n0[0] * s, n0[1] * s, n0[2] * s, mx(uA, uB, t0), vB, info, o.tint);
         buf.quad(k0, k1, k2, k3);
       }
@@ -238,6 +254,8 @@ function context(bld, buf, b, D, F, rnd) {
   const seed = rnd(), wall = wallMaterial(D), H = F.h, y0 = F.mh > 0.5 ? F.mh : 0;
   const lit = D.night.crownLight || D.crown.lit || null;
   const ctx = { bld, buf, b, D, F, rnd, seed, wall, H, y0, c: F.c, lit, glass: rgb555(D.glass) };
+  // the street above the base (the lowest outline point) at a point of the outline: walls keep their glass above it
+  ctx.gl = bld.groundAt && y0 === 0 ? (x, z) => bld.groundAt(x, z) - F.base : null;
   ctx.plainWall = [-1, -1, seed, enc(wall.kind === 1 ? PBR.GRANITE : wall.pbr, MODE.WALLONLY)];
   ctx.plainTint = wall.kind === 1 ? tintFor([0.5, 0.49, 0.48]) : wall.tint;
   ctx.trim = [-1, -1, seed, enc(wall.kind ? PBR.PLAIN : PBR.CONCRETE_PANEL, MODE.PLAIN)];
@@ -318,7 +336,7 @@ function tiers(ctx) {
       if (gH > 0) { groundFloor(ctx, ra, gH, lobby, smooth(ra)); yb0 = gH; }
     } else if (k === 0 && y0 > 2) bld.flatPolygon(buf, ra, [], y0, ctx.roof, ctx.roofTint, false);
     const rm = yb0 > s.ya ? tap(s.ring, yb0) : ra;
-    emitWalls(ctx, rm, yb0, rb, s.yb, { info: up.info, tint: up.tint, bay: up.bay, v0: vOf(yb0), v1: vOf(s.yb), smooth: smooth(ra), u0: Math.floor(ctx.seed * 4) });
+    emitWalls(ctx, rm, yb0, rb, s.yb, { info: up.info, tint: up.tint, bay: up.bay, v0: vOf(yb0), v1: vOf(s.yb), smooth: smooth(ra), u0: Math.floor(ctx.seed * 4), street: yb0 === 0 });
     if (!last) {
       // a terrace: the roof of this step, a coping round its edge
       bld.flatPolygon(buf, rb, [], s.yb, ctx.roof, ctx.roofTint, true);
@@ -340,10 +358,10 @@ function groundFloor(ctx, ring, gH, lobby, smooth) {
   if (use === 'retail') {
     // shop fronts: the engine's lit shop glazing, a sign band and awnings from the generic builder
     const bay = clamp(D.bay || 4, 3.2, 6);
-    emitWalls(ctx, ring, 0, ring, gH, { info: [FACADE.STOREFRONT, -1, seed, enc(wall.kind ? PBR.CONCRETE_PANEL : wall.pbr, MODE.WALL)], tint: wall.kind ? tintFor([0.6, 0.6, 0.6]) : wall.tint, bay, v0: 0, v1: 1, smooth });
+    emitWalls(ctx, ring, 0, ring, gH, { street: true, info: [FACADE.STOREFRONT, -1, seed, enc(wall.kind ? PBR.CONCRETE_PANEL : wall.pbr, MODE.WALL)], tint: wall.kind ? tintFor([0.6, 0.6, 0.6]) : wall.tint, bay, v0: 0, v1: 1, smooth });
     for (const i of order.slice(0, 3)) {
       const a = ring[i], b = ring[(i + 1) % ring.length], f = edgeFrame(a, b);
-      if (f.L >= 6 && bld.style.storeDressing !== false && bld.isStreet(f.mx + f.ox * 4.5, f.mz + f.oz * 4.5)) bld.storefront(buf, f, { bayW: bay, prewar: D.material === 'brick' }, Math.min(gH, 4.6), rnd, seed, 0);
+      if (f.L >= 6 && bld.style.storeDressing !== false && bld.isStreet(f.mx + f.ox * 4.5, f.mz + f.oz * 4.5)) bld.storefront(buf, f, { bayW: bay, prewar: D.material === 'brick' }, Math.min(gH, 4.6), rnd, seed, 0, ctx.gl ? (s) => ctx.gl(f.ax + f.dx * s, f.az + f.dz * s) : undefined);
     }
     bld.ledge(buf, ring, gH - 0.3, 0.3, 0.12, ctx.trim, ctx.trimTint);
     return;
@@ -352,7 +370,7 @@ function groundFloor(ctx, ring, gH, lobby, smooth) {
     // an arcade: the wall sits back behind a row of columns, a soffit over the walk
     const inner = shrinkRing(ring, clamp(3.2 / Math.max(4, minWidth(ring) * 0.5), 0.05, 0.35));
     if (inner !== ring && inner.length === ring.length) {
-      emitWalls(ctx, inner, 0, inner, gH, { info: lobby.info, tint: lobby.tint, bay: lobby.bay, v0: 0, v1: 1 });
+      emitWalls(ctx, inner, 0, inner, gH, { info: lobby.info, tint: lobby.tint, bay: lobby.bay, v0: 0, v1: 1, street: true });
       emitBand(ctx, ring, gH - 0.6, inner, gH - 0.6, ctx.trim, ctx.trimTint.map((v) => Math.round(v * 0.8)), false);
       const colW = clamp(gH * 0.11, 0.6, 1.3), sp = clamp(D.bay || 4, 3.4, 7);
       for (let i = 0; i < ring.length; i++) {
@@ -364,7 +382,7 @@ function groundFloor(ctx, ring, gH, lobby, smooth) {
       return;
     }
   }
-  emitWalls(ctx, ring, 0, ring, gH, { info: lobby.info, tint: lobby.tint, bay: lobby.bay, v0: 0, v1: 1, smooth });
+  emitWalls(ctx, ring, 0, ring, gH, { info: lobby.info, tint: lobby.tint, bay: lobby.bay, v0: 0, v1: 1, smooth, street: true });
   bld.ledge(buf, ring, gH - 0.35, 0.35, 0.1, ctx.trim, ctx.trimTint);
   if (use === 'lobby' && F0.L > 7) entrance(ctx, F0, gH);
 }
@@ -373,7 +391,10 @@ function groundFloor(ctx, ring, gH, lobby, smooth) {
 function entrance(ctx, f, gH) {
   const { bld, buf, seed } = ctx;
   const w = clamp(f.L * 0.28, 4, 11), s0 = f.L / 2 - w / 2, s1 = s0 + w, yc = clamp(gH - 0.9, 3, 4.6), out = 2.6, th = 0.32;
-  const P = (s, e, y) => [f.ax + f.dx * s + f.ox * e, y, f.az + f.dz * s + f.oz * e];
+  // on a slope the door stands on the street where it meets the wall (none where the street has climbed past the lobby)
+  const g0 = ctx.gl ? Math.max(0, ctx.gl(f.mx, f.mz)) : 0;
+  if (g0 > gH - yc + 0.5) return;
+  const P = (s, e, y) => [f.ax + f.dx * s + f.ox * e, y + g0, f.az + f.dz * s + f.oz * e];
   const n = [f.ox, 0, f.oz], d = [f.dx, 0, f.dz];
   const metal = [packSurf({ metal: 0.8, rough: 0.35 }), 0, 0, enc(PBR.PLAIN, MODE.SURF)], mt = tintFor([0.3, 0.3, 0.32]);
   const soffit = [packSurf({ metal: 0, rough: 0.6, glow: 3 }), rgb555([1, 0.86, 0.66]), 0, enc(PBR.PLAIN, MODE.SURF)];
@@ -383,7 +404,7 @@ function entrance(ctx, f, gH) {
   buf.q([P(s0, 0, yc), P(s0, out, yc), P(s0, out, yc + th), P(s0, 0, yc + th)], d.map((v) => -v), metal, mt);
   buf.q([P(s1, 0, yc), P(s1, out, yc), P(s1, out, yc + th), P(s1, 0, yc + th)], d, metal, mt);
   // the door bay: two posts and dark glass doors proud of the lobby glazing
-  for (const s of [s0 + 0.2, s1 - 0.5]) bld.box(buf, f.ax + f.dx * (s + 0.15) + f.ox * 0.2, f.az + f.dz * (s + 0.15) + f.oz * 0.2, 0, 0.3, 0.4, yc, Math.atan2(f.dz, f.dx), metal, mt);
+  for (const s of [s0 + 0.2, s1 - 0.5]) bld.box(buf, f.ax + f.dx * (s + 0.15) + f.ox * 0.2, f.az + f.dz * (s + 0.15) + f.oz * 0.2, g0, 0.3, 0.4, yc, Math.atan2(f.dz, f.dx), metal, mt);
   const door = [packGrid({ pier: 0.05, span: 0.05, emph: 1, kind: 1, lit: 0.9 }), rgb555([0.16, 0.18, 0.2]), packGridSeed(seed, 0.2, 2), enc(PBR.PLAIN, MODE.GRID)];
   const dw = Math.min(w - 1.6, 5.2), d0 = f.L / 2 - dw / 2, nd = Math.max(1, Math.round(dw / 1.8));
   buf.q([P(d0, 0.12, 0), P(d0 + dw, 0.12, 0), P(d0 + dw, 0.12, 2.6), P(d0, 0.12, 2.6)], n, door, [200, 200, 200], [[0, 0], [nd, 0], [nd, 1], [0, 1]]);
@@ -596,7 +617,7 @@ function church(ctx) {
     let dmax = 0;
     for (const p of ring) dmax = Math.max(dmax, Math.abs((p[0] - c[0]) * nx + (p[1] - c[1]) * nz));
     const r2 = insertRidgePoints(ring, c, nx, nz), topH = (x, z) => wallH + roofH * (1 - Math.abs((x - c[0]) * nx + (z - c[1]) * nz) / dmax);
-    emitWalls(ctx, ring, 0, ring, wallH, { info: slots, tint: wall.tint, bay: D.bay || 4.2, v0: 0, v1: 1 });
+    emitWalls(ctx, ring, 0, ring, wallH, { info: slots, tint: wall.tint, bay: D.bay || 4.2, v0: 0, v1: 1, street: true });
     for (let i = 0; i < r2.length; i++) {
       const a = r2[i], b = r2[(i + 1) % r2.length], ha = topH(a[0], a[1]), hb = topH(b[0], b[1]);
       if (Math.max(ha, hb) < wallH + 0.05) continue;
@@ -609,7 +630,7 @@ function church(ctx) {
     for (const pc of splitByRidge(ringO, c, [o.ux, o.uz])) bld.heightPolygon(buf, pc, topH, slate, slateT);
     bld.eaves(buf, r2, ringO, (p) => topH(p[0], p[1]), seed, null);
   } else {
-    emitWalls(ctx, ring, 0, ring, wallH, { info: slots, tint: wall.tint, bay: D.bay || 4.2, v0: 0, v1: 1 });
+    emitWalls(ctx, ring, 0, ring, wallH, { info: slots, tint: wall.tint, bay: D.bay || 4.2, v0: 0, v1: 1, street: true });
     bld.flatPolygon(buf, ring, F.holes, wallH, ctx.roof, ctx.roofTint, true);
     bld.ledge(buf, ring, wallH - 0.35, 0.5, 0.2, ctx.trim, ctx.trimTint);
   }
@@ -653,7 +674,7 @@ function arena(ctx) {
   if (!starShaped(ring, c) || F.holes.length) return tiers(ctx);
   const wallH = H * 0.62, up = facade(ctx), lobby = facade(ctx, true), gH = Math.min(6, wallH * 0.45);
   if (bld.foundation) emitWalls(ctx, ring, -bld.foundation, ring, 0, { info: ctx.plainWall, tint: ctx.plainTint, metres: true });
-  emitWalls(ctx, ring, 0, ring, gH, { info: lobby.info, tint: lobby.tint, bay: lobby.bay, v0: 0, v1: 1, smooth: ring.length >= 16 });
+  emitWalls(ctx, ring, 0, ring, gH, { info: lobby.info, tint: lobby.tint, bay: lobby.bay, v0: 0, v1: 1, smooth: ring.length >= 16, street: true });
   emitWalls(ctx, ring, gH, ring, wallH, { info: up.info, tint: up.tint, bay: up.bay, v0: 0, v1: Math.max(1, Math.round((wallH - gH) / (D.floorHeight || 5))), smooth: ring.length >= 16 });
   const out = offsetRing(ring, 0.9), S = surface(ctx, D.crown.material || 'steel', { pat: 3 });
   emitBand(ctx, out, wallH, ring, wallH, ctx.trim, ctx.trimTint, false);
@@ -673,7 +694,7 @@ function warehouse(ctx) {
   if (bld.foundation) emitWalls(ctx, ring, -bld.foundation, ring, 0, { info: ctx.plainWall, tint: ctx.plainTint, metres: true });
   const sheet = wall.kind === 2 ? [-1, -1, seed, enc(PBR.METAL, MODE.WALLONLY)] : ctx.plainWall;
   const y1 = H * 0.62, y2 = Math.min(H - 0.8, H * 0.86);
-  emitWalls(ctx, ring, 0, ring, y1, { info: sheet, tint: wall.tint, metres: true });
+  emitWalls(ctx, ring, 0, ring, y1, { info: sheet, tint: wall.tint, metres: true, street: true });
   const band = [packGrid({ pier: 0.1, span: 0.1, emph: 0, kind: wall.kind === 2 ? 2 : 0, lit: 0.3 }), ctx.glass, packGridSeed(seed, 0.2, 3), enc(wall.kind === 2 ? PBR.PLAIN : wall.pbr, MODE.GRID)];
   emitWalls(ctx, ring, y1, ring, y2, { info: (i, L) => (L > 8 ? band : sheet), tint: wall.tint, bay: D.bay || 6, v0: 0, v1: 1 });
   emitWalls(ctx, ring, y2, ring, H, { info: sheet, tint: wall.tint, metres: true });

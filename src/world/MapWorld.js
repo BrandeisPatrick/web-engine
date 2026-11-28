@@ -138,7 +138,7 @@ export class MapWorld {
    * @param {object} [o.roads]  RoadNetwork options ({ deckHolds })
    * @param {object} [o.buildings]  BuildingBuilder options ({ style, baseGrid, detailGrid, lodDist, detailFloors, maxWindows })
    *        plus (opt-in) landmarks: a landmarks.json object or its URL (per-building descriptors, BuildingDescriptors.js;
-   *        world.landmarks = { matched, suppressed, unmatched } after load) and infer: true (buildings without a
+   *        world.described = { matched, suppressed, unmatched } after load) and infer: true (buildings without a
    *        descriptor get one deduced from their OSM tags: parking decks, churches, hotels, towers with a top, ...)
    * @param {object} [o.props]  Props options ({ seed, streets, signStyle })
    * @param {object} [o.vegetation]  Vegetation options ({ rules, mix })
@@ -700,14 +700,14 @@ diffuseColor.rgb *= (0.85 + 0.3 * texture2D(map, vMapUv * 0.071 + 0.13).g) * mix
    */
   async _applyLandmarks() {
     let lm = (this.opts.buildings || {}).landmarks;
-    this.landmarks = null;
+    this.described = null;
     if (!lm) return;
     if (typeof lm === 'string') {
       try { const res = await fetch(lm); if (!res.ok) throw new Error(`HTTP ${res.status}`); lm = await res.json(); } catch (e) { console.warn('[MapWorld] landmarks unavailable:', e.message || e); return; }
     }
-    this.landmarks = applyBuildingDescriptors(this.data, lm, { offset: this.offset });
-    if (this.landmarks.unmatched.length) console.warn(`[MapWorld] landmarks: no footprint for ${this.landmarks.unmatched.join(', ')}`);
-    console.info(`[MapWorld] landmarks: ${this.landmarks.matched} described, ${this.landmarks.suppressed} OSM parts replaced`);
+    this.described = applyBuildingDescriptors(this.data, lm, { offset: this.offset });
+    if (this.described.unmatched.length) console.warn(`[MapWorld] landmarks: no footprint for ${this.described.unmatched.join(', ')}`);
+    console.info(`[MapWorld] landmarks: ${this.described.matched} described, ${this.described.suppressed} OSM parts replaced`);
   }
 
   async _buildBuildings(P) {
