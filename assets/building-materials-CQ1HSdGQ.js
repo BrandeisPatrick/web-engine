@@ -1,0 +1,194 @@
+import{S as R}from"./three.module-Dt1S_jJM.js";import{c as S}from"./Buildings-DNRBUR2_.js";import{G as I}from"./Impostors-BcVPmRVg.js";import{NEON_NAMES as x}from"./world-BDfcu_7z.js";import{l as F,em as M,C as W,cX as k,n as G,ad as E,I as H,L,cB as T,S as z}from"./three.core-BG5Iv3B7.js";import"./FacadeTextures-CFrENjYO.js";import"./TextureSets-B1CadDTh.js";import"./noise-g5kHFeMn.js";import"./geom-CY3Snety.js";import"./GBuffer-Dhsz133z.js";import"./Pass-CoGsOzd1.js";import"./BufferGeometryUtils-Cm1sGGAi.js";import"./MapWorld-qTsdNVbO.js";import"./preload-helper-BcAn6VXt.js";import"./Atmosphere-BthVULBV.js";import"./spatial-BBDwhacX.js";import"./PhysicsWorld-CH8hss_I.js";import"./collision-BS0BhbTY.js";import"./RoadNetwork-DstD-mx-.js";import"./Furniture-Bt7CS1uQ.js";import"./Vehicles-DMl14XIn.js";import"./NearestLights-rE_WnXbh.js";import"./Memory-efRiMhED.js";import"./dune-road-Cf3ZKjqh.js";import"./palm-6PhAO9ib.js";const me={WALL:1,CONCRETE:2,TRIM:3,GLASSBLOCK:4,FAR:5,ROOF:6},A=`
+{
+  float mbC = vInfo.x;
+  if (fMode == 3 && mbC > 0.5) {
+    vec3 wN = normalize((vec4(fNg, 0.0) * viewMatrix).xyz);
+    vec2 p = vWuv;
+    float pw = max(fwidth(p.x), fwidth(p.y));            // metres per pixel
+    float nearK = 1.0 - smoothstep(0.012, 0.05, pw);     // fine detail fades out with distance
+    float baseY = vInfo.y >= 0.0 ? vInfo.y / 20.0 : (-vInfo.y - 1.0) / 20.0;            // y < 0: a streak quad (buildings.js)
+    float hs = mbC < 1.5 ? vWPos.y - baseY : (vWall.z > 0.5 ? vWPos.y - vWall.x : 10.0); // height above the street
+    vec4 wxC0 = vec4(0.0, 0.0, 0.0, fract(vInfo.z * 7.31) * 100.0);
+    if ((mbC < 1.5 || (mbC > 4.5 && mbC < 5.5)) && uMbWeather > 0.5) {
+      // ---- stucco: float texture (fine) + unevenness (broad) as normal detail, repainted patches, hairline cracks;
+      // the fine work only where a pixel is under ~2 cm (branch: distant walls skip it)
+      float b0 = mbN(p * 0.55 + 3.1);
+      vec2 gB = vec2(dFdx(b0), dFdy(b0)) / max(pw, 1e-3) * 0.08;
+      fNxy = fNxy * 0.5 + clamp(gB, -0.2, 0.2);
+      fNStr = 1.0;
+      if (pw < 0.012) {
+        float a0 = mbN(p * 11.0);
+        fNxy += clamp(vec2(dFdx(a0), dFdy(a0)) / max(pw, 1e-4) * 0.012, -0.25, 0.25) * nearK;
+        vec2 pr = vec2(dot(p, vec2(0.8, 0.6)), dot(p, vec2(-0.6, 0.8)));
+        float cq = pr.y * 0.7 + (mbN(vec2(pr.x * 2.5, 7.0)) - 0.5) * 0.3 + (mbN(vec2(pr.x * 13.0, 3.0)) - 0.5) * 0.05;
+        float cl = abs(fract(cq) - 0.5) / 0.7;
+        float cw = max(0.0015, pw * 0.5);
+        float crack = (1.0 - smoothstep(cw * 0.5, cw * 1.5, cl)) * smoothstep(0.72, 0.8, mbN(vec2(pr.x * 0.55, floor(cq) * 3.1 + 5.0))) * (1.0 - smoothstep(0.004, 0.02, pw));
+        fCol *= 1.0 - 0.3 * crack;
+      }
+      // repainted patches, a shade off, crisp edged
+      vec2 pc = floor((p + vec2(mbH(floor(p / 7.0)) * 3.0, 1.0)) / vec2(2.3, 1.6));
+      float ph = mbH(pc + 7.7);
+      fCol *= 1.0 + step(0.86, ph) * (ph - 0.93) * 1.1;
+      // the engine's weathering (MaterialPatches GLSL_WEATHERING): blotchy repaint and render at two scales, a warm /
+      // cool drift, dirt and damp splashed up from the pavement, dust on ledges, sun-fading (south / west faces more),
+      // chipped paint showing the grey render near the camera (its streaks are off: the dirt runs below are cheaper and
+      // start where water really runs from, the coping and the ledges)
+      float sunF = clamp(wN.z * 0.8 - wN.x * 0.5, 0.0, 1.0) * (1.0 - abs(wN.y));
+      float fRoughW = fRough;
+      wxWeather(fCol, fRoughW, vWPos, wN, hs, pw, vec4(0.17, 0.04, 0.12, 0.75), vec4(0.62, 1.25, 0.0, 1.0 / 5.0),
+        vec4(0.18 + 0.3 * sunF, 0.35, 0.45, wxC0.w), vec3(0.6, 0.57, 0.5), vec3(0.55, 0.54, 0.51));
+      fRough = fRoughW;
+      // the darker damp band right at the pavement (ragged top)
+      if (hs < 0.9) {
+        float damp = 1.0 - smoothstep(0.05, 0.25 + 0.5 * mbN(vec2(p.x * 1.4, 3.0)), hs);
+        fCol *= mix(vec3(1.0), vec3(0.72, 0.72, 0.66), damp * 0.7);
+        fRough = mix(fRough, 0.97, damp);
+      }
+      // a streak quad under a sill or bracket (buildings.js): runs of dirty water, uneven lengths, soft sides
+      if (vInfo.y < 0.0) {
+        vec2 sl = vec2(vFuv.x, vFuv.y - 1.0);
+        float colm = smoothstep(0.35, 0.75, mbN(vec2(p.x * 6.0, vInfo.z * 13.0))) * 0.7 + 0.3 * smoothstep(0.5, 0.8, mbN(vec2(p.x * 19.0, 4.0)));
+        float len = 0.25 + 0.75 * mbN(vec2(p.x * 2.6, vInfo.z * 5.0 + 9.0));
+        float run = smoothstep(1.0 - len, 1.0, sl.y) * smoothstep(0.0, 0.12, sl.x) * smoothstep(1.0, 0.88, sl.x);
+        float m = clamp(colm * run, 0.0, 1.0);
+        fCol *= mix(vec3(1.0), vec3(0.58, 0.55, 0.48), m * 0.8);
+        fRough = mix(fRough, 0.75, m * 0.5);
+      }
+      // mildew on the north faces, low down and in patches
+      float north = smoothstep(0.15, 0.7, -wN.z) * (1.0 - abs(wN.y));
+      float mil = north > 0.01 || hs < 5.0 ? (north * 0.7 + 0.3) * smoothstep(0.5, 0.85, mbN(p * 0.8 + 5.0)) * (0.35 + 0.65 * (1.0 - smoothstep(0.0, 5.0, hs))) : 0.0;
+      fCol *= mix(vec3(1.0), vec3(0.8, 0.84, 0.76), mil * 0.55);
+      fRough = mix(fRough, 0.9, 0.2);
+    } else if (mbC < 2.5 && mbC > 1.5 && uMbWeather > 0.5) {
+      // ---- concrete: formwork board lines, drip marks, damp undersides
+      float bl = 1.0 - smoothstep(0.0, max(0.008, pw), abs(fract(p.y / 0.15) - 0.5) * 0.15 - 0.065);
+      float bv = 1.0 - smoothstep(0.0, max(0.01, pw), abs(fract(p.x / 1.22) - 0.5) * 1.22 - 0.6);
+      fNxy = vec2(bv * 0.25, bl * 0.18) * nearK + (vec2(mbN(p * 13.0), mbN(p * 13.0 + 4.0)) - 0.5) * 0.25 * nearK;
+      fNStr = 1.0;
+      fCol *= 1.0 - 0.05 * max(bl, bv) * nearK;
+      float drip = smoothstep(0.55, 0.85, mbN(vec2(p.x * 7.0, p.y * 0.7))) * (1.0 - abs(wN.y));
+      fCol *= mix(vec3(1.0), vec3(0.78, 0.77, 0.74), drip * 0.6);
+      if (wN.y < -0.5) fCol *= mix(1.0, 0.82, smoothstep(0.4, 0.8, mbN(p * 0.9)));
+      fRough = 0.88;
+      wxWeather(fCol, fRough, vWPos, wN, hs, pw, vec4(0.16, 0.03, 0.1, 1.3), vec4(0.5, 1.0, 0.0, 1.0 / 2.5),
+        vec4(0.0, 0.0, 0.6, wxC0.w + 3.0), vec3(0.58, 0.55, 0.49), vec3(0.5, 0.49, 0.47));
+    } else if (mbC > 2.5 && mbC < 3.5) {
+      // ---- trim: gloss paint, dulled and chipped (the grey render shows at the chips), dust on its tops
+      fRough = 0.42; fNStr = 0.15;
+      if (uMbWeather > 0.5) wxWeather(fCol, fRough, vWPos, wN, hs, pw, vec4(0.07, 0.02, 0.12, 1.6), vec4(0.35, 0.8, 0.0, 1.0 / 2.0),
+        vec4(0.1, 0.5, 0.55, wxC0.w + 5.0), vec3(0.62, 0.58, 0.5), vec3(0.52, 0.51, 0.49));
+    } else if (mbC > 3.5 && mbC < 4.5) {
+      // ---- glass block
+      vec2 g = fract(p / 0.2), gi = floor(p / 0.2);
+      float mortar = 1.0 - step(0.06, g.x) * step(g.x, 0.94) * step(0.06, g.y) * step(g.y, 0.94);
+      float far = smoothstep(0.01, 0.03, pw);
+      mortar = mix(mortar, 0.25, far);
+      vec3 blockC = vec3(0.62, 0.74, 0.76) * (0.9 + 0.2 * mbH(gi));
+      fCol = mix(blockC * 0.55, vec3(0.86, 0.86, 0.84) * 0.6, mortar);
+      fNxy = (g - 0.5) * 0.9 * (1.0 - mortar) * (1.0 - far); fNStr = 1.0;
+      fRough = mix(0.1, 0.8, mortar);
+      fEmis += vec3(1.0, 0.84, 0.6) * uNight * (1.0 - mortar) * 0.18 * step(0.4, mbH(gi * 0.1 + vInfo.z));
+      fEnv = 1.4;
+    } else if (mbC > 5.5 && mbC < 6.5 && uMbWeather > 0.5) {
+      // ---- roof: gravel / membrane, seams, stains
+      float gr = mbN(p * 31.0);
+      fNxy = (vec2(gr, mbN(p * 31.0 + 9.0)) - 0.5) * 0.7 * nearK; fNStr = 1.0;
+      float seam = 1.0 - smoothstep(0.0, max(0.02, pw), abs(fract(p.x / 1.0) - 0.5) * 1.0 - 0.48);
+      float stain = smoothstep(0.5, 0.82, mbN(p * 0.18 + 2.0)) * 0.7 + smoothstep(0.7, 0.9, mbN(p * 0.9)) * 0.3;
+      fCol *= (0.92 + 0.16 * gr * nearK) * (1.0 - 0.07 * seam) * mix(vec3(1.0), vec3(0.62, 0.6, 0.55), stain * 0.7);
+      fRough = 0.95;
+      fCol *= 1.0 + 0.2 * (wxNoise(vWPos * 0.21 + wxC0.w) - 0.5);
+    }
+    // (desktop and phones) runs of dirt down from the parapet coping and from every floor's ledge / eyebrow line (buildings.js walls pack
+    // the wall top in vFuv.x and the floor rhythm in vFuv.y: floor height x 100 x 1000 + ground storey x 100)
+  if (mbC < 1.5 && vInfo.y >= 0.0 && vFuv.x > 0.5) {
+      float topY = vFuv.x, fhh = floor(vFuv.y / 1000.0) / 100.0, gH = mod(vFuv.y, 1000.0) / 100.0;
+      float cA = mbN(vec2(p.x * 3.3, 11.0 + vInfo.z * 7.0)) * 0.7 + mbN(vec2(p.x * 11.0, 5.0 + vInfo.z)) * 0.4;
+      float cols = smoothstep(0.38, 0.82, cA);
+      float dTop = topY - vWPos.y;
+      float runT = cols * (1.0 - smoothstep(0.0, 1.0 + 3.5 * mbN(vec2(p.x * 1.7, 2.0 + vInfo.z)), dTop)) * step(-0.05, dTop);
+      float runF = 0.0;
+      if (fhh > 1.5 && hs > gH + 0.2) {
+        float dB = fhh - mod(hs - gH, fhh);
+        float cB = smoothstep(0.45, 0.85, mbN(vec2(p.x * 4.1, 23.0 + vInfo.z * 3.0)) * 0.7 + mbN(vec2(p.x * 13.0, 9.0)) * 0.4);
+        runF = cB * (1.0 - smoothstep(0.0, 0.5 + 1.2 * mbN(vec2(p.x * 2.3, 7.0 + vInfo.z)), dB));
+      }
+      float run = clamp(max(runT * 0.95, runF * 0.75), 0.0, 1.0);
+      fCol *= mix(vec3(1.0), vec3(0.62, 0.6, 0.53), run * 0.62);
+      fRough = mix(fRough, 0.97, run * 0.3);
+    }
+    // phones (no weathering pass): a cheap broad mottle so walls are not one flat value
+    if (mbC < 1.5 && uMbWeather < 0.5) fCol *= 1.0 + 0.24 * (mbN(p * 0.3 + vInfo.z * 9.0) * 0.65 + mbN(p * 1.1) * 0.35 - 0.5);
+    // ---- far facade: the window bays of the near version (uv: bays, floors; y: window width / height x100)
+    if (mbC > 4.5 && mbC < 5.5) {
+      vec2 c = vFuv, cf = fract(c), ci = floor(c);
+      float wf = floor(vInfo.y / 100.0) / 100.0, hf = mod(vInfo.y, 100.0) / 100.0, sf = hf > 0.85 ? 0.04 : 0.3;
+      vec2 fw2 = fwidth(c) + 1e-4;
+      float inX = smoothstep(-fw2.x, fw2.x, wf * 0.5 - abs(cf.x - 0.5));
+      float inY = smoothstep(-fw2.y, fw2.y, cf.y - sf) * smoothstep(-fw2.y, fw2.y, sf + hf - cf.y);
+      vec2 id = ci + vec2(vInfo.z * 113.0, vInfo.z * 71.0);
+      float blank = step(0.93, mbH(id + 1.3)) * step(hf, 0.85);
+      float win = inX * inY * (1.0 - blank);
+      if (win > 0.01) {
+        vec2 wl = vec2((cf.x - 0.5) / max(wf, 0.05) + 0.5, (cf.y - sf) / max(hf, 0.05));
+        float hp = mbH(id + 3.7);
+        float lit = step(1.0 - uLitFrac * (0.75 + 1.2 * fract(vInfo.z * 7.13)), hp);
+        vec3 lc = mix(vec3(1.0, 0.66, 0.36), vec3(0.78, 0.87, 1.0), step(0.72, mbH(id + 9.1))) * uWinGain * (0.55 + 0.8 * mbH(id + 5.3)) * uNight;
+        float glow = 0.0;
+        vec3 room = fRoom(id, clamp(wl, 0.0, 1.0), fRt, vInfo.z, lit, lc, fDay, 0.0, glow) + lc * glow * 1.4;
+        float blind = mbH(id + 21.7) < 0.4 ? 0.2 + 0.6 * mbH(id + 2.2) : 0.0;
+        if (wl.y > 1.0 - blind) room = vec3(0.85, 0.82, 0.74) * (0.12 * fDay) + vec3(0.85, 0.82, 0.74) * lc * lit * 0.6;
+        float farR = smoothstep(0.12, 0.45, max(fw2.x, fw2.y) * 3.0);
+        vec3 avg = vec3(0.62, 0.57, 0.5) * (0.04 * fDay + lc * lit * 1.05);
+        // the reveal: a shadow along the head and one jamb of the opening
+        float rev = smoothstep(0.86, 0.98, wl.y) + smoothstep(0.12, 0.0, wl.x) * 0.6;
+        fEmis = mix(fEmis, mix(room, avg, farR) * (1.0 - 0.6 * rev), win);
+        fCol = mix(fCol, vec3(0.025), win);
+        fRough = mix(fRough, 0.05, win);
+        fNxy *= 1.0 - win;
+        if (win > 0.5) { fGlass = 1.0; fSpec = vec3(0.05 + 0.02 * mbH(id)); fEnv = mix(1.5, 0.8, farR) * (1.0 - 0.5 * rev); }
+      }
+      // shade under each window head (the eyebrow / reveal above)
+      float under = smoothstep(sf + hf + 0.12, sf + hf, cf.y) * step(sf + hf, cf.y) * inX;
+      fCol *= 1.0 - 0.25 * under;
+      // a dirty run under each sill
+      float runS = smoothstep(sf - 0.3, sf, cf.y) * step(cf.y, sf) * inX * smoothstep(0.4, 0.7, mbH(id + 13.1));
+      fCol *= 1.0 - 0.18 * runS;
+    }
+  }
+  // ---- window glass seen from afar (the skyline at dusk): less of the pale sky in it, so the openings read darker
+  // than the stucco, and the lit rooms keep a warm core instead of averaging into the glass
+  if (fMode == 7 && fGlass > 0.5) {
+    float farG = smoothstep(0.015, 0.1, max(fwidth(vFuv.x * 0.5), fwidth(vFuv.y)));
+    if (farG > 0.0) {
+      vec2 cell = vec2(floor(vFuv.x * 0.5), floor(vFuv.y)), id = cell + vec2(vInfo.z * 113.0, vInfo.z * 71.0);
+      float hp = mix(fHash(id + 3.7), fHash(vec2(vInfo.z * 17.0, cell.y)), 0.75);
+      float lit = max(step(1.0 - uLitFrac * (0.9 + 1.2 * fract(vInfo.z * 5.7)), hp), step(1.0 - uLitFrac * 0.7, fHash(id + 9.9)));
+      // the rows must read at a distance: the glass darker than the stucco (less sky in it), every room a faint warm
+      // grey (curtains, a lamp further in), more of them lit
+      fEnv *= 1.0 - 0.7 * farG;
+      fCol *= 1.0 - 0.5 * farG;
+      fEmis += vec3(1.0, 0.8, 0.6) * uNight * uWinGain * 0.025 * (0.5 + fHash(id + 4.4)) * farG;
+      fEmis += vec3(1.0, 0.74, 0.46) * lit * uNight * uWinGain * 0.38 * farG;
+    }
+  }
+}
+`,_=`
+${I}
+uniform float uMbWeather;
+float mbH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+uniform sampler2D uMbNoise; // 64 x 64 value-noise lattice, one cell per texel, repeating: bilinear = value noise
+float mbN(vec2 p) { return texture2D(uMbNoise, (p + 0.5) / 64.0).r; }
+`;function pe(c,{weather:o=!0}={}){const a=c.tex,e=S(a.facade,a.pbr),r=c.mat.facadeSet.uniforms;for(const s of["uNight","uLitFrac","uWinGain","uTime","uClock"])r[s]&&(e.uniforms[s]=r[s]);e.uniforms.uMbWeather={value:o?1:0},e.uniforms.uMbNoise={value:K()},e.uniforms.uMbKeyGlint={value:new F(1,0)};const i=e.facade,p=i.onBeforeCompile;return i.onBeforeCompile=(s,n)=>{p.call(i,s,n),s.uniforms.uMbKeyGlint=e.uniforms.uMbKeyGlint,s.fragmentShader=s.fragmentShader.replace("varying vec3 vWall;",`varying vec3 vWall;
+${_}
+uniform vec2 uMbKeyGlint;`).replace("diffuseColor.rgb *= fCol;",`${A}
+diffuseColor.rgb *= fCol;`).replace("#include <lights_fragment_begin>",R.lights_fragment_begin.replace("#if ( NUM_DIR_LIGHTS > 0 ) && defined( RE_Direct )",`vec3 mbSpec0 = reflectedLight.directSpecular;
+#ifdef USE_CLEARCOAT
+vec3 mbCc0 = clearcoatSpecularDirect;
+#endif
+#if ( NUM_DIR_LIGHTS > 0 ) && defined( RE_Direct )`).replace("#if ( NUM_RECT_AREA_LIGHTS > 0 )",`{ vec3 ds = max( reflectedLight.directSpecular - mbSpec0, 0.0 ) * uMbKeyGlint.x; reflectedLight.directSpecular = mbSpec0 + ds / ( 1.0 + ds * uMbKeyGlint.y ); }
+#ifdef USE_CLEARCOAT
+{ vec3 dc = max( clearcoatSpecularDirect - mbCc0, 0.0 ) * uMbKeyGlint.x; clearcoatSpecularDirect = mbCc0 + dc / ( 1.0 + dc * uMbKeyGlint.y ); }
+#endif
+#if ( NUM_RECT_AREA_LIGHTS > 0 )`))},i.customProgramCacheKey=()=>"roadster-facade-3-miami-weather-3",e}function K(){const o=new Uint8Array(16384);let a=9137;for(let r=0;r<4096;r++){a=a*1103515245+12345>>>0;const i=a>>>16&255;o[r*4]=o[r*4+1]=o[r*4+2]=i,o[r*4+3]=255}const e=new k(o,64,64,G);return e.wrapS=e.wrapT=E,e.magFilter=H,e.minFilter=L,e.generateMipmaps=!0,e.needsUpdate=!0,e}function he(){if(typeof document>"u")return null;const c=1024,o=512,a=96,e=x.length,r=2048,i=()=>{const f=document.createElement("canvas");return f.width=c,f.height=r,f},p=i(),s=i(),n=p.getContext("2d"),h=s.getContext("2d");h.fillStyle="#000",h.fillRect(0,0,c,r);const u=["#1d4f5c","#9c2533","#e8e1cf","#22324f","#2c6e4e"];x.forEach((f,l)=>{for(let t=0;t<2;t++){const v=t*o,d=l*a,g=t===0?"#efe7d4":u[l%u.length],y=t===0?"#1c2a33":g==="#e8e1cf"?"#a3202c":"#fbf6ea";n.fillStyle=g,n.fillRect(v,d,o,a),n.strokeStyle=t===0?"#b9ad92":"#f3efe4",n.lineWidth=4,n.strokeRect(v+6,d+6,o-12,a-12);const C=t===0?`600 ${a*.5}px "Futura", "Avenir Next", "Trebuchet MS", sans-serif`:`bold ${a*.6}px "Futura", "Avenir Next", "Trebuchet MS", sans-serif`;for(const m of[n,h]){m.font=C,m.textAlign="center",m.textBaseline="middle",m.fillStyle=m===n?y:"#fff";const N=t===0?f.split("").join(" "):f;m.fillText(N,v+o/2,d+a/2+3,o-40)}}});const b=(f,l)=>{const t=new T(f);return t.colorSpace=z,t.anisotropy=8,t.flipY=!1,t},w=new M({map:b(p),emissiveMap:b(s),emissive:new W(1,.86,.62),emissiveIntensity:0,roughness:.55,metalness:0,name:"miamiSigns"});return{material:w,cell:(f,l)=>{const t=f%e;return[l*o/c,t*a/r,(l+1)*o/c,(t+1)*a/r]},setLit:f=>{w.emissiveIntensity=2.6*f}}}export{me as CL,pe as miamiFacadeMaterials,he as signAtlas};
