@@ -5,6 +5,9 @@
 //   node engine/tools/bake-map.mjs --lat 37.792 --lon -122.3965 --size 2200 --outer 9000 --out public/map/city.json
 //   node engine/tools/bake-map.mjs --dry-run   (print the plan: bboxes, Overpass jobs, paths; no network, no files)
 //   node engine/tools/bake-map.mjs --help      (all flags; cached raw responses in --cache are reused unless --refresh)
+//   --keep-outlines 0.6                        (opt-in, default 0: a building whose building:parts cover less than this
+//                                               share of its outline keeps the outline too; without it a lone dome or
+//                                               awning part replaces the whole building, as for the Georgia Capitol)
 //   export async function bakeMap(opts)        (same options, camelCase; used by the game's tools/bake-map.mjs)
 //
 // Data source: Overpass API (several mirrors, retried with exponential backoff, chunked by feature
@@ -25,6 +28,7 @@ export const SPEC = {
   size: { type: 'number', def: 2200, help: 'detailed city square edge (m)' },
   outer: { type: 'number', def: 9000, help: 'coastline / land square edge (m)' },
   'bridge-ext': { type: 'numbers', def: [3200, 2200], help: 'extra bbox east,north of the city for motorway bridges (0,0 = none)' },
+  'keep-outlines': { type: 'number', def: 0, help: 'also keep an outline whose ground-level building:parts cover less than this fraction of its area (0 = parts always replace it)' },
   out: { type: 'string', def: 'public/map/city.json', help: 'output city.json' },
   cache: { type: 'string', def: '.osm-cache', help: 'raw response cache dir' },
   ua: { type: 'string', def: 'roadster-flying-car-map-baker/1.0 (one-off offline bake for a three.js game)', help: 'HTTP User-Agent' },
@@ -33,7 +37,7 @@ export const SPEC = {
 };
 
 // configuration (set by configure() from the options; read by the functions below at call time)
-let ROOT, OUT, CACHE, REFRESH, CENTER, SIZE, OUTER, BRIDGE_EXT, UA, COS0, H, CITY, CITY_BB, OH, OUTER_BB, BRIDGE_BB;
+let ROOT, OUT, CACHE, REFRESH, CENTER, SIZE, OUTER, BRIDGE_EXT, KEEP_OUTLINES, UA, COS0, H, CITY, CITY_BB, OH, OUTER_BB, BRIDGE_BB;
 function configure(o = {}) {
   const d = (k) => (o[k] !== undefined ? o[k] : SPEC[k.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())].def);
   ROOT = process.cwd();
@@ -41,6 +45,7 @@ function configure(o = {}) {
   CENTER = { lat: d('lat'), lon: d('lon') };
   SIZE = d('size'); OUTER = d('outer');
   const be = d('bridgeExt'); BRIDGE_EXT = { east: be[0] || 0, north: be[1] || 0 };
+  KEEP_OUTLINES = Math.max(0, d('keepOutlines') || 0);
   UA = d('ua');
   COS0 = Math.cos(CENTER.lat * DEG);
   H = SIZE / 2;
@@ -494,7 +499,7 @@ export async function bakeMap(opts = {}) {
     ['parking', `(way["amenity"="parking"](${bbStr(CITY_BB)});relation["amenity"="parking"](${bbStr(CITY_BB)});way["place"="square"](${bbStr(CITY_BB)}););out body geom;`],
   ];
   if (opts.dryRun) {
-    console.log(`  centre ${CENTER.lat}, ${CENTER.lon}  city ${SIZE} m  outer ${OUTER} m  bridge ext east ${BRIDGE_EXT.east} north ${BRIDGE_EXT.north} m`);
+    console.log(`  centre ${CENTER.lat}, ${CENTER.lon}  city ${SIZE} m  outer ${OUTER} m  bridge ext east ${BRIDGE_EXT.east} north ${BRIDGE_EXT.north} m${KEEP_OUTLINES > 0 ? `  keep outlines under ${KEEP_OUTLINES} part cover` : ''}`);
     console.log(`  bbox(s,w,n,e) city ${bbStr(CITY_BB)} | outer ${bbStr(OUTER_BB)}${BRIDGE_EXT.east > 0 || BRIDGE_EXT.north > 0 ? ` | bridge ${bbStr(BRIDGE_BB)}` : ''}`);
     console.log(`  Overpass jobs (${jobs.length}): ${jobs.map((j) => j[0]).join(', ')}`);
     console.log(`  out ${OUT}\n  cache ${CACHE}${REFRESH ? ' (refresh)' : ''}\n  user agent ${UA}\n  dry run: no requests made, nothing written`);
@@ -598,9 +603,23 @@ export async function bakeMap(opts = {}) {
     if (parent) o.part = 1;
     out.buildings.push(o);
   };
-  bOutlines.forEach((b, idx) => { if (!hasParts.has(idx)) pushB(b, null); });
+  // --keep-outlines: where the mapper drew parts only for a detail (a dome, a tower, an awning), dropping the outline
+  // would drop the building. Ground-level part area per outline; raised parts and roofs are not building mass.
+  const partArea = new Map();
+  if (KEEP_OUTLINES > 0) {
+    for (const [p, par] of partParent) {
+      const t = p.t;
+      if (parseLen(t.min_height) > 0 || parseFloat(t['building:min_level']) > 0 || t['building:part'] === 'roof') continue;
+      partArea.set(par, (partArea.get(par) || 0) + p.area);
+    }
+  }
+  let keptOutlines = 0;
+  bOutlines.forEach((b, idx) => {
+    if (!hasParts.has(idx)) pushB(b, null);
+    else if (KEEP_OUTLINES > 0 && (partArea.get(b) || 0) < KEEP_OUTLINES * b.area) { pushB(b, null); keptOutlines++; }
+  });
   for (const p of bParts) pushB(p, partParent.get(p) || null);
-  console.log(`  buildings: ${bOutlines.length} outlines (${hasParts.size} replaced by parts), ${bParts.length} parts -> ${out.buildings.length}`);
+  console.log(`  buildings: ${bOutlines.length} outlines (${hasParts.size} replaced by parts${KEEP_OUTLINES > 0 ? `, ${keptOutlines} of them kept under their parts` : ''}), ${bParts.length} parts -> ${out.buildings.length}`);
 
   // ---------- roads
   const roadWays = elements.filter((e) => e.type === 'way' && e.tags && e.tags.highway && e.geometry && e.geometry.length >= 2);
