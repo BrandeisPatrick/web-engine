@@ -24,10 +24,10 @@
   "sound": "Sound"
  },
  "counts": {
-  "total": 156,
+  "total": 166,
   "byCategory": {
    "vehicle": 13,
-   "character": 3,
+   "character": 11,
    "building": 7,
    "prop": 44,
    "vegetation": 9,
@@ -41,16 +41,16 @@
    "environment": 10,
    "effect": 2,
    "grade": 5,
-   "map": 2,
+   "map": 4,
    "sound": 3
   },
   "byKind": {
-   "file": 51,
+   "file": 61,
    "code": 105
   },
   "byScope": {
    "engine": 71,
-   "demo": 85
+   "demo": 95
   },
   "notReusable": 9
  },
@@ -62,6 +62,14 @@
     "CC0 1.0"
    ],
    "entries": 42
+  },
+  {
+   "name": "Microsoft Rocketbox Avatar Library",
+   "url": "https://github.com/microsoft/Microsoft-Rocketbox",
+   "licences": [
+    "MIT"
+   ],
+   "entries": 8
   },
   {
    "name": "Quaternius via poly.pizza",
@@ -77,13 +85,21 @@
    "licences": [
     "ODbL 1.0"
    ],
-   "entries": 2
+   "entries": 3
   },
   {
    "name": "Khronos glTF Sample Assets",
    "url": "https://github.com/KhronosGroup/glTF-Sample-Assets",
    "licences": [
     "CC-BY 4.0"
+   ],
+   "entries": 1
+  },
+  {
+   "name": "Wikipedia articles and OpenStreetMap tags",
+   "url": "https://www.openstreetmap.org/copyright",
+   "licences": [
+    "MIT"
    ],
    "entries": 1
   }
@@ -100,6 +116,10 @@
   {
    "path": "samples/public/miami/textures-lite/manifest.json",
    "reason": "phone-tier texture manifest of the Miami drive: it lists no sets (procedural layers)"
+  },
+  {
+   "path": "samples/public/people/LICENSE-Rocketbox.md",
+   "reason": "the MIT licence text of the Microsoft Rocketbox Avatar Library, which must ship with the people files baked from it: not an asset"
   }
  ],
  "entries": [
@@ -849,6 +869,201 @@
    }
   },
   {
+   "id": "people-man-denim-jacket",
+   "name": "Man in a denim jacket",
+   "category": "character",
+   "categoryLabel": "Character",
+   "kind": "file",
+   "scope": "demo",
+   "demo": "nyc-night",
+   "where": {
+    "files": [
+     "samples/public/people/man-denim-jacket.glb"
+    ]
+   },
+   "usedBy": [
+    "nyc-night"
+   ],
+   "via": null,
+   "reusable": true,
+   "reason": null,
+   "credit": {
+    "source": "Microsoft Rocketbox Avatar Library",
+    "author": "Microsoft (Rocketbox Avatar Library)",
+    "licence": "MIT (Copyright (c) 2020 Microsoft; keep LICENSE-Rocketbox.md with the file)",
+    "url": "https://github.com/microsoft/Microsoft-Rocketbox",
+    "creditsFile": "samples/public/people/CREDITS.md"
+   },
+   "bytes": 571968,
+   "facts": {
+    "avatar": "Male_Adult_12",
+    "clips": "Idle, Walk (1.3 m/s), Run (5.4 to 5.8 m/s)",
+    "bakedWith": "tools/bake-people.mjs",
+    "triangles": 6722,
+    "meshes": 1,
+    "materials": 1,
+    "textures": 1,
+    "bones": 53,
+    "animations": [
+     "Idle",
+     "Walk",
+     "Run"
+    ],
+    "skinned": true
+   },
+   "tags": [
+    "character",
+    "person",
+    "pedestrian",
+    "rigged",
+    "animated",
+    "textured",
+    "glb",
+    "rocketbox",
+    "man"
+   ],
+   "thumb": "catalog/thumbs/people-man-denim-jacket.jpg",
+   "preview3d": true,
+   "description": "Rigged, textured adult in denim jacket and light jeans, baked from the Microsoft Rocketbox avatar Male_Adult_12 (MIT) by tools/bake-people.mjs: metres, one atlas, one or two draw calls, Idle / Walk / Run. One of the Night NYC drive's pedestrians. Finish a clone with finishPerson (world/People.js) for the height, the light and per-person cloth colours.",
+   "snippet": "import * as THREE from 'three';\nimport { Assets } from '@vibe/engine/core';\nimport { registerRenderLoaders } from '@vibe/engine/render';\nconst assets = new Assets({ base: import.meta.env.BASE_URL + 'people/' });\nregisterRenderLoaders(assets, renderer, { ktx2: false, meshopt: false });\nassets.add('person', { type: 'gltf', url: 'man-denim-jacket.glb' });\nawait assets.load();\nconst gltf = assets.get('person');\nconst person = gltf.instantiate();                  // a skinning-safe clone (geometry and materials shared)\nscene.add(person);\nconst mixer = new THREE.AnimationMixer(person);\nmixer.clipAction(gltf.animations.find((c) => c.name === 'Walk')).play();\n// every frame: mixer.update(dt);",
+   "preview": {
+    "az": 30,
+    "el": 10,
+    "frames": 20,
+    "result": "gltf"
+   }
+  },
+  {
+   "id": "people-man-grey-jacket",
+   "name": "Man in a grey jacket",
+   "category": "character",
+   "categoryLabel": "Character",
+   "kind": "file",
+   "scope": "demo",
+   "demo": "nyc-night",
+   "where": {
+    "files": [
+     "samples/public/people/man-grey-jacket.glb"
+    ]
+   },
+   "usedBy": [
+    "nyc-night"
+   ],
+   "via": null,
+   "reusable": true,
+   "reason": null,
+   "credit": {
+    "source": "Microsoft Rocketbox Avatar Library",
+    "author": "Microsoft (Rocketbox Avatar Library)",
+    "licence": "MIT (Copyright (c) 2020 Microsoft; keep LICENSE-Rocketbox.md with the file)",
+    "url": "https://github.com/microsoft/Microsoft-Rocketbox",
+    "creditsFile": "samples/public/people/CREDITS.md"
+   },
+   "bytes": 615956,
+   "facts": {
+    "avatar": "Male_Adult_07",
+    "clips": "Idle, Walk (1.3 m/s), Run (5.4 to 5.8 m/s)",
+    "bakedWith": "tools/bake-people.mjs",
+    "triangles": 7588,
+    "meshes": 1,
+    "materials": 2,
+    "textures": 2,
+    "bones": 53,
+    "animations": [
+     "Idle",
+     "Walk",
+     "Run"
+    ],
+    "skinned": true
+   },
+   "tags": [
+    "character",
+    "person",
+    "pedestrian",
+    "rigged",
+    "animated",
+    "textured",
+    "glb",
+    "rocketbox",
+    "man"
+   ],
+   "thumb": "catalog/thumbs/people-man-grey-jacket.jpg",
+   "preview3d": true,
+   "description": "Rigged, textured adult in grey jacket and jeans, baked from the Microsoft Rocketbox avatar Male_Adult_07 (MIT) by tools/bake-people.mjs: metres, one atlas, one or two draw calls, Idle / Walk / Run. The walker of the walking starter and one of the Night NYC drive's pedestrians. Finish a clone with finishPerson (world/People.js) for the height, the light and per-person cloth colours.",
+   "snippet": "import * as THREE from 'three';\nimport { Assets } from '@vibe/engine/core';\nimport { registerRenderLoaders } from '@vibe/engine/render';\nconst assets = new Assets({ base: import.meta.env.BASE_URL + 'people/' });\nregisterRenderLoaders(assets, renderer, { ktx2: false, meshopt: false });\nassets.add('person', { type: 'gltf', url: 'man-grey-jacket.glb' });\nawait assets.load();\nconst gltf = assets.get('person');\nconst person = gltf.instantiate();                  // a skinning-safe clone (geometry and materials shared)\nscene.add(person);\nconst mixer = new THREE.AnimationMixer(person);\nmixer.clipAction(gltf.animations.find((c) => c.name === 'Walk')).play();\n// every frame: mixer.update(dt);",
+   "preview": {
+    "az": 30,
+    "el": 10,
+    "frames": 20,
+    "result": "gltf"
+   }
+  },
+  {
+   "id": "people-man-hooded-jacket",
+   "name": "Man in a hooded jacket",
+   "category": "character",
+   "categoryLabel": "Character",
+   "kind": "file",
+   "scope": "demo",
+   "demo": "nyc-night",
+   "where": {
+    "files": [
+     "samples/public/people/man-hooded-jacket.glb"
+    ]
+   },
+   "usedBy": [
+    "nyc-night"
+   ],
+   "via": null,
+   "reusable": true,
+   "reason": null,
+   "credit": {
+    "source": "Microsoft Rocketbox Avatar Library",
+    "author": "Microsoft (Rocketbox Avatar Library)",
+    "licence": "MIT (Copyright (c) 2020 Microsoft; keep LICENSE-Rocketbox.md with the file)",
+    "url": "https://github.com/microsoft/Microsoft-Rocketbox",
+    "creditsFile": "samples/public/people/CREDITS.md"
+   },
+   "bytes": 707956,
+   "facts": {
+    "avatar": "Male_Adult_04",
+    "clips": "Idle, Walk (1.3 m/s), Run (5.4 to 5.8 m/s)",
+    "bakedWith": "tools/bake-people.mjs",
+    "triangles": 8684,
+    "meshes": 1,
+    "materials": 2,
+    "textures": 2,
+    "bones": 53,
+    "animations": [
+     "Idle",
+     "Walk",
+     "Run"
+    ],
+    "skinned": true
+   },
+   "tags": [
+    "character",
+    "person",
+    "pedestrian",
+    "rigged",
+    "animated",
+    "textured",
+    "glb",
+    "rocketbox",
+    "man"
+   ],
+   "thumb": "catalog/thumbs/people-man-hooded-jacket.jpg",
+   "preview3d": true,
+   "description": "Rigged, textured adult in dark hooded jacket and khaki trousers, baked from the Microsoft Rocketbox avatar Male_Adult_04 (MIT) by tools/bake-people.mjs: metres, one atlas, one or two draw calls, Idle / Walk / Run. One of the Night NYC drive's pedestrians. Finish a clone with finishPerson (world/People.js) for the height, the light and per-person cloth colours.",
+   "snippet": "import * as THREE from 'three';\nimport { Assets } from '@vibe/engine/core';\nimport { registerRenderLoaders } from '@vibe/engine/render';\nconst assets = new Assets({ base: import.meta.env.BASE_URL + 'people/' });\nregisterRenderLoaders(assets, renderer, { ktx2: false, meshopt: false });\nassets.add('person', { type: 'gltf', url: 'man-hooded-jacket.glb' });\nawait assets.load();\nconst gltf = assets.get('person');\nconst person = gltf.instantiate();                  // a skinning-safe clone (geometry and materials shared)\nscene.add(person);\nconst mixer = new THREE.AnimationMixer(person);\nmixer.clipAction(gltf.animations.find((c) => c.name === 'Walk')).play();\n// every frame: mixer.update(dt);",
+   "preview": {
+    "az": 30,
+    "el": 10,
+    "frames": 20,
+    "result": "gltf"
+   }
+  },
+  {
    "id": "nyc-ManInSuit",
    "name": "Man in Suit",
    "category": "character",
@@ -909,6 +1124,331 @@
    "preview3d": true,
    "description": "Rigged, animated low-poly character by Quaternius (CC0). One of the Night NYC drive's pedestrians. The demo plays its walk and idle clips through an AnimationMixer per person (pedestrians.js).",
    "snippet": "import * as THREE from 'three';\nimport { Assets } from '@vibe/engine/core';\nimport { registerRenderLoaders } from '@vibe/engine/render';\nconst assets = new Assets({ base: import.meta.env.BASE_URL + 'nyc/' });\nregisterRenderLoaders(assets, renderer, { ktx2: false, meshopt: false });\nassets.add('suit', { type: 'gltf', url: 'models/ManInSuit.glb' });\nawait assets.load();\nconst gltf = assets.get('suit');\nconst person = gltf.instantiate();                  // a skinning-safe clone (geometry and materials shared)\nscene.add(person);\nconst mixer = new THREE.AnimationMixer(person);\nmixer.clipAction(gltf.animations.find((c) => c.name === 'HumanArmature|Man_Walk')).play();\n// every frame: mixer.update(dt);",
+   "preview": {
+    "az": 30,
+    "el": 10,
+    "frames": 20,
+    "result": "gltf"
+   }
+  },
+  {
+   "id": "people-man-blazer",
+   "name": "Older man in a blazer",
+   "category": "character",
+   "categoryLabel": "Character",
+   "kind": "file",
+   "scope": "demo",
+   "demo": "nyc-night",
+   "where": {
+    "files": [
+     "samples/public/people/man-blazer.glb"
+    ]
+   },
+   "usedBy": [
+    "nyc-night"
+   ],
+   "via": null,
+   "reusable": true,
+   "reason": null,
+   "credit": {
+    "source": "Microsoft Rocketbox Avatar Library",
+    "author": "Microsoft (Rocketbox Avatar Library)",
+    "licence": "MIT (Copyright (c) 2020 Microsoft; keep LICENSE-Rocketbox.md with the file)",
+    "url": "https://github.com/microsoft/Microsoft-Rocketbox",
+    "creditsFile": "samples/public/people/CREDITS.md"
+   },
+   "bytes": 816824,
+   "facts": {
+    "avatar": "Male_Adult_03",
+    "clips": "Idle, Walk (1.3 m/s), Run (5.4 to 5.8 m/s)",
+    "bakedWith": "tools/bake-people.mjs",
+    "triangles": 7200,
+    "meshes": 1,
+    "materials": 2,
+    "textures": 2,
+    "bones": 53,
+    "animations": [
+     "Idle",
+     "Walk",
+     "Run"
+    ],
+    "skinned": true
+   },
+   "tags": [
+    "character",
+    "person",
+    "pedestrian",
+    "rigged",
+    "animated",
+    "textured",
+    "glb",
+    "rocketbox",
+    "man"
+   ],
+   "thumb": "catalog/thumbs/people-man-blazer.jpg",
+   "preview3d": true,
+   "description": "Rigged, textured adult in grey checked blazer and dark trousers, baked from the Microsoft Rocketbox avatar Male_Adult_03 (MIT) by tools/bake-people.mjs: metres, one atlas, one or two draw calls, Idle / Walk / Run. One of the Night NYC drive's pedestrians. Finish a clone with finishPerson (world/People.js) for the height, the light and per-person cloth colours.",
+   "snippet": "import * as THREE from 'three';\nimport { Assets } from '@vibe/engine/core';\nimport { registerRenderLoaders } from '@vibe/engine/render';\nconst assets = new Assets({ base: import.meta.env.BASE_URL + 'people/' });\nregisterRenderLoaders(assets, renderer, { ktx2: false, meshopt: false });\nassets.add('person', { type: 'gltf', url: 'man-blazer.glb' });\nawait assets.load();\nconst gltf = assets.get('person');\nconst person = gltf.instantiate();                  // a skinning-safe clone (geometry and materials shared)\nscene.add(person);\nconst mixer = new THREE.AnimationMixer(person);\nmixer.clipAction(gltf.animations.find((c) => c.name === 'Walk')).play();\n// every frame: mixer.update(dt);",
+   "preview": {
+    "az": 30,
+    "el": 10,
+    "frames": 20,
+    "result": "gltf"
+   }
+  },
+  {
+   "id": "people-woman-beige-jacket",
+   "name": "Woman in a beige jacket",
+   "category": "character",
+   "categoryLabel": "Character",
+   "kind": "file",
+   "scope": "demo",
+   "demo": "nyc-night",
+   "where": {
+    "files": [
+     "samples/public/people/woman-beige-jacket.glb"
+    ]
+   },
+   "usedBy": [
+    "nyc-night"
+   ],
+   "via": null,
+   "reusable": true,
+   "reason": null,
+   "credit": {
+    "source": "Microsoft Rocketbox Avatar Library",
+    "author": "Microsoft (Rocketbox Avatar Library)",
+    "licence": "MIT (Copyright (c) 2020 Microsoft; keep LICENSE-Rocketbox.md with the file)",
+    "url": "https://github.com/microsoft/Microsoft-Rocketbox",
+    "creditsFile": "samples/public/people/CREDITS.md"
+   },
+   "bytes": 823696,
+   "facts": {
+    "avatar": "Female_Adult_14",
+    "clips": "Idle, Walk (1.3 m/s), Run (5.4 to 5.8 m/s)",
+    "bakedWith": "tools/bake-people.mjs",
+    "triangles": 8724,
+    "meshes": 1,
+    "materials": 2,
+    "textures": 2,
+    "bones": 53,
+    "animations": [
+     "Idle",
+     "Walk",
+     "Run"
+    ],
+    "skinned": true
+   },
+   "tags": [
+    "character",
+    "person",
+    "pedestrian",
+    "rigged",
+    "animated",
+    "textured",
+    "glb",
+    "rocketbox",
+    "woman"
+   ],
+   "thumb": "catalog/thumbs/people-woman-beige-jacket.jpg",
+   "preview3d": true,
+   "description": "Rigged, textured adult in beige jacket, dark jeans and boots, baked from the Microsoft Rocketbox avatar Female_Adult_14 (MIT) by tools/bake-people.mjs: metres, one atlas, one or two draw calls, Idle / Walk / Run. One of the Night NYC drive's pedestrians. Finish a clone with finishPerson (world/People.js) for the height, the light and per-person cloth colours.",
+   "snippet": "import * as THREE from 'three';\nimport { Assets } from '@vibe/engine/core';\nimport { registerRenderLoaders } from '@vibe/engine/render';\nconst assets = new Assets({ base: import.meta.env.BASE_URL + 'people/' });\nregisterRenderLoaders(assets, renderer, { ktx2: false, meshopt: false });\nassets.add('person', { type: 'gltf', url: 'woman-beige-jacket.glb' });\nawait assets.load();\nconst gltf = assets.get('person');\nconst person = gltf.instantiate();                  // a skinning-safe clone (geometry and materials shared)\nscene.add(person);\nconst mixer = new THREE.AnimationMixer(person);\nmixer.clipAction(gltf.animations.find((c) => c.name === 'Walk')).play();\n// every frame: mixer.update(dt);",
+   "preview": {
+    "az": 30,
+    "el": 10,
+    "frames": 20,
+    "result": "gltf"
+   }
+  },
+  {
+   "id": "people-woman-blazer",
+   "name": "Woman in a blazer",
+   "category": "character",
+   "categoryLabel": "Character",
+   "kind": "file",
+   "scope": "demo",
+   "demo": "nyc-night",
+   "where": {
+    "files": [
+     "samples/public/people/woman-blazer.glb"
+    ]
+   },
+   "usedBy": [
+    "nyc-night"
+   ],
+   "via": null,
+   "reusable": true,
+   "reason": null,
+   "credit": {
+    "source": "Microsoft Rocketbox Avatar Library",
+    "author": "Microsoft (Rocketbox Avatar Library)",
+    "licence": "MIT (Copyright (c) 2020 Microsoft; keep LICENSE-Rocketbox.md with the file)",
+    "url": "https://github.com/microsoft/Microsoft-Rocketbox",
+    "creditsFile": "samples/public/people/CREDITS.md"
+   },
+   "bytes": 727052,
+   "facts": {
+    "avatar": "Female_Adult_09",
+    "clips": "Idle, Walk (1.3 m/s), Run (5.4 to 5.8 m/s)",
+    "bakedWith": "tools/bake-people.mjs",
+    "triangles": 9032,
+    "meshes": 1,
+    "materials": 2,
+    "textures": 2,
+    "bones": 53,
+    "animations": [
+     "Idle",
+     "Walk",
+     "Run"
+    ],
+    "skinned": true
+   },
+   "tags": [
+    "character",
+    "person",
+    "pedestrian",
+    "rigged",
+    "animated",
+    "textured",
+    "glb",
+    "rocketbox",
+    "woman"
+   ],
+   "thumb": "catalog/thumbs/people-woman-blazer.jpg",
+   "preview3d": true,
+   "description": "Rigged, textured adult in beige blazer and black trousers, baked from the Microsoft Rocketbox avatar Female_Adult_09 (MIT) by tools/bake-people.mjs: metres, one atlas, one or two draw calls, Idle / Walk / Run. One of the Night NYC drive's pedestrians. Finish a clone with finishPerson (world/People.js) for the height, the light and per-person cloth colours.",
+   "snippet": "import * as THREE from 'three';\nimport { Assets } from '@vibe/engine/core';\nimport { registerRenderLoaders } from '@vibe/engine/render';\nconst assets = new Assets({ base: import.meta.env.BASE_URL + 'people/' });\nregisterRenderLoaders(assets, renderer, { ktx2: false, meshopt: false });\nassets.add('person', { type: 'gltf', url: 'woman-blazer.glb' });\nawait assets.load();\nconst gltf = assets.get('person');\nconst person = gltf.instantiate();                  // a skinning-safe clone (geometry and materials shared)\nscene.add(person);\nconst mixer = new THREE.AnimationMixer(person);\nmixer.clipAction(gltf.animations.find((c) => c.name === 'Walk')).play();\n// every frame: mixer.update(dt);",
+   "preview": {
+    "az": 30,
+    "el": 10,
+    "frames": 20,
+    "result": "gltf"
+   }
+  },
+  {
+   "id": "people-woman-dark-jacket",
+   "name": "Woman in a dark jacket",
+   "category": "character",
+   "categoryLabel": "Character",
+   "kind": "file",
+   "scope": "demo",
+   "demo": "nyc-night",
+   "where": {
+    "files": [
+     "samples/public/people/woman-dark-jacket.glb"
+    ]
+   },
+   "usedBy": [
+    "nyc-night"
+   ],
+   "via": null,
+   "reusable": true,
+   "reason": null,
+   "credit": {
+    "source": "Microsoft Rocketbox Avatar Library",
+    "author": "Microsoft (Rocketbox Avatar Library)",
+    "licence": "MIT (Copyright (c) 2020 Microsoft; keep LICENSE-Rocketbox.md with the file)",
+    "url": "https://github.com/microsoft/Microsoft-Rocketbox",
+    "creditsFile": "samples/public/people/CREDITS.md"
+   },
+   "bytes": 670064,
+   "facts": {
+    "avatar": "Female_Adult_07",
+    "clips": "Idle, Walk (1.3 m/s), Run (5.4 to 5.8 m/s)",
+    "bakedWith": "tools/bake-people.mjs",
+    "triangles": 8308,
+    "meshes": 1,
+    "materials": 2,
+    "textures": 2,
+    "bones": 53,
+    "animations": [
+     "Idle",
+     "Walk",
+     "Run"
+    ],
+    "skinned": true
+   },
+   "tags": [
+    "character",
+    "person",
+    "pedestrian",
+    "rigged",
+    "animated",
+    "textured",
+    "glb",
+    "rocketbox",
+    "woman"
+   ],
+   "thumb": "catalog/thumbs/people-woman-dark-jacket.jpg",
+   "preview3d": true,
+   "description": "Rigged, textured adult in dark jacket, jeans and boots, baked from the Microsoft Rocketbox avatar Female_Adult_07 (MIT) by tools/bake-people.mjs: metres, one atlas, one or two draw calls, Idle / Walk / Run. One of the Night NYC drive's pedestrians. Finish a clone with finishPerson (world/People.js) for the height, the light and per-person cloth colours.",
+   "snippet": "import * as THREE from 'three';\nimport { Assets } from '@vibe/engine/core';\nimport { registerRenderLoaders } from '@vibe/engine/render';\nconst assets = new Assets({ base: import.meta.env.BASE_URL + 'people/' });\nregisterRenderLoaders(assets, renderer, { ktx2: false, meshopt: false });\nassets.add('person', { type: 'gltf', url: 'woman-dark-jacket.glb' });\nawait assets.load();\nconst gltf = assets.get('person');\nconst person = gltf.instantiate();                  // a skinning-safe clone (geometry and materials shared)\nscene.add(person);\nconst mixer = new THREE.AnimationMixer(person);\nmixer.clipAction(gltf.animations.find((c) => c.name === 'Walk')).play();\n// every frame: mixer.update(dt);",
+   "preview": {
+    "az": 30,
+    "el": 10,
+    "frames": 20,
+    "result": "gltf"
+   }
+  },
+  {
+   "id": "people-woman-leather-jacket",
+   "name": "Woman in a leather jacket",
+   "category": "character",
+   "categoryLabel": "Character",
+   "kind": "file",
+   "scope": "demo",
+   "demo": "nyc-night",
+   "where": {
+    "files": [
+     "samples/public/people/woman-leather-jacket.glb"
+    ]
+   },
+   "usedBy": [
+    "nyc-night"
+   ],
+   "via": null,
+   "reusable": true,
+   "reason": null,
+   "credit": {
+    "source": "Microsoft Rocketbox Avatar Library",
+    "author": "Microsoft (Rocketbox Avatar Library)",
+    "licence": "MIT (Copyright (c) 2020 Microsoft; keep LICENSE-Rocketbox.md with the file)",
+    "url": "https://github.com/microsoft/Microsoft-Rocketbox",
+    "creditsFile": "samples/public/people/CREDITS.md"
+   },
+   "bytes": 724476,
+   "facts": {
+    "avatar": "Female_Adult_04",
+    "clips": "Idle, Walk (1.3 m/s), Run (5.4 to 5.8 m/s)",
+    "bakedWith": "tools/bake-people.mjs",
+    "triangles": 9284,
+    "meshes": 1,
+    "materials": 2,
+    "textures": 2,
+    "bones": 53,
+    "animations": [
+     "Idle",
+     "Walk",
+     "Run"
+    ],
+    "skinned": true
+   },
+   "tags": [
+    "character",
+    "person",
+    "pedestrian",
+    "rigged",
+    "animated",
+    "textured",
+    "glb",
+    "rocketbox",
+    "woman"
+   ],
+   "thumb": "catalog/thumbs/people-woman-leather-jacket.jpg",
+   "preview3d": true,
+   "description": "Rigged, textured adult in brown leather jacket, khaki trousers and boots, baked from the Microsoft Rocketbox avatar Female_Adult_04 (MIT) by tools/bake-people.mjs: metres, one atlas, one or two draw calls, Idle / Walk / Run. One of the Night NYC drive's pedestrians. Finish a clone with finishPerson (world/People.js) for the height, the light and per-person cloth colours.",
+   "snippet": "import * as THREE from 'three';\nimport { Assets } from '@vibe/engine/core';\nimport { registerRenderLoaders } from '@vibe/engine/render';\nconst assets = new Assets({ base: import.meta.env.BASE_URL + 'people/' });\nregisterRenderLoaders(assets, renderer, { ktx2: false, meshopt: false });\nassets.add('person', { type: 'gltf', url: 'woman-leather-jacket.glb' });\nawait assets.load();\nconst gltf = assets.get('person');\nconst person = gltf.instantiate();                  // a skinning-safe clone (geometry and materials shared)\nscene.add(person);\nconst mixer = new THREE.AnimationMixer(person);\nmixer.clipAction(gltf.animations.find((c) => c.name === 'Walk')).play();\n// every frame: mixer.update(dt);",
    "preview": {
     "az": 30,
     "el": 10,
@@ -7113,6 +7653,107 @@
    "preview": {
     "mode": "lut",
     "result": "lut"
+   }
+  },
+  {
+   "id": "atlanta-landmarks",
+   "name": "Atlanta building descriptors",
+   "category": "map",
+   "categoryLabel": "Map data",
+   "kind": "file",
+   "scope": "demo",
+   "demo": "atlanta-drive",
+   "where": {
+    "files": [
+     "samples/public/atlanta/map/landmarks.json"
+    ]
+   },
+   "usedBy": [
+    "atlanta-drive"
+   ],
+   "via": null,
+   "reusable": true,
+   "reason": null,
+   "credit": {
+    "source": "Wikipedia articles and OpenStreetMap tags (listed in CREDITS.md), the rest deduced and marked so",
+    "author": "Written for this repository",
+    "licence": "MIT (as the repository); the facts are from the public pages CREDITS.md lists",
+    "url": "https://en.wikipedia.org/wiki/<title>",
+    "creditsFile": "samples/public/atlanta/CREDITS.md"
+   },
+   "bytes": 142979,
+   "facts": {
+    "buildings": "129: 30 iconic ones with facts read from public pages, 99 further named buildings with a lighter, mostly deduced descriptor (each says which)",
+    "schema": "src/world/BuildingDescriptors.js"
+   },
+   "tags": [
+    "landmarks",
+    "descriptors",
+    "buildings",
+    "atlanta",
+    "skyline"
+   ],
+   "thumb": "catalog/thumbs/atlanta-landmarks.jpg",
+   "preview3d": false,
+   "description": "What 129 of downtown Atlanta's buildings are (height, floors, cladding and colour, plan, podium, setbacks, crown, night lighting), matched to the baked footprints by the engine's builder: Bank of America Plaza, the Westin's cylinder, 191 Peachtree, the Capitol and the rest.",
+   "snippet": "import { validateLandmarks } from '@vibe/engine/world';\nconst landmarks = validateLandmarks(await (await fetch(import.meta.env.BASE_URL + 'atlanta/map/landmarks.json')).json());\n// MapWorld applies it: buildings: { landmarks, infer: true }",
+   "preview": {
+    "mode": "card",
+    "result": "landmarks",
+    "label": "Building descriptors",
+    "note": "129 buildings"
+   }
+  },
+  {
+   "id": "atlanta-map",
+   "name": "Downtown Atlanta map",
+   "category": "map",
+   "categoryLabel": "Map data",
+   "kind": "file",
+   "scope": "demo",
+   "demo": "atlanta-drive",
+   "where": {
+    "files": [
+     "samples/public/atlanta/map/city.json"
+    ]
+   },
+   "usedBy": [
+    "atlanta-drive"
+   ],
+   "via": null,
+   "reusable": true,
+   "reason": null,
+   "credit": {
+    "source": "OpenStreetMap (Overpass API), baked by tools/bake-map.mjs",
+    "author": "OpenStreetMap contributors",
+    "licence": "ODbL 1.0 (attribution required: \"© OpenStreetMap contributors\")",
+    "url": "https://www.openstreetmap.org/copyright",
+    "creditsFile": "samples/public/atlanta/CREDITS.md"
+   },
+   "bytes": 961677,
+   "facts": {
+    "area": "2.8 km square around 33.7606, -84.3905 (Downtown Atlanta and SoNo: the Fox Theatre to the State Capitol, the stadium to the Connector)",
+    "bakedWith": "tools/bake-map.mjs --lat 33.7606 --lon -84.3905 --size 2800 --outer 9000 --bridge-ext 0,0 --keep-outlines 0.6"
+   },
+   "tags": [
+    "openstreetmap",
+    "osm",
+    "city",
+    "roads",
+    "buildings",
+    "atlanta",
+    "peachtree",
+    "downtown"
+   ],
+   "thumb": "catalog/thumbs/atlanta-map.jpg",
+   "preview3d": false,
+   "description": "Baked OpenStreetMap data for the engine's MapWorld: the Atlanta drive builds downtown from it, with landmarks.json describing its known buildings.",
+   "snippet": "import { loadMapData } from '@vibe/engine/world';\nconst map = await loadMapData(import.meta.env.BASE_URL + 'atlanta/map/city.json');\n// with its landmarks: new MapWorld({ scene, renderer, data: { mapUrl: import.meta.env.BASE_URL + 'atlanta/map/city.json', farlandUrl: false }, terrain: false,\n//   buildings: { landmarks: import.meta.env.BASE_URL + 'atlanta/map/landmarks.json', infer: true } })",
+   "preview": {
+    "mode": "card",
+    "result": "map",
+    "label": "Map data",
+    "note": "OpenStreetMap, ODbL"
    }
   },
   {

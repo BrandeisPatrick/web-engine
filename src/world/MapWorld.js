@@ -260,7 +260,8 @@ export class MapWorld {
 
     P(0.2, 'Land and water');
     this._buildRaster();
-    if (o.filler !== false && this.source !== 'procedural' && this.landPolys.length) this._makeFiller();
+    // (an inland map has no land rings: all of it is land, and it gets its context ring like a coastal one)
+    if (o.filler !== false && this.source !== 'procedural' && (this.landPolys.length || this.inland)) this._makeFiller();
     await tick();
 
     P(0.24, 'Terrain surface');
@@ -572,6 +573,8 @@ diffuseColor.rgb *= (0.85 + 0.3 * texture2D(map, vMapUv * 0.071 + 0.13).g) * mix
     for (const L of d.land) { const r = sanitizeRing(L && L.p); if (r) this.landPolys.push(poly(r)); }
     this.pierPolys = [];
     for (const L of d.piers) { const r = sanitizeRing(L && L.p); if (r) this.pierPolys.push(poly(r)); }
+    /** True for a baked map without coastline rings (an inland city: Atlanta): the whole map is land. */
+    this.inland = this.source !== 'procedural' && !this.landPolys.length && !(d.water || []).some((w) => w && w.sea);
     if (this.landPolys.length) {
       this.raster.data.fill(RBIT.WATER);
       for (const L of this.landPolys) this.raster.fillPolygon([L.ring], RBIT.WATER, 'clear');
@@ -630,6 +633,19 @@ diffuseColor.rgb *= (0.85 + 0.3 * texture2D(map, vMapUv * 0.071 + 0.13).g) * mix
     } else {
       const l = S.levels[S.levels.length - 1];
       tris += drapePolygon(S, [[l.x0, l.z0], [l.x1, l.z0], [l.x1, l.z1], [l.x0, l.z1]], [], 0, sink(G, white));
+      // No coastline, so no Waterfront to bake the land classes the ground material reads (Shore.js bakeLandClass):
+      // without them every pixel was "natural" ground, bare earth between the buildings of an inland city. One texel
+      // says what an inland city is: built-up everywhere, with the context ring's block pattern beyond the baked square
+      const gu = this.mat.ground.userData.u;
+      if (this.inland && gu && typeof THREE.DataTexture === 'function') {
+        const cls = new THREE.DataTexture(new Uint8Array([255, 40, 0, 255]), 1, 1, THREE.RGBAFormat);
+        cls.needsUpdate = true;
+        gu.uClass.value = cls; gu.uClassRect.value.set(0, 0, 1, 1);
+        const b = this.bounds;
+        gu.uCity.value.set(b.minX - 8, b.minZ - 8, b.maxX + 8, b.maxZ + 8);
+        const fg = this._fillerGrid;
+        if (fg) { gu.uGrid.value.set(fg.cx, fg.cz, fg.Rout, 0); gu.uAng.value.set(...fg.angles); gu.uBlock.value.set(fg.BW, fg.BH, fg.street); }
+      }
     }
     this._groundTris = tris;
     this._seawall = null; // seawalls / pier edges are built by the Waterfront (own material)

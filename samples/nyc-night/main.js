@@ -37,7 +37,7 @@ import { buildSignage, updateSignage, quietBuildingSigns } from './signage.js';
 import { ExtraLights } from './lights.js';
 import { Steam } from './steam.js';
 import { CARS, DEFAULT_CAR, carById, carSpec } from './cars.js';
-import { Pedestrians } from './pedestrians.js';
+import { Pedestrians, PEOPLE } from './pedestrians.js';
 import { buildStructures } from './structures.js';
 import { CarShadows } from './carshadows.js';
 import { buildStreet } from './street.js';
@@ -187,7 +187,9 @@ async function boot() {
   // the people's models load with the world
   const assets = new Assets({ base: NYC });
   registerRenderLoaders(assets, renderer, { ktx2: false, meshopt: false });
-  if (NY.pedestrians) for (const [k, f] of [['man', 'BusinessMan'], ['suit', 'ManInSuit'], ['woman', 'Woman']]) assets.add(k, { type: 'gltf', url: `models/${f}.glb`, weight: 1 });
+  // (samples/public/people: one file per person; a small crowd loads the first four, men and women alternate)
+  const peopleIds = NY.pedestrians ? PEOPLE.slice(0, NY.pedestrians > 8 ? 8 : 4) : [];
+  for (const id of peopleIds) assets.add(`person-${id}`, { type: 'gltf', url: `../people/${id}.glb`, weight: 1 });
   // photographed interiors for the open shops (Poly Haven CC0 indoor HDRIs, tone-mapped to 512 x 256 equirect JPGs) and
   // the night environment for glass, cars and the damp street (a CC0 urban night HDRI, dimmed)
   const loadImage = (url) => new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = url; });
@@ -463,7 +465,7 @@ async function boot() {
   const headSpot = clustered ? null : new THREE.SpotLight(0xfff0dc, 0, 70, 0.5, 0.45, 1.6);
   if (headSpot) scene.add(headSpot, headSpot.target);
   // people on the sidewalks
-  const people = [['man', 1.78], ['suit', 1.76], ['woman', 1.66]].map(([k, height]) => assets.peek(k) && { gltf: assets.peek(k), height, textured: k === 'woman' }).filter(Boolean);
+  const people = peopleIds.map((id) => assets.peek(`person-${id}`)).filter(Boolean).map((gltf) => ({ gltf })); // the height is the file's
   const peds = NY.pedestrians && people.length ? new Pedestrians({ scene, world, sources: people, count: NY.pedestrians, center: SQUARE, radius: 520, seed: 4711, postfx }) : null;
   if (peds) peds.scatter(CAR_START.x, CAR_START.z, 4711);
   // the traffic brakes for the player's car and never drives into it (TrafficSim)

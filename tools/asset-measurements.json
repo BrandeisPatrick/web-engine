@@ -1,4 +1,10 @@
 {
+ "atlanta-landmarks": {
+  "ran": true
+ },
+ "atlanta-map": {
+  "ran": true
+ },
  "engine-boat-ferry": {
   "triangles": 212,
   "meshes": 1,
@@ -1195,5 +1201,109 @@
   "instances": 0,
   "skinned": 0,
   "points": 0
+ },
+ "people-man-blazer": {
+  "triangles": 7200,
+  "meshes": 2,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 2,
+  "points": 0,
+  "animations": [
+   "Idle",
+   "Walk",
+   "Run"
+  ]
+ },
+ "people-man-denim-jacket": {
+  "triangles": 6722,
+  "meshes": 1,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 1,
+  "points": 0,
+  "animations": [
+   "Idle",
+   "Walk",
+   "Run"
+  ]
+ },
+ "people-man-grey-jacket": {
+  "triangles": 7588,
+  "meshes": 2,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 2,
+  "points": 0,
+  "animations": [
+   "Idle",
+   "Walk",
+   "Run"
+  ]
+ },
+ "people-man-hooded-jacket": {
+  "triangles": 8684,
+  "meshes": 2,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 2,
+  "points": 0,
+  "animations": [
+   "Idle",
+   "Walk",
+   "Run"
+  ]
+ },
+ "people-woman-beige-jacket": {
+  "triangles": 8724,
+  "meshes": 2,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 2,
+  "points": 0,
+  "animations": [
+   "Idle",
+   "Walk",
+   "Run"
+  ]
+ },
+ "people-woman-blazer": {
+  "triangles": 9032,
+  "meshes": 2,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 2,
+  "points": 0,
+  "animations": [
+   "Idle",
+   "Walk",
+   "Run"
+  ]
+ },
+ "people-woman-dark-jacket": {
+  "triangles": 8308,
+  "meshes": 2,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 2,
+  "points": 0,
+  "animations": [
+   "Idle",
+   "Walk",
+   "Run"
+  ]
+ },
+ "people-woman-leather-jacket": {
+  "triangles": 9284,
+  "meshes": 2,
+  "instanced": 0,
+  "instances": 0,
+  "skinned": 2,
+  "points": 0,
+  "animations": [
+   "Idle",
+   "Walk",
+   "Run"
+  ]
  }
 }

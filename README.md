@@ -31,6 +31,11 @@ Each demo runs in the browser on a computer or a phone, with nothing to install.
   </tr>
 </table>
 
+A third demo is in the repository and not yet on the public page: **Atlanta drive** (`samples/atlanta-drive/`: `npm run dev`,
+then `/atlanta-drive/`), downtown Atlanta at golden hour built from data: the map baked from OpenStreetMap, 129 of its
+buildings described in a `landmarks.json` (Bank of America Plaza, the Westin's cylinder, the Capitol's gold dome), the
+rest deduced from the map's tags.
+
 Every demo has a graphics setting (Miami: the gear button; Night NYC: the pause card): **Mac / desktop** (full lighting) or **Phone / tablet**
 (lighter, saves battery). The demo recommends one for the device and remembers the choice; `?quality=desktop|mobile`
 in the URL forces one.

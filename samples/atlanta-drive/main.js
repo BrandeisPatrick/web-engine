@@ -21,14 +21,15 @@
 // poses peachtree / park / skyline / capitol / drive), ?notraffic, ?nopeople, ?noinfer (the seeded style pick for
 // undescribed buildings), ?nolandmarks (no descriptors: the generic builder everywhere, for an A/B).
 import * as THREE from 'three';
-import { Engine, PoseInterpolator, createBenchHarness, readBenchParams, resolveQuality } from '@vibe/engine/core';
+import { Engine, Assets, PoseInterpolator, createBenchHarness, readBenchParams, resolveQuality } from '@vibe/engine/core';
 import { VehicleController, Gearbox } from '@vibe/engine/physics';
-import { PostFX, TextureSets, ClusteredLights, installClusteredChunks, TyreFx, AirParticles } from '@vibe/engine/render';
+import { PostFX, DEFAULT_GRADE, TextureSets, ClusteredLights, installClusteredChunks, TyreFx, AirParticles, registerRenderLoaders } from '@vibe/engine/render';
 import { VehicleInput } from '@vibe/engine/input';
 import { ChaseRig } from '@vibe/engine/camera';
 import { GameShell, UILayer, Panel, Readout } from '@vibe/engine/ui';
 import { AudioBus, SoundBank, EngineAudio } from '@vibe/engine/audio';
 import { MapWorld, createCarVisual, roadStyle } from '@vibe/engine/world';
+import { Pedestrians, PEOPLE } from '../nyc-night/pedestrians.js'; // sidewalk people on the engine's People module (world)
 
 const params = new URLSearchParams(location.search);
 const BASE = import.meta.env.BASE_URL, ATL = `${BASE}atlanta/`;
@@ -44,14 +45,14 @@ const Q = resolveQuality({
       postfx: { ssr: false, volumetric: { scale: 0.25, steps: 12, maxDistance: 320, intensity: 0.4, density: 1 } },
       lights: { clustered: true, clusteredRange: 160, cutoff: 0.0025 },
       world: { streamRadius: 1000, traffic: 90, trafficHd: { count: 3, radius: 18, midCount: 8, midRadius: 45, parked: true } },
-      atl: { textures: 'textures', pbrSize: 1024 },
+      atl: { textures: 'textures', pbrSize: 1024, pedestrians: 14 },
     },
     mobile: {
       engine: { maxPixelRatio: 1.25, adaptiveResolution: true },
       shadows: { cascades: 1, kernel: 'fast', singleMapSize: 1024 },
       lights: { clustered: false },
       world: { streamRadius: 500, traffic: 30, trafficHd: { count: 0, midCount: 4, midRadius: 30, parked: true } },
-      atl: { textures: 'textures-512', pbrSize: 512 },
+      atl: { textures: 'textures-512', pbrSize: 512, pedestrians: 5 },
     },
   },
 });
@@ -104,7 +105,13 @@ async function boot() {
     pbrSize: S.atl.pbrSize,
   });
   engine.addSystem(world.system({ camera, loadWeight: 6 }), 'world');
-  await engine.load((p, label) => shell.setProgress(0.95 * p, label));
+  // the people's models load with the world (samples/public/people: one file per person; phones load four)
+  const assets = new Assets({ base: `${BASE}people/` });
+  registerRenderLoaders(assets, renderer, { ktx2: false, meshopt: false });
+  const peopleIds = params.has('nopeople') ? [] : PEOPLE.slice(0, DESK ? 8 : 4);
+  for (const id of peopleIds) assets.add(`person-${id}`, { type: 'gltf', url: `${id}.glb`, weight: 1 });
+  engine.addSystem(assets.system({ loadWeight: 1 }), 'assets');
+  try { await engine.load((p, label) => shell.setProgress(0.95 * p, label)); } catch (e) { if (!e.key) throw e; console.warn('[atlanta] a person model failed to load: fewer people', e); }
   const data = world.data, physics = world.physics, atmo = world.atmo;
   world.trimMemory(renderer);
   // bake frame (metres around the map's centre, x east, z south) -> world
@@ -114,7 +121,14 @@ async function boot() {
 
   // ---------------------------------------------------------------- post-processing
   const { width, height } = engine.size;
-  const postfx = new PostFX(renderer, scene, camera, { atmosphere: atmo, width, height, pixelRatio: engine.pixelRatio, ...S.postfx, ao: { radius: 1.4, thickness: 1.2, samples: 6, maxPixels: 0.35e6 }, look: { aoLit: 0.8, aoTint: [0, 0.02, 0.05] } });
+  // the grade: the engine's, with the eye adapting more (a street between towers is mostly shade: at the default half
+  // strength it stayed dark blue) and a slightly firmer curve
+  const grade = DEFAULT_GRADE.map((g) => ({ ...g, aeS: 0.85, aeMax: 3, con: Math.max(g.con, 0.22) }));
+  const postfx = new PostFX(renderer, scene, camera, { atmosphere: atmo, width, height, pixelRatio: engine.pixelRatio, ...S.postfx, grade, ao: { radius: 1.4, thickness: 1.2, samples: 6, maxPixels: 0.35e6 }, look: { aoLit: 0.8 } });
+  // what the sunlit walls and pavement throw back into the shade: a neutral-warm fill by day (the sky alone leaves a
+  // street canyon navy blue). One light, always in the scene; its level follows the daylight
+  const bounce = new THREE.HemisphereLight(0xfff0dc, 0xcdbfa8, 0.55);
+  scene.add(bounce);
   if (postfx.aoPass) postfx.aoPass.enabled = S.passes.ao;
   if (postfx.bloomPass) postfx.bloomPass.enabled = S.passes.bloom;
   world.postfx = postfx;
@@ -137,6 +151,12 @@ async function boot() {
   const START = { x: sp.position.x, z: sp.position.z, h: sp.headingRad };
   placeCar(START.x, START.z, START.h);
   if (world.traffic) world.traffic.setPlayer(() => (visual.root.visible ? visual.root : null));
+  // people on the sidewalks of the whole district; they step clear of the car
+  const people = peopleIds.map((id) => assets.peek(`person-${id}`)).filter(Boolean).map((gltf) => ({ gltf }));
+  const mid = { x: (world.bounds.minX + world.bounds.maxX) / 2, z: (world.bounds.minZ + world.bounds.maxZ) / 2 };
+  const peds = people.length ? new Pedestrians({ scene, world, sources: people, count: S.atl.pedestrians, center: mid, radius: 2000, seed: 77, postfx }) : null;
+  if (peds) peds.scatter(START.x, START.z, 77);
+  const carInfo = { x: START.x, z: START.z, fx: 0, fz: -1, hl: visual.spec.length / 2, hw: visual.spec.width / 2, speed: 0 };
 
   const canvas = renderer.domElement;
   const input = new VehicleInput(canvas, { touch: 'auto', assist: true });
@@ -213,6 +233,8 @@ async function boot() {
       squeal.setGain(car.grounded ? 0.22 * slide : 0).setRate(0.96 + 0.08 * slide);
       sfx.update(dt);
       air.update(dt, camera);
+      bounce.intensity = 0.55 * (1 - atmo.darkness);
+      if (peds) { carInfo.x = car.position.x; carInfo.z = car.position.z; carInfo.fx = -Math.sin(car.heading); carInfo.fz = -Math.cos(car.heading); carInfo.speed = car.speed; peds.update(dt, carInfo.x, carInfo.z, carInfo); }
       speed.set(Math.round(Math.abs(car.forwardSpeed) * 3.6));
       streetT -= dt;
       if (streetT <= 0) { streetT = 0.4; const s = nearest(car.position.x, car.position.z); street.set(s ? s[4].replace(/ (Northeast|Northwest|Southeast|Southwest)$/, '') : ''); }
@@ -261,6 +283,8 @@ async function boot() {
       if (T) T.update = tu;
       if (T && T.refreshHD) T.refreshHD(cam.position);
       air.time = 5; air.update(0, cam);
+      bounce.intensity = 0.55 * (1 - atmo.darkness);
+      if (peds) { peds.scatter(cam.position.x, cam.position.z, 77); peds.update(0, cam.position.x, cam.position.z); }
     },
     async settle() {
       const St = world.streamer; if (!St) return;
@@ -293,7 +317,7 @@ async function boot() {
   await shell.ready();
   if (bp.enabled) { delete engine.start; harness.freeze(); }
   shell.onStart(() => { placeCar(START.x, START.z, START.h); rig.snap(); tyres.clear(); });
-  window.__atlanta = { THREE, engine, world, postfx, atmo, car, visual, input, rig, air, geo, shell, harness, quality: Q };
+  window.__atlanta = { THREE, engine, world, postfx, atmo, car, visual, input, rig, air, peds, bounce, geo, shell, harness, quality: Q };
   window.__sample = Object.assign(harness, { shell }).setReady();
 }
 

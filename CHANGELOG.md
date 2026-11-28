@@ -1,6 +1,56 @@
 # Changelog
 
 ## Unreleased
+- Graphics balance: the light sources carry the picture. Measured first (software GL, 1280x720, one effect off at a
+  time on nyc-night): screen-space reflections changed the frame by 0.2 to 0.5 of 255, the volumetric pass by 0.16
+  to 1.6, bloom by under 0.1, the wet street by 4.5: the costly passes ran with almost nothing bright to work on,
+  under a haze that put a fifth of the sky's colour on everything past 50 m. Now, in the open look:
+  - nyc-night: signs 2.2x, lit windows 1.8x, sign light 2x, lamp pools 1.5x, bloom at threshold 1.0 / strength 0.6
+    (was 1.8 / 0.34), half the haze and mist, contrast 0.34 (was 0.24), a black floor of 40 % of the old one, a wet
+    film whose gloss varies (tyre lanes and patches that drain last are glossy, the rest is duller), a drizzle that
+    shows in the light of the five nearest lamps and the headlights, and no volumetric pass (`?volumetric=1` puts it
+    back). A review pose `drive` (`?lookposes=1`) frames the played view.
+  - miami-drive: saturation 1.04 (was 0.93), contrast +0.12 (was +0.02), bloom at threshold 1.4 / strength 0.45 (was
+    4.5 / 0.2), the haze floor 0.0013 (was 0.0022), a softer shoulder and less grey in the darks of the LUT, a lower
+    black floor. Its speed-gated motion blur stays.
+  - The smoke test's look gate holds the new frames (`test/browser/playwright.config.mjs` has the measured ranges).
+- Natural daylight by default. On open level ground a shadow was 35 % as bright as the sunlit ground at noon and 68 %
+  at golden hour (the sky fill about twice what a clear sky gives against the sun). `DEFAULT_LOOKS` (Atmosphere) now
+  gives 24 % at noon, 27 % mid-afternoon and about 45 % at golden hour with the lit side as bright as before (`sun`
+  1.17 to 1.5, `env` 0.55 to 0.6 from 9 degrees of sun up; 3 degrees: 1.2 / 0.8). The keys at and below the horizon
+  are unchanged, so the dusk and night demos are not affected.
+- New `AirParticles` (render): what floats around the camera, in one draw call with no CPU work per particle (a box
+  of particles wraps around the camera in the vertex shader). Presets `motes`, `pollen`, `leaves`, `drizzle`, `rain`,
+  `snow`, `embers`, `fireflies`; lit by the sun's colour with a lobe toward the sun, the sky's ambient and up to six
+  point lights (`setLights`), so rain shows in a lamp's light; a particle smaller than `minPixels` is drawn that size
+  and dimmed. `test/air-particles.mjs`. In the starters (pollen, fireflies), nyc-night (drizzle) and atlanta-drive.
+- Buildings can be described. New `world/BuildingDescriptors.js` and `world/BuildingForms.js`: a city ships a
+  `landmarks.json` beside its `city.json` saying what a building is (archetype, floors and height, plan, podium,
+  setbacks, taper, facade system / material / colours, crown, ground floor, night lighting and sign), matched to the
+  baked footprints by point or name, and the builder makes that building: `new MapWorld({ buildings: { landmarks: url,
+  infer: true } })` (result in `world.described`). `infer` deduces a descriptor for the rest from the map's tags
+  (parking decks, churches, hotels, hospitals, civic buildings, stadiums, arenas, warehouses, towers with a top).
+  Sixteen archetypes including a Ferris wheel; a building without a descriptor is built byte-identical to before
+  (`test/building-descriptors.mjs` pins it). `samples/dev/buildings.html` is the test bed. `tools/bake-map.mjs` gained
+  `--ids` (OSM ids for `match.osm`) and `--keep-outlines` (a building mapped with only a detail part keeps its body).
+- New demo `samples/atlanta-drive/`: downtown Atlanta at golden hour, built from data. The map is baked OpenStreetMap
+  (2.8 km around 33.7606, -84.3905: 2028 buildings); `samples/public/atlanta/map/landmarks.json` describes 129 of
+  them (30 with facts read from public pages, 99 with a lighter, mostly deduced descriptor; every entry says which);
+  the rest are inferred. Street trees, traffic, the new people on the sidewalks, pollen in the low sun, a bounce fill
+  in the shade; no screen-space reflections (a dry city has nothing for them). Poses `peachtree`, `park`, `skyline`,
+  `capitol`, `drive`. In `npm run smoke`.
+- Starters: the ground planes are segmented (a 6 km quad of two triangles lost depth precision under a software
+  rasteriser and drew over the road); starter-drive heads toward the low sun (`sun: { azimuthStart: 180 }`), with a
+  lighter road, matt grass, less haze and light shafts at 0.4; starter-walk has less haze.
+- People read as people. The walker of `samples/starter-walk/` and the pedestrians' sources are eight textured, clothed
+  adults (`samples/public/people/`, 0.57 to 0.82 MB, 6.7k to 9.3k triangles, 53 joints, 1 or 2 draw calls, `Idle` /
+  `Walk` / `Run`), baked by the new `tools/bake-people.mjs` from the Microsoft Rocketbox Avatar Library (MIT: the
+  licence text ships next to the files). New `world/People.js`: `finishPerson` (fit to a height, smooth normals and a
+  one-mesh merge for low-poly characters, a wrap / rim light so a figure catches lamp light and separates from a dark
+  street, cloth colours per person through a baked vertex mask, culling bounds), `personVariety`, `clothMatrix` and
+  `ContactShadows` (soft shadows under a crowd's feet in one draw call). The starter's blend tree is synced and its
+  points are the speeds the cycles were made for. `test/people.mjs` holds the module, the baker's image code and the
+  baked files' budget.
 - The Miami car no longer spins when a steer key is held through a fast bend. At the limit the tyre model was neutral
   (the force is linear in the load), so holding A or D at 60 km/h or faster, throttle held or lifted, swung the tail
   round within 2 s (84 degrees of sideslip at 100 km/h). A new spec field `rearGrip` (VehicleController, default 1, so

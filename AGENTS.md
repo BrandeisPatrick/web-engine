@@ -86,6 +86,7 @@ expose state that changes through a function (`{ game: () => ({ mode, score }) }
 | Post-processing | `PostFX` (render) | `new PostFX(renderer, scene, camera, { atmosphere, width, height, pixelRatio, ...S.postfx })`; `engine.renderFn = (sc, cam, dt) => postfx.render(dt)` | HOWTO "Engine and quality tiers" |
 | Walk a character | `CharacterController` (physics), `CharacterInput` (input), `ThirdPersonRig` (camera) | `cc.step(dt, moveX, moveZ, jump, sprint, physics)` | `samples/starter-walk/main.js` |
 | Load a GLB, play clips | `Assets` (core), `registerRenderLoaders` (render), `AnimationController` (anim) | `assets.get(key).instantiate()`; states name clips by exact string | `samples/starter-walk/main.js` |
+| A person: the walker, a sidewalk crowd | `finishPerson`, `personVariety`, `ContactShadows` (world) | `finishPerson(model, { height: 1.8 })` (fit, cloth-and-skin light, culling bounds); a crowd: `finishPerson(model, { height, build, clothes })` from `personVariety(rand)`, `shadows.add(holder, model)`, per frame `shadows.update((x, z) => groundY)` | `samples/starter-walk/main.js`, `samples/nyc-night/pedestrians.js` |
 | Drive a car | `VehicleController` (physics), `createCarVisual` (world), `VehicleInput` (input), `ChaseRig` (camera) | `const visual = createCarVisual('hatchback'); car = new VehicleController(visual.spec); car.step(dt, { throttle, brake, steer, handbrake }, physics); visual.update(dt, car, { darkness })` | `samples/starter-drive/main.js` |
 | Keyboard steering that holds the grip limit and catches slides | `VehicleInput`, `SteeringAssist` (input) | `new VehicleInput(el, { assist: true })`; per frame `input.update(dt, car)`; `input.assist.enabled` toggles it | `samples/starter-drive/main.js` |
 | Skid marks and tyre smoke | `TyreFx` (render) | `new TyreFx({ scene, atmosphere })`; per frame `tyres.update(dt, car, body)`; `tyres.clear()` on reset | `samples/starter-drive/main.js` |
@@ -116,6 +117,7 @@ expose state that changes through a function (`{ game: () => ({ mode, score }) }
 | A small place to start in: a road or a park corner | `countryRoad`, `parkCorner`, `groundCover` (world) | `const place = countryRoad({ physics }); scene.add(place.group)`; per frame `place.update(dt, camera.position, darkness)`; `applyPatches(ground.material, [groundCover({ paths: place.paths })])` | starters |
 | See a demo's earlier low-key grade | the demos' own flag | open `nyc-night/` or `miami-drive/` with `?look=low` (the default is the brighter two-temperature open look, the one the smoke look gate checks) | `samples/nyc-night/main.js` (`LOOK`) |
 | A whole city | `MapWorld` (world) | only for map-scale cities from baked OpenStreetMap data | `samples/nyc-night/main.js` |
+| Say what a building is (landmarks, crowns, cladding) | `MapWorld` (world) | `new MapWorld({ buildings: { landmarks: url, infer: true } })`: a `landmarks.json` of descriptors beside `city.json` (schema: the header of `src/world/BuildingDescriptors.js`); `infer` deduces the rest from the map's tags | `samples/atlanta-drive/main.js`, `samples/dev/buildings.js` |
 
 Everything else, layer by layer: [ENGINE.md](ENGINE.md). Every source file starts with a header documenting its API.
 
@@ -125,8 +127,8 @@ Everything else, layer by layer: [ENGINE.md](ENGINE.md). Every source file start
   inherits every field you leave out from it. Start from `ROAD_CAR_SPEC` and spread it to tune.
 - Fitting a skinned GLB to a height with `new THREE.Box3().setFromObject(model)` gives wrong bounds unless
   `model.updateMatrixWorld(true)` runs first.
-- Animation clip names are the GLB's exact names (`HumanArmature|Man_Walk`, not `Walk`). A wrong name throws and lists
-  the real ones.
+- Animation clip names are the GLB's exact names: `Idle`, `Walk`, `Run` in the people of `samples/public/people/`,
+  `HumanArmature|Man_Walk` (not `Walk`) in the Quaternius characters. A wrong name throws and lists the real ones.
 - Lamp intensity is three.js `PointLight` intensity: 8 to 12 for a garden lamp (reach 12 m, decay 1.5; 12 over dark
   gravel and earth, as starter-walk), up to 260 for a city street lamp (reach 48 m, decay 2). At 1 the lamp is invisible
   and nothing warns you. The lamp's glass needs `emissiveIntensity` about 8 to glow through the dusk bloom.
@@ -164,7 +166,8 @@ downloading something. After adding an asset, add it to `tools/asset-registry.mj
 then run `npm run catalog`; `test/asset-catalog.mjs` fails until the catalogue covers every file in `samples/public/`.
 
 Use only what is in `samples/public/`. Each demo folder lists every file, author and licence in its `CREDITS.md`
-(`samples/public/nyc/CREDITS.md`, `samples/public/miami/CREDITS.md`).
+(`samples/public/nyc/CREDITS.md`, `samples/public/miami/CREDITS.md`, `samples/public/people/CREDITS.md`: the people are
+MIT, and `samples/public/people/LICENSE-Rocketbox.md` must stay with them).
 
 ## Using the engine from another project
 
@@ -177,7 +180,8 @@ there:
    (`@vibe/engine/core`, `three`, ...) resolve from `node_modules`. Serve it with Vite or any bundler that handles
    `import.meta.env.BASE_URL`.
 2. Copy the asset files it loads from the engine repository's `samples/public/` into your public folder at the same
-   paths (`nyc/models/ManInSuit.glb`, `nyc/textures/manifest.json` and the set folders it uses), or change the
+   paths (`people/man-grey-jacket.glb` with `people/LICENSE-Rocketbox.md`, `nyc/textures/manifest.json` and the set
+   folders it uses), or change the
    paths. Keep each file's licence and credit from the `CREDITS.md` next to it.
 3. Remove or replace the page contract line if you do not use the repo's browser tests.
 
@@ -193,6 +197,8 @@ there:
   hand.
 - Night NYC's three cars, its pedestrians stepping clear and its map-edge wall were checked by scripted drives in the
   page and Node runs of the car specs; nobody has driven them by hand, and the page has not run on a real phone.
+- The people (the walker of starter-walk, the pedestrians) were checked in stills from software rendering: poses of the
+  idle, the walk, the run and their blend, light, contact shadows. Nobody has watched them move or seen them on a GPU.
 - Neither starter has been run on a real phone; the mobile tier was checked only through `?quality=mobile`.
 - No page has been run on a real phone since the start-up warm-up and the lost-context notice were added: both were
   checked in headless Chrome and in Playwright's WebKit with an iPhone profile on a Mac, whose GPU is far faster.

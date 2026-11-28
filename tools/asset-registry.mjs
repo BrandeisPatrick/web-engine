@@ -253,14 +253,14 @@ const map = await loadMapData(${B} + 'atlanta/map/city.json');
   },
   {
     id: 'atlanta-landmarks', name: 'Atlanta building descriptors', category: 'map', usedBy: ['atlanta-drive'], files: ['samples/public/atlanta/map/landmarks.json'],
-    credit: { file: 'samples/public/atlanta/CREDITS.md', row: '`map/landmarks.json`', author: 'web-engine (facts from the pages listed in the file and in CREDITS.md)', licence: 'MIT (the file); the facts are from public sources', source: 'written for this repository', url: '' },
+    credit: { file: 'samples/public/atlanta/CREDITS.md', row: '`map/landmarks.json`', author: 'Written for this repository', licence: 'MIT (as the repository); the facts are from the public pages CREDITS.md lists', source: 'Wikipedia articles and OpenStreetMap tags (listed in CREDITS.md), the rest deduced and marked so', url: 'https://en.wikipedia.org/wiki/<title>' },
     tags: ['landmarks', 'descriptors', 'buildings', 'atlanta', 'skyline'],
     facts: { buildings: '129: 30 iconic ones with facts read from public pages, 99 further named buildings with a lighter, mostly deduced descriptor (each says which)', schema: 'src/world/BuildingDescriptors.js' },
     description: 'What 129 of downtown Atlanta\'s buildings are (height, floors, cladding and colour, plan, podium, setbacks, crown, night lighting), matched to the baked footprints by the engine\'s builder: Bank of America Plaza, the Westin\'s cylinder, 191 Peachtree, the Capitol and the rest.',
     snippet: `import { validateLandmarks } from '@vibe/engine/world';
 const landmarks = validateLandmarks(await (await fetch(${B} + 'atlanta/map/landmarks.json')).json());
 // MapWorld applies it: buildings: { landmarks, infer: true }`,
-    preview: { mode: 'card', result: 'map', label: 'Building descriptors', note: '129 buildings' },
+    preview: { mode: 'card', result: 'landmarks', label: 'Building descriptors', note: '129 buildings' },
   },
 ];
 

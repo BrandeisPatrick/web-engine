@@ -830,3 +830,52 @@ once):
 | destructible | 5.31 / 4.68 | 13.47 / 8.40 | 5.56 / 5.29 | 13.66 / 8.99 | 1.006 | 183 | 0.00 M |
 
 Files: `2026-10-30-0016-canyon-run-2560x1440-p6-canyon.json`, `2026-10-30-0016-canyon-run-3024x1964-p6-canyon.json`, `2026-10-30-0017-canyon-run-2560x1440-p6-canyon-night.json`, `2026-10-30-0017-canyon-run-3024x1964-p6-canyon-night.json`, `2026-10-30-0017-city-3024x1964-p6-city.json`, `2026-10-30-0018-character-2560x1440-p6-character.json`, `2026-10-30-0018-character-3024x1964-p6-character.json`, `2026-10-30-0018-city-2560x1440-p6-city.json`, `2026-10-30-0019-sandbox-3024x1964-p6-sandbox-bench1000.json`, `2026-10-30-0019-sandbox-3024x1964-p6-sandbox-buoyancy.json`, `2026-10-30-0019-sandbox-3024x1964-p6-sandbox-cloth.json`, `2026-10-30-0019-sandbox-3024x1964-p6-sandbox-rope.json`, `2026-10-30-0019-sandbox-3024x1964-p6-sandbox-soft.json`, `2026-10-30-0019-sandbox-3024x1964-p6-sandbox-stack.json`, `2026-10-30-0020-sandbox-2560x1440-p6-sandbox-bench1000.json`, `2026-10-30-0020-sandbox-2560x1440-p6-sandbox-buoyancy.json`, `2026-10-30-0020-sandbox-2560x1440-p6-sandbox-cloth.json`, `2026-10-30-0020-sandbox-2560x1440-p6-sandbox-rope.json`, `2026-10-30-0020-sandbox-2560x1440-p6-sandbox-soft.json`, `2026-10-30-0020-sandbox-2560x1440-p6-sandbox-stack.json`, `2026-10-30-0020-sandbox-3024x1964-p6-sandbox-destructible.json`, `2026-10-30-0021-sandbox-2560x1440-p6-sandbox-destructible.json`.
+
+## Graphics balance (2026-11-28): what each effect gives against what it costs
+
+The question was the owner's: the picture was "far from optimal", perhaps too much reflection, light that was not
+natural, too little in the air. The method: measure what each effect changes in the frame (one knob off at a time,
+`h.diff` of two captures, mean absolute difference of 255), set it against its documented cost (the tables above:
+Apple M4), then move the budget. The measurements here are from software GL (SwiftShader, 1280x720): the pictures are
+the same pixels as on a GPU, the times are not, so no frame time in this section is new.
+
+**What the frame was made of** (nyc-night, desktop tier, before):
+
+| effect off | avenue | square | cost (documented, M4) |
+|---|---|---|---|
+| wet street (material) | 4.49 | 4.21 | none of its own |
+| LUT | 0.75 | 0.75 | 0.04 ms |
+| screen-space reflections | 0.47 | 0.17 | 0.35 to 0.55 ms (traced every other frame) |
+| ambient occlusion | 0.20 | 0.38 | part of the base frame |
+| volumetric light | 0.16 | 1.61 | 0.35 to 0.9 ms |
+| bloom | 0.09 | 0.08 | part of the base frame |
+
+Bloom ran and added under a tenth of a level: its threshold (1.8) sat above everything on the street. Reflections had
+a dark street to reflect. The volumetric pass marched a weak moon. The haze (0.0026 + 0.0014 per metre at dusk) put a
+fifth of the sky's colour on everything past 50 m and a third past 100 m: the mauve veil over both city demos.
+
+**The rules that came out of it** (with the research in the pull request's page):
+
+1. Tone and light before effects. A frame that sits in one band (nyc-night: mean 55, nothing bright; starter-drive:
+   0.7 % of pixels under 40 and nothing over 222) is not fixed by another pass.
+2. Light sources carry a night picture: bright emissives over a dark, clear street. Bloom, reflections and the wet
+   road then have something to do; before that they are paid for and invisible.
+3. Sun against sky at a clear-sky ratio (measured on level ground: a shadow at 24 % of the sunlit ground at noon, not
+   35 %; about 45 % at golden hour, not 68 %). `DEFAULT_LOOKS` holds it.
+4. Wetness varies. An evenly glossy street reads as plastic; gloss in the tyre lanes and in patches is where lamps
+   and tail lights streak.
+5. Reflections only where the street is wet enough to show them; a dry daytime city runs without the pass
+   (atlanta-drive).
+6. Haze for depth, not as a veil: half the earlier densities.
+7. A pass that changes the frame by under one level in the views that matter is cut or given work: the NYC
+   volumetric pass is cut; bloom was given work.
+8. Life in the air for one draw call: `AirParticles` (pollen, drizzle in lamp light, fireflies) instead of another
+   screen-space pass.
+9. Aim the scene at the light. starter-drive looked away from its low sun; turned toward it (one option) the same
+   scene has glare on the asphalt, shadows toward the camera and backlit trees.
+10. Shade in a street canyon needs the bounce a rasteriser does not compute: a neutral-warm fill and stronger eye
+    adaptation (atlanta-drive), or the street is navy blue.
+
+**After** (the same captures): nyc-night mean 49 to 57 with 34 to 48 % of the frame under 40 and up to 0.2 % over 240
+(sign and lamp cores); miami-drive mean 59 to 76, saturation 0.27 to 0.37. Not measured here and owed on the Mac:
+frame times (`npm run perf` and its golden images, which this change moves on purpose), the played frame, flicker.

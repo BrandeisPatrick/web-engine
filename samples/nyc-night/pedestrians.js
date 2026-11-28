@@ -106,9 +106,17 @@ export class Pedestrians {
 
   /** Put person p on a random sidewalk point between dMin and dMax metres from (x, z) (any point if none). */
   _place(p, x, z, dMin, dMax) {
-    const R = this.R, S = this.segs;
+    const R = this.R, S = this.segs, C = this._cand || (this._cand = []);
+    // the sidewalk lines that reach within dMax: on a district-wide set of lines (Atlanta: 3900 over 2.8 km) forty
+    // random picks almost never land near (x, z), and everyone was put somewhere else in the city every frame
+    C.length = 0;
+    for (let i = 0; i < S.length; i++) {
+      const g = S[i], mx = g.ax + g.tx * g.len * 0.5 - x, mz = g.az + g.tz * g.len * 0.5 - z, r = dMax + g.len * 0.5;
+      if (mx * mx + mz * mz < r * r) C.push(i);
+    }
+    const N = C.length;
     for (let k = 0; k < 40; k++) {
-      const i = (R() * S.length) | 0, g = S[i], s = R() * g.len;
+      const i = N ? C[(R() * N) | 0] : (R() * S.length) | 0, g = S[i], s = R() * g.len;
       const px = g.ax + g.tx * s, pz = g.az + g.tz * s, d = Math.hypot(px - x, pz - z);
       if (k < 39 && (d < dMin || d > dMax)) continue;
       p.seg = i; p.s = s; p.dir = R() < 0.5 ? 1 : -1; p.off = 0;
