@@ -11,7 +11,7 @@
 // sample on the mobile quality tier (`?quality=mobile`, core/Quality.js); the `-low` pages are a demo in its earlier
 // low-key look (`?look=low`) on one pose.
 //
-//   node test/browser/smoke.mjs                        # nyc-night, miami-drive, the starters, their -mobile variants, the demos' -low (?look=low) pages, assets, sound-check
+//   node test/browser/smoke.mjs                        # nyc-night, miami-drive, atlanta-drive, the starters, their -mobile variants, the demos' -low (?look=low) pages, assets, sound-check
 //   node test/browser/smoke.mjs nyc-night --headed --size=1600x900 [--config=other.vite.config.js] [--no-look]
 import {
   defaultSize, repoRoot, legacyGlobals, readyTimeoutMs, parseArgs, parseSize, startVite, resolvePage, launchChrome,
@@ -22,12 +22,14 @@ import {
 const PAGE_QUERY = {
   'nyc-night': 'quality=desktop', 'nyc-night-mobile': 'quality=mobile', 'nyc-night-low': 'quality=desktop&look=low',
   'miami-drive': 'quality=desktop', 'miami-drive-mobile': 'quality=mobile', 'miami-drive-low': 'quality=desktop&look=low',
+  'atlanta-drive': 'quality=desktop', 'atlanta-drive-mobile': 'quality=mobile',
   'starter-walk': 'quality=desktop', 'starter-walk-mobile': 'quality=mobile',
   'starter-drive': 'quality=desktop', 'starter-drive-mobile': 'quality=mobile',
 };
 // pages that are another page with a different query, and the poses they run (default: all)
 const PAGE_PATH = {
   'nyc-night-mobile': 'nyc-night', 'nyc-night-low': 'nyc-night', 'miami-drive-mobile': 'miami-drive', 'miami-drive-low': 'miami-drive',
+  'atlanta-drive-mobile': 'atlanta-drive',
   'starter-walk-mobile': 'starter-walk', 'starter-drive-mobile': 'starter-drive',
 };
 const PAGE_POSES = { 'nyc-night-low': ['avenue'], 'miami-drive-low': ['chase'] };
@@ -38,7 +40,7 @@ const STEP_MS = 90000;
 
 const args = parseArgs();
 const pages = args._.length ? args._ : args.pages ? String(args.pages).split(',') : [
-  'nyc-night', 'nyc-night-mobile', 'miami-drive', 'miami-drive-mobile',
+  'nyc-night', 'nyc-night-mobile', 'miami-drive', 'miami-drive-mobile', 'atlanta-drive', 'atlanta-drive-mobile',
   // the earlier low-key look (?look=low), one pose each: not black, not blown out
   'nyc-night-low', 'miami-drive-low',
   // the starters (samples/starter-*): no poses, so they are checked for booting clean and drawing something

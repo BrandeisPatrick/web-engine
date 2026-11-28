@@ -217,6 +217,29 @@ const map = await loadMapData(${B} + 'nyc/map/city.json');
 const map = await loadMapData(${B} + 'miami/map/city.json');`,
     preview: { mode: 'card', result: 'map', label: 'Map data', note: 'OpenStreetMap, ODbL' },
   },
+  {
+    id: 'atlanta-map', name: 'Downtown Atlanta map', category: 'map', usedBy: ['atlanta-drive'], files: ['samples/public/atlanta/map/city.json'],
+    credit: { file: 'samples/public/atlanta/CREDITS.md', row: '`map/city.json`', author: 'OpenStreetMap contributors', licence: 'ODbL 1.0 (attribution required: "© OpenStreetMap contributors")', source: 'OpenStreetMap (Overpass API), baked by tools/bake-map.mjs', url: 'https://www.openstreetmap.org/copyright' },
+    tags: ['openstreetmap', 'osm', 'city', 'roads', 'buildings', 'atlanta', 'peachtree', 'downtown'],
+    facts: { area: '2.8 km square around 33.7606, -84.3905 (Downtown Atlanta and SoNo: the Fox Theatre to the State Capitol, the stadium to the Connector)', bakedWith: 'tools/bake-map.mjs --lat 33.7606 --lon -84.3905 --size 2800 --outer 9000 --bridge-ext 0,0 --keep-outlines 0.6' },
+    description: 'Baked OpenStreetMap data for the engine\'s MapWorld: the Atlanta drive builds downtown from it, with landmarks.json describing its known buildings.',
+    snippet: `import { loadMapData } from '@vibe/engine/world';
+const map = await loadMapData(${B} + 'atlanta/map/city.json');
+// with its landmarks: new MapWorld({ scene, renderer, data: { mapUrl: ${B} + 'atlanta/map/city.json', farlandUrl: false }, terrain: false,
+//   buildings: { landmarks: ${B} + 'atlanta/map/landmarks.json', infer: true } })`,
+    preview: { mode: 'card', result: 'map', label: 'Map data', note: 'OpenStreetMap, ODbL' },
+  },
+  {
+    id: 'atlanta-landmarks', name: 'Atlanta building descriptors', category: 'map', usedBy: ['atlanta-drive'], files: ['samples/public/atlanta/map/landmarks.json'],
+    credit: { file: 'samples/public/atlanta/CREDITS.md', row: '`map/landmarks.json`', author: 'web-engine (facts from the pages listed in the file and in CREDITS.md)', licence: 'MIT (the file); the facts are from public sources', source: 'written for this repository', url: '' },
+    tags: ['landmarks', 'descriptors', 'buildings', 'atlanta', 'skyline'],
+    facts: { buildings: '129: 30 iconic ones with facts read from public pages, 99 further named buildings with a lighter, mostly deduced descriptor (each says which)', schema: 'src/world/BuildingDescriptors.js' },
+    description: 'What 129 of downtown Atlanta\'s buildings are (height, floors, cladding and colour, plan, podium, setbacks, crown, night lighting), matched to the baked footprints by the engine\'s builder: Bank of America Plaza, the Westin\'s cylinder, 191 Peachtree, the Capitol and the rest.',
+    snippet: `import { validateLandmarks } from '@vibe/engine/world';
+const landmarks = validateLandmarks(await (await fetch(${B} + 'atlanta/map/landmarks.json')).json());
+// MapWorld applies it: buildings: { landmarks, infer: true }`,
+    preview: { mode: 'card', result: 'map', label: 'Building descriptors', note: '129 buildings' },
+  },
 ];
 
 // ------------------------------------------------------------------------------------------------ engine: vehicles
