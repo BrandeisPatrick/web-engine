@@ -6,7 +6,8 @@
   to 1.6, bloom by under 0.1, the wet street by 4.5: the costly passes ran with almost nothing bright to work on,
   under a haze that put a fifth of the sky's colour on everything past 50 m. Now, in the open look:
   - nyc-night: signs 2.2x, lit windows 1.8x, sign light 2x, lamp pools 1.5x, bloom at threshold 1.0 / strength 0.6
-    (was 1.8 / 0.34), half the haze and mist, contrast 0.34 (was 0.24), a black floor of 40 % of the old one, a wet
+    (was 1.8 / 0.34), half the haze and mist, contrast 0.3 (was 0.24), a black floor of 40 % of the old one (the phone
+    tier's exposure 2.05, was 1.65: it has no reflections or clustered sign light to lift its street), a wet
     film whose gloss varies (tyre lanes and patches that drain last are glossy, the rest is duller), a drizzle that
     shows in the light of the five nearest lamps and the headlights, and no volumetric pass (`?volumetric=1` puts it
     back). A review pose `drive` (`?lookposes=1`) frames the played view.
@@ -14,9 +15,10 @@
     4.5 / 0.2), the haze floor 0.0013 (was 0.0022), a softer shoulder and less grey in the darks of the LUT, a lower
     black floor. Its speed-gated motion blur stays.
   - The smoke test's look gate holds the new frames (`test/browser/playwright.config.mjs` has the measured ranges).
-- Natural daylight by default. On open level ground a shadow was 35 % as bright as the sunlit ground at noon and 68 %
-  at golden hour (the sky fill about twice what a clear sky gives against the sun). `DEFAULT_LOOKS` (Atmosphere) now
-  gives 24 % at noon, 27 % mid-afternoon and about 45 % at golden hour with the lit side as bright as before (`sun`
+- Natural daylight by default. On open level ground a shadow was 35 % as bright as the sunlit ground at noon, 39 %
+  mid-afternoon and 62 % at golden hour (68 % in starter-drive, which also had `lowSunEnv` on): the sky fill was about
+  twice what a clear sky gives against the sun. `DEFAULT_LOOKS` (Atmosphere) now measures 23 %, 26 % and 41 % with the
+  lit side as bright as before (`sun`
   1.17 to 1.5, `env` 0.55 to 0.6 from 9 degrees of sun up; 3 degrees: 1.2 / 0.8). The keys at and below the horizon
   are unchanged, so the dusk and night demos are not affected.
 - New `AirParticles` (render): what floats around the camera, in one draw call with no CPU work per particle (a box

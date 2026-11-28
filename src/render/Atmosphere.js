@@ -81,9 +81,9 @@ function acesFilmic(c, exposure) { // mirror of three's ACESFilmicToneMapping (l
 // densities (1/m at sea level; haze falls off over ~700 m, mist over ~40 m). cover/cirrus/cop: clouds.
 // cs/ca: cloud sun / ambient colours (linear HDR). aur: sun aureole gain.
 // Sun against sky (the keys from 3 deg up): measured on open level ground, a shadow was 35 % as bright as sunlit ground
-// at noon and 68 % at golden hour (ambient twice what a clear sky gives: flat light, weak shadows). With `sun` raised
-// and `env` lowered by day the same ground reads 24 % at noon, 27 % mid-afternoon and about 45 % at golden hour, the
-// lit side as bright as before. The keys at and below the horizon (dusk, night) are unchanged.
+// at noon, 39 % mid-afternoon and 62 % at golden hour (ambient about twice what a clear sky gives: flat light, weak
+// shadows). With `sun` raised and `env` lowered by day the same ground measures 23 %, 26 % and 41 %, the lit side as
+// bright as before (0.416 against 0.413 at noon). The keys at and below the horizon (dusk, night) are unchanged.
 export const DEFAULT_LOOKS = [
   { el: -40, turb: 2.4, ray: 1.4, mie: 0.0030, g: 0.78, tw: 1, night: 1, glowA: 0, sun: 1, env: 0.85, hemi: 0.2, haze: 0.00018, mist: 0.00008, cover: 0.36, cirrus: 0.22, cop: 0.8, cs: [0.012, 0.014, 0.020], ca: [0.032, 0.023, 0.019], aur: 0 },
   { el: -12, turb: 2.4, ray: 1.4, mie: 0.0030, g: 0.78, tw: 1, night: 1, glowA: 0.05, sun: 1, env: 0.85, hemi: 0.2, haze: 0.00018, mist: 0.00008, cover: 0.36, cirrus: 0.22, cop: 0.8, cs: [0.014, 0.015, 0.022], ca: [0.032, 0.024, 0.021], aur: 0 },

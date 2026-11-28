@@ -391,7 +391,7 @@ async function boot() {
     const lut = nightLut(24, LOOK);
     postfx = new PostFX(renderer, scene, camera, {
       atmosphere: world.atmo, width, height, pixelRatio: engine.pixelRatio,
-      ...S.postfx, ao: { radius: 1.2, thickness: 1.2, samples: 6, maxPixels: 0.25e6 }, grade: nightGrade({ look: LOOK, exposure: LOOK === 'open' ? (DESK ? 1.8 : 1.65) : (DESK ? 1.5 : 1.4) }), look: nightLook(LOOK), lut: { texture: lut.texture, size: lut.size, strength: 1 }, // mobile a touch lower: no SSR / TAA there
+      ...S.postfx, ao: { radius: 1.2, thickness: 1.2, samples: 6, maxPixels: 0.25e6 }, grade: nightGrade({ look: LOOK, exposure: LOOK === 'open' ? (DESK ? 1.8 : 2.05) : (DESK ? 1.5 : 1.4) }), look: nightLook(LOOK), lut: { texture: lut.texture, size: lut.size, strength: 1 }, // open, mobile: higher (no reflections, sign lights or lamp pools from the cluster lift its street: at 1.65 it measured as dark as the low-key look)
     });
     if (!S.passes.ao) postfx.aoPass.enabled = false;
     postfx.setTimeOfDay(world.atmo.darkness);

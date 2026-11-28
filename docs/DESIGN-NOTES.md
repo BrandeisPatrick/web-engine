@@ -860,8 +860,10 @@ fifth of the sky's colour on everything past 50 m and a third past 100 m: the ma
    0.7 % of pixels under 40 and nothing over 222) is not fixed by another pass.
 2. Light sources carry a night picture: bright emissives over a dark, clear street. Bloom, reflections and the wet
    road then have something to do; before that they are paid for and invisible.
-3. Sun against sky at a clear-sky ratio (measured on level ground: a shadow at 24 % of the sunlit ground at noon, not
-   35 %; about 45 % at golden hour, not 68 %). `DEFAULT_LOOKS` holds it.
+3. Sun against sky at a clear-sky ratio (measured on level ground, a grey card, the tone curve inverted: a shadow at
+   23 % of the sunlit ground at noon, not 35 %; 26 % mid-afternoon, not 39 %; 41 % at golden hour, not 62 %; the lit
+   side unchanged). `DEFAULT_LOOKS` holds it. The clear-sky figures it aims at (roughly 15 to 25 % at noon, 40 % at
+   13 degrees of sun) are an estimate from standard direct and diffuse irradiance, not a measurement.
 4. Wetness varies. An evenly glossy street reads as plastic; gloss in the tyre lanes and in patches is where lamps
    and tail lights streak.
 5. Reflections only where the street is wet enough to show them; a dry daytime city runs without the pass

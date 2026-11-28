@@ -34,7 +34,7 @@ export function nightGrade({ look = 'low', exposure, bloomThreshold, bloomStreng
     // bloom that the signs, lamps and lit windows reach (at threshold 1.8 / strength 0.34 the pass ran and changed the
     // frame by under 0.1 / 255), and a firmer curve: light sources carry the picture, the darks stay dark
     wb: [0.97, 0.995, 1.04], aeK: 0.06, aeS: 0.3, aeMax: 1.35, exp: exposure ?? 1.8, bT: bloomThreshold ?? 1.0, bS: bloomStrength ?? 0.6, bR: bloomRadius ?? 0.5,
-    sat: 1.0, con: 0.34, split: 1.0, sh: [-0.002, 0.001, 0.008], hi: [0.016, 0.006, -0.008], vig: 0.36, grain, ao: 0.7,
+    sat: 1.0, con: 0.3, split: 1.0, sh: [-0.002, 0.001, 0.008], hi: [0.016, 0.006, -0.008], vig: 0.36, grain, ao: 0.7,
   } : {
     // the low-key grade: fixed exposure (no adaptation), a lower bloom threshold with a wider, weak radius (halation
     // around lamps and windows, not glare), warm near-neutral, saturation and contrast as the reference
