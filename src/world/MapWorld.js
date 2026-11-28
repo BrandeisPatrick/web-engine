@@ -39,6 +39,7 @@ import { ColliderGrid, polygonToBoxes, Raster } from '../physics/spatial.js';
 import { PhysicsWorld } from '../physics/PhysicsWorld.js';
 import { makeFacadeTextures, loadPbrTextures, PBR } from './FacadeTextures.js';
 import { BuildingBuilder, TileBuildingBuilder, createFacadeMaterials, releaseTileBuffers } from './Buildings.js';
+import { applyBuildingDescriptors } from './BuildingDescriptors.js';
 import { TileStreamer } from './TileStreamer.js';
 import { RoadNetwork, createRoadMaterial, RBIT, SolidBuf } from './RoadNetwork.js';
 import { Props } from './Props.js';
@@ -136,6 +137,9 @@ export class MapWorld {
    * @param {Array<{x,z,r}>} [o.clearZones]  extra bake-frame circles kept free of filler lots
    * @param {object} [o.roads]  RoadNetwork options ({ deckHolds })
    * @param {object} [o.buildings]  BuildingBuilder options ({ style, baseGrid, detailGrid, lodDist, detailFloors, maxWindows })
+   *        plus (opt-in) landmarks: a landmarks.json object or its URL (per-building descriptors, BuildingDescriptors.js;
+   *        world.landmarks = { matched, suppressed, unmatched } after load) and infer: true (buildings without a
+   *        descriptor get one deduced from their OSM tags: parking decks, churches, hotels, towers with a top, ...)
    * @param {object} [o.props]  Props options ({ seed, streets, signStyle })
    * @param {object} [o.vegetation]  Vegetation options ({ rules, mix })
    * @param {object|number|false} [o.traffic]  Traffic options ({ count, seed, busLivery, worker, mix }) or a vehicle count; false = none.
@@ -231,6 +235,7 @@ export class MapWorld {
     if (!data) { data = generateProceduralCity(1337, o.procedural || {}); this.source = 'procedural'; }
     this.data = data;
     this._prepare(data);
+    await this._applyLandmarks();
     P(0.04, 'Terrain');
     this.terrain = await terrainP;
     if (this.source === 'procedural') this.terrain = new Terrain(); // the DEM belongs to the real map: keep the fallback flat
@@ -577,7 +582,7 @@ diffuseColor.rgb *= (0.85 + 0.3 * texture2D(map, vMapUv * 0.071 + 0.13).g) * mix
       const r = sanitizeRing(bd && bd.p); if (!r) continue;
       if ((bd.mh || 0) > 2.2) continue; // raised parts (skybridges, canopies) do not block the street
       this.raster.fillPolygon([r, ...((bd.hl || []).map((h) => sanitizeRing(h)).filter(Boolean))], RBIT.BUILDING);
-      maxH = Math.max(maxH, Math.min(400, bd.h || 0));
+      maxH = Math.max(maxH, Math.min(400, bd.d ? Math.max(bd.h || 0, bd.d.height || bd.d.roofHeight || 0) : bd.h || 0));
     }
     this.maxBuildingHeight = maxH;
     for (const pk of d.parks) { const r = sanitizeRing(pk && pk.p); if (r) this.raster.fillPolygon([r], RBIT.PARK); }
@@ -689,6 +694,22 @@ diffuseColor.rgb *= (0.85 + 0.3 * texture2D(map, vMapUv * 0.071 + 0.13).g) * mix
   }
 
   // ================================================================== buildings
+  /**
+   * Per-building descriptors (o.buildings.landmarks: a landmarks.json object or its URL; BuildingDescriptors.js):
+   * matched to the map's buildings before anything reads them. A missing file is a warning; a schema error throws.
+   */
+  async _applyLandmarks() {
+    let lm = (this.opts.buildings || {}).landmarks;
+    this.landmarks = null;
+    if (!lm) return;
+    if (typeof lm === 'string') {
+      try { const res = await fetch(lm); if (!res.ok) throw new Error(`HTTP ${res.status}`); lm = await res.json(); } catch (e) { console.warn('[MapWorld] landmarks unavailable:', e.message || e); return; }
+    }
+    this.landmarks = applyBuildingDescriptors(this.data, lm, { offset: this.offset });
+    if (this.landmarks.unmatched.length) console.warn(`[MapWorld] landmarks: no footprint for ${this.landmarks.unmatched.join(', ')}`);
+    console.info(`[MapWorld] landmarks: ${this.landmarks.matched} described, ${this.landmarks.suppressed} OSM parts replaced`);
+  }
+
   async _buildBuildings(P) {
     if (this.streamOpts) return this._buildBuildingsStreamed(P);
     const b = this.bounds;
@@ -738,6 +759,7 @@ diffuseColor.rgb *= (0.85 + 0.3 * texture2D(map, vMapUv * 0.071 + 0.13).g) * mix
       offset: this.offset,
       baseGrid: BO.baseGrid || o.baseGrid || [7, 7], detailGrid: BO.detailGrid || o.detailGrid || [8, 8], lodDist: BO.lodDist || o.buildingLod || 300,
       detailFloors: BO.detailFloors ?? 4, maxWindows: BO.maxWindows ?? 120000, style: BO.style || null,
+      infer: !!BO.infer,
     };
   }
 

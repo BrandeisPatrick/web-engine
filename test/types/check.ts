@@ -286,3 +286,18 @@ const parkPaths: CoverPath[] = park.paths;
 applyPatches(wallMat, [groundCover({ paths: parkPaths, scale: 1, amount: 1 })]);
 const paint: THREE.Mesh = paintedLines([{ x: 0, from: 0, to: -40, dash: [3, 9] }]); void paint;
 const coverMax: number = COVER_MAX_SEGMENTS + park.counts.trees + road.counts.posts; void coverMax;
+
+// per-building descriptors (a city's landmarks.json): matching, inference, the builder's opt-in, the vertex info packers
+import { applyBuildingDescriptors, validateLandmarks, resolveDescriptor, inferDescriptor, signRuns, planRing, packGrid, packSurf, rgb555, tintFor, BuildingBuilder, ARCHETYPES, CROWN_TYPES } from '@vibe/engine/world';
+const landmarks = { v: 1, city: 'atlanta', buildings: [{ match: { name: 'Westin Peachtree Plaza', at: [-84.3877, 33.7595] }, archetype: 'cylinder-tower', height: 220, night: { sign: { text: 'WESTIN', color: '#ffffff' } } }] };
+const cityData = { center: { lat: 33.75, lon: -84.39 }, buildings: [{ p: [[0, 0], [30, 0], [30, 30], [0, 30]], h: 200, n: 'Westin Peachtree Plaza' }] };
+validateLandmarks(landmarks);
+const matchRes = applyBuildingDescriptors(cityData, landmarks, { offset: { x: 0, z: 0 } });
+const matchedN: number = matchRes.matched + matchRes.suppressed + matchRes.unmatched.length; void matchedN;
+const describing = new BuildingBuilder({ minX: -100, maxX: 100, minZ: -100, maxZ: 100 }, { infer: true });
+const fpDesc = describing.footprint(cityData.buildings[0]);
+void inferDescriptor(cityData.buildings[0], fpDesc!); void resolveDescriptor({ archetype: 'stone-tower' });
+const runW: number = signRuns('WESTIN').w + planRing(cityData.buildings[0].p, { plan: 'octagon' }, 900).length; void runW;
+const packed: number = packGrid({ pier: 0.3, span: 0.4, emph: 2, kind: 0, lit: 0.3 }) + packSurf({ metal: 1, rough: 0.3, glow: 2, pat: 1 }) + rgb555([1, 0.7, 0.2]) + tintFor([0.6, 0.4, 0.3])[0]; void packed;
+const archetypeNames: string[] = [...ARCHETYPES, ...CROWN_TYPES]; void archetypeNames;
+const worldWithLandmarks = new MapWorld({ scene: engine.scene, renderer: engine.renderer, buildings: { landmarks, infer: true } }); void worldWithLandmarks;
