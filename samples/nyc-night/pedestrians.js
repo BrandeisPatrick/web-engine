@@ -1,99 +1,47 @@
-// People on the sidewalks: clones of the CC0 Quaternius "Man" / "Animated Woman" (samples/public/nyc/models), each with
-// its own AnimationMixer (walk, a few idle), walking the sidewalk lines of the named streets around the walker and
-// respawning ahead of / around the player when they fall more than `keep` metres behind. They keep to the sidewalks (a
-// block's end turns them round; they never cross a road), and they step clear of the player's car when it comes onto
-// the sidewalk at them: aside, away from its path, within the sidewalk; one it would still reach steps out of the
-// scene (respawned out of the way). Nobody is ever shown being hit, and nothing reacts to an impact. The Man's six flat materials
-// are baked into one vertex-coloured material per clone (one draw instead of six, and per-person coat / trouser
-// colours); the Woman is textured and keeps her material (tinted per clone). Seeded, so bench poses reproduce.
+// People on the sidewalks: clones of the people GLBs (samples/public/people, baked from the Microsoft Rocketbox avatars
+// by tools/bake-people.mjs: textured, clothed adults, one or two draw calls each), finished by the engine's
+// world/People.js (cloth colours, height and build per person, the wrap / rim light a figure needs at night, culling
+// bounds) with soft contact shadows under their feet (one draw call for everyone). Each has its own AnimationMixer
+// (walk, a few idle; the walk plays at the speed its cycle was made for, so feet do not slide), walks the sidewalk
+// lines of the named streets around the walker and respawns ahead of / around the player when they fall more than
+// `keep` metres behind. They keep to the sidewalks (a block's end turns them round; they never cross a road), and they
+// step clear of the player's car when it comes onto the sidewalk at them: aside, away from its path, within the
+// sidewalk; one it would still reach steps out of the scene (respawned out of the way). Nobody is ever shown being
+// hit, and nothing reacts to an impact. The low-poly CC0 Quaternius characters (samples/public/nyc/models) still work
+// as sources: their flat materials are merged into one vertex-coloured mesh with per-person coat / trouser colours and
+// smooth normals; the textured one is tinted per clone. Seeded, so bench poses reproduce.
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { roadStyle } from '@vibe/engine/world';
+import { roadStyle, finishPerson, personVariety, ContactShadows } from '@vibe/engine/world';
 
 function rng(seed) { let s = seed >>> 0; return () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
-/**
- * Bake a multi-material (skinned) mesh into one MeshStandardMaterial with vertex colours. `recolour` maps a material
- * name (Shirt, Pants, ...) to a colour (hex / THREE.Color); others keep theirs. Clones the geometry (per person).
- */
-export function bakeVertexColours(mesh, recolour = {}) {
-  const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-  const g = mesh.geometry.clone();
-  const n = g.attributes.position.count, col = new Float32Array(n * 3);
-  const groups = g.groups.length ? g.groups : [{ start: 0, count: g.index ? g.index.count : n, materialIndex: 0 }];
-  const c = new THREE.Color();
-  for (const gr of groups) {
-    const m = mats[gr.materialIndex] || mats[0];
-    if (recolour[m.name] !== undefined) c.set(recolour[m.name]); else c.copy(m.color || c.set(0xffffff));
-    for (let i = gr.start; i < gr.start + gr.count; i++) {
-      const v = g.index ? g.index.getX(i) : i;
-      col[v * 3] = c.r; col[v * 3 + 1] = c.g; col[v * 3 + 2] = c.b;
-    }
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  g.clearGroups();
-  mesh.geometry = g;
-  mesh.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0, name: 'baked' });
-  return mesh;
-}
-
-/**
- * GLTFLoader splits a multi-material skinned mesh into sibling SkinnedMeshes (one per primitive) that share one
- * skeleton: merge siblings with untextured materials into ONE SkinnedMesh with vertex colours (recoloured by material
- * name), so a person is one draw call.
- */
-function mergeSkinnedParts(root, recolour) {
-  const groups = new Map();
-  root.traverse((o) => { if (o.isSkinnedMesh && !o.material.map) { const k = o.parent; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(o); } });
-  const c = new THREE.Color();
-  for (const [parent, parts] of groups) {
-    // (SkeletonUtils.clone gives each part its own Skeleton object over the same bones: compare the bones)
-    const sameBones = (p) => p.skeleton.bones.length === parts[0].skeleton.bones.length && p.skeleton.bones.every((b, i) => b === parts[0].skeleton.bones[i]);
-    if (parts.length < 2 || !parts.every(sameBones)) continue;
-    const geos = parts.map((p) => {
-      const g = p.geometry.clone();
-      for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'skinIndex', 'skinWeight'].includes(k)) g.deleteAttribute(k);
-      const n = g.attributes.position.count, col = new Float32Array(n * 3);
-      const name = p.material.name;
-      if (recolour[name] !== undefined) c.set(recolour[name]); else c.copy(p.material.color);
-      for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
-      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-      return g;
-    });
-    const merged = mergeGeometries(geos, false);
-    if (!merged) continue;
-    const first = parts[0];
-    const mesh = new THREE.SkinnedMesh(merged, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0, name: 'baked' }));
-    mesh.name = first.name; mesh.position.copy(first.position); mesh.quaternion.copy(first.quaternion); mesh.scale.copy(first.scale);
-    mesh.bind(first.skeleton, first.bindMatrix);
-    for (const p of parts) parent.remove(p);
-    parent.add(mesh);
-  }
-}
-
-/** A clone of a glTF character, normalised to `height` with its feet at 0, facing +Z, inside a wrapper group. */
-export function cloneCharacter(gltf, height, recolour, tint) {
-  const model = SkeletonUtils.clone(gltf.scene);
-  mergeSkinnedParts(model, recolour || {});
-  model.traverse((o) => {
-    if (!o.isMesh) return;
-    o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
-    if (Array.isArray(o.material) && o.material.length > 1) bakeVertexColours(o, recolour || {});
-    else if (o.material.name !== 'baked') { o.material = (Array.isArray(o.material) ? o.material[0] : o.material).clone(); if (tint) o.material.color.multiply(tint); }
-  });
-  model.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(model);
-  const h = box.max.y - box.min.y, s = h > 1e-6 ? height / h : 1;
-  const fit = new THREE.Group(); fit.scale.setScalar(s);
-  fit.position.set(-(box.min.x + box.max.x) / 2 * s, -box.min.y * s, -(box.min.z + box.max.z) / 2 * s);
-  fit.add(model);
-  return { fit, model };
-}
+/** The people GLBs (samples/public/people/<id>.glb), men and women alternating: load the first n for a smaller crowd. */
+export const PEOPLE = ['man-grey-jacket', 'woman-leather-jacket', 'man-blazer', 'woman-dark-jacket', 'man-hooded-jacket', 'woman-blazer', 'man-denim-jacket', 'woman-beige-jacket'];
 
 const clip = (anims, key) => anims.find((a) => a.name.toLowerCase().endsWith(key)) || anims.find((a) => a.name.toLowerCase().includes(key)) || null;
-const COATS = [0x1e2430, 0x2b2622, 0x3a1f22, 0x1d2b25, 0x24272c, 0x4a4036, 0x15171b, 0x5a2a20, 0x2c3440];
-const TROUSERS = [0x16171b, 0x22252d, 0x2a2420, 0x1b1d26, 0x303339];
+const COATS = [0x2a3446, 0x3d342c, 0x55282c, 0x26392f, 0x34383f, 0x6a5a48, 0x1c1f25, 0x7a3a2a, 0x3c4a5e, 0x8a8478];
+const TROUSERS = [0x1c1e24, 0x2b3040, 0x38302a, 0x242838, 0x41454d];
+
+/**
+ * A clone of a glTF character as a person `height` metres tall with its feet at 0, facing -Z inside a holder group.
+ * A baked person (tools/bake-people.mjs) takes its clothes, height and build from `look` (world personVariety); a
+ * low-poly one its coat / trouser colours or tint from the generator R.
+ * @returns {{ holder: THREE.Group, model: THREE.Object3D, scale: number }}  scale: the fit over the file's own height
+ */
+export function clonePerson(src, height, look, R) {
+  const model = SkeletonUtils.clone(src.gltf.scene), baked = src.gltf.scene.userData.person || null;
+  let fit;
+  if (baked) fit = finishPerson(model, { height: (height || baked.height) * look.height, build: look.build, clothes: look.clothes });
+  else {
+    const coat = COATS[(R() * COATS.length) | 0], trousers = TROUSERS[(R() * TROUSERS.length) | 0];
+    const tint = src.textured ? new THREE.Color().setHSL(0.05 + R() * 0.08, 0.14, 0.42 + R() * 0.25) : undefined;
+    fit = finishPerson(model, { height: height * look.height, recolour: { Shirt: coat, Suit: coat, Pants: trousers, Socks: 0x1a1a1a }, tint });
+  }
+  const holder = new THREE.Group(), view = new THREE.Group();
+  view.rotation.y = Math.PI; view.add(model); holder.add(view); // the GLBs face +Z, the holder's forward is -Z
+  return { holder, model, scale: baked ? fit.height / baked.height : 1 };
+}
 
 export class Pedestrians {
   /**
@@ -128,26 +76,28 @@ export class Pedestrians {
       }
     }
     const n = segs.length ? o.count : 0;
-    // sources: [{ gltf, height, textured }] (people in long trousers and coats); legacy man / woman still work
+    // sources: [{ gltf, height, textured }]: baked people (height optional: the file's) or low-poly characters; the
+    // legacy man / woman pair still works
     const srcs = o.sources || [o.man && { gltf: o.man, height: 1.76 }, o.woman && { gltf: o.woman, height: 1.66, textured: true }].filter(Boolean);
+    this.shadows = n && srcs.length ? new ContactShadows({ parent: this.group, max: n, opacity: o.shadowOpacity ?? 0.8 }) : null;
+    this._ground = (x, z) => this.world.getGroundHeight(x, z);
     for (let i = 0; i < n && srcs.length; i++) {
-      const S = srcs[i % srcs.length], src = S.gltf, woman = !!S.textured;
-      const R = this.R;
-      const coat = COATS[(R() * COATS.length) | 0], trousers = TROUSERS[(R() * TROUSERS.length) | 0];
-      const recolour = { Shirt: coat, Suit: coat, Pants: trousers, Socks: 0x1a1a1a };
-      const tint = woman ? new THREE.Color().setHSL(0.05 + R() * 0.08, 0.12, 0.3 + R() * 0.2) : null;
-      const { fit } = cloneCharacter(src, S.height + (R() - 0.5) * 0.1, recolour, tint);
-      const holder = new THREE.Group(); const view = new THREE.Group(); view.rotation.y = Math.PI; view.add(fit); holder.add(view);
+      const S = srcs[i % srcs.length], src = S.gltf, R = this.R;
+      const { holder, model, scale } = clonePerson(S, S.height, personVariety(R), R);
       this.group.add(holder);
-      const mixer = new THREE.AnimationMixer(fit);
+      const mixer = new THREE.AnimationMixer(model);
       const walk = clip(src.animations, '_walk') || clip(src.animations, 'walk') || clip(src.animations, 'walking'), idle = clip(src.animations, '|idle') || clip(src.animations, '_idle') || clip(src.animations, 'idle');
       const standing = R() < 0.18 && idle;
       const act = mixer.clipAction(standing ? idle : walk || idle);
       act.play(); act.time = R() * 2;
-      const speed = standing ? 0 : 1.15 + R() * 0.45;
-      act.timeScale = standing ? 1 : speed / (woman ? 1.25 : 1.4);
+      // the ground speed the walk cycle covers at this person's size (baked people carry it; 1.4 / 1.25 m/s for the
+      // low-poly man / woman): the person walks at 0.85 to 1.2 of it and the cycle is played at that rate
+      const cycle = ((walk && walk.userData && walk.userData.speed) || (S.textured ? 1.25 : 1.4)) * scale, pace = 0.85 + R() * 0.35;
+      const speed = standing ? 0 : cycle * pace;
+      act.timeScale = standing ? 1 : pace;
       const p = { holder, mixer, speed, seg: 0, s: 0, dir: 1, off: 0 };
       this.people.push(p);
+      if (this.shadows) this.shadows.add(holder, model);
       if (o.postfx) holder.traverse((m) => { if (m.isMesh) o.postfx.track(m); });
     }
     this._t = 0;
@@ -194,6 +144,7 @@ export class Pedestrians {
       h.rotation.y = Math.atan2(-g.tx * p.dir, -g.tz * p.dir);
       if (dt > 0) p.mixer.update(dt);
     }
+    if (this.shadows) this.shadows.update(this._ground);
   }
 
   /** Step person p (on segment g) out of the car's path: aside within the sidewalk, or out of the scene if it would still reach them. */

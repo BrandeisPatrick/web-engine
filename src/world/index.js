@@ -24,6 +24,10 @@ export { createCarVisual, carSpecFor } from './CarVisual.js';
 export { countryRoad, parkCorner, groundCover, paintedLines, COVER_MAX_SEGMENTS } from './Scenery.js';
 /** @typedef {import('./Scenery.js').SceneryResult} SceneryResult */
 /** @typedef {import('./Scenery.js').CoverPath} CoverPath */
+// people: finish a rigged character (smooth normals, one draw call, wrap / rim light, cloth colours, culling bounds),
+// per-person variety, and soft contact shadows under a crowd's feet in one draw call
+export { finishPerson, personLight, personVariety, clothMatrix, smoothNormals, mergePersonParts, ContactShadows, DEFAULT_PERSON_LIGHT } from './People.js';
+/** @typedef {import('./People.js').FinishPersonOptions} FinishPersonOptions */
 export { Traffic } from './Traffic.js';
 export { TrafficSim, TRAFFIC_TYPES, POSE_STRIDE, buildSignalInfos, playerInfoFrom, typeCounts } from './TrafficSim.js';
 export { buildTreeMeshes, bakeVegImpostors, IMP_VIEWS, impostorView } from './Vegetation.js';

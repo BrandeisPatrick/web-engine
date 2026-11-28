@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { Engine, Assets, PoseInterpolator, resolveQuality, createBenchHarness } from '@vibe/engine/core';
 import { PhysicsWorld, CharacterController } from '@vibe/engine/physics';
 import { Atmosphere, PostFX, NearestLights, registerRenderLoaders, loadTextureManifest, loadTextureSet, softDotTexture, applyPatches, weathering } from '@vibe/engine/render';
-import { parkCorner, groundCover } from '@vibe/engine/world';
+import { parkCorner, groundCover, finishPerson } from '@vibe/engine/world';
 import { AnimationController } from '@vibe/engine/anim';
 import { CharacterInput } from '@vibe/engine/input';
 import { ThirdPersonRig } from '@vibe/engine/camera';
@@ -73,19 +73,17 @@ async function boot() {
 
   // ---- the character: a GLB with clips. Change the file, the height and the clip names for your own model
   // #region howto:glb-load
-  const assets = new Assets({ base: `${BASE}nyc/models/` });
+  const assets = new Assets({ base: `${BASE}people/` });
   registerRenderLoaders(assets, renderer);
-  assets.add('hero', { type: 'gltf', url: 'ManInSuit.glb' });
+  assets.add('hero', { type: 'gltf', url: 'man-grey-jacket.glb' });
   engine.addSystem(assets.system(), 'assets');
   await engine.load((p, label) => shell.setProgress(0.3 + 0.6 * p, label));
   /** @type {import('@vibe/engine/render').GltfAsset} */
   const gltf = assets.get('hero');
   const model = gltf.instantiate(); // an Object3D (a skinning-safe clone)
-  // this GLB (converted from FBX) has metalness 0.4 on cloth, skin and hair: the hair mirrored the sky as a grey patch
-  model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; Object.assign(o.material, { metalness: 0, roughness: 0.75 }); } });
-  model.updateMatrixWorld(true); // bones too: the skinned bounds below read them
-  const box = new THREE.Box3().setFromObject(model), k = 1.8 / (box.max.y - box.min.y); // fit to 1.8 m, feet at y = 0
-  model.scale.multiplyScalar(k); model.position.y = -box.min.y * k;
+  // world/People.js: fit to 1.8 m with the feet at y = 0, cast shadows, and light the figure as cloth and skin (light
+  // wraps past the terminator, a soft rim against the dusk); a low-poly model also gets smooth normals here
+  finishPerson(model, { height: 1.8 });
   model.rotation.y = Math.PI; // this GLB faces +Z; the engine's forward is -Z
   const player = new THREE.Group().add(model); // the game moves and turns this group
   scene.add(player);
@@ -94,10 +92,11 @@ async function boot() {
   scene.add(blob);
   // #endregion howto:glb-load
   // #region howto:glb-anim
-  // states name clips by string (the GLB's names; a wrong name throws and lists the right ones); the tree blends by speed
+  // states name clips by string (the GLB's names; a wrong name throws and lists the right ones); the tree blends by speed.
+  // The points are the ground speeds the cycles were made for (this walk covers 1.35 m/s), so the feet do not slide
   const anim = new AnimationController(model, gltf.animations, {
-    states: { idle: { clip: 'HumanArmature|Man_Idle' }, walk: { clip: 'HumanArmature|Man_Walk' }, run: { clip: 'HumanArmature|Man_Run' } },
-    trees: { move: { type: '1d', param: 'speed', points: [{ at: 0, state: 'idle' }, { at: 2, state: 'walk' }, { at: 5.5, state: 'run' }] } },
+    states: { idle: { clip: 'Idle' }, walk: { clip: 'Walk' }, run: { clip: 'Run' } },
+    trees: { move: { type: '1d', param: 'speed', sync: true, points: [{ at: 0, state: 'idle' }, { at: 1.35, state: 'walk' }, { at: 5.5, state: 'run' }] } },
   });
   anim.play('move');
   // #endregion howto:glb-anim
